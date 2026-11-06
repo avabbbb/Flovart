@@ -115,7 +115,17 @@
 @media (max-width:760px) { .workflow-image-tool__grid { grid-template-columns:1fr; } .workflow-image-tool__preview,.workflow-image-tool__mask { min-height:260px; } }
 .workflow-node__body textarea { box-sizing: border-box; width: 100%; height: 100%; resize: none; border: 0; outline: 0; padding: 12px; color: inherit; background: transparent; font: inherit; user-select: text; }
 .workflow-node__empty { display: grid; place-content: center; justify-items: center; gap: 8px; height: 100%; color: var(--wf-muted); background:linear-gradient(145deg,var(--wf-strong),color-mix(in srgb,var(--wf-panel) 78%,var(--wf-bg))); font-size: 12px; }
-.workflow-video-placeholder { box-sizing:border-box; display:grid; place-content:center; justify-items:center; gap:8px; width:100%; height:100%; color:var(--wf-muted); background:color-mix(in srgb,var(--wf-strong) 88%,var(--wf-bg)); font-size:11px; }
+.workflow-video-placeholder { box-sizing:border-box; display:grid; place-content:center; justify-items:center; gap:8px; width:100%; height:100%; color:var(--wf-muted); background:radial-gradient(120% 90% at 25% 15%,color-mix(in srgb,var(--wf-accent,#6c64b0) 14%,transparent),transparent 62%),linear-gradient(145deg,var(--wf-strong),color-mix(in srgb,var(--wf-panel) 78%,var(--wf-bg))); font-size:11px; }
+.workflow-video-preparing { position:relative; box-sizing:border-box; display:grid; place-content:center; justify-items:center; gap:8px; width:100%; height:100%; padding:16px; overflow:hidden; text-align:center; color:var(--wf-muted); background:radial-gradient(120% 90% at 25% 15%,color-mix(in srgb,var(--wf-accent,#6c64b0) 20%,transparent),transparent 62%),linear-gradient(145deg,var(--wf-strong),color-mix(in srgb,var(--wf-panel) 78%,var(--wf-bg))); font-size:11px; }
+.workflow-video-preparing-icon { display:grid; width:38px; height:38px; place-items:center; border-radius:50%; color:var(--wf-accent,#6c64b0); background:color-mix(in srgb,var(--wf-accent,#6c64b0) 14%,transparent); }
+.workflow-video-preparing strong { font-size:12px; font-weight:600; color:inherit; filter:brightness(1.25); }
+.workflow-video-preparing-bar { position:relative; display:block; width:min(180px,72%); height:3px; overflow:hidden; border-radius:99px; background:color-mix(in srgb,var(--wf-muted) 22%,transparent); }
+.workflow-video-preparing-bar i { position:absolute; inset:0 auto 0 0; border-radius:inherit; background:var(--wf-accent,#6c64b0); transition:width .3s ease; }
+.workflow-video-preparing-bar.is-indeterminate i { width:36%; animation:workflow-video-preparing-slide 1.4s ease-in-out infinite; }
+.workflow-video-preparing-meta { font-size:10px; font-variant-numeric:tabular-nums; }
+.workflow-video-preparing-hint { font-size:10px; opacity:.7; }
+@keyframes workflow-video-preparing-slide { 0% { transform:translateX(-110%); } 100% { transform:translateX(300%); } }
+@media (prefers-reduced-motion: reduce) { .workflow-video-preparing-bar.is-indeterminate i { animation:none; width:100%; opacity:.5; } }
 .workflow-config { display: flex; flex-direction: column; gap: 7px; height: 100%; box-sizing: border-box; padding: 10px; overflow: auto; user-select: text; }
 .workflow-config__row { display: grid; grid-template-columns: 52px minmax(0,1fr); align-items: center; gap: 7px; }
 .workflow-config label { color: var(--wf-muted); font-size: 10px; }

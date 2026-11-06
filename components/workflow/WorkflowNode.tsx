@@ -313,6 +313,19 @@ export function WorkflowNode({
     : (language === 'en' ? 'Saving' : '保存中');
   // 本地入库不是网络上传：没有百分比时只标明文件大小。
   const uploadDetail = uploadPercent || (language === 'en' ? 'File ' : '文件 ') + formatBytes(uploadBytes);
+  // 后台生成画布预览期间：原文件浏览器解不了，挂 <video> 只会黑屏，改为带进度的占位；节点本身仍可连线、生成。
+  const previewProgress = uploadStage?.progress;
+  const previewPlaceholder = node.type === 'video' && !uploading && uploadStage ? (
+    <div className="workflow-video-preparing" role="img" aria-label={language === 'en' ? 'Preparing canvas preview' : '正在生成画布预览'} data-testid="workflow-video-preparing" data-workflow-media-preview>
+      <span className="workflow-video-preparing-icon"><Video size={18} /></span>
+      <strong>{language === 'en' ? 'Preparing canvas preview' : '正在生成画布预览'}</strong>
+      <span className={'workflow-video-preparing-bar' + (previewProgress === undefined ? ' is-indeterminate' : '')}>
+        <i style={previewProgress === undefined ? undefined : { width: Math.max(2, Math.round(previewProgress / 0.01)) + '%' }} />
+      </span>
+      <span className="workflow-video-preparing-meta">{uploadLabel}{uploadPercent ? ' · ' + uploadPercent : ''}</span>
+      <span className="workflow-video-preparing-hint">{language === 'en' ? 'Node is ready · generation uses the original file' : '节点可正常使用 · 生成时用原文件'}</span>
+    </div>
+  ) : null;
   const isLoading = status === 'loading' || uploading;
   const [isDropTarget, setDropTarget] = useState(false);
   const [isEditingTitle, setEditingTitle] = useState(false);
@@ -513,7 +526,9 @@ export function WorkflowNode({
           ? <><img src={media.url} alt={node.title} draggable={false} data-workflow-media-preview style={{ filter: buildCssFilter(node.metadata.filters) }} />{lassoActive && onLassoDone ? <WorkflowNodeLasso width={node.metadata.naturalWidth} height={node.metadata.naturalHeight} language={language} onDone={onLassoDone} /> : mediaActions}</>
           : <div className="workflow-node__empty"><ImageIcon size={26} /><span>{mediaError || (language === 'en' ? 'Image node' : '图片节点')}</span>{mediaActions}</div>)}
         {node.type === 'video' && (hasMediaReference
-          ? videoActive
+          ? previewPlaceholder
+            ? <>{previewPlaceholder}{mediaActions}</>
+            : videoActive
             ? media.url && !videoDecodeError
               ? <>
                 <video
@@ -623,16 +638,6 @@ export function WorkflowNode({
             )}
             {staleHint && <div className="workflow-node__generation-stale" data-workflow-overlay>{staleHint}</div>}
           </motion.div>
-        )}
-        {!uploading && uploadStage && (
-          <span
-            data-workflow-overlay
-            className="workflow-node__preview-badge"
-            title={language === 'en' ? 'Preparing canvas preview in the background; the node is ready to use' : '画布预览后台生成中，节点可正常使用'}
-            style={{ position: 'absolute', right: 8, bottom: 8, padding: '2px 8px', borderRadius: 999, fontSize: 11, lineHeight: '18px', background: 'rgba(0,0,0,.55)', color: '#fff', pointerEvents: 'none' }}
-          >
-            {uploadLabel}{uploadPercent ? ' ' + uploadPercent : ''}
-          </span>
         )}
         {uploading && (
           <motion.div
