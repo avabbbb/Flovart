@@ -621,7 +621,7 @@ describe('workflow generation', () => {
     expect(events.indexOf('success')).toBeLessThan(events.indexOf('history'));
   });
 
-  it('does not commit a stale result when a newer run starts during history preparation', async () => {
+  it('does not commit a stale result when the user stops and reruns during history preparation', async () => {
     const source = project();
     let latest = source;
     let releaseEncoding!: () => void;
@@ -630,16 +630,41 @@ describe('workflow generation', () => {
     const encoding = new Promise<string>(resolve => { releaseEncoding = () => resolve('data:image/png;base64,OLD'); });
     const first = runWorkflowGeneration(source, 'config-1', {
       userApiKeys: [imageKey],
-      executeMedia: vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'image', mediaUrl: 'https://old', mimeType: 'image/png' }), fetchMedia: vi.fn().mockResolvedValue(new Blob(['old'])), ingestMedia: vi.fn().mockResolvedValue({ type: 'image', storageKey: 'old-key', name: 'old.png', mimeType: 'image/png', bytes: 3 }), encodeDataUrl: () => { markEncodingStarted(); return encoding; }, getProject: () => latest, onProjectChange: next => { latest = next; },
+      executeMedia: vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'image', mediaUrl: 'mock-result', mimeType: 'image/png' }), fetchMedia: vi.fn().mockResolvedValue(new Blob(['old'])), ingestMedia: vi.fn().mockResolvedValue({ type: 'image', storageKey: 'old-key', name: 'old.png', mimeType: 'image/png', bytes: 3 }), encodeDataUrl: () => { markEncodingStarted(); return encoding; }, getProject: () => latest, onProjectChange: next => { latest = next; },
     });
     await encodingStarted;
+    expect(cancelWorkflowGeneration(source.id, 'config-1')).toBe(true);
     const second = runWorkflowGeneration(latest, 'config-1', {
-      userApiKeys: [imageKey], executeMedia: vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'image', mediaUrl: 'https://new', mimeType: 'image/png' }), fetchMedia: vi.fn().mockResolvedValue(new Blob(['new'])), ingestMedia: vi.fn().mockResolvedValue({ type: 'image', storageKey: 'new-key', name: 'new.png', mimeType: 'image/png', bytes: 3 }), encodeDataUrl: vi.fn().mockResolvedValue('data:image/png;base64,NEW'), getProject: () => latest, onProjectChange: next => { latest = next; },
+      userApiKeys: [imageKey], executeMedia: vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'image', mediaUrl: 'mock-result', mimeType: 'image/png' }), fetchMedia: vi.fn().mockResolvedValue(new Blob(['new'])), ingestMedia: vi.fn().mockResolvedValue({ type: 'image', storageKey: 'new-key', name: 'new.png', mimeType: 'image/png', bytes: 3 }), encodeDataUrl: vi.fn().mockResolvedValue('data:image/png;base64,NEW'), getProject: () => latest, onProjectChange: next => { latest = next; },
     });
     releaseEncoding();
     await Promise.all([first, second]);
     expect(latest.nodes.some(node => node.metadata.storageKey === 'old-key')).toBe(false);
     expect(latest.nodes.some(node => node.metadata.storageKey === 'new-key')).toBe(true);
+  });
+
+  it('ignores a repeated trigger while the node already has a request in flight', async () => {
+    const source = project();
+    let latest = source;
+    let releaseEncoding!: () => void;
+    let markEncodingStarted!: () => void;
+    const encodingStarted = new Promise<void>(resolve => { markEncodingStarted = resolve; });
+    const encoding = new Promise<string>(resolve => { releaseEncoding = () => resolve('data:image/png;base64,ONE'); });
+    const firstExecute = vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'image', mediaUrl: 'mock-result', mimeType: 'image/png' });
+    const secondExecute = vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'image', mediaUrl: 'mock-result', mimeType: 'image/png' });
+    const first = runWorkflowGeneration(source, 'config-1', {
+      userApiKeys: [imageKey], executeMedia: firstExecute, fetchMedia: vi.fn().mockResolvedValue(new Blob(['one'])), ingestMedia: vi.fn().mockResolvedValue({ type: 'image', storageKey: 'one-key', name: 'one.png', mimeType: 'image/png', bytes: 3 }), encodeDataUrl: () => { markEncodingStarted(); return encoding; }, getProject: () => latest, onProjectChange: next => { latest = next; },
+    });
+    await encodingStarted;
+    await runWorkflowGeneration(latest, 'config-1', {
+      userApiKeys: [imageKey], executeMedia: secondExecute, fetchMedia: vi.fn().mockResolvedValue(new Blob(['two'])), ingestMedia: vi.fn().mockResolvedValue({ type: 'image', storageKey: 'two-key', name: 'two.png', mimeType: 'image/png', bytes: 3 }), encodeDataUrl: vi.fn().mockResolvedValue('data:image/png;base64,TWO'), getProject: () => latest, onProjectChange: next => { latest = next; },
+    });
+    releaseEncoding();
+    await first;
+    expect(firstExecute).toHaveBeenCalledTimes(1);
+    expect(secondExecute).not.toHaveBeenCalled();
+    expect(latest.nodes.some(node => node.metadata.storageKey === 'one-key')).toBe(true);
+    expect(latest.nodes.some(node => node.metadata.storageKey === 'two-key')).toBe(false);
   });
 
   it('uses a JPEG poster for video history and revokes provider blob URLs', async () => {

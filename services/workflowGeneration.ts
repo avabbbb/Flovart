@@ -243,6 +243,7 @@ export function findInterruptedWorkflowNodes(project: WorkflowProject, options: 
 export async function runWorkflowGeneration(project: WorkflowProject, nodeId: string, runtime: WorkflowGenerationRuntime): Promise<WorkflowProject> {
   const initialNode = project.nodes.find(node => node.id === nodeId);
   if (!initialNode) return project;
+  if (activeRequests.has(requestKey(project.id, nodeId))) return canonical(runtime, project);
   const isImageOperation = initialNode.type === 'operation' && initialNode.metadata.operation?.capabilityId === 'image.generate@1';
   if (initialNode.type === 'operation' && !isImageOperation) {
     return publish(runtime, patchInitiator(canonical(runtime, project), nodeId, { status: 'error', error: '该 Operation 需要对应的图片处理执行器', progress: undefined }));
@@ -268,7 +269,8 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     }
   }
 
-  cancelWorkflowGeneration(project.id, nodeId);
+  // 同一节点已有在途请求：忽略重复触发（连击、Agent 重放），绝不取消旧请求后重新提交。停止走 cancelWorkflowGeneration。
+  if (activeRequests.has(requestKey(project.id, nodeId))) return canonical(runtime, project);
   const key = requestKey(project.id, nodeId);
   const requestId = runtime.runId || nanoid();
   const controller = new AbortController();
@@ -579,9 +581,12 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
             if (event.phase === 'submitted') {
               await updateApiUsage(usage.id, { status: 'queued', providerTaskId: event.providerTaskId, submitTime: event.submittedAt });
               current = patchInitiator(canonical(runtime, current), nodeId, { generationProviderTaskId: event.providerTaskId, generationMessage: '任务已提交，等待供应商处理' });
+              // 任务 ID 必须立刻落盘：否则提交后、下一次进度前刷新会丢失任务，只能重提并重复扣费。
+              await publish(runtime, current);
             } else if (event.phase === 'running') {
               await updateApiUsage(usage.id, { status: 'running', providerTaskId: event.providerTaskId, startTime: Date.now() });
               current = patchInitiator(canonical(runtime, current), nodeId, { generationProviderTaskId: event.providerTaskId, generationMessage: event.remoteStatus || '供应商正在生成' });
+              await publish(runtime, current);
             } else if (event.phase === 'cancelled') {
               if (event.canceled) {
                 await refundApiUsage(usage.id, '供应商已确认取消');
