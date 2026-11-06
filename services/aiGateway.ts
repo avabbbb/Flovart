@@ -1933,6 +1933,9 @@ async function generateVideoWithUnifiedAsyncApi(
         references?: VideoImage[];
         signal?: AbortSignal;
         pollTimeoutMs?: number;
+        durationSec?: number;
+        resolution?: string;
+        generateAudio?: boolean;
         resumeProviderTaskId?: string;
         onProviderTaskLifecycle?: (event: ProviderTaskLifecycleEvent) => void | Promise<void>;
     },
@@ -1960,11 +1963,19 @@ async function generateVideoWithUnifiedAsyncApi(
                     aspect_ratio: aspectRatio,
                 };
 
-                const imageHrefs = (options?.references ?? [])
-                    .map(r => r.href)
-                    .filter(Boolean);
-                if (imageHrefs.length) {
-                    createBody.images = imageHrefs;
+                // 画布上设置的时长、分辨率、音频必须原样到达供应商，否则计划卡按的参数与实际扣费不一致。
+                if (options?.durationSec != null && options.durationSec > 0) createBody.duration = options.durationSec;
+                if (options?.resolution) createBody.resolution = options.resolution;
+                if (options?.generateAudio !== undefined) createBody.generate_audio = options.generateAudio;
+
+                const references = (options?.references ?? []).filter(r => Boolean(r.href));
+                if (references.length) {
+                    createBody.images = references.map(r => r.href);
+                    const roles = references.map(r => {
+                        const tagged = r as { slotRole?: string; role?: string };
+                        return tagged.slotRole || tagged.role || 'reference';
+                    });
+                    createBody.reference_roles = roles;
                 }
 
                 let createRes: Response;
