@@ -786,6 +786,14 @@
       "watchers": 0,
       "releases": 18,
       "downloads": 104
+    },
+    {
+      "date": "2026-11-06",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 18,
+      "downloads": 105
     }
   ],
   "releaseAssets": [
@@ -804,6 +812,12 @@
     {
       "release": "v0.1.0",
       "name": "Flovart_0.1.0_aarch64.dmg",
+      "downloads": 3,
+      "updatedAt": "2026-10-16T06:47:32Z"
+    },
+    {
+      "release": "v0.1.0",
+      "name": "Flovart_0.1.0_amd64.AppImage",
       "downloads": 3,
       "updatedAt": "2026-10-16T06:47:32Z"
     },
@@ -884,12 +898,6 @@
       "name": "flovart-windows-latest-sbom.spdx.json",
       "downloads": 2,
       "updatedAt": "2026-10-16T06:49:49Z"
-    },
-    {
-      "release": "v0.1.0",
-      "name": "Flovart_0.1.0_amd64.AppImage",
-      "downloads": 2,
-      "updatedAt": "2026-10-16T06:47:32Z"
     },
     {
       "release": "v0.1.0",
@@ -1438,5 +1446,5 @@
       "updatedAt": "2026-10-16T03:30:20Z"
     }
   ],
-  "updatedAt": "2026-11-05T06:58:04.105Z"
+  "updatedAt": "2026-11-06T06:57:38.233Z"
 }
