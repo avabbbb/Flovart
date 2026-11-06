@@ -905,7 +905,7 @@ const userApiKeysRef = useRef(userApiKeys);
               </div>
             </div>
             {sending
-              ? <button type="button" className="agent-composer__send" aria-label="停止" onClick={() => { abort.current?.abort(); activity.current('idle'); if (kernelRef.current) kernelRef.current.cancel(); else void client.current?.cancel(project.id); }}><Square size={13} /></button>
+              ? <button type="button" className="agent-composer__send" aria-label="停止" onClick={() => { confirmationRef.current?.resolve(false); confirmationRef.current = undefined; setConfirmation(undefined); abort.current?.abort(); activity.current('idle'); if (kernelRef.current) kernelRef.current.cancel(); else void client.current?.cancel(project.id); }}><Square size={13} /></button>
               : <button type="button" className="agent-composer__send" aria-label="发送" onClick={() => void send()} disabled={status !== 'ready' || (!prompt.trim() && references.length === 0)}><Send size={16} /></button>}
           </div>
         </div>

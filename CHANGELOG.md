@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0 — Closed beta / 内测版 (2026-11-06)
+
+- Canvas 多标签页：用 navigator.locks 选出唯一写入标签页，其余标签页只读；只读页不落盘、不清理媒体、不接管中断节点，避免互相覆盖或误删刚生成的媒体。
+- Canvas 持久化：保存失败时常驻提示，可重试或导出项目；配额不足单独提示。
+- Agent：未完成的工具调用自动补“已取消”结果，停止或中断后可继续对话；停止时关闭待确认卡；workflow.apply 含删除节点时与单独删除一样需要确认。
+- API Key 加密存储 v2：密钥派生不再依赖 userAgent，浏览器升级后仍可解密；解密失败时保留原密文，不再被空列表覆盖。
+- 删除 Agent 离线浏览模式与武侠风示例模板。
+- 逆向工作台暂时显示「正在优化，后续上线」，代码与已保存数据保留；登录 / 注册显示「内测版本，账号功能后续更新」。
+- 版本号统一为 0.3.0（package.json / tauri.conf.json / Cargo.toml）。
+
 ## 0.2.0 — Closed beta / 内测版 (2026-10-19)
 
 - Canvas: align, distribute, duplicate (Ctrl/Cmd+D), arrow-key nudge with one undo entry per held key, pane context menu, Alt+Shift+F auto layout, F to focus the selection.

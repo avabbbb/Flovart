@@ -2,7 +2,8 @@ import { nanoid } from 'nanoid';
 import { create } from 'zustand';
 import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware';
 import { INITIAL_WORKFLOW_VIEWPORT } from './constants';
-import { pruneWorkflowMedia, setWorkflowMediaCanonicalProjects } from './media';
+import { pruneWorkflowMedia, setWorkflowMediaCanonicalProjects, setWorkflowMediaPruneGuard } from './media';
+import { isWorkflowWriter, notifyWorkflowPersisted, startWorkflowWriterElection, whenWorkflowWriterDecided } from './writerLock';
 import { migrateWorkflowPersistedState, migrateWorkflowProject, WORKFLOW_BACKUP_KEY, WORKFLOW_PERSISTENCE_VERSION } from './migrations';
 import { workflowStorage } from './storage';
 import type { WorkflowProject } from './types';
@@ -60,6 +61,7 @@ let writeTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingWrite: PendingPersistWrite | null = null;
 let activeWrite: Promise<void> | null = null;
 let persistenceError: WorkflowPersistenceError | null = null;
+let lastFailedWrite: PendingPersistWrite | null = null;
 const persistenceErrorListeners = new Set<WorkflowPersistenceErrorListener>();
 
 export const getWorkflowPersistenceError = () => persistenceError;
@@ -91,10 +93,19 @@ function cancelPendingWrite() {
 
 function persistWrite(write: PendingPersistWrite): Promise<void> {
   const task = (activeWrite || Promise.resolve()).then(async () => {
+    // 只读标签页不落盘：否则会用自己的旧内存状态覆盖写入者的数据。
+    await whenWorkflowWriterDecided();
+    if (!isWorkflowWriter()) {
+      write.waiters.forEach(resolve => resolve());
+      return;
+    }
     try {
       await workflowStorage.set(write.name, write.value);
+      lastFailedWrite = null;
       setWorkflowPersistenceError(null);
+      notifyWorkflowPersisted();
     } catch (error) {
+      lastFailedWrite = write;
       setWorkflowPersistenceError({ operation: 'write', error });
     }
     write.waiters.forEach(resolve => resolve());
@@ -112,6 +123,17 @@ export function flushWorkflowPersistence(): Promise<void> {
   const write = pendingWrite;
   pendingWrite = null;
   return write ? persistWrite(write) : activeWrite || Promise.resolve();
+}
+
+/** 持久化失败后的重试：有新修改先落盘新的，否则重写上次失败的快照；读取失败则重新水合。 */
+export async function retryWorkflowPersistence(): Promise<void> {
+  if (pendingWrite) return flushWorkflowPersistence();
+  if (persistenceError?.operation === 'read') {
+    await useWorkflowStore.persist.rehydrate();
+    return;
+  }
+  if (lastFailedWrite) return persistWrite({ ...lastFailedWrite, waiters: [] });
+  return activeWrite || undefined;
 }
 
 // 关闭/刷新标签页或切到后台时立即落盘，避免丢失 400ms 防抖窗口内的最后一次编辑。
@@ -245,4 +267,13 @@ export const useWorkflowStore = create<WorkflowStore>()(
 export function getActiveWorkflowProject(): WorkflowProject | null {
   const state = useWorkflowStore.getState();
   return state.projects.find(project => project.id === state.activeProjectId) || null;
+}
+
+if (typeof window !== 'undefined') {
+  setWorkflowMediaPruneGuard(isWorkflowWriter);
+  startWorkflowWriterElection({
+    reloadFromStorage: async () => { await useWorkflowStore.persist.rehydrate(); },
+    flush: flushWorkflowPersistence,
+    canHandOff: () => !useWorkflowStore.getState().projects.some(project => project.nodes.some(node => node.metadata.status === 'loading')),
+  });
 }

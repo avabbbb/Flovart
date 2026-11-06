@@ -252,6 +252,15 @@ function validateEnvelope(envelope: WorkflowCommandEnvelope): WorkflowCommandRes
 function requiresWorkflowConfirmation(envelope: WorkflowCommandEnvelope) {
   const isExternalAgent = envelope.source === 'agent'
     || (envelope.source === 'cli' && Boolean(envelope.caller?.agentIdentity));
+  if (!isExternalAgent) return false;
+  // 批量文档操作里夹带删除节点，与单独 workflow.node.delete 同等风险，必须确认。
+  if (envelope.command === 'workflow.apply') {
+    try {
+      return documentOperationsArg(envelope.args.operations || envelope.args.ops).some(op => op.type === 'delete_nodes');
+    } catch {
+      return false; // 参数非法时后续执行会直接报错，不会落写。
+    }
+  }
   if (!WORKFLOW_MUTATION_COMMANDS.has(envelope.command) || !isExternalAgent) return false;
   if (envelope.command === 'workflow.project.delete' || envelope.command === 'workflow.node.delete' || envelope.command === 'workflow.node.run') return true;
   if (envelope.command !== 'workflow.node.tool') return false;

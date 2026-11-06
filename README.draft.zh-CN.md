@@ -144,7 +144,7 @@ Open Flovart and turn ./ref.mp4 into a storyboard: one node per shot with durati
 
 ## 当前状态与限制
 
-- **0.2.0 内测版。** Beta 路径只有 Codex CLI + Browser Workflow（Agent）与 RunningHub 图像 + 视频（Provider，待认证）；DaVinci Resolve、WorkBuddy、Claude Code、OpenCode、Gemini、OpenAI-compatible BYOK 等均为 Experimental。
+- **0.3.0 内测版。** Beta 路径只有 Codex CLI + Browser Workflow（Agent）与 RunningHub 图像 + 视频（Provider，待认证）；DaVinci Resolve、WorkBuddy、Claude Code、OpenCode、Gemini、OpenAI-compatible BYOK 等均为 Experimental。
 - **安装包未签名。** Windows 会出现 SmartScreen 提示；macOS 为 ad-hoc 签名且未公证。
 - **付费生成由 Provider 计费。** 生成中停止或刷新页面后，Provider 仍可能扣费。
 - **Resolve 宿主层仍在开发。** P0 只做到 Add to Media Pool，不改原 Timeline。

@@ -46,6 +46,8 @@ const WorkflowWorkspace = React.lazy(() => import('./components/workflow/Workflo
 const WorkflowContextPanel = React.lazy(() => import('./components/workflow/WorkflowWorkspace').then(m => ({ default: m.WorkflowContextPanel })));
 const AssetAddModal = React.lazy(() => import('./components/AssetAddModal').then(m => ({ default: m.AssetAddModal })));
 const BrowserImportBridge = React.lazy(() => import('./components/extension/BrowserImportBridge').then(m => ({ default: m.BrowserImportBridge })));
+import { WorkflowSessionGuard } from './components/workflow/WorkflowSessionGuard';
+import { useWorkflowWriterState } from './components/workflow/writerLock';
 
 type ThemePalette = {
     appBackground: string;
@@ -413,8 +415,10 @@ const App: React.FC = () => {
             });
         },
     }), [handleRunWorkflowNode]);
+    // 只有写入者标签页处理中断节点与续接；只读标签页看到的 loading 可能正由写入者在跑。
+    const workflowWriterState = useWorkflowWriterState();
     useEffect(() => {
-        if (!apiKeysLoaded || !activeWorkflowProjectId) return;
+        if (workflowWriterState !== 'writer' || !apiKeysLoaded || !activeWorkflowProjectId) return;
         const project = workflowProjects.find(item => item.id === activeWorkflowProjectId);
         if (!project) return;
         const canResume = userApiKeys.length > 0;
@@ -472,7 +476,7 @@ const App: React.FC = () => {
                     }
                 })();
             });
-    }, [activeWorkflowProjectId, apiKeysLoaded, userApiKeys, workflowExecutor, workflowProjects]);
+    }, [activeWorkflowProjectId, apiKeysLoaded, userApiKeys, workflowExecutor, workflowProjects, workflowWriterState]);
     const pendingRunRef = React.useRef<{ projectId: string; nodeId: string; promptIntent?: PromptIntent } | null>(null);
     const runWorkflowNodeFromUi = useCallback((projectId: string, nodeId: string, promptIntent?: PromptIntent) => {
         const node = useWorkflowStore.getState().projects.find(item => item.id === projectId)?.nodes.find(item => item.id === nodeId);
@@ -643,6 +647,7 @@ const App: React.FC = () => {
                         />
                     </Suspense>
                 )}
+                <WorkflowSessionGuard language={language} />
             </div>
 
             <StudioRightDrawer

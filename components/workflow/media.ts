@@ -74,7 +74,14 @@ export function unregisterWorkflowMediaTransientReferences(owner: string) {
   transientReferences.delete(owner);
 }
 
+// 只认本标签页内存里的引用，所以只有写入者标签页可以清理；否则会删掉其它标签页刚生成的媒体。
+let pruneGuard: () => boolean = () => true;
+export function setWorkflowMediaPruneGuard(guard: () => boolean) {
+  pruneGuard = guard;
+}
+
 export async function pruneWorkflowMedia() {
+  if (!pruneGuard()) return;
   const keys = await workflowMediaStorage.keys();
   const reachable = new Set([...canonicalReferences, ...pendingReferences]);
   transientReferences.forEach(keys => keys.forEach(key => reachable.add(key)));

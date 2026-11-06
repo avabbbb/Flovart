@@ -264,6 +264,38 @@ function toOpenAIMessage(message: AgentMessage): Record<string, unknown> {
   return { role: 'user', content: parts };
 }
 
+const ORPHAN_TOOL_RESULT = '已取消：本次工具调用未执行完成（用户停止或会话中断）。';
+
+/**
+ * OpenAI 兼容接口要求每个 assistant.tool_calls 都紧跟对应的 tool 消息。
+ * 停止、拒绝确认或刷新中断后会话里会留下没有结果的 toolCall，下一轮请求会被整体拒绝；
+ * 这里在发送前补齐合成结果，不改写已持久化的会话。
+ */
+export function toOpenAIMessages(messages: AgentMessage[]): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  let pending: string[] = [];
+  const flush = () => {
+    for (const id of pending) out.push({ role: 'tool', tool_call_id: id, content: ORPHAN_TOOL_RESULT });
+    pending = [];
+  };
+  for (const message of messages) {
+    const converted = toOpenAIMessage(message);
+    if (converted.role === 'tool') {
+      const id = String(converted.tool_call_id || '');
+      if (!pending.includes(id)) continue; // 没有对应 tool_call 的孤立结果同样会被拒绝，丢弃。
+      pending = pending.filter(item => item !== id);
+      out.push(converted);
+      continue;
+    }
+    flush();
+    out.push(converted);
+    const calls = converted.tool_calls as Array<{ id?: string }> | undefined;
+    if (calls?.length) pending = calls.map(call => String(call.id || '')).filter(Boolean);
+  }
+  flush();
+  return out;
+}
+
 export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn {
   return async (model, context, options) => {
     const stream = createAssistantMessageEventStream();
@@ -288,7 +320,7 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
           signal: options?.signal,
         }, {
           model: route.model,
-          messages: context.messages.map(toOpenAIMessage),
+          messages: toOpenAIMessages(context.messages),
           ...(context.tools?.length ? {
             tools: context.tools.map(tool => ({
               type: 'function',
