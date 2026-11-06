@@ -19,14 +19,22 @@
 
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
 
-const SINGLE_THREAD_BASE = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
-const MULTI_THREAD_BASE = 'https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm';
+const VERSION = '0.12.6';
+const HTTPS = 'https:';
+// 依次尝试的 CDN：npmmirror 国内最快且按 Origin 回 CORS；jsdelivr / unpkg 作为海外回退。
+// core wasm 约 31MB，超过 Cloudflare Pages 单文件 25 MiB 上限，无法随站点自托管。
+function coreBases(pkg: 'core' | 'core-mt'): string[] {
+  return [
+    HTTPS + '//registry.npmmirror.com/@ffmpeg/' + pkg + '/' + VERSION + '/files/dist/esm',
+    HTTPS + '//cdn.jsdelivr.net/npm/@ffmpeg/' + pkg + '@' + VERSION + '/dist/esm',
+    HTTPS + '//unpkg.com/@ffmpeg/' + pkg + '@' + VERSION + '/dist/esm',
+  ];
+}
 
-// TODO: 后续应本地打包 assets + SRI 校验，避免从 unpkg CDN 动态加载 ~31MB core
 const ACCEPTED_JS_TYPES = new Set(['text/javascript', 'application/javascript', 'application/x-javascript']);
 
 // CDN 挂起或 wasm 初始化卡住时必须失败：loadingPromise 永不落定会让整条 FFmpeg 串行队列随之卡死。
-const CORE_FETCH_TIMEOUT_MS = 180_000;
+const CORE_FETCH_TIMEOUT_MS = 90_000;
 const CORE_INIT_TIMEOUT_MS = 60_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
@@ -77,13 +85,7 @@ export async function getFFmpeg(): Promise<FFmpeg> {
     const { FFmpeg } = await import('@ffmpeg/ffmpeg');
     const ffmpeg = new FFmpeg();
     const multiThread = isMultiThreadAvailable();
-    const base = multiThread ? MULTI_THREAD_BASE : SINGLE_THREAD_BASE;
-    // 三个文件互不依赖，并行下载。
-    const [coreURL, wasmURL, workerURL] = await Promise.all([
-      safeToBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript'),
-      safeToBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm'),
-      multiThread ? safeToBlobURL(`${base}/ffmpeg-core.worker.js`, 'text/javascript') : Promise.resolve(undefined),
-    ]);
+    const { coreURL, wasmURL, workerURL } = await fetchCoreFiles(multiThread);
     try {
       await withTimeout(
         ffmpeg.load(workerURL ? { coreURL, wasmURL, workerURL } : { coreURL, wasmURL }),
@@ -103,6 +105,26 @@ export async function getFFmpeg(): Promise<FFmpeg> {
   } finally {
     loadingPromise = null;
   }
+}
+
+async function fetchCoreFiles(multiThread: boolean): Promise<{ coreURL: string; wasmURL: string; workerURL?: string }> {
+  const errors: string[] = [];
+  for (const base of coreBases(multiThread ? 'core-mt' : 'core')) {
+    // 三个文件互不依赖，并行下载；任一失败就整组换下一个 CDN，避免混用不同来源的 core 与 wasm。
+    const results = await Promise.allSettled([
+      safeToBlobURL(base + '/ffmpeg-core.js', 'text/javascript'),
+      safeToBlobURL(base + '/ffmpeg-core.wasm', 'application/wasm'),
+      multiThread ? safeToBlobURL(base + '/ffmpeg-core.worker.js', 'text/javascript') : Promise.resolve(undefined),
+    ]);
+    const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+    if (!failure) {
+      const [coreURL, wasmURL, workerURL] = results.map(result => (result as PromiseFulfilledResult<string | undefined>).value);
+      return { coreURL: coreURL!, wasmURL: wasmURL!, workerURL };
+    }
+    results.forEach(result => { if (result.status === 'fulfilled' && result.value) URL.revokeObjectURL(result.value); });
+    errors.push(failure.reason instanceof Error ? failure.reason.message : String(failure.reason));
+  }
+  throw new Error('加载 ffmpeg core 失败，所有 CDN 均不可用：' + errors.join('；'));
 }
 
 // 终止当前实例（例如任务卡死后）；下一次 getFFmpeg 会重新加载干净的实例。
