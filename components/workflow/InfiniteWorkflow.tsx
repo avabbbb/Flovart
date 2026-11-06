@@ -1701,6 +1701,10 @@ export function InfiniteWorkflow({
     }
   }, [applyOps, currentSnapshot, enqueueRunNode, language, selectNodes, viewportCenter]);
 
+  // 媒体入库阶段/进度与取消句柄：只用于显示，不进项目数据与撤销栈。
+  const [ingestStages, setIngestStages] = useState<Record<string, { stage: 'probe' | 'download' | 'transcode' | 'store'; progress?: number }>>({});
+  const ingestAbortRef = useRef(new Map<string, AbortController>());
+
   const addMediaAt = useCallback(async (file: File, center: WorkflowPoint, expectedProjectId = projectRef.current.id) => {
     let type: WorkflowMediaRecord['type'];
     try {
@@ -1721,13 +1725,25 @@ export function InfiniteWorkflow({
     if (!applyOps([{ type: 'add_node', node: placeholder }])) return;
     let record: WorkflowMediaRecord | undefined;
     try {
-      record = await ingestWorkflowMedia(file);
+      const controller = new AbortController();
+      ingestAbortRef.current.set(nodeId, controller);
+      // 进度回调很密：只在阶段或整数百分比变化时刷新，避免整张画布高频重渲染。
+      let lastStageKey = '';
+      record = await ingestWorkflowMedia(file, undefined, {
+        signal: controller.signal,
+        onStage: stage => {
+          const key = stage.stage + ('progress' in stage ? Math.round(stage.progress / 0.01) : '');
+          if (key === lastStageKey) return;
+          lastStageKey = key;
+          setIngestStages(current => ({ ...current, [nodeId]: stage }));
+        },
+      });
       const currentNode = projectRef.current.nodes.find(item => item.id === nodeId);
       if (!mountedRef.current || projectRef.current.id !== expectedProjectId || !currentNode) {
         await discardWorkflowMediaRecord(record.storageKey);
         return;
       }
-      const { type: _type, ...metadata } = record;
+      const { type: _type, warning, ...metadata } = record;
       const size = fitWorkflowMediaSize(type, record.naturalWidth, record.naturalHeight);
       const nodeCenter = { x: currentNode.position.x + currentNode.width / 2, y: currentNode.position.y + currentNode.height / 2 };
       commitFrame(projectRef.current.nodes.map(item => item.id === nodeId ? {
@@ -1737,11 +1753,17 @@ export function InfiniteWorkflow({
         metadata: { ...item.metadata, ...metadata, error: undefined, uploading: false },
       } : item), projectRef.current.connections);
       releaseWorkflowMediaRecord(record.storageKey);
+      // 转码失败已降级为保留原文件：提示但不丢素材。
+      if (warning) setNotice(warning);
     } catch (error) {
       if (record) await discardWorkflowMediaRecord(record.storageKey);
       if (!mountedRef.current || projectRef.current.id !== expectedProjectId) return;
       if (projectRef.current.nodes.some(item => item.id === nodeId)) applyOps([{ type: 'delete_nodes', ids: [nodeId] }]);
-      setNotice(displayError(error, '媒体文件导入失败'));
+      // 用户主动取消：静默移除占位。
+      if (!(error instanceof DOMException && error.name === 'AbortError')) setNotice(displayError(error, '媒体文件导入失败'));
+    } finally {
+      ingestAbortRef.current.delete(nodeId);
+      setIngestStages(({ [nodeId]: _done, ...rest }) => rest);
     }
   }, [applyOps, commitFrame]);
 
@@ -3080,6 +3102,8 @@ export function InfiniteWorkflow({
             language={language}
             selected={selectedNodes.has(node.id)}
             mediaActive={activeMedia?.projectId === project.id && activeMedia.nodeId === node.id}
+            uploadStage={ingestStages[node.id]}
+            onCancelUpload={ingestAbortRef.current.has(node.id) ? () => ingestAbortRef.current.get(node.id)?.abort() : undefined}
             onActivateMedia={node.type === 'video' && (node.metadata.storageKey || node.metadata.href || node.metadata.artifactRef?.taskId)
               ? () => {
                 // 幂等：onMouseOver 每次划过都会触发；同一节点直接复用原引用，避免不必要的新对象引发全量重渲染。

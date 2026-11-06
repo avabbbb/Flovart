@@ -18,6 +18,8 @@ export interface WorkflowMediaRecord extends WorkflowNodeMetadata {
   type: WorkflowMediaType;
   storageKey: string;
   name: string;
+  /** 入库降级提示（例如转码失败、保留原文件）；调用方展示后不得写进节点 metadata。 */
+  warning?: string;
   mimeType: string;
   bytes: number;
 }
@@ -201,17 +203,48 @@ export async function isBrowserDecodableVideo(blob: Blob): Promise<boolean> {
   }
 }
 
-async function ensureDecodableVideo(file: File): Promise<File> {
-  if (await isBrowserDecodableVideo(file)) return file;
-  let converted: Blob;
+export type WorkflowMediaIngestStage =
+  | { stage: 'probe' }
+  | { stage: 'download'; progress: number }
+  | { stage: 'transcode'; progress: number }
+  | { stage: 'store' };
+
+export interface WorkflowMediaIngestOptions {
+  onStage?: (stage: WorkflowMediaIngestStage) => void;
+  /** 取消入库：终止转码并以 AbortError 拒绝。 */
+  signal?: AbortSignal;
+}
+
+async function ensureDecodableVideo(file: File, { onStage, signal }: WorkflowMediaIngestOptions): Promise<{ file: File; warning?: string }> {
+  onStage?.({ stage: 'probe' });
+  if (await isBrowserDecodableVideo(file)) return { file };
+  signal?.throwIfAborted();
+  onStage?.({ stage: 'transcode', progress: 0 });
   try {
-    converted = await transcodeVideoToH264(file, file.name);
+    const converted = await transcodeVideoToH264(file, file.name, {
+      signal,
+      onDownloadProgress: progress => onStage?.({ stage: 'download', progress }),
+      onProgress: progress => onStage?.({ stage: 'transcode', progress }),
+    });
+    const name = file.name.replace(/\.[^.]+$/, '') + '.mp4';
+    return { file: new File([converted], name, { type: 'video/mp4', lastModified: file.lastModified }) };
   } catch (error) {
+    signal?.throwIfAborted();
+    // 转码失败不丢素材：保留原文件入库（仍可下载、作参考上传），仅画布内预览可能黑屏。
     const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(`浏览器无法解码该视频，自动转码为 H.264 失败：${reason}`);
+    return { file, warning: '浏览器无法解码该视频，转码为 H.264 失败，已保留原文件（画布内可能无法预览）：' + reason };
   }
-  const name = file.name.replace(/\.[^.]+$/, '') + '.mp4';
-  return new File([converted], name, { type: 'video/mp4', lastModified: file.lastModified });
+}
+
+// 不支持的编码可能既不触发 loadeddata 也不触发 error：封面/元数据读取必须有上限，不能让入库永远挂起。
+const POSTER_TIMEOUT_MS = 8000;
+const INSPECT_FALLBACK_TIMEOUT_MS = 5000;
+
+function inspectWorkflowMediaLenient(file: File): Promise<Pick<WorkflowMediaRecord, 'naturalWidth' | 'naturalHeight' | 'durationMs'>> {
+  return Promise.race([
+    inspectWorkflowMedia(file),
+    new Promise<Pick<WorkflowMediaRecord, 'naturalWidth' | 'naturalHeight' | 'durationMs'>>(resolve => setTimeout(() => resolve({}), INSPECT_FALLBACK_TIMEOUT_MS)),
+  ]).catch(() => ({}));
 }
 
 export async function createWorkflowVideoPoster(blob: Blob, maxWidth = 640): Promise<Blob | null> {
@@ -222,12 +255,14 @@ export async function createWorkflowVideoPoster(blob: Blob, maxWidth = 640): Pro
     video.preload = 'auto';
     video.muted = true;
     video.playsInline = true;
-    await new Promise<void>((resolve, reject) => {
-      video.addEventListener('loadeddata', () => resolve(), { once: true });
-      video.addEventListener('error', () => reject(new Error('无法提取视频封面')), { once: true });
+    const loaded = await new Promise<boolean>(resolve => {
+      const timer = setTimeout(() => resolve(false), POSTER_TIMEOUT_MS);
+      video.addEventListener('loadeddata', () => { clearTimeout(timer); resolve(true); }, { once: true });
+      video.addEventListener('error', () => { clearTimeout(timer); resolve(false); }, { once: true });
       video.src = url;
       video.load();
     });
+    if (!loaded) return null;
     const sourceWidth = video.videoWidth || 1280;
     const sourceHeight = video.videoHeight || 720;
     const width = Math.min(maxWidth, sourceWidth);
@@ -323,13 +358,19 @@ export async function ensureWorkflowVideoPoster(
 export async function ingestWorkflowMedia(
   file: File,
   createPoster: (blob: Blob) => Promise<Blob | null> = createWorkflowVideoPoster,
+  options: WorkflowMediaIngestOptions = {},
 ): Promise<WorkflowMediaRecord> {
   const type = workflowMediaType(file);
   const declaredMimeType = workflowMediaMimeType(file);
   const declaredFile = declaredMimeType === file.type ? file : new File([file], file.name, { type: declaredMimeType, lastModified: file.lastModified });
-  const mediaFile = type === 'video' ? await ensureDecodableVideo(declaredFile) : declaredFile;
+  const ensured = type === 'video' ? await ensureDecodableVideo(declaredFile, options) : { file: declaredFile, warning: undefined };
+  const mediaFile = ensured.file;
+  const warning = ensured.warning;
   const mimeType = mediaFile === declaredFile ? declaredMimeType : mediaFile.type;
-  const inspected = await inspectWorkflowMedia(mediaFile);
+  options.signal?.throwIfAborted();
+  options.onStage?.({ stage: 'store' });
+  // 降级保留的原文件可能连元数据都读不出：尺寸缺省，不阻断入库。
+  const inspected = warning ? await inspectWorkflowMediaLenient(mediaFile) : await inspectWorkflowMedia(mediaFile);
   const storageKey = `workflow-media-${nanoid()}`;
   const reservedPosterStorageKey = type === 'video' ? workflowPosterStorageKey(storageKey) : undefined;
   pendingReferences.add(storageKey);
@@ -350,6 +391,7 @@ export async function ingestWorkflowMedia(
       bytes: mediaFile.size,
       ...inspected,
       status: 'success',
+      ...(warning ? { warning } : {}),
     };
   } catch (error) {
     pendingReferences.delete(storageKey);

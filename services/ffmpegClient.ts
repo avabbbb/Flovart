@@ -44,7 +44,23 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
   return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
 }
 
-async function safeToBlobURL(url: string, expectedType: string): Promise<string> {
+async function readBody(res: Response, onProgress?: (loaded: number, total: number) => void): Promise<Blob> {
+  if (!onProgress || !res.body) return res.blob();
+  const total = Number(res.headers.get('Content-Length')) || 0;
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let loaded = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    loaded += value.byteLength;
+    onProgress(loaded, total);
+  }
+  return new Blob(chunks as BlobPart[]);
+}
+
+async function safeToBlobURL(url: string, expectedType: string, onProgress?: (loaded: number, total: number) => void): Promise<string> {
   const signal = AbortSignal.timeout(CORE_FETCH_TIMEOUT_MS);
   let blob: Blob;
   try {
@@ -62,7 +78,7 @@ async function safeToBlobURL(url: string, expectedType: string): Promise<string>
         }
       }
     }
-    blob = await res.blob();
+    blob = await readBody(res, onProgress);
   } catch (error) {
     if (signal.aborted) throw new Error(`加载 ffmpeg core 超时（${CORE_FETCH_TIMEOUT_MS / 1000}s）：${url}`);
     throw error;
@@ -73,14 +89,36 @@ async function safeToBlobURL(url: string, expectedType: string): Promise<string>
   return URL.createObjectURL(new Blob([blob], { type: expectedType }));
 }
 
+export interface FFmpegLoadOptions {
+  // 首次加载时 ffmpeg core（wasm）下载进度，0–1；实例已就绪时不回调。
+  onDownloadProgress?: (ratio: number) => void;
+}
+
+// Content-Length 缺失（或被 gzip 改写）时按约 32 MiB 估算 wasm 体积。
+const WASM_BYTES_ESTIMATE = 33_554_432;
+
 let ffmpegInstance: FFmpeg | null = null;
 let loadingPromise: Promise<FFmpeg> | null = null;
+// 并发等待同一次加载的调用方都能收到下载进度。
+const downloadListeners = new Set<(ratio: number) => void>();
 
-export async function getFFmpeg(): Promise<FFmpeg> {
+function emitDownloadProgress(loaded: number, total: number) {
+  const ratio = Math.min(1, loaded / (total > 0 ? total : WASM_BYTES_ESTIMATE));
+  downloadListeners.forEach(listener => listener(ratio));
+}
+
+export async function getFFmpeg({ onDownloadProgress }: FFmpegLoadOptions = {}): Promise<FFmpeg> {
   if (ffmpegInstance) return ffmpegInstance;
-  if (loadingPromise) return loadingPromise;
+  if (onDownloadProgress) downloadListeners.add(onDownloadProgress);
+  try {
+    loadingPromise ??= loadFFmpeg().finally(() => { loadingPromise = null; });
+    return await loadingPromise;
+  } finally {
+    if (onDownloadProgress) downloadListeners.delete(onDownloadProgress);
+  }
+}
 
-  loadingPromise = (async () => {
+async function loadFFmpeg(): Promise<FFmpeg> {
     // 懒加载：~31MB 运行时只在首次使用视频工具时下载，不能进首屏 bundle。
     const { FFmpeg } = await import('@ffmpeg/ffmpeg');
     const ffmpeg = new FFmpeg();
@@ -98,13 +136,6 @@ export async function getFFmpeg(): Promise<FFmpeg> {
     }
     ffmpegInstance = ffmpeg;
     return ffmpeg;
-  })();
-
-  try {
-    return await loadingPromise;
-  } finally {
-    loadingPromise = null;
-  }
 }
 
 async function fetchCoreFiles(multiThread: boolean): Promise<{ coreURL: string; wasmURL: string; workerURL?: string }> {
@@ -113,7 +144,7 @@ async function fetchCoreFiles(multiThread: boolean): Promise<{ coreURL: string; 
     // 三个文件互不依赖，并行下载；任一失败就整组换下一个 CDN，避免混用不同来源的 core 与 wasm。
     const results = await Promise.allSettled([
       safeToBlobURL(base + '/ffmpeg-core.js', 'text/javascript'),
-      safeToBlobURL(base + '/ffmpeg-core.wasm', 'application/wasm'),
+      safeToBlobURL(base + '/ffmpeg-core.wasm', 'application/wasm', emitDownloadProgress),
       multiThread ? safeToBlobURL(base + '/ffmpeg-core.worker.js', 'text/javascript') : Promise.resolve(undefined),
     ]);
     const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');

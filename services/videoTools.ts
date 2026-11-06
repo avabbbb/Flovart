@@ -145,30 +145,60 @@ async function scaleVideoOnFFmpeg(blob: Blob, size: { width: number; height: num
 
 // 浏览器原生解不了的编码（H.265/HEVC、ProRes 等）在入库前转为 H.264 MP4。
 // 只取第一条视频轨 + 可选第一条音轨；宽高取偶数以满足 yuv420p。
-export async function transcodeVideoToH264(blob: Blob, originalName = 'video.mp4'): Promise<Blob> {
-  return enqueueFFmpegTask(() => transcodeVideoToH264OnFFmpeg(blob, originalName));
+export interface VideoTranscodeOptions {
+  // 首次使用时 ffmpeg core 的下载进度（0–1）；已加载时不回调。
+  onDownloadProgress?: (ratio: number) => void;
+  // 转码进度（0–1）。
+  onProgress?: (ratio: number) => void;
+  // 取消：终止 ffmpeg 实例并以 AbortError 拒绝；下一个任务重新加载干净实例。
+  signal?: AbortSignal;
 }
 
-async function transcodeVideoToH264OnFFmpeg(blob: Blob, originalName: string): Promise<Blob> {
-  const ffmpeg = await getFFmpeg();
+// 入库转码只为让浏览器能解码预览、作参考素材：ultrafast + 长边限 1920（≈1080p），比 veryfast 原分辨率快数倍。
+const H264_MAX_EDGE = 1920;
+
+export async function transcodeVideoToH264(blob: Blob, originalName = 'video.mp4', options: VideoTranscodeOptions = {}): Promise<Blob> {
+  options.signal?.throwIfAborted();
+  return enqueueFFmpegTask(() => transcodeVideoToH264OnFFmpeg(blob, originalName, options));
+}
+
+async function transcodeVideoToH264OnFFmpeg(blob: Blob, originalName: string, { onDownloadProgress, onProgress, signal }: VideoTranscodeOptions): Promise<Blob> {
+  // 排队期间可能已被取消。
+  signal?.throwIfAborted();
+  const ffmpeg = await getFFmpeg({ onDownloadProgress });
+  signal?.throwIfAborted();
   const prefix = uniqueFFmpegPrefix('h264');
   const inputName = prefix + 'input.' + guessFormat(originalName);
   const outputName = prefix + 'output.mp4';
+  const handleProgress = ({ progress }: { progress: number }) => {
+    if (Number.isFinite(progress)) onProgress?.(Math.min(1, Math.max(0, progress)));
+  };
+  // 取消即终止实例：进行中的 exec 以 terminated 拒绝。
+  const abort = () => resetFFmpeg();
+  signal?.addEventListener('abort', abort, { once: true });
+  ffmpeg.on?.('progress', handleProgress);
   try {
     await ffmpeg.writeFile(inputName, await fetchFile(blob));
     const code = await ffmpeg.exec([
       '-i', inputName,
       '-map', '0:v:0', '-map', '0:a:0?',
-      '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
-      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
-      '-c:a', 'aac', '-b:a', '192k',
+      // 只缩不放：小于 1920 的保持原尺寸；宽高取偶数满足 yuv420p。
+      '-vf', "scale='min(iw," + H264_MAX_EDGE + ")':'min(ih," + H264_MAX_EDGE + ")':force_original_aspect_ratio=decrease:force_divisible_by=2",
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-b:a', '160k',
       '-movflags', '+faststart',
       outputName,
     ]);
+    signal?.throwIfAborted();
     assertFFmpegExitCode(code);
     const data = await ffmpeg.readFile(outputName);
     return new Blob([data], { type: 'video/mp4' });
+  } catch (error) {
+    signal?.throwIfAborted();
+    throw error;
   } finally {
+    signal?.removeEventListener('abort', abort);
+    ffmpeg.off?.('progress', handleProgress);
     await deleteFFmpegFiles(ffmpeg, [inputName, outputName]);
   }
 }

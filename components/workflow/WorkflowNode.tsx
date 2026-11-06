@@ -146,6 +146,8 @@ export function WorkflowNode({
   onLassoDone,
   subgraphChildCount,
   onToggleCollapse,
+  uploadStage,
+  onCancelUpload,
 }: {
   node: WorkflowNodeData;
   selected: boolean;
@@ -200,6 +202,10 @@ export function WorkflowNode({
   lassoActive?: boolean;
   /** null 取消；[] 整图；否则为原图像素坐标的闭合路径。 */
   onLassoDone?: (points: LassoPoint[] | null) => void;
+  // 媒体入库阶段与进度（画布持有，仅显示）。
+  uploadStage?: { stage: 'probe' | 'download' | 'transcode' | 'store'; progress?: number };
+  // 取消入库：终止转码并移除占位节点。
+  onCancelUpload?: () => void;
 }) {
   const status = node.metadata.status || 'idle';
   const progress = Math.max(0, Math.min(100, Math.round(node.metadata.progress || 0)));
@@ -269,6 +275,13 @@ export function WorkflowNode({
   }, [node.metadata.poster, node.metadata.posterStorageKey, node.type, posterSourceKey]);
   const uploading = Boolean(node.metadata.uploading);
   const uploadBytes = node.metadata.uploadBytes || 0;
+  const uploadPercent = uploadStage?.progress !== undefined ? Math.round(uploadStage.progress / 0.01) + '%' : '';
+  const uploadLabel = !uploadStage ? (language === 'en' ? 'Uploading' : '上传中')
+    : uploadStage.stage === 'probe' ? (language === 'en' ? 'Checking format' : '检测格式')
+    : uploadStage.stage === 'download' ? (language === 'en' ? 'Downloading converter' : '下载转码组件')
+    : uploadStage.stage === 'transcode' ? (language === 'en' ? 'Converting' : '转码中')
+    : (language === 'en' ? 'Saving' : '保存中');
+  const uploadDetail = uploadPercent || formatBytes(uploadBytes);
   const isLoading = status === 'loading' || uploading;
   const [isDropTarget, setDropTarget] = useState(false);
   const [isEditingTitle, setEditingTitle] = useState(false);
@@ -586,7 +599,18 @@ export function WorkflowNode({
               animate={{ x: '120%' }}
               transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut', repeatDelay: 0.5 }}
             />
-            <span className="flv-generation-glass__status">上传中<b>{formatBytes(uploadBytes)}</b></span>
+            <span className="flv-generation-glass__status">{uploadLabel}<b>{uploadDetail}</b></span>
+            {onCancelUpload && (
+              <button
+                type="button"
+                data-workflow-overlay
+                style={{ pointerEvents: 'auto', position: 'relative', marginLeft: 8, padding: '2px 10px', fontSize: 12, borderRadius: 6, border: '1px solid currentColor', background: 'transparent', color: 'inherit', cursor: 'pointer' }}
+                onPointerDown={event => event.stopPropagation()}
+                onClick={event => { event.stopPropagation(); onCancelUpload(); }}
+              >
+                {language === 'en' ? 'Cancel' : '取消'}
+              </button>
+            )}
           </motion.div>
         )}
         {status === 'error' && node.metadata.error && <div className="workflow-node__generation-error" title={node.metadata.error}>{node.metadata.error}</div>}
