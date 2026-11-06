@@ -1,3 +1,4 @@
+import { pickVideoFile, promptUndecodableVideo } from '../../services/undecodableVideoPrompt';
 import { anchorApprovalPatch } from '../../services/anchorApproval';
 import { deriveWorkflowLayerPreview } from './layerPreview';
 import { nanoid } from 'nanoid';
@@ -1705,6 +1706,14 @@ export function InfiniteWorkflow({
   // 媒体入库阶段/进度与取消句柄：只用于显示，不进项目数据与撤销栈。
   const [ingestStages, setIngestStages] = useState<Record<string, { stage: 'probe' | 'download' | 'transcode' | 'store'; progress?: number }>>({});
   const ingestAbortRef = useRef(new Map<string, AbortController>());
+  // 浏览器解不了且预览代理失败的视频：弹窗让用户换文件或复制本机转码命令。replaceMedia 定义在后面，经 ref 调用。
+  const replaceMediaRef = useRef<((node: WorkflowNodeData, file: File) => Promise<void>) | undefined>(undefined);
+  const offerUndecodableVideoFix = useCallback(async (nodeId: string, fileName: string) => {
+    if (await promptUndecodableVideo(fileName) !== 'replace') return;
+    const next = await pickVideoFile();
+    const node = projectRef.current.nodes.find(item => item.id === nodeId);
+    if (next && node && !node.isLocked) await replaceMediaRef.current?.(node, next);
+  }, []);
 
   const addMediaAt = useCallback(async (file: File, center: WorkflowPoint, expectedProjectId = projectRef.current.id) => {
     let type: WorkflowMediaRecord['type'];
@@ -1754,8 +1763,9 @@ export function InfiniteWorkflow({
         metadata: { ...item.metadata, ...metadata, error: undefined, uploading: false },
       } : item), projectRef.current.connections);
       releaseWorkflowMediaRecord(record.storageKey);
-      // 转码失败已降级为保留原文件：提示但不丢素材。
-      if (warning) setNotice(warning);
+      // 转码失败已降级为保留原文件：解不了的视频弹窗给出换文件/转换方案，其它降级只提示。
+      if (warning && record.type === 'video' && !record.previewStorageKey) void offerUndecodableVideoFix(nodeId, file.name);
+      else if (warning) setNotice(warning);
     } catch (error) {
       if (record) await discardWorkflowMediaRecord(record.storageKey);
       if (!mountedRef.current || projectRef.current.id !== expectedProjectId) return;
@@ -1766,7 +1776,7 @@ export function InfiniteWorkflow({
       ingestAbortRef.current.delete(nodeId);
       setIngestStages(({ [nodeId]: _done, ...rest }) => rest);
     }
-  }, [applyOps, commitFrame]);
+  }, [applyOps, commitFrame, offerUndecodableVideoFix]);
 
   const addSharedMediaAt = useCallback(async (media: WorkflowSharedMedia, center: WorkflowPoint) => {
     if (/^https?:\/\//i.test(media.href)) {
@@ -2399,7 +2409,12 @@ export function InfiniteWorkflow({
       } : item);
       commitFrame(updated, projectRef.current.connections);
       releaseWorkflowMediaRecord(record.storageKey);
-      setNotice(warning ?? null);
+      if (warning && record.type === 'video' && !record.previewStorageKey) {
+        setNotice(null);
+        void offerUndecodableVideoFix(node.id, file.name);
+      } else {
+        setNotice(warning ?? null);
+      }
     } catch (error) {
       if (record) await discardWorkflowMediaRecord(record.storageKey);
       if (mountedRef.current
@@ -2411,7 +2426,8 @@ export function InfiniteWorkflow({
         setNotice(displayError(error, '媒体文件替换失败'));
       }
     }
-  }, [commitFrame]);
+  }, [commitFrame, offerUndecodableVideoFix]);
+  useEffect(() => { replaceMediaRef.current = replaceMedia; }, [replaceMedia]);
 
   const addSharedMedia = useCallback(async (media: WorkflowSharedMedia) => {
     await addSharedMediaAt(media, viewportCenter());

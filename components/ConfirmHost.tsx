@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Z } from '../utils/zLayers';
-import { answerUiConfirm, registerUiConfirmHost, useUiConfirmRequest } from '../services/uiConfirm';
+import { answerUiConfirm, registerUiConfirmHost, runUiConfirmExtra, useUiConfirmRequest } from '../services/uiConfirm';
 
 /** Renders the single pending in-app confirmation. Non-modal: the canvas keeps working behind it. */
 export function ConfirmHost() {
@@ -22,6 +22,7 @@ export function ConfirmHost() {
       <strong id="flovart-confirm-title">{request.title}</strong>
       {request.body && <p>{request.body}</p>}
       <div className="flovart-confirm__actions">
+        {request.extraLabel && <button type="button" onClick={() => runUiConfirmExtra(request.id)}>{request.extraLabel}</button>}
         <button type="button" onClick={() => answerUiConfirm(request.id, false)}>{request.cancelLabel}</button>
         <button type="button" ref={confirmRef} data-tone={request.tone} onClick={() => answerUiConfirm(request.id, true)}>{request.confirmLabel}</button>
       </div>

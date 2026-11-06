@@ -23,6 +23,7 @@ const JARGON_RULES: ReadonlyArray<{ pattern: RegExp; message: string }> = [
     { pattern: /\b429\b|rate[ _-]?limit|too many requests|quota exceeded/i, message: 'AI 服务当前限流，请稍后重试。' },
     { pattern: /\b(?:500|502|503|504)\b|provider error|service unavailable|bad gateway|internal server error/i, message: 'AI 服务暂时不可用，任务已失败，可稍后重试。' },
     { pattern: /非 JSON|malformed response|invalid json/i, message: 'AI 服务返回了无法识别的结果，任务已失败，可重试或检查服务配置。' },
+    { pattern: /\b422\b|unprocessable|unsupported (?:video )?(?:codec|format)/i, message: '当前 AI 服务无法处理该参考素材（多为视频编码不受支持，如 HEVC/H.265、ProRes），请换一个文件，或先转成 H.264 MP4 再上传。' },
     { pattern: /\b400\b|bad request|invalid request/i, message: '当前 AI 服务不接受这组生成参数，请检查模型和参考素材。' },
     { pattern: /failed to fetch|networkerror|fetch failed|network request failed|econnrefused|enotfound|etimedout/i, message: '无法连接到该 AI 服务，请检查服务地址后重试。' },
     // 持久化 / 本地存储

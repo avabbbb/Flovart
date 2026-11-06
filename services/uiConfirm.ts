@@ -16,6 +16,7 @@ export interface UiConfirmRequest {
   confirmLabel: string;
   cancelLabel: string;
   tone: 'default' | 'danger';
+  extraLabel?: string;
   expiresAt: number | null;
 }
 
@@ -25,13 +26,15 @@ export interface UiConfirmOptions {
   confirmLabel?: string;
   cancelLabel?: string;
   tone?: 'default' | 'danger';
+  // 第三个按钮：执行后不关闭弹窗（例如复制命令）。
+  extraAction?: { label: string; run: () => void };
   /** Auto-cancel after this many ms. Default 120s; pass 0 to wait for the user. */
   timeoutMs?: number;
   /** Called when the request closes without a user answer, so callers can tell the user nothing was submitted. */
   onDismissed?: (reason: 'timeout' | 'replaced' | 'unmounted') => void;
 }
 
-type Pending = { request: UiConfirmRequest; resolve: (value: boolean) => void; timer?: number; onDismissed?: UiConfirmOptions['onDismissed'] };
+type Pending = { request: UiConfirmRequest; resolve: (value: boolean) => void; timer?: number; onDismissed?: UiConfirmOptions['onDismissed']; extraRun?: () => void };
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 let nextId = 1;
@@ -62,16 +65,19 @@ export function requestUiConfirm(options: UiConfirmOptions): Promise<boolean> {
     confirmLabel: options.confirmLabel || '确定',
     cancelLabel: options.cancelLabel || '取消',
     tone: options.tone || 'default',
+    ...(options.extraAction ? { extraLabel: options.extraAction.label } : {}),
     expiresAt: timeoutMs > 0 ? Date.now() + timeoutMs : null,
   };
   return new Promise<boolean>(resolve => {
-    pending = { request, resolve, onDismissed: options.onDismissed };
+    pending = { request, resolve, onDismissed: options.onDismissed, extraRun: options.extraAction?.run };
     if (timeoutMs > 0) pending.timer = window.setTimeout(() => settle(request.id, false, 'timeout'), timeoutMs);
     emit();
   });
 }
 
 export function answerUiConfirm(id: number, value: boolean) { settle(id, value); }
+
+export function runUiConfirmExtra(id: number) { if (pending?.request.id === id) pending.extraRun?.(); }
 
 export function registerUiConfirmHost(): () => void {
   hostCount += 1;
