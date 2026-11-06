@@ -143,6 +143,36 @@ async function scaleVideoOnFFmpeg(blob: Blob, size: { width: number; height: num
   }
 }
 
+// 浏览器原生解不了的编码（H.265/HEVC、ProRes 等）在入库前转为 H.264 MP4。
+// 只取第一条视频轨 + 可选第一条音轨；宽高取偶数以满足 yuv420p。
+export async function transcodeVideoToH264(blob: Blob, originalName = 'video.mp4'): Promise<Blob> {
+  return enqueueFFmpegTask(() => transcodeVideoToH264OnFFmpeg(blob, originalName));
+}
+
+async function transcodeVideoToH264OnFFmpeg(blob: Blob, originalName: string): Promise<Blob> {
+  const ffmpeg = await getFFmpeg();
+  const prefix = uniqueFFmpegPrefix('h264');
+  const inputName = prefix + 'input.' + guessFormat(originalName);
+  const outputName = prefix + 'output.mp4';
+  try {
+    await ffmpeg.writeFile(inputName, await fetchFile(blob));
+    const code = await ffmpeg.exec([
+      '-i', inputName,
+      '-map', '0:v:0', '-map', '0:a:0?',
+      '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-b:a', '192k',
+      '-movflags', '+faststart',
+      outputName,
+    ]);
+    assertFFmpegExitCode(code);
+    const data = await ffmpeg.readFile(outputName);
+    return new Blob([data], { type: 'video/mp4' });
+  } finally {
+    await deleteFFmpegFiles(ffmpeg, [inputName, outputName]);
+  }
+}
+
 export async function splitAudioVideo(blob: Blob, originalName = 'video.mp4'): Promise<VideoAvSplitResult> {
   return enqueueFFmpegTask(() => splitAudioVideoOnFFmpeg(blob, originalName));
 }

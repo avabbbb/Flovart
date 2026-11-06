@@ -8,6 +8,7 @@ import { loadRuntimeArtifactBlob } from '../../services/runtimeArtifacts';
 import { loadBrowserImportArtifactBlob, parseBrowserImportHref } from '../../services/browserImportArtifacts';
 import { LocalFolderError, parseLocalFolderHref, readLocalFolderFile } from '../../services/localFolderSource';
 import { fetchRemoteMediaBlob, shouldUseDesktopNativeFetch } from '../../services/desktopNetwork';
+import { transcodeVideoToH264 } from '../../services/videoTools';
 import { workflowMediaStorage } from './storage';
 import type { WorkflowArtifactRef, WorkflowNode, WorkflowNodeMetadata, WorkflowNodeType, WorkflowProject } from './types';
 
@@ -170,6 +171,49 @@ export async function inspectWorkflowMedia(file: File): Promise<Pick<WorkflowMed
   }
 }
 
+// Chrome 遇到不支持的编码（HEVC 4:2:2/10bit、ProRes 等）可能只解出音轨（videoWidth 为 0）、直接报错，
+// 或元数据正常但首帧解不出来。以首帧 loadeddata 为准；元数据正常但超时仍无首帧时按可解码处理，避免误转码。
+const DECODE_PROBE_TIMEOUT_MS = 2500;
+
+export async function isBrowserDecodableVideo(blob: Blob): Promise<boolean> {
+  if (typeof document === 'undefined') return true;
+  const url = URL.createObjectURL(blob);
+  const video = document.createElement('video');
+  const { promise, resolve } = Promise.withResolvers<boolean>();
+  let sawMetadata = false;
+  const timer = setTimeout(() => resolve(sawMetadata), DECODE_PROBE_TIMEOUT_MS);
+  const settle = (value: boolean) => { clearTimeout(timer); resolve(value); };
+  video.addEventListener('loadedmetadata', () => {
+    if (!video.videoWidth || !video.videoHeight) settle(false);
+    else sawMetadata = true;
+  }, { once: true });
+  video.addEventListener('loadeddata', () => settle(Boolean(video.videoWidth && video.videoHeight)), { once: true });
+  video.addEventListener('error', () => settle(false), { once: true });
+  video.muted = true;
+  video.preload = 'auto';
+  video.src = url;
+  video.load();
+  try {
+    return await promise;
+  } finally {
+    video.removeAttribute('src');
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function ensureDecodableVideo(file: File): Promise<File> {
+  if (await isBrowserDecodableVideo(file)) return file;
+  let converted: Blob;
+  try {
+    converted = await transcodeVideoToH264(file, file.name);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`浏览器无法解码该视频，自动转码为 H.264 失败：${reason}`);
+  }
+  const name = file.name.replace(/\.[^.]+$/, '') + '.mp4';
+  return new File([converted], name, { type: 'video/mp4', lastModified: file.lastModified });
+}
+
 export async function createWorkflowVideoPoster(blob: Blob, maxWidth = 640): Promise<Blob | null> {
   if (typeof document === 'undefined') return null;
   const url = URL.createObjectURL(blob);
@@ -281,8 +325,10 @@ export async function ingestWorkflowMedia(
   createPoster: (blob: Blob) => Promise<Blob | null> = createWorkflowVideoPoster,
 ): Promise<WorkflowMediaRecord> {
   const type = workflowMediaType(file);
-  const mimeType = workflowMediaMimeType(file);
-  const mediaFile = mimeType === file.type ? file : new File([file], file.name, { type: mimeType, lastModified: file.lastModified });
+  const declaredMimeType = workflowMediaMimeType(file);
+  const declaredFile = declaredMimeType === file.type ? file : new File([file], file.name, { type: declaredMimeType, lastModified: file.lastModified });
+  const mediaFile = type === 'video' ? await ensureDecodableVideo(declaredFile) : declaredFile;
+  const mimeType = mediaFile === declaredFile ? declaredMimeType : mediaFile.type;
   const inspected = await inspectWorkflowMedia(mediaFile);
   const storageKey = `workflow-media-${nanoid()}`;
   const reservedPosterStorageKey = type === 'video' ? workflowPosterStorageKey(storageKey) : undefined;
@@ -299,9 +345,9 @@ export async function ingestWorkflowMedia(
       storageKey,
       poster: undefined,
       posterStorageKey,
-      name: file.name,
+      name: mediaFile.name,
       mimeType,
-      bytes: file.size,
+      bytes: mediaFile.size,
       ...inspected,
       status: 'success',
     };
