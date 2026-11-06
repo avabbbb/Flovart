@@ -1,5 +1,5 @@
 import { AtSign, Box, Check, ChevronDown, Hand, Image as ImageIcon, KeyRound, LayoutGrid, Plus, RotateCw, Send, Square, Trash2, Video, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
 import {
   ManagedFlovartAgentClient,
@@ -36,6 +36,7 @@ import { useMineSkillsStore } from './mineSkills';
 import { AgentReferenceChip } from './AgentReferenceChip';
 import { AgentTodoCard } from './AgentTodoCard';
 import { AGENT_TODO_TOOL_NAME, latestTodoFromMessages, todoFromToolResult, type AgentTodoItem } from './agentTodo';
+import { AgentHeaderLeadingContext } from './agentHeaderSlot';
 
 interface FlovartAgentPanelProps {
   project: WorkflowProject;
@@ -747,11 +748,13 @@ const userApiKeysRef = useRef(userApiKeys);
     focusComposer();
   };
   const activeSessionTitle = sessionList.find(session => session.id === activeSessionId)?.title || t('agentPanel.newChat');
+  const headerLeading = useContext(AgentHeaderLeadingContext);
   const conversationEmpty = !messages.some(message => message.role === 'user' || message.role === 'assistant' || message.role === 'tool');
   const setupGate = Boolean(setupBlocker);
   return (
     <div ref={rootRef} className="workflow-agent is-embedded agent-conversation">
       <header className="workflow-agent__utility agent-conversation__header">
+        {headerLeading}
         <button
           type="button"
           className="agent-header-title"
@@ -778,7 +781,7 @@ const userApiKeysRef = useRef(userApiKeys);
           </div>
         )}
         <span className="agent-header-actions">
-          <button type="button" className="agent-icon-btn" aria-label={t('agentPanel.newChat')} title={t('agentPanel.newChat')} onClick={() => void handleNewConversation()}><Plus size={15} /></button>
+          <button type="button" className="agent-new-chat-btn" aria-label={t('agentPanel.newChat')} title={t('agentPanel.newChat')} onClick={() => void handleNewConversation()}><Plus size={14} /><span>{t('agentPanel.newChat')}</span></button>
         </span>
       </header>
       <section className="workflow-agent__body">

@@ -42,6 +42,7 @@ import { registerWorkflowArtifact } from './services/studio/artifactRegistry';
 
 const SettingsPanel = React.lazy(() => import('./components/SettingsPanel').then(m => ({ default: m.SettingsPanel })));
 
+import { AgentDrawerSections } from './components/agent/AgentDrawerSections';
 const WorkflowWorkspace = React.lazy(() => import('./components/workflow/WorkflowWorkspace').then(m => ({ default: m.WorkflowWorkspace })));
 const AssetAddModal = React.lazy(() => import('./components/AssetAddModal').then(m => ({ default: m.AssetAddModal })));
 const BrowserImportBridge = React.lazy(() => import('./components/extension/BrowserImportBridge').then(m => ({ default: m.BrowserImportBridge })));
@@ -669,7 +670,7 @@ const App: React.FC = () => {
                     { id: 'history', label: language === 'zho' ? '生成历史' : 'History', icon: undefined },
                 ]}
             >
-                {rightTab === 'agent' && (activeWorkflowProject ? (
+                {rightTab === 'agent' && (<AgentDrawerSections projectTitle={activeWorkflowProject?.title} language={language} chatHasHeader={Boolean(activeWorkflowProject)}>{activeWorkflowProject ? (
                     <FlovartAgentPanel
                         project={activeWorkflowProject}
                         onActivityChange={() => undefined}
@@ -687,7 +688,7 @@ const App: React.FC = () => {
                         language={language}
                         onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
                     />
-                ))}
+                )}</AgentDrawerSections>)}
                 {rightTab === 'history' && (
                     <StudioMediaBrowser
                         mode="history"

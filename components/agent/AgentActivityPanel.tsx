@@ -46,7 +46,7 @@ function StatusIcon({ status }: { status: AgentActivityEntry['status'] }) {
   return <CircleDashed size={14} className="animate-spin" style={{ color: 'var(--isl-ink-soft)' }} />;
 }
 
-export function AgentActivityPanel({ language = 'zho' }: { language?: Lang }) {
+export function AgentActivityPanel({ language = 'zho', view = 'all' }: { language?: Lang; view?: 'all' | 'status' | 'log' }) {
   const zh = language === 'zho';
   const entries = useAgentActivityStore(state => state.entries);
   const windows = useAgentActivityStore(state => state.windows);
@@ -108,7 +108,7 @@ export function AgentActivityPanel({ language = 'zho' }: { language?: Lang }) {
         </button>
       </header>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      {view !== 'log' && (<div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border p-3" style={{ borderColor: 'var(--isl-border)' }}>
           <strong className="text-xs">{zh ? '已连接的画布窗口' : 'Connected canvas windows'}</strong>
           {windows.length === 0 ? (
@@ -133,9 +133,9 @@ export function AgentActivityPanel({ language = 'zho' }: { language?: Lang }) {
             <li>{zh ? '在该 Agent 里直接说出要做的事，每一步都会出现在下方。' : 'Tell that agent what to do; each step appears below.'}</li>
           </ol>
         </div>
-      </div>
+      </div>)}
 
-      <div className="flex flex-col gap-2">
+      {view !== 'status' && (<div className="flex flex-col gap-2">
         <div className="flex items-center gap-2 text-xs">
           <span style={{ color: 'var(--isl-ink-soft)' }}>{zh ? '显示' : 'Show'}</span>
           <select value={agentFilter} onChange={event => setAgentFilter(event.target.value)} className="rounded border bg-transparent px-1 py-0.5" style={{ borderColor: 'var(--isl-border)' }}>
@@ -167,8 +167,8 @@ export function AgentActivityPanel({ language = 'zho' }: { language?: Lang }) {
             ))}
           </ol>
         )}
-      </div>
-      <AgentReceiptsSection language={language} />
+      </div>)}
+      {view !== 'status' && <AgentReceiptsSection language={language} />}
     </section>
   );
 }
