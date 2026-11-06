@@ -1702,27 +1702,48 @@ export function InfiniteWorkflow({
   }, [applyOps, currentSnapshot, enqueueRunNode, language, selectNodes, viewportCenter]);
 
   const addMediaAt = useCallback(async (file: File, center: WorkflowPoint, expectedProjectId = projectRef.current.id) => {
+    let type: WorkflowMediaRecord['type'];
+    try {
+      type = workflowMediaType(file);
+    } catch (error) {
+      setNotice(displayError(error, '媒体文件导入失败'));
+      return;
+    }
+    // 入库可能要做解码探测、首次下载 ~31MB ffmpeg core 并转码，耗时数秒到数十秒：
+    // 先放「上传中」占位节点，避免拖入后画布毫无反应；完成后原地替换，失败则移除并提示。
+    const nodeId = nanoid();
+    const placeholderSize = fitWorkflowMediaSize(type);
+    const placeholder = {
+      ...createWorkflowNode(nodeId, type, { x: center.x - placeholderSize.width / 2, y: center.y - placeholderSize.height / 2 }, { name: file.name, uploading: true, uploadBytes: file.size }),
+      ...placeholderSize,
+      freeResize: false,
+    };
+    if (!applyOps([{ type: 'add_node', node: placeholder }])) return;
     let record: WorkflowMediaRecord | undefined;
     try {
       record = await ingestWorkflowMedia(file);
-      if (!mountedRef.current || projectRef.current.id !== expectedProjectId) {
+      const currentNode = projectRef.current.nodes.find(item => item.id === nodeId);
+      if (!mountedRef.current || projectRef.current.id !== expectedProjectId || !currentNode) {
         await discardWorkflowMediaRecord(record.storageKey);
         return;
       }
-      const { type, ...metadata } = record;
+      const { type: _type, ...metadata } = record;
       const size = fitWorkflowMediaSize(type, record.naturalWidth, record.naturalHeight);
-      const node = {
-        ...createWorkflowNode(nanoid(), type, { x: center.x - size.width / 2, y: center.y - size.height / 2 }, metadata),
+      const nodeCenter = { x: currentNode.position.x + currentNode.width / 2, y: currentNode.position.y + currentNode.height / 2 };
+      commitFrame(projectRef.current.nodes.map(item => item.id === nodeId ? {
+        ...item,
         ...size,
-        freeResize: false,
-      };
-      if (!applyOps([{ type: 'add_node', node }])) await discardWorkflowMediaRecord(record.storageKey);
-      else releaseWorkflowMediaRecord(record.storageKey);
+        position: { x: nodeCenter.x - size.width / 2, y: nodeCenter.y - size.height / 2 },
+        metadata: { ...item.metadata, ...metadata, error: undefined, uploading: false },
+      } : item), projectRef.current.connections);
+      releaseWorkflowMediaRecord(record.storageKey);
     } catch (error) {
       if (record) await discardWorkflowMediaRecord(record.storageKey);
-      if (mountedRef.current && projectRef.current.id === expectedProjectId) setNotice(displayError(error, '媒体文件导入失败'));
+      if (!mountedRef.current || projectRef.current.id !== expectedProjectId) return;
+      if (projectRef.current.nodes.some(item => item.id === nodeId)) applyOps([{ type: 'delete_nodes', ids: [nodeId] }]);
+      setNotice(displayError(error, '媒体文件导入失败'));
     }
-  }, [applyOps]);
+  }, [applyOps, commitFrame]);
 
   const addSharedMediaAt = useCallback(async (media: WorkflowSharedMedia, center: WorkflowPoint) => {
     if (/^https?:\/\//i.test(media.href)) {
