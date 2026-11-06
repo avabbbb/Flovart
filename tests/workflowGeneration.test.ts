@@ -667,6 +667,28 @@ describe('workflow generation', () => {
     expect(latest.nodes.some(node => node.metadata.storageKey === 'two-key')).toBe(false);
   });
 
+  it('keeps media the user swapped in during a run and adds the result as a new connected node', async () => {
+    const source = project();
+    let latest = source;
+    let releaseEncoding!: () => void;
+    let markEncodingStarted!: () => void;
+    const encodingStarted = new Promise<void>(resolve => { markEncodingStarted = resolve; });
+    const encoding = new Promise<string>(resolve => { releaseEncoding = () => resolve('data:image/png;base64,RUN'); });
+    const run = runWorkflowGeneration(source, 'config-1', {
+      userApiKeys: [imageKey],
+      executeMedia: vi.fn().mockResolvedValue({ ok: true, elementId: 'config-1', capability: 'image', mediaUrl: 'mock-result', mimeType: 'image/png' }), fetchMedia: vi.fn().mockResolvedValue(new Blob(['run'])), ingestMedia: vi.fn().mockResolvedValue({ type: 'image', storageKey: 'run-key', name: 'run.png', mimeType: 'image/png', bytes: 3 }), encodeDataUrl: () => { markEncodingStarted(); return encoding; }, getProject: () => latest, onProjectChange: next => { latest = next; },
+    });
+    await encodingStarted;
+    latest = { ...latest, nodes: latest.nodes.map(node => node.id === 'config-1' ? { ...node, metadata: { ...node.metadata, storageKey: 'user-key' } } : node) };
+    releaseEncoding();
+    await run;
+    const initiator = latest.nodes.find(node => node.id === 'config-1');
+    expect(initiator?.metadata.storageKey).toBe('user-key');
+    expect(initiator?.metadata.status).toBe('success');
+    const resultNode = latest.nodes.find(node => node.metadata.storageKey === 'run-key');
+    expect(resultNode).toBeDefined();
+    expect(latest.connections.some(connection => connection.fromNodeId === 'config-1' && connection.toNodeId === resultNode?.id)).toBe(true);
+  });
   it('uses a JPEG poster for video history and revokes provider blob URLs', async () => {
     const source = project();
     source.nodes[2].metadata.config = { mode: 'video', modelId: 'flovart:seedance-2' };

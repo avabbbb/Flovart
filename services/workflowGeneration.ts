@@ -483,6 +483,35 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     const batched = count > 1;
     const batchId = batched ? createId() : undefined;
     const previousStorageKey = executionTarget.selectionSnapshot.metadata.storageKey;
+    // 运行期间用户换了该节点的媒体（选了别的版本、重新上传）：结果另存为新节点并连线，绝不覆盖用户的选择。
+    let detachedResult = false;
+    const userReplacedMedia = () => {
+      const liveKey = canonical(runtime, current).nodes.find(node => node.id === nodeId)?.metadata.storageKey;
+      return liveKey !== previousStorageKey && liveKey !== singleMediaRecord?.storageKey;
+    };
+    const pushResultNode = (record: WorkflowMediaRecord, index: number) => {
+      const resultNode = {
+        ...createWorkflowNode(createId(), mode, { x: executionTarget.outputTarget.x + executionTarget.outputTarget.width + 80, y: executionTarget.outputTarget.y + index * 48 }, {
+          ...record,
+          href: undefined,
+          status: 'success',
+          config: executionTarget.selectionSnapshot.metadata.config,
+          sourceOperationNodeId: isImageOperation ? nodeId : undefined,
+          operationTakeId: isImageOperation ? operationTakeId : undefined,
+          operationOutputRole: isImageOperation ? 'result_image' : undefined,
+        }),
+        ...fitWorkflowMediaSize(mode as 'image' | 'video', record.naturalWidth, record.naturalHeight),
+      };
+      resultNode.title = mode === 'video' ? '生成视频' : '生成图片';
+      preparedNodes.push(resultNode);
+      if (!stillActive()) throw abortError();
+      preparedConnections.push({
+        id: createId(), fromNodeId: nodeId, toNodeId: resultNode.id,
+        kind: isImageOperation ? 'operation-output' : 'data',
+        role: isImageOperation ? 'result_image' : undefined,
+        order: isImageOperation ? index : undefined,
+      });
+    };
 
     for (let index = 0; index < count; index += 1) {
       if (!stillActive()) throw abortError();
@@ -660,28 +689,9 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         throw abortError();
       }
 
-      if (batched) {
-        const resultNode = {
-          ...createWorkflowNode(createId(), mode, { x: executionTarget.outputTarget.x + executionTarget.outputTarget.width + 80, y: executionTarget.outputTarget.y + index * 48 }, {
-            ...record,
-            href: undefined,
-            status: 'success',
-            config: executionTarget.selectionSnapshot.metadata.config,
-            sourceOperationNodeId: isImageOperation ? nodeId : undefined,
-            operationTakeId: isImageOperation ? operationTakeId : undefined,
-            operationOutputRole: isImageOperation ? 'result_image' : undefined,
-          }),
-          ...fitWorkflowMediaSize(mode, record.naturalWidth, record.naturalHeight),
-        };
-        resultNode.title = mode === 'video' ? '生成视频' : '生成图片';
-        preparedNodes.push(resultNode);
-        if (!stillActive()) throw abortError();
-        preparedConnections.push({
-          id: createId(), fromNodeId: nodeId, toNodeId: resultNode.id,
-          kind: isImageOperation ? 'operation-output' : 'data',
-          role: isImageOperation ? 'result_image' : undefined,
-          order: isImageOperation ? index : undefined,
-        });
+      if (batched || userReplacedMedia()) {
+        if (!batched) detachedResult = true;
+        pushResultNode(record, index);
       } else {
         const size = fitWorkflowMediaSize(mode, record.naturalWidth, record.naturalHeight);
         const center = { x: executionTarget.outputTarget.x + executionTarget.outputTarget.width / 2, y: executionTarget.outputTarget.y + executionTarget.outputTarget.height / 2 };
@@ -738,7 +748,12 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     if (batchId) preparedNodes.forEach((node, index) => { node.batchId = batchId; node.batchIndex = index; });
 
     if (!stillActive()) throw abortError();
-    if (batched) {
+    // 提交后、提交前最后一刻再查一次：用户在结果落盘后才换了媒体，也不覆盖。
+    if (!batched && !detachedResult && singleMediaRecord && userReplacedMedia()) {
+      detachedResult = true;
+      pushResultNode(singleMediaRecord, 0);
+    }
+    if (batched || detachedResult) {
       const latest = canonical(runtime, current);
       current = {
         ...latest,
@@ -832,7 +847,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     preparedNodes.forEach(node => { if (node.metadata.storageKey) releaseWorkflowMediaRecord(node.metadata.storageKey); });
     // 非批量路径的结果直接替换了原节点（不在 preparedNodes 里），需在此补一次 release，
     // 与批量路径在 commit 后释放 pending 引用的时机对齐。
-    if (!batched) {
+    if (!batched && !detachedResult) {
       const committedNode = current.nodes.find(node => node.id === nodeId);
       if (committedNode?.metadata.storageKey) releaseWorkflowMediaRecord(committedNode.metadata.storageKey);
     }
