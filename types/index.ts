@@ -87,6 +87,8 @@ export interface GenerationHistoryItem {
   provider?: string;
   model?: string;
   generationParams?: Record<string, unknown>;
+  /** 生成时所属画布（工作空间）id；旧记录无此字段，归入「未归属」。 */
+  projectId?: string;
 }
 
 export interface GenerationRecipe {

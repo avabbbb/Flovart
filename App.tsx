@@ -43,7 +43,6 @@ import { registerWorkflowArtifact } from './services/studio/artifactRegistry';
 const SettingsPanel = React.lazy(() => import('./components/SettingsPanel').then(m => ({ default: m.SettingsPanel })));
 
 const WorkflowWorkspace = React.lazy(() => import('./components/workflow/WorkflowWorkspace').then(m => ({ default: m.WorkflowWorkspace })));
-const WorkflowContextPanel = React.lazy(() => import('./components/workflow/WorkflowWorkspace').then(m => ({ default: m.WorkflowContextPanel })));
 const AssetAddModal = React.lazy(() => import('./components/AssetAddModal').then(m => ({ default: m.AssetAddModal })));
 const BrowserImportBridge = React.lazy(() => import('./components/extension/BrowserImportBridge').then(m => ({ default: m.BrowserImportBridge })));
 import { WorkflowSessionGuard } from './components/workflow/WorkflowSessionGuard';
@@ -97,7 +96,7 @@ const App: React.FC = () => {
     const setRightOpen = useCallback((open: boolean) => {
         if (mediumViewport) setMobileRightOpen(open); else setDesktopRightOpen(open);
     }, [mediumViewport]);
-    const [rightTab, setRightTab] = useState<'agent' | 'hosts' | 'context' | 'history'>('agent');
+    const [rightTab, setRightTab] = useState<'agent' | 'hosts' | 'history'>('agent');
     const [rightWidth, setRightWidth] = useState(() => {
         try {
             const stored = Number(localStorage.getItem('workflowRightPanelWidth'));
@@ -266,6 +265,7 @@ const App: React.FC = () => {
         height: number;
         prompt: string;
         mediaType?: 'image' | 'video';
+        projectId?: string;
     }) => {
         const item: GenerationHistoryItem = {
             id: generateId(),
@@ -277,6 +277,7 @@ const App: React.FC = () => {
             prompt: payload.prompt,
             createdAt: Date.now(),
             mediaType: payload.mediaType,
+            projectId: payload.projectId,
         };
         setGenerationHistory(prev => addGenerationHistoryItem(prev, item));
     }, []);
@@ -297,6 +298,7 @@ const App: React.FC = () => {
         height: item.height,
         createdAt: item.createdAt,
         prompt: item.prompt,
+        projectId: item.projectId,
     })), [generationHistory]);
 
     const handleRunWorkflowNode = useCallback(async (command: WorkflowRunCommand, context: WorkflowExecutionContext): Promise<WorkflowRunAdapterResult | void> => {
@@ -370,7 +372,7 @@ const App: React.FC = () => {
                 });
                 if (gainedDurableTask) return flushWorkflowPersistence();
             },
-            saveHistory: saveGenerationToHistory,
+            saveHistory: payload => saveGenerationToHistory({ ...payload, projectId }),
         });
         const generatedNode = generated.nodes.find(item => item.id === executableNodeId);
         const failureMessage = generatedNode?.metadata.status === 'error' ? generatedNode.metadata.error : undefined;
@@ -661,10 +663,9 @@ const App: React.FC = () => {
                 flush
                 docked={!mediumViewport}
                 activeTab={rightTab}
-                onTabChange={tab => setRightTab(tab as 'agent' | 'context' | 'history')}
+                onTabChange={tab => setRightTab(tab as 'agent' | 'history')}
                 tabs={[
                     { id: 'agent', label: language === 'zho' ? '助手' : 'Assistant', icon: undefined },
-                    { id: 'context', label: language === 'zho' ? '上下文' : 'Context', icon: undefined },
                     { id: 'history', label: language === 'zho' ? '生成历史' : 'History', icon: undefined },
                 ]}
             >
@@ -687,24 +688,13 @@ const App: React.FC = () => {
                         onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
                     />
                 ))}
-                {rightTab === 'context' && (activeWorkflowProject ? (
-                    <Suspense fallback={null}>
-                        <WorkflowContextPanel project={activeWorkflowProject} />
-                    </Suspense>
-                ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, height: '100%', padding: '0 32px', textAlign: 'center', color: 'var(--isl-ink-soft)', fontSize: 13 }}>
-                        <strong style={{ color: 'var(--isl-ink)' }}>{language === 'zho' ? '制作状态需要一个 Workflow 项目' : 'Context needs a workflow project'}</strong>
-                        <button type="button" aria-label="新建工作流" onClick={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
-                            style={{ marginTop: 6, padding: '7px 16px', border: 0, borderRadius: 9, color: '#fff', background: 'var(--isl-accent, #1677ff)', cursor: 'pointer', fontSize: 12 }}>
-                            {language === 'zho' ? '创建项目' : 'Create project'}
-                        </button>
-                    </div>
-                ))}
                 {rightTab === 'history' && (
                     <StudioMediaBrowser
                         mode="history"
                         items={historyDrawerMedia}
                         language={language}
+                        projects={workflowProjects.map(project => ({ id: project.id, title: project.title }))}
+                        activeProjectId={activeWorkflowProjectId}
                         onInsert={media => insertDrawerMedia(media)}
                         onReversePrompt={async media => {
                             const blob = await loadWorkflowMediaBlob(undefined, media.href);

@@ -1,5 +1,5 @@
 import { Download, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
-import { useMemo, useState, type DragEvent } from 'react';
+import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import { loadWorkflowMediaBlob, useWorkflowMediaUrl } from '../workflow/media';
 import { FolderTree, type FolderTreeProps } from './FolderTree';
 import type { AssetFolder } from '../../types';
@@ -22,6 +22,8 @@ export interface StudioMediaItem {
   height?: number;
   createdAt?: number;
   prompt?: string;
+  /** 生成时所属画布 id；仅生成历史使用，旧记录为空。 */
+  projectId?: string;
 }
 
 interface StudioMediaBrowserProps {
@@ -36,9 +38,14 @@ interface StudioMediaBrowserProps {
   onAddFolder?: FolderTreeProps['onAddFolder'];
   onRenameFolder?: FolderTreeProps['onRenameFolder'];
   onDeleteFolder?: FolderTreeProps['onDeleteFolder'];
+  /** history 模式：可选画布列表，提供时显示画布筛选。 */
+  projects?: { id: string; title: string }[];
+  /** 当前画布；画布筛选默认跟随它。 */
+  activeProjectId?: string | null;
 }
 
 type MediaFilter = 'all' | 'image' | 'video';
+const UNASSIGNED_PROJECT = '__unassigned__';
 
 function StudioMediaPreview({ item }: { item: StudioMediaItem }) {
   const media = useWorkflowMediaUrl(undefined, item.href);
@@ -93,13 +100,17 @@ function StudioMediaDownload({ item, isChinese }: { item: StudioMediaItem; isChi
   );
 }
 
-export function StudioMediaBrowser({ mode, items, language, onInsert, onRename, onRemove, onReversePrompt, folders, onAddFolder, onRenameFolder, onDeleteFolder }: StudioMediaBrowserProps) {
+export function StudioMediaBrowser({ mode, items, language, onInsert, onRename, onRemove, onReversePrompt, folders, onAddFolder, onRenameFolder, onDeleteFolder, projects, activeProjectId }: StudioMediaBrowserProps) {
   const [query, setQuery] = useState('');
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [notice, setNotice] = useState('');
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [projectFilter, setProjectFilter] = useState<string>(() => activeProjectId || 'all');
+  // 切换画布时生成历史跟随到新画布；用户仍可手动选「全部」或其它画布。
+  useEffect(() => { setProjectFilter(activeProjectId || 'all'); }, [activeProjectId]);
+  const hasProjects = mode === 'history' && Boolean(projects?.length);
   const isChinese = language === 'zho';
   const title = mode === 'history' ? (isChinese ? '历史生成' : 'Generation History') : (isChinese ? '我的素材' : 'My Assets');
   const searchLabel = mode === 'history' ? (isChinese ? '搜索生成历史' : 'Search History') : (isChinese ? '搜索素材库' : 'Search Assets');
@@ -107,14 +118,19 @@ export function StudioMediaBrowser({ mode, items, language, onInsert, onRename, 
 
   const filtered = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase();
+    const knownProjectIds = new Set((projects || []).map(project => project.id));
     return items.filter(item => {
       if (mediaFilter !== 'all' && item.type !== mediaFilter) return false;
+      if (hasProjects && projectFilter !== 'all') {
+        const unassigned = !item.projectId || !knownProjectIds.has(item.projectId);
+        if (projectFilter === UNASSIGNED_PROJECT ? !unassigned : item.projectId !== projectFilter) return false;
+      }
       if (hasFolders && selectedFolderId !== null) {
         if (!item.folderIds?.includes(selectedFolderId)) return false;
       }
       return !keyword || `${item.name} ${item.prompt || ''}`.toLocaleLowerCase().includes(keyword);
     });
-  }, [items, mediaFilter, query, hasFolders, selectedFolderId]);
+  }, [items, mediaFilter, query, hasFolders, selectedFolderId, hasProjects, projectFilter, projects]);
 
   const startDrag = (event: DragEvent<HTMLElement>, item: StudioMediaItem) => {
     const payload = JSON.stringify(item);
@@ -173,6 +189,24 @@ export function StudioMediaBrowser({ mode, items, language, onInsert, onRename, 
             </button>
           ))}
         </div>
+        {hasProjects && (
+          <label className="mt-2 flex items-center gap-2 text-[11px]" style={{ color: 'var(--isl-ink-soft)' }}>
+            <span className="shrink-0">{isChinese ? '画布' : 'Canvas'}</span>
+            <select
+              aria-label={isChinese ? '按画布筛选生成历史' : 'Filter history by canvas'}
+              value={projectFilter}
+              onChange={event => setProjectFilter(event.target.value)}
+              className="isl-well h-7 min-w-0 flex-1 px-2 text-[11px] outline-none"
+              style={{ color: 'var(--isl-ink)' }}
+            >
+              <option value="all">{isChinese ? '全部画布' : 'All canvases'}</option>
+              {projects!.map(project => (
+                <option key={project.id} value={project.id}>{project.title || (isChinese ? '未命名画布' : 'Untitled canvas')}</option>
+              ))}
+              <option value={UNASSIGNED_PROJECT}>{isChinese ? '未归属（旧记录）' : 'Unassigned (older)'}</option>
+            </select>
+          </label>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
