@@ -88,7 +88,7 @@ function quoteArg(value) {
   return `"${String(value).replaceAll('"', '\\"')}"`
 }
 
-function joinWorkspace(base, child) {
+function joinWorkspace(base, ...parts) {
   const windowsStyle = /^[A-Za-z]:/.test(base) || base.includes(String.fromCharCode(92))
   return (windowsStyle ? win32 : posix).join(base, child)
 }
@@ -98,7 +98,7 @@ export function harnessEnvironment(config, repositoryRoot = REPOSITORY_ROOT, wor
   return {
     FLOVART_WORKSPACE_URL: config.url,
     FLOVART_WORKSPACE_TOKEN: config.token,
-    FLOVART_CLI: `${quoteArg(process.execPath)} ${quoteArg(join(repositoryRoot, 'tools', 'flovart', 'cli.js'))}`,
+    FLOVART_CLI: quoteArg(process.execPath) + ' ' + quoteArg(joinWorkspace(repositoryRoot, 'tools', 'flovart', 'cli.js')),
     FLOVART_WORKSPACE_MODE: 'browser',
     ...(workspaceDir ? {
       FLOVART_AGENT_HOME: workspaceDir,
