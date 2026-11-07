@@ -90,7 +90,7 @@ function quoteArg(value) {
 
 function joinWorkspace(base, ...parts) {
   const windowsStyle = /^[A-Za-z]:/.test(base) || base.includes(String.fromCharCode(92))
-  return (windowsStyle ? win32 : posix).join(base, child)
+  return (windowsStyle ? win32 : posix).join(base, ...parts)
 }
 
 export function harnessEnvironment(config, repositoryRoot = REPOSITORY_ROOT, workspaceDirectory) {
