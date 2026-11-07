@@ -11,9 +11,10 @@ afterEach(() => useWorkspaceStore.setState({ language: 'zho' }));
 describe('foundation surfaces use the active locale', () => {
   it('renders the Agent connection surface in English', async () => {
     render(<AgentConnectionsPage project={null} language="en" />);
-    expect(screen.getByRole('heading', { name: 'Being reworked, coming soon' })).toBeInTheDocument();
-    expect(screen.getByText(/Your connections and data are kept/)).toBeInTheDocument();
-    expect(screen.queryByText('正在优化，后续上线')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Drive the canvas from DeepSeek Harness (DSH)' })).toBeInTheDocument();
+    expect(screen.getByText(/Install the DSH profile/)).toBeInTheDocument();
+    expect(screen.getByTestId('agent-dsh-status')).toHaveTextContent('npm publish and marketplace listing not done yet');
+    expect(screen.queryByText('用 DeepSeek Harness（DSH）指挥画布')).not.toBeInTheDocument();
   });
 
   it('renders the PromptBar model picker in English with viewport-safe dialog labeling', async () => {

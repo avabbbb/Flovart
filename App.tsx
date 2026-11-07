@@ -512,7 +512,11 @@ const App: React.FC = () => {
             confirmDisabled: blocked,
             confirmLabel: '生成',
             ...(blocked ? { cancelLabel: '关闭' } : {}),
-            onDismissed: () => toast.show(language === 'en' ? 'The generation request expired and nothing was submitted. Press Run again.' : '生成确认已过期，未提交任何任务。请重新点击运行。', 'warning'),
+            onDismissed: (reason) => toast.show(reason === 'replaced'
+              ? (language === 'en' ? 'Another confirmation took its place, so nothing was submitted for this one. Press Run again if you still want it.' : '已有新的确认请求，本次未提交任何任务。如仍需要，请重新点击运行。')
+              : reason === 'unmounted'
+                ? (language === 'en' ? 'The confirmation closed and nothing was submitted. Press Run again.' : '确认窗口已关闭，未提交任何任务。请重新点击运行。')
+                : (language === 'en' ? 'The generation request expired and nothing was submitted. Press Run again.' : '生成确认已过期，未提交任何任务。请重新点击运行。'), 'warning'),
         }).then(approved => { if (approved) run(); });
     }, [language, toast, userApiKeys, workflowExecutor]);
 
