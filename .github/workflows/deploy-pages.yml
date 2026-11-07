@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install DSH plugin dependencies
+        run: npm --prefix dsh-plugin ci
+
       # 发布门控：与 ci.yml 一致，验证失败则不部署 Pages
       - name: Docs contract
         run: npm run docs:check
