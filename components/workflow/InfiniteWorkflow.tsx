@@ -1,3 +1,4 @@
+import { workflowFitOnOpen } from './templates';
 import { pickVideoFile, promptUndecodableVideo } from '../../services/undecodableVideoPrompt';
 import { anchorApprovalPatch } from '../../services/anchorApproval';
 import { deriveWorkflowLayerPreview } from './layerPreview';
@@ -1287,6 +1288,14 @@ export function InfiniteWorkflow({
     return true;
   }, [applyDraftProject]);
 
+  // 无 Key 时的生成入口：先给配置引导，而不是让运行失败后再报错。“仍然运行”保留 Runtime-only 路由。
+  const [noKeyRunNodeId, setNoKeyRunNodeId] = useState<string | null>(null);
+  const hasAnyAiService = userApiKeys.some(key => Boolean(key.key || key.baseUrl));
+  const runNodeWithKeyGuide = useCallback((nodeId: string) => {
+    if (!hasAnyAiService) { setNoKeyRunNodeId(nodeId); return; }
+    onRunNode(nodeId);
+  }, [hasAnyAiService, onRunNode]);
+
   // Slash/分镜/整组等批量入口的 runNode 串行队列（按 projectId）：逐个发起，避免同一
   // 批次内多个 run 的 prepare 写回互相覆盖。onRunNode 契约返回 void；若适配器实际
   // 返回 thenable 则等它落定，否则让出一个宏任务再放行下一个。
@@ -2433,6 +2442,34 @@ export function InfiniteWorkflow({
     applyOps([{ type: 'add_node', node: createWorkflowNode(nanoid(), type, { x, y }, metadata) }]);
   }, [applyOps, viewportCenter]);
 
+  // 标注为示例的画布：浏览与编辑不需要 Key，运行时走同一配置引导。
+  const openSampleCanvas = useCallback(() => {
+    const zh = language === 'zho';
+    const center = viewportCenter();
+    const script = createWorkflowNode(nanoid(), 'text', { x: center.x - 640, y: center.y - 120 }, {
+      content: zh
+        ? '【示例】三镜头产品短片。浏览、编辑、连线都不需要 Key；点镜头上的运行前，需先在设置中配置自己的 AI 服务。'
+        : '[Sample] A three-shot product clip. Browsing, editing and connecting need no key; running a shot needs your own AI service in Settings.',
+    });
+    script.title = zh ? '示例 · 脚本' : 'Sample · Script';
+    const prompts = zh
+      ? ['产品全景，镜头缓慢推进，柔光', '产品特写，侧光扫过材质', '产品落幅，镜头拉远，留白放标题']
+      : ['Product wide shot, slow push-in, soft light', 'Product close-up, side light across the surface', 'End card, pull back, space for a title'];
+    const shots = prompts.map((prompt, index) => {
+      const node = createWorkflowNode(nanoid(), 'video', { x: center.x - 160 + index * 420, y: center.y - 120 }, { prompt });
+      node.title = zh ? '示例 · 镜头 ' + (index + 1) : 'Sample · Shot ' + (index + 1);
+      return node;
+    });
+    const ops: WorkflowDocumentOperation[] = [
+      { type: 'add_node', node: script },
+      ...shots.map(node => ({ type: 'add_node' as const, node })),
+      ...shots.map(node => ({ type: 'connect_nodes' as const, fromNodeId: script.id, toNodeId: node.id })),
+    ];
+    if (applyOps(ops)) {
+      setNotice(zh ? '已打开示例画布：浏览和编辑不需要 Key，运行生成前需要先配置 AI 服务。' : 'Sample canvas opened. Browsing and editing need no key; running needs an AI service.');
+    }
+  }, [applyOps, language, viewportCenter]);
+
   const replaceMedia = useCallback(async (node: WorkflowNodeData, file: File) => {
     if (node.isLocked) return;
     // 换素材：正在后台生成的旧预览作废。
@@ -2874,6 +2911,11 @@ export function InfiniteWorkflow({
   // 视口裁剪：只挂载视口附近的节点 DOM；连线额外保留与可见节点相邻的一端，避免边线断裂。
   // 首帧尚未测量到容器尺寸时不裁剪，避免挂载瞬间丢节点（也兼容无布局的测试环境）。
   const cullingEnabled = Boolean(rootSize && rootSize.width > 0 && rootSize.height > 0);
+  // 模板/示例画布首次打开时适配视图；否则窄窗口只看到第一个节点，其余被裁剪。
+  useEffect(() => {
+    if (!cullingEnabled || !workflowFitOnOpen.delete(project.id)) return;
+    fitView();
+  }, [cullingEnabled, fitView, project.id]);
   const visibleWorldRect = useMemo(() => {
     const k = project.viewport.k || 1;
     const left = -project.viewport.x / k;
@@ -3099,6 +3141,7 @@ export function InfiniteWorkflow({
           <div>
             <button type="button" onClick={() => addNode('image')}>{language === 'zho' ? '图片节点' : 'Image node'}</button>
             <button type="button" onClick={() => addNode('video')}>{language === 'zho' ? '视频节点' : 'Video node'}</button>
+            <button type="button" data-testid="workflow-open-sample" onClick={openSampleCanvas}>{language === 'zho' ? '打开示例画布（示例，免 Key）' : 'Open sample canvas (sample, no key)'}</button>
           </div>
         </div>
       )}
@@ -3226,7 +3269,7 @@ export function InfiniteWorkflow({
             }}
             onChangeText={content => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, metadata: { content } }]); }}
             onChangeMetadata={metadata => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, metadata }]); }}
-            onRun={() => { if (!node.isLocked) onRunNode(node.id); }}
+            onRun={() => { if (!node.isLocked) runNodeWithKeyGuide(node.id); }}
             onStop={() => stopNode(node.id)}
             runState={runStates.get(node.id)}
             layerPreview={deriveWorkflowLayerPreview(node, project.nodes)}
@@ -3321,7 +3364,7 @@ export function InfiniteWorkflow({
             onCopy={ids => { const nodes = projectRef.current.nodes.filter(node => ids.includes(node.id)); clipboardRef.current = nodes; setClipboardVersion(version => version + 1); syncToSharedClipboard(nodes); }}
             onDelete={ids => applyOps([{ type: 'delete_nodes', ids }])}
             onExport={nodes => { void exportSelectedMedia(nodes); }}
-            onRun={id => onRunNode(id)}
+            onRun={id => runNodeWithKeyGuide(id)}
             onStop={stopNode}
             onPromptFocus={() => setPromptFocusSignal(value => value + 1)}
             onFrameSelection={frameSelection}
@@ -3417,6 +3460,15 @@ export function InfiniteWorkflow({
         patchProject({ viewport: { ...viewportRef.current, x: (rect?.width || 1000) / 2 - x * viewportRef.current.k, y: (rect?.height || 700) / 2 - y * viewportRef.current.k } });
       }} />}
       {notice && <div role="status" aria-live="polite" data-workflow-overlay style={{ position: 'absolute', zIndex: 80, right: 14, top: 58, maxWidth: 320, padding: '7px 10px', border: '1px solid var(--wf-border)', borderRadius: 7, color: 'var(--wf-text)', background: 'var(--wf-panel)', fontSize: 12 }}>{notice}</div>}
+      {noKeyRunNodeId && <div role="alertdialog" aria-label={language === 'zho' ? '配置 AI 服务' : 'Set up an AI service'} data-testid="workflow-no-key-guide" data-workflow-overlay onPointerDown={event => event.stopPropagation()} style={{ position: 'absolute', zIndex: 95, right: 14, top: 58, maxWidth: 340, padding: '12px 14px', border: '1px solid var(--wf-border)', borderRadius: 8, color: 'var(--wf-text)', background: 'var(--wf-panel)', fontSize: 12, display: 'grid', gap: 8 }}>
+        <strong>{language === 'zho' ? '还没有配置 AI 服务' : 'No AI service set up yet'}</strong>
+        <span>{language === 'zho' ? '生成需要你自己的 AI 服务 Key 或 Base URL。Key 只保存在本机浏览器，生成时直接发给你选择的服务。' : 'Generating needs your own AI service key or Base URL. The key stays in this browser and goes only to the service you choose.'}</span>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+          <button type="button" onClick={() => setNoKeyRunNodeId(null)}>{language === 'zho' ? '取消' : 'Cancel'}</button>
+          <button type="button" data-testid="workflow-no-key-run-anyway" onClick={() => { const id = noKeyRunNodeId; setNoKeyRunNodeId(null); onRunNode(id); }}>{language === 'zho' ? '仍然运行' : 'Run anyway'}</button>
+          {onOpenSettings && <button type="button" data-testid="workflow-no-key-open-settings" onClick={() => { setNoKeyRunNodeId(null); onOpenSettings(); }}>{language === 'zho' ? '配置 AI 服务' : 'Set up AI service'}</button>}
+        </div>
+      </div>}
       <AnimatePresence>
         {focusBadge && (
           <motion.button
@@ -3498,7 +3550,7 @@ export function InfiniteWorkflow({
           onCopy={() => { copySelection(); setContextMenu(null); }}
           onDuplicate={ctxNode && !ctxNode.isLocked ? (() => { duplicateSelection(); setContextMenu(null); }) : undefined}
           onSaveMedia={contextMenu.type === 'node' && ctxNode && ['image', 'video', 'audio'].includes(ctxNode.type) && (ctxNode.metadata.storageKey || ctxNode.metadata.href || ctxNode.metadata.artifactRef?.taskId) && onSaveWorkflowMedia ? (() => { onSaveWorkflowMedia(ctxNode.id); setContextMenu(null); }) : undefined}
-          onRun={() => { if (contextMenu.type === 'node' && !projectRef.current.nodes.find(node => node.id === contextMenu.id)?.isLocked) onRunNode(contextMenu.id); setContextMenu(null); }}
+          onRun={() => { if (contextMenu.type === 'node' && !projectRef.current.nodes.find(node => node.id === contextMenu.id)?.isLocked) runNodeWithKeyGuide(contextMenu.id); setContextMenu(null); }}
           onRename={contextMenu.type === 'node' && ctxNode && !ctxNode.isLocked ? (() => { setRenameSignal({ nodeId: ctxNode.id, nonce: Date.now() }); setContextMenu(null); }) : undefined}
           onDelete={() => { if (contextMenu.type !== 'pane') deleteSelection(); setContextMenu(null); }}
         />

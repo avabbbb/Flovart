@@ -11,10 +11,11 @@ const ICONS: Record<WorkflowTemplateId, typeof Sparkles> = {
   'product-scene': Package,
 };
 
-export function WorkflowStartScreen({ language, onStart, onBlank }: {
+export function WorkflowStartScreen({ language, onStart, onBlank, onSample }: {
   language: string;
   onStart: (seed: WorkflowTemplateSeed) => void;
   onBlank: () => void;
+  onSample?: () => void;
 }) {
   const zh = language === 'zho';
   const [prompt, setPrompt] = useState('');
@@ -61,7 +62,10 @@ export function WorkflowStartScreen({ language, onStart, onBlank }: {
           );
         })}
       </div>
-      <button type={'button'} className={'workflow-start-blank'} onClick={onBlank}>{zh ? '新建画布' : 'New canvas'}</button>
+      <div className={'workflow-start-actions'}>
+        {onSample && <button type={'button'} className={'workflow-start-blank'} data-testid={'workflow-open-sample'} onClick={onSample}>{zh ? '打开示例画布（示例，免 Key）' : 'Open sample canvas (sample, no key)'}</button>}
+        <button type={'button'} className={'workflow-start-blank'} onClick={onBlank}>{zh ? '新建画布' : 'New canvas'}</button>
+      </div>
     </div>
   );
 }

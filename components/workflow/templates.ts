@@ -109,3 +109,26 @@ export function buildWorkflowTemplate(id: WorkflowTemplateId, prompt: string, la
   }
   return { templateId: template.id, title, nodes, connections: chain(nodes) };
 }
+
+// 示例画布：明确标注为示例，浏览和编辑不需要 Key；运行时仍走计划卡与配置引导。
+export function buildSampleCanvasSeed(language: string): Omit<WorkflowTemplateSeed, 'templateId'> {
+  const zh = language === 'zho';
+  const script = place('text', null, zh ? '示例 · 脚本' : 'Sample · Script', {
+    content: zh
+      ? '【示例】三镜头产品短片。浏览、编辑、连线都不需要 Key；运行镜头前需先在设置中配置自己的 AI 服务。'
+      : '[Sample] A three-shot product clip. Browsing, editing and connecting need no key; running a shot needs your own AI service in Settings.',
+  });
+  const prompts = zh
+    ? ['产品全景，镜头缓慢推进，柔光', '产品特写，侧光扫过材质', '产品落幅，镜头拉远，留白放标题']
+    : ['Product wide shot, slow push-in, soft light', 'Product close-up, side light across the surface', 'End card, pull back, space for a title'];
+  const shots: WorkflowNode[] = [];
+  prompts.forEach((prompt, index) => {
+    const shot = place('video', shots.at(-1) || script, (zh ? '示例 · 镜头 ' : 'Sample · Shot ') + (index + 1), { prompt, config: { mode: 'video', aspectRatio: '16:9', durationSec: 5 } });
+    shots.push(shot);
+  });
+  const connections: WorkflowConnection[] = shots.map(shot => ({ id: nanoid(), fromNodeId: script.id, toNodeId: shot.id, kind: 'data' as const, order: 0 }));
+  return { title: zh ? '示例 · 三镜头产品短片' : 'Sample · Three-shot product clip', nodes: [script, ...shots], connections };
+}
+
+// 由模板或示例新建、尚未适配视图的画布 id；画布首次测量到尺寸时适配一次后移除。
+export const workflowFitOnOpen = new Set<string>();

@@ -1,4 +1,5 @@
 import { WorkflowStartScreen } from './WorkflowStartScreen';
+import { buildSampleCanvasSeed, workflowFitOnOpen } from './templates';
 import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useState } from 'react';
 import type { PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../types';
@@ -491,8 +492,12 @@ assetLibrary={assetLibrary}
           ) : (
             <WorkflowStartScreen
               language={language}
-              onStart={seed => createProject(seed.title, { nodes: seed.nodes, connections: seed.connections })}
+              onStart={seed => { workflowFitOnOpen.add(createProject(seed.title, { nodes: seed.nodes, connections: seed.connections })); }}
               onBlank={() => createProject()}
+              onSample={() => {
+                const sample = buildSampleCanvasSeed(language);
+                workflowFitOnOpen.add(createProject(sample.title, { nodes: sample.nodes, connections: sample.connections }));
+              }}
             />
           )}
         </WorkflowGenerationCapabilitiesProvider>
