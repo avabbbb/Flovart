@@ -171,7 +171,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
             navigate('/app');
           }}
         >
-          <img src='/favicon.png' alt='' className='h-7 w-7 rounded-lg' />
+          <img src={import.meta.env.BASE_URL + 'favicon.png'} alt='' className='h-7 w-7 rounded-lg' />
           <span className='hidden text-sm font-black tracking-[-0.03em] sm:inline' style={{ color: 'var(--isl-ink)' }}>Flovart</span>
         </button>
         <span className='hidden h-4 w-px sm:block' style={{ background: 'var(--isl-border)' }} />

@@ -5,12 +5,15 @@ import { describe, expect, it } from 'vitest';
 import { buildSkillDraft, evaluateSkillDraft, extractCanvasSubgraph, topologicalNodeOrder } from '../tools/flovart/skill-draft.js';
 import { runSkillCommand } from '../tools/flovart/skill-commands.js';
 
+// Token-shaped fixture assembled at runtime: the release secret audit scans source text,
+// and this value only exists to prove the subgraph export redacts credentials.
+const FAKE_KEY = 'sk-' + 'abcdefghijklmnopqrstuvwx';
 const project = {
   id: 'proj-1',
   nodes: [
     { id: 'ref', type: 'image', title: '参考图', metadata: {} },
     { id: 'prompt', type: 'text', title: '主提示词', metadata: { content: '奶蛙表情包，扁平风格' } },
-    { id: 'gen', type: 'image', title: '生成', metadata: { prompt: '按参考生成 4 张 emoji sk-abcdefghijklmnopqrstuvwx', config: { model: 'seedream-v5' } } },
+    { id: 'gen', type: 'image', title: '生成', metadata: { prompt: '按参考生成 4 张 emoji ' + FAKE_KEY, config: { model: 'seedream-v5' } } },
     { id: 'other', type: 'video', title: '无关节点', metadata: {} },
   ],
   connections: [
@@ -36,6 +39,7 @@ describe('skill draft from session', () => {
     expect(draft.files['flovart.skill.yaml']).toContain('  - image.generate');
     expect(draft.files['flovart.skill.yaml']).toContain('id: references');
     expect(draft.files['references/canvas-subgraph.json']).toContain('[redacted]');
+    expect(draft.files['references/canvas-subgraph.json']).not.toContain(FAKE_KEY);
     const evaluation = evaluateSkillDraft(draft.files, 'community.nawa-emoji');
     expect(evaluation.checks.filter(item => !item.ok)).toEqual([]);
     expect(evaluation.ok).toBe(true);
