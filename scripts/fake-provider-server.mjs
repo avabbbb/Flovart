@@ -93,7 +93,11 @@ export function createFakeProviderServer(options = {}) {
 
   const server = createServer(async (req, res) => {
     try {
-      if (req.method === 'OPTIONS') return send(res, 204, '');
+      if (req.method === 'OPTIONS') {
+        // Preflights are logged with their socket so a resend on a reused connection is visible in traces.
+        requests.push({ method: 'OPTIONS', path: new URL(req.url || '/', 'http://127.0.0.1').pathname, socketPort: req.socket.remotePort, bodyBytes: 0, bodyType: 'preflight' });
+        return send(res, 204, '');
+      }
       const url = new URL(req.url || '/', `http://${req.headers.host || '127.0.0.1'}`);
       const body = req.method === 'GET' ? Buffer.alloc(0) : await readBody(req);
       const path = url.pathname;
@@ -130,6 +134,8 @@ export function createFakeProviderServer(options = {}) {
 
       if (!path.startsWith('/v1/') && !path.startsWith('/v2/')) return send(res, 404, { error: { message: 'not found' } });
       const summary = requestSummary(req, body);
+      // Socket identity lets traces tell an app-level resubmit from a browser-level resend on a new connection.
+      summary.socketPort = req.socket.remotePort;
       requests.push(summary);
 
       if (mode === 'slow') await sleep(slowDelayMs);
@@ -153,8 +159,11 @@ export function createFakeProviderServer(options = {}) {
       if ((path === '/v1/videos' || path === '/v2/videos/generations') && req.method === 'POST') {
         const id = `fake-video-${++taskCounter}`;
         tasks.set(id, { id, pollCount: 0 });
-        // submit_lost: the provider accepted the task, but the response never reaches the client.
-        if (mode === 'submit_lost') return req.socket.destroy();
+        // submit_lost: the provider accepted the task, but the response is cut off after its first bytes.
+        // A reset with zero response bytes on a reused keep-alive socket makes Chromium resend the POST by itself
+        // (seen in traces: OPTIONS and the first POST share a socket, the resend arrives on a new one), which would
+        // measure the browser rather than the app. Partial bytes stop that resend; the app still gets no response.
+        if (mode === 'submit_lost') { req.socket.write('HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n'); return req.socket.destroy(); }
         // submit_no_task_id: accepted (and billable) but the response omits the task id.
         if (mode === 'submit_no_task_id') return send(res, 200, { status: 'queued' });
         return send(res, 200, { id, task_id: id, status: 'queued' });
