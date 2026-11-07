@@ -22,7 +22,7 @@
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, posix, resolve, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { WorkspaceSupervisor } from './workspace-supervisor.mjs'
 
@@ -88,6 +88,11 @@ function quoteArg(value) {
   return `"${String(value).replaceAll('"', '\\"')}"`
 }
 
+function joinWorkspace(base, child) {
+  const windowsStyle = /^[A-Za-z]:/.test(base) || base.includes(String.fromCharCode(92))
+  return (windowsStyle ? win32 : posix).join(base, child)
+}
+
 export function harnessEnvironment(config, repositoryRoot = REPOSITORY_ROOT, workspaceDirectory) {
   const workspaceDir = workspaceDirectory || null
   return {
@@ -97,8 +102,8 @@ export function harnessEnvironment(config, repositoryRoot = REPOSITORY_ROOT, wor
     FLOVART_WORKSPACE_MODE: 'browser',
     ...(workspaceDir ? {
       FLOVART_AGENT_HOME: workspaceDir,
-      FLOVART_AGENT_CONFIG: join(workspaceDir, 'agent.json'),
-      FLOVART_CREW_DIR: join(workspaceDir, 'crew'),
+      FLOVART_AGENT_CONFIG: joinWorkspace(workspaceDir, 'agent.json'),
+      FLOVART_CREW_DIR: joinWorkspace(workspaceDir, 'crew'),
     } : {}),
   }
 }
@@ -132,8 +137,8 @@ function spawnWorkspaceOperator(workspaceDir) {
       ...process.env,
       FLOVART_WORKSPACE_ONLY: '1',
       FLOVART_AGENT_HOME: workspaceDir,
-      FLOVART_AGENT_CONFIG: join(workspaceDir, 'agent.json'),
-      FLOVART_CREW_DIR: join(workspaceDir, 'crew'),
+      FLOVART_AGENT_CONFIG: joinWorkspace(workspaceDir, 'agent.json'),
+      FLOVART_CREW_DIR: joinWorkspace(workspaceDir, 'crew'),
     },
     stdio: 'inherit',
     windowsHide: true,
