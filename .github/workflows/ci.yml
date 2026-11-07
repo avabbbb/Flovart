@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   web-and-runtime:
-    name: Web, extension, Rust
+    name: Web, extension, DSH, Rust
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -33,6 +33,13 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install DSH plugin dependencies
+        run: npm --prefix dsh-plugin ci
+
+      - name: Audit DSH plugin dependencies
+        if: github.event_name != 'pull_request'
+        run: npm audit --prefix dsh-plugin --audit-level=moderate
 
       - name: Docs contract
         run: npm run docs:check
@@ -59,6 +66,10 @@ jobs:
 
       - name: Browser extension build
         run: npm run ext:build
+
+      - name: DSH plugin build
+        if: github.event_name != 'pull_request'
+        run: npm --prefix dsh-plugin run build
 
       - name: Build Tauri agent sidecar fixture
         if: github.event_name != 'pull_request'
@@ -96,6 +107,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install DSH plugin dependencies
+        run: npm --prefix dsh-plugin ci
+
+      - name: Audit DSH plugin dependencies
+        run: npm audit --prefix dsh-plugin --audit-level=moderate
 
       - name: Critical suite repeated ten times
         run: npm run test:critical

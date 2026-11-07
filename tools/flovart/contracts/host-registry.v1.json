@@ -47,6 +47,15 @@
       "runtimeSurfaces": ["cli", "browser-workflow"]
     },
     {
+      "id": "deepseek-harness",
+      "label": "DeepSeek Harness",
+      "category": "harness",
+      "executable": "dsh",
+      "aliases": [],
+      "distributionTargets": ["dsh-plugin"],
+      "runtimeSurfaces": ["browser-workflow"]
+    },
+    {
       "id": "workbuddy",
       "label": "WorkBuddy",
       "category": "mainstream-host",
@@ -107,6 +116,13 @@
       "kind": "skill",
       "installPath": ".agents/skills",
       "status": "supported"
+    },
+    {
+      "id": "dsh-plugin",
+      "label": "DeepSeek Harness Plugin",
+      "kind": "plugin",
+      "installPath": "dsh-plugin",
+      "status": "external-plugin"
     },
     {
       "id": "workbuddy-skill",
