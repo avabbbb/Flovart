@@ -794,6 +794,14 @@
       "watchers": 0,
       "releases": 18,
       "downloads": 105
+    },
+    {
+      "date": "2026-11-07",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 18,
+      "downloads": 109
     }
   ],
   "releaseAssets": [
@@ -806,13 +814,13 @@
     {
       "release": "v0.1.0",
       "name": "flovart-agent-toolkit-win32-x64.tar.gz",
-      "downloads": 3,
+      "downloads": 4,
       "updatedAt": "2026-10-16T06:50:45Z"
     },
     {
       "release": "v0.1.0",
       "name": "Flovart_0.1.0_aarch64.dmg",
-      "downloads": 3,
+      "downloads": 4,
       "updatedAt": "2026-10-16T06:47:32Z"
     },
     {
@@ -853,9 +861,21 @@
     },
     {
       "release": "v0.1.0",
+      "name": "Flovart_0.1.0_x64.dmg",
+      "downloads": 3,
+      "updatedAt": "2026-10-16T07:06:10Z"
+    },
+    {
+      "release": "v0.1.0",
       "name": "Flovart_aarch64.app.tar.gz.sig",
       "downloads": 3,
       "updatedAt": "2026-10-16T06:47:36Z"
+    },
+    {
+      "release": "v0.1.0",
+      "name": "Flovart_x64.app.tar.gz",
+      "downloads": 3,
+      "updatedAt": "2026-10-16T07:06:14Z"
     },
     {
       "release": "v0.1.0",
@@ -901,21 +921,9 @@
     },
     {
       "release": "v0.1.0",
-      "name": "Flovart_0.1.0_x64.dmg",
-      "downloads": 2,
-      "updatedAt": "2026-10-16T07:06:10Z"
-    },
-    {
-      "release": "v0.1.0",
       "name": "Flovart_aarch64.app.tar.gz",
       "downloads": 2,
       "updatedAt": "2026-10-16T06:47:35Z"
-    },
-    {
-      "release": "v0.1.0",
-      "name": "Flovart_x64.app.tar.gz",
-      "downloads": 2,
-      "updatedAt": "2026-10-16T07:06:14Z"
     },
     {
       "release": "v0.1.0",
@@ -1446,5 +1454,5 @@
       "updatedAt": "2026-10-16T03:30:20Z"
     }
   ],
-  "updatedAt": "2026-11-06T06:57:38.233Z"
+  "updatedAt": "2026-11-07T06:09:40.723Z"
 }
