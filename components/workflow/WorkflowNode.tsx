@@ -435,7 +435,7 @@ export function WorkflowNode({
       } : undefined}
       onDragOver={event => { if (isMedia && event.dataTransfer?.types?.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setDropTarget(true); } }}
       onDragLeave={event => { if (!isMedia) return; const related = event.relatedTarget as Node | null; if (related && (event.currentTarget as HTMLElement).contains(related)) return; setDropTarget(false); }}
-      onDrop={event => { if (!isMedia) return; event.preventDefault(); event.stopPropagation(); setDropTarget(false); const file = event.dataTransfer.files?.[0]; if (file) onReplaceMedia(file); }}
+      onDrop={event => { if (!isMedia) return; setDropTarget(false); if ((event.dataTransfer.files?.length || 0) > 1) return; event.preventDefault(); event.stopPropagation(); const file = event.dataTransfer.files?.[0]; if (file) onReplaceMedia(file); }}
     >
       <div className="workflow-handle-zone workflow-handle-zone--target" data-workflow-target={node.id} onPointerMove={event => trackWorkflowHandle(event, 'in')} onPointerLeave={resetWorkflowHandle} onPointerDown={event => { if (event.target === event.currentTarget) onConnectStartTarget?.(event as unknown as ReactPointerEvent<HTMLButtonElement>); }}>
       <button type="button" className="workflow-handle workflow-handle--target" aria-label={language === 'en' ? `Connect to ${node.title}` : `连接到${node.title}`} title={language === 'en' ? 'Activate to complete a keyboard connection' : '激活以完成键盘连接'} data-workflow-target={node.id} onPointerDown={onConnectStartTarget} onClick={event => { if (event.detail === 0) onKeyboardConnectTarget?.(); }}>

@@ -1855,7 +1855,9 @@ export function InfiniteWorkflow({
       const dropTarget = event.target instanceof Element
         ? event.target.closest('.workflow-node--image, .workflow-node--video, .workflow-node--audio')
         : null;
-      if (dropTarget) return;
+      // A single file dropped on a media node replaces that node's media (handled by the node).
+      // Several files always become new nodes so none of them is silently discarded.
+      if (dropTarget && (event.dataTransfer.files?.length || 0) <= 1) return;
     }
     event.stopPropagation();
     const sharedMedia = workflowDropSharedMedia(event.dataTransfer);
@@ -1867,17 +1869,29 @@ export function InfiniteWorkflow({
       return;
     }
     const files = workflowDropFiles(event.dataTransfer);
-    const file = files.find(item => {
+    const mediaFiles = files.filter(item => {
       try { workflowMediaType(item); return true; } catch { return false; }
     });
-    if (!file) {
+    if (!mediaFiles.length) {
       if (files.length) setNotice('仅支持图片、视频或音频文件');
       return;
     }
+    const skipped = files.length - mediaFiles.length;
     const point = Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
       ? screenToWorkflow(event.clientX, event.clientY)
       : viewportCenter();
-    void addMediaAt(file, point);
+    const expectedProjectId = projectRef.current.id;
+    void (async () => {
+      // Sequential on purpose: each addMediaAt persists its node before the next starts,
+      // so concurrent uploads cannot overwrite one another's project snapshot.
+      for (let index = 0; index < mediaFiles.length; index += 1) {
+        if (!mountedRef.current || projectRef.current.id !== expectedProjectId) return;
+        const column = index % 4;
+        const row = Math.floor(index / 4);
+        await addMediaAt(mediaFiles[index], { x: point.x + column * 380, y: point.y + row * 300 }, expectedProjectId);
+      }
+      if (skipped > 0 && mountedRef.current) setNotice('已导入 ' + mediaFiles.length + ' 个媒体文件，跳过 ' + skipped + ' 个不支持的文件');
+    })();
   }, [addMediaAt, addSharedMediaAt, screenToWorkflow, viewportCenter]);
 
   const localPoint = useCallback((clientX: number, clientY: number): WorkflowPoint => {

@@ -739,12 +739,45 @@ describe('InfiniteWorkflow surface interactions', () => {
     fireEvent.dragOver(editor());
     fireEvent.drop(editor(), { clientX: 500, clientY: 350, dataTransfer: { files: [file] } });
     await waitFor(() => expect(editor().querySelectorAll('[data-workflow-node-id]')).toHaveLength(3));
+    // Drops add an "uploading" placeholder first (6dd3b43); assert on the committed media node.
+    await waitFor(() => expect(projectNode(projectState().selectedNodeIds[0]).metadata.uploading).toBe(false));
     const dropped = editor().querySelector<HTMLElement>('.workflow-node--image.is-selected')!;
     expect(projectNode(projectState().selectedNodeIds[0]).position).toEqual({ x: 290, y: 232 });
     expect(dropped.style.width).toBe('420px');
     expect(dropped.style.height).toBe('236px');
 
     expect(persist).toHaveBeenCalledTimes(1);
+  });
+
+  it('imports every media file from a multi-file drop and reports skipped files', async () => {
+    class TestImage {
+      naturalWidth = 1600;
+      naturalHeight = 900;
+      onload: null | (() => void) = null;
+      onerror: null | (() => void) = null;
+      set src(_value: string) { queueMicrotask(() => this.onload?.()); }
+    }
+    vi.stubGlobal('Image', TestImage);
+    const persist = vi.spyOn(workflowMediaStorage, 'set');
+    render(<Harness />);
+    const before = projectState().nodes.map(node => node.id);
+    const files = [
+      new File(['image-a'], 'a.png', { type: 'image/png' }),
+      new File(['pdf'], 'notes.pdf', { type: 'application/pdf' }),
+      new File(['image-b'], 'b.png', { type: 'image/png' }),
+    ];
+
+    fireEvent.dragOver(editor());
+    fireEvent.drop(editor(), { clientX: 500, clientY: 350, dataTransfer: { files } });
+    await waitFor(() => expect(editor().querySelectorAll('[data-workflow-node-id]')).toHaveLength(before.length + 2));
+    expect(await screen.findByRole('status')).toHaveTextContent('已导入 2 个媒体文件，跳过 1 个不支持的文件');
+
+    const added = projectState().nodes.filter(node => !before.includes(node.id));
+    expect(added).toHaveLength(2);
+    expect(added.every(node => node.type === 'image')).toBe(true);
+    expect(added[1].position.x - added[0].position.x).toBe(380);
+    expect(added[1].position.y).toBe(added[0].position.y);
+    expect(persist).toHaveBeenCalledTimes(2);
   });
 
   it('drops a right-panel media card at the pointer instead of the viewport center', async () => {
@@ -800,7 +833,9 @@ describe('InfiniteWorkflow surface interactions', () => {
     finishWrite?.();
 
     await waitFor(() => expect(remove).toHaveBeenCalled());
-    expect(updateA).not.toHaveBeenCalled();
+    // The "uploading" placeholder is written to project A at drop time by design; the late
+    // ingest result (its storageKey) must never be committed to either project.
+    expect(updateA.mock.calls.every(([next]) => !JSON.stringify(next).includes('storageKey'))).toBe(true);
     expect(updateB).not.toHaveBeenCalled();
     await waitFor(() => expect(editor().querySelectorAll('[data-workflow-node-id]')).toHaveLength(0));
   });
@@ -920,6 +955,8 @@ describe('InfiniteWorkflow surface interactions', () => {
     fireEvent.click(screen.getByRole('button', { name: '共享素材' }));
     fireEvent.click(screen.getByRole('button', { name: 'blob.png' }));
     await waitFor(() => expect(editor().querySelectorAll('[data-workflow-node-id]')).toHaveLength(4));
+    // Shared media now land as "uploading" placeholders first; both must commit a durable storageKey.
+    await waitFor(() => expect((screen.getByTestId('workflow-project-state').textContent || '').split('"storageKey"').length - 1).toBe(2), { timeout: 5000 });
 
     const json = screen.getByTestId('workflow-project-state').textContent || '';
     expect(json).toContain('storageKey');
