@@ -802,6 +802,14 @@
       "watchers": 0,
       "releases": 18,
       "downloads": 109
+    },
+    {
+      "date": "2026-11-08",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 18,
+      "downloads": 112
     }
   ],
   "releaseAssets": [
@@ -825,6 +833,18 @@
     },
     {
       "release": "v0.1.0",
+      "name": "Flovart_0.1.0_amd64.deb",
+      "downloads": 4,
+      "updatedAt": "2026-10-16T06:47:26Z"
+    },
+    {
+      "release": "v0.1.0",
+      "name": "Flovart_0.1.0_x64-setup.exe",
+      "downloads": 4,
+      "updatedAt": "2026-10-16T06:49:24Z"
+    },
+    {
+      "release": "v0.1.0",
       "name": "Flovart_0.1.0_amd64.AppImage",
       "downloads": 3,
       "updatedAt": "2026-10-16T06:47:32Z"
@@ -837,21 +857,9 @@
     },
     {
       "release": "v0.1.0",
-      "name": "Flovart_0.1.0_amd64.deb",
-      "downloads": 3,
-      "updatedAt": "2026-10-16T06:47:26Z"
-    },
-    {
-      "release": "v0.1.0",
       "name": "Flovart_0.1.0_amd64.deb.sig",
       "downloads": 3,
       "updatedAt": "2026-10-16T06:47:27Z"
-    },
-    {
-      "release": "v0.1.0",
-      "name": "Flovart_0.1.0_x64-setup.exe",
-      "downloads": 3,
-      "updatedAt": "2026-10-16T06:49:24Z"
     },
     {
       "release": "v0.1.0",
@@ -864,6 +872,12 @@
       "name": "Flovart_0.1.0_x64.dmg",
       "downloads": 3,
       "updatedAt": "2026-10-16T07:06:10Z"
+    },
+    {
+      "release": "v0.1.0",
+      "name": "Flovart_aarch64.app.tar.gz",
+      "downloads": 3,
+      "updatedAt": "2026-10-16T06:47:35Z"
     },
     {
       "release": "v0.1.0",
@@ -918,12 +932,6 @@
       "name": "flovart-windows-latest-sbom.spdx.json",
       "downloads": 2,
       "updatedAt": "2026-10-16T06:49:49Z"
-    },
-    {
-      "release": "v0.1.0",
-      "name": "Flovart_aarch64.app.tar.gz",
-      "downloads": 2,
-      "updatedAt": "2026-10-16T06:47:35Z"
     },
     {
       "release": "v0.1.0",
@@ -1454,5 +1462,5 @@
       "updatedAt": "2026-10-16T03:30:20Z"
     }
   ],
-  "updatedAt": "2026-11-07T06:09:40.723Z"
+  "updatedAt": "2026-11-08T06:15:49.413Z"
 }
