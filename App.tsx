@@ -1,3 +1,4 @@
+import { isDshEmbed } from './services/dshEmbedBridge';
 import React, { useState, useCallback, useEffect, useMemo, Suspense } from 'react';
 import { generateId } from './utils/helpers';
 import type { AssetLibrary, UserApiKey, PromptEnhanceMode, GenerationHistoryItem, ThemeMode } from './types';
@@ -225,7 +226,8 @@ const App: React.FC = () => {
         root.dataset.theme = resolvedTheme;
         root.style.setProperty('--ui-bg-color', themePalette.uiBgColor);
         root.style.setProperty('--button-bg-color', themePalette.buttonBgColor);
-        document.body.style.backgroundColor = themePalette.appBackground;
+        // Embedded in DSH, the host shell paints the backdrop; keep the page body transparent.
+        document.body.style.backgroundColor = isDshEmbed() ? 'transparent' : themePalette.appBackground;
     }, [resolvedTheme, themePalette]);
 
     const t = useCallback((key: string, ...args: any[]): any => {

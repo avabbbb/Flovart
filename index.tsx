@@ -4,11 +4,14 @@ import ReactDOM from 'react-dom/client';
 import { RouterHost } from './RouterHost';
 import { bootstrapRuntimeCredentials } from './services/bootstrapRuntimeCredentials';
 import { installCrashLog } from './utils/crashLog';
+import { installDshEmbedBridge } from './services/dshEmbedBridge';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import './styles/index.css';
 import './styles/adaptive.css';
+import './styles/dshEmbed.css';
 
 installCrashLog();
+installDshEmbedBridge();
 
 void bootstrapRuntimeCredentials().catch(() => {
   // Browser builds and unavailable Desktop IPC keep using the encrypted Web Vault.

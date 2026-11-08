@@ -1,0 +1,35 @@
+:root[data-dsh-embed] :is(.isl-shell, .isl-panel, .workflow-toolbar-layer, .workflow-toolbar-menu\5f\5f list, .workflow-toolbar\5f\5f compact-menu, .workflow-toolbar\5f\5f add-menu-content, .workflow-toolbar\5f\5f library, .workflow-toolbar\5f\5f shortcut-card, .compact-right-panel, .agent-skill-picker, .agent-mode-menu, .agent-reference-picker, .agent-session-menu, .agent-attachment-menu, .agent-header-menu, .adaptive-modal, .settings-dialog) {
+  --isl-ink: var(--dsw-alias-label-primary, #1f1d1a);
+  --isl-ink-soft: var(--dsw-alias-label-secondary, #6b6862);
+  --isl-ink-ghost: var(--dsw-alias-label-tertiary, #a8a49c);
+  --isl-surface: var(--dsw-alias-bg-base, #faf9f6);
+  --isl-surface-2: var(--dsw-alias-bg-layer-2, #f1efe9);
+  --isl-card: var(--dsw-alias-bg-layer-2, #ffffff);
+  --isl-border: var(--dsw-alias-border-l2, #e3e0d8);
+  --isl-mint: var(--dsw-alias-button-primary-fill, #19c8b9);
+  --isl-mint-deep: var(--dsw-alias-link, #12a89b);
+  --isl-r-sm: var(--dsw-radius-sm, 0.375rem);
+  --isl-r: var(--dsw-radius-md, 0.5rem);
+  --isl-r-lg: var(--dsw-radius-lg, 0.625rem);
+}
+
+:root[data-dsh-embed][data-theme='dark'] :is(.isl-shell, .isl-panel, .workflow-toolbar-layer, .workflow-toolbar-menu\5f\5f list, .workflow-toolbar\5f\5f compact-menu, .workflow-toolbar\5f\5f add-menu-content, .workflow-toolbar\5f\5f library, .workflow-toolbar\5f\5f shortcut-card, .compact-right-panel, .agent-skill-picker, .agent-mode-menu, .agent-reference-picker, .agent-session-menu, .agent-attachment-menu, .agent-header-menu, .adaptive-modal, .settings-dialog) {
+  --isl-ink: var(--dsw-alias-label-primary, #f4f2ec);
+  --isl-ink-soft: var(--dsw-alias-label-secondary, #b4b0a8);
+  --isl-ink-ghost: var(--dsw-alias-label-tertiary, #76726b);
+  --isl-surface: var(--dsw-alias-bg-base, #1a1917);
+  --isl-surface-2: var(--dsw-alias-bg-layer-2, #232220);
+  --isl-card: var(--dsw-alias-bg-layer-2, #201f1d);
+  --isl-border: var(--dsw-alias-border-l2, #3a3834);
+  --isl-mint: var(--dsw-alias-button-primary-fill, #3ad9c9);
+  --isl-mint-deep: var(--dsw-alias-link, #1fb8a9);
+}
+
+:root[data-dsh-embed] :is(.isl-shell, .isl-panel, .workflow-toolbar-menu\5f\5f list, .workflow-toolbar\5f\5f compact-menu, .workflow-toolbar\5f\5f add-menu-content, .workflow-toolbar\5f\5f library, .workflow-toolbar\5f\5f shortcut-card, .compact-right-panel[data-open='true'], .agent-skill-picker, .agent-mode-menu, .agent-reference-picker, .agent-session-menu, .agent-attachment-menu, .agent-header-menu, .adaptive-modal) {
+  background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, var(--isl-card)) 72%, transparent) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+  border-color: var(--dsw-alias-border-l2, var(--isl-border)) !important;
+  box-shadow: var(--dsw-elevation-soft, var(--isl-shadow-lg)) !important;
+  color: var(--isl-ink);
+}
