@@ -4,7 +4,7 @@ type BootstrapOptions = { location: { hash: string; search: string } };
 const bootstrapSpy = vi.hoisted(() => vi.fn(async (_options: BootstrapOptions) => ({ state: 'ready' as const })));
 vi.mock('../services/agentConnectionBootstrap', () => ({ bootstrapLocalAgentConnection: bootstrapSpy }));
 
-import { DSH_EMBED_MESSAGE, installDshEmbedBridge, isDshEmbed, requestDshStartSession } from '../services/dshEmbedBridge';
+import { DSH_EMBED_MESSAGE, installDshEmbedBridge, isDshEmbed, requestDshStartSession, startDshBootstrap } from '../services/dshEmbedBridge';
 import { useWorkspaceStore } from '../stores/useWorkspaceStore';
 
 const ORIGIN = 'http' + '://127.0.0.1:5173';
@@ -116,6 +116,35 @@ describe('dshEmbedBridge', () => {
     dispatch({ type: DSH_EMBED_MESSAGE.bootstrap, agentUrl, bootstrapToken: 'x' }, {});
     expect(bootstrapSpy).toHaveBeenCalledTimes(1);
     dispose();
+  });
+
+  it('logs only the error name and code when bootstrap rejects, never the token', async () => {
+    const { win, dispatch } = fakeWindow();
+    const dispose = installDshEmbedBridge(win);
+    const token = 'one-time-secret-9d2c';
+    bootstrapSpy.mockRejectedValueOnce(Object.assign(new Error('failed at #/app?bootstrapToken=' + token), { code: 'E_BOOT' }));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      dispatch({ type: DSH_EMBED_MESSAGE.bootstrap, agentUrl: 'http:' + '//' + '127.0.0.1:17373', bootstrapToken: token });
+      await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
+      expect(warn.mock.calls[0]?.[1]).toBe('Error E_BOOT');
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(token);
+    } finally {
+      warn.mockRestore();
+      dispose();
+    }
+  });
+
+  it('accepts only loopback http agentUrl values', () => {
+    const { win } = fakeWindow();
+    for (const agentUrl of ['http:' + '//' + '10.0.0.5:17373', 'https:' + '//' + '127.0.0.1:17373', 'javascript:alert(1)', 'not a url']) {
+      expect(startDshBootstrap(win, { agentUrl, bootstrapToken: 'x' })).toBeNull();
+    }
+    expect(bootstrapSpy).not.toHaveBeenCalled();
+    for (const host of ['127.0.0.1', 'localhost', '[::1]']) {
+      expect(startDshBootstrap(win, { agentUrl: 'http:' + '//' + host + ':17373', bootstrapToken: 'x' })).not.toBeNull();
+    }
+    expect(bootstrapSpy).toHaveBeenCalledTimes(3);
   });
 
   it('asks the DSH parent to start a draft session with targetOrigin pinned', () => {

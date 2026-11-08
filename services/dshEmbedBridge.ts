@@ -68,8 +68,27 @@ export function applyDshLocale(root: HTMLElement, data: Payload): boolean {
   return true;
 }
 
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
+
+function loopbackAgentUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' || !LOOPBACK_HOSTS.has(url.hostname) || url.username || url.password) return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+// Name and code only: a message or stack may echo the synthetic URL that carries the one-time token.
+export function safeErrorLabel(error: unknown): string {
+  if (!(error instanceof Error)) return 'UnknownError';
+  const code = 'code' in error && typeof error.code === 'string' ? ' ' + error.code : '';
+  return error.name + code;
+}
+
 export function startDshBootstrap(win: EmbedWindow, data: Payload) {
-  const agentUrl = typeof data.agentUrl === 'string' ? data.agentUrl.trim() : '';
+  const agentUrl = typeof data.agentUrl === 'string' ? loopbackAgentUrl(data.agentUrl.trim()) : null;
   const bootstrapToken = typeof data.bootstrapToken === 'string' ? data.bootstrapToken.trim() : '';
   if (!agentUrl || !bootstrapToken) return null;
   // Synthetic location: the one-time token reaches the existing bootstrap flow
@@ -102,7 +121,7 @@ export function installDshEmbedBridge(win: EmbedWindow = window): () => void {
     if (data.type === DSH_EMBED_MESSAGE.theme) applyDshTheme(root, data, appliedTokens);
     else if (data.type === DSH_EMBED_MESSAGE.locale) applyDshLocale(root, data);
     else if (data.type === DSH_EMBED_MESSAGE.bootstrap) {
-      void startDshBootstrap(win, data)?.catch(error => console.warn('Flovart DSH embed bootstrap unavailable.', error));
+      void startDshBootstrap(win, data)?.catch(error => console.warn('Flovart DSH embed bootstrap unavailable.', safeErrorLabel(error)));
     }
   };
   win.addEventListener('message', onMessage);
