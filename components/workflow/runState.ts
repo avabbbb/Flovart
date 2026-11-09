@@ -41,6 +41,23 @@ function baseState(node: WorkflowNode): WorkflowNodeRunState {
   return node.metadata.operation && selectedSuccessfulTake(node) ? 'done' : 'idle';
 }
 
+/** 单个节点的生成阶段（只看元数据，不含 stale 判定）。 */
+export type WorkflowGenerationPhase = 'idle' | 'running' | 'succeeded' | 'failed';
+
+/**
+ * status 是唯一权威：矛盾组合一律按 status 判定，保证确定性。
+ * 例如 success/idle 上残留 generationRequestId 仍是 succeeded/idle；error 无文案仍是 failed；
+ * loading 带 error 或无 requestId（中断）仍是 running——中断由 findInterruptedWorkflowNodes 结合会话状态判定。
+ */
+export function deriveWorkflowGenerationPhase(metadata: Pick<WorkflowNode['metadata'], 'status'>): WorkflowGenerationPhase {
+  switch (metadata.status) {
+    case 'loading': return 'running';
+    case 'error': return 'failed';
+    case 'success': return 'succeeded';
+    default: return 'idle';
+  }
+}
+
 /** 节点“结果所属”的 Operation：Operation 自身，或输出节点通过 sourceOperationNodeId 指回的 Operation。 */
 function owningOperation(node: WorkflowNode, byId: Map<string, WorkflowNode>): WorkflowNode | undefined {
   if (node.metadata.operation) return node;

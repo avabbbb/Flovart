@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createExtensionKeySync,
   diffExtensionKeys,
@@ -95,6 +95,35 @@ describe('extension key sync', () => {
     sync.dispose();
     await sync.update([k1]);
     expect(fake.calls).toEqual([]);
+  });
+
+  it('retries once with a snapshot when keys change during a failed drain', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fake = fakeBridge('approved');
+    const sync = createExtensionKeySync(fake.bridge);
+    await sync.update([k1]);
+    fake.failNext(new Error('network down'));
+    const first = sync.update([k1, k2]);
+    const second = sync.update([k2]);
+    await Promise.all([first, second]);
+    expect(fake.calls.map(call => call.type)).toEqual(['keys.snapshot', 'keys.delta', 'keys.snapshot']);
+    expect(fake.calls[2].payload).toEqual({ revision: 1, keys: [k2] });
+    expect(warn).toHaveBeenCalledWith('[ExtensionKeySync] 同步 Key 到插件失败', expect.objectContaining({ willRetry: true }));
+    warn.mockRestore();
+  });
+
+  it('does not retry a failed drain without new changes, and resends a snapshot next time', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fake = fakeBridge('approved');
+    const sync = createExtensionKeySync(fake.bridge);
+    await sync.update([k1]);
+    fake.failNext(new Error('network down'));
+    await sync.update([k1, k2]);
+    expect(fake.calls.map(call => call.type)).toEqual(['keys.snapshot', 'keys.delta']);
+    expect(warn).toHaveBeenCalledWith('[ExtensionKeySync] 同步 Key 到插件失败', expect.objectContaining({ willRetry: false }));
+    await sync.update([k1, k2]);
+    expect(fake.calls.map(call => call.type)).toEqual(['keys.snapshot', 'keys.delta', 'keys.snapshot']);
+    warn.mockRestore();
   });
 
   it('keeps only fields the extension uses and diffs by id', () => {

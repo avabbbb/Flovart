@@ -1,6 +1,6 @@
 // 画布 Vault → 已配对的浏览器插件。
 // 连接进入 approved 后先发 keys.snapshot（全量），之后每次 Key 变更只发 keys.delta（增量）。
-// 插件拒绝 delta（revision 对不上）时回退为全量；任何失败都在下次变更或重连时整份重发。
+// 插件拒绝 delta（revision 对不上）时回退为全量；发送失败时若期间又有变更则立即全量重试一次，否则在下次变更或重连时整份重发。
 
 export interface ExtensionKeySource {
   id: string;
@@ -55,19 +55,23 @@ function isRevisionMismatch(error: unknown): boolean {
   return error instanceof Error && error.message.includes(REVISION_MISMATCH);
 }
 
+// idle：没有进行中的发送；draining：正在把 desired 推给插件；disposed：终态，忽略一切更新。
+type KeySyncPhase = 'idle' | 'draining' | 'disposed';
+
 export function createExtensionKeySync(bridge: KeySyncBridge): ExtensionKeySync {
   let desired: ExtensionKeyEntry[] = [];
   let hasDesired = false;
   let acked: { revision: number; keys: ExtensionKeyEntry[] } | null = null;
+  let phase: KeySyncPhase = 'idle';
   let running: Promise<void> | null = null;
+  // draining 期间又有变更：本轮结束后再推一次。
   let dirty = false;
-  let disposed = false;
   let wasApproved = bridge.getState().status === 'approved';
 
   async function drain() {
     do {
       dirty = false;
-      if (disposed || !hasDesired || bridge.getState().status !== 'approved') return;
+      if (phase === 'disposed' || !hasDesired || bridge.getState().status !== 'approved') return;
       const target = desired;
       const revision = (acked?.revision ?? 0) + 1;
       if (acked) {
@@ -86,18 +90,34 @@ export function createExtensionKeySync(bridge: KeySyncBridge): ExtensionKeySync 
     } while (dirty);
   }
 
+  async function drainWithRetry() {
+    let retried = false;
+    for (;;) {
+      try {
+        await drain();
+        return;
+      } catch (error) {
+        acked = null;
+        const willRetry = dirty && !retried;
+        console.warn('[ExtensionKeySync] 同步 Key 到插件失败', { error: error instanceof Error ? error.message : String(error), willRetry });
+        // 失败那一轮里又有新变更：立即用全量重试一次，否则最新 Key 要等下次变更或重连才送达。
+        if (!willRetry) return;
+        retried = true;
+      }
+    }
+  }
+
   function flush(): Promise<void> {
-    if (running) {
+    if (phase === 'disposed') return Promise.resolve();
+    if (phase === 'draining' && running) {
       dirty = true;
       return running;
     }
-    running = drain()
-      .catch(() => {
-        acked = null;
-      })
-      .finally(() => {
-        running = null;
-      });
+    phase = 'draining';
+    running = drainWithRetry().finally(() => {
+      running = null;
+      if (phase === 'draining') phase = 'idle';
+    });
     return running;
   }
 
@@ -116,7 +136,7 @@ export function createExtensionKeySync(bridge: KeySyncBridge): ExtensionKeySync 
       return flush();
     },
     dispose() {
-      disposed = true;
+      phase = 'disposed';
       unsubscribe();
     },
   };

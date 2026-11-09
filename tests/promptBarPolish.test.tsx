@@ -9,7 +9,7 @@ type EnhanceResult = Awaited<ReturnType<EnhanceFn>>;
 // 测试只关心 enhancedPrompt 字段，其余结果字段与润色写回无关。
 const enhanceReturning = (enhancedPrompt: string) => vi.fn<EnhanceFn>(async () => ({ enhancedPrompt }) as unknown as EnhanceResult);
 
-function Harness({ onEnhancePrompt, onAutoEnhanceToggle, onPrompt }: { onEnhancePrompt: EnhanceFn; onAutoEnhanceToggle?: () => void; onPrompt: (value: string) => void }) {
+function Harness({ onEnhancePrompt, onAutoEnhanceToggle, onPrompt, promptSnapshotKey }: { onEnhancePrompt: EnhanceFn; onAutoEnhanceToggle?: () => void; onPrompt: (value: string) => void; promptSnapshotKey?: string }) {
   const [prompt, setPrompt] = useState('一只猫');
   const mounted = useRef(false);
   // 只上报真正变化后的提示词；编辑器挂载时会用原值同步一次。
@@ -37,6 +37,7 @@ function Harness({ onEnhancePrompt, onAutoEnhanceToggle, onPrompt }: { onEnhance
       onEnhancePrompt={onEnhancePrompt}
       isAutoEnhanceEnabled={false}
       onAutoEnhanceToggle={onAutoEnhanceToggle}
+      promptSnapshotKey={promptSnapshotKey}
     />
   );
 }
@@ -78,5 +79,47 @@ describe('PromptBar one-shot polish', () => {
     fireEvent.click(screen.getByTitle('更多操作'));
     fireEvent.click(screen.getByRole('button', { name: /生成前自动润色/ }));
     expect(onAutoEnhanceToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the restore button after the node prompt bar remounts', async () => {
+    const onEnhancePrompt = enhanceReturning('一只橘猫，电影感');
+    const first = render(<Harness onEnhancePrompt={onEnhancePrompt} onPrompt={vi.fn()} promptSnapshotKey="workflow-node:test-remount" />);
+    fireEvent.click(screen.getByRole('button', { name: '润色提示词' }));
+    await screen.findByRole('button', { name: '还原提示词' });
+    first.unmount();
+
+    render(<Harness onEnhancePrompt={onEnhancePrompt} onPrompt={vi.fn()} promptSnapshotKey="workflow-node:test-remount" />);
+    expect(screen.getByRole('button', { name: '还原提示词' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '还原提示词' }));
+    expect(screen.queryByRole('button', { name: '还原提示词' })).not.toBeInTheDocument();
+  });
+
+  it('restores the original text after polishing twice', async () => {
+    const onEnhancePrompt = vi.fn<EnhanceFn>()
+      .mockResolvedValueOnce({ enhancedPrompt: '一只橘猫，电影感' } as unknown as EnhanceResult)
+      .mockResolvedValueOnce({ enhancedPrompt: '一只橘猫，午后阳光，电影感' } as unknown as EnhanceResult);
+    const onPrompt = vi.fn();
+    render(<Harness onEnhancePrompt={onEnhancePrompt} onPrompt={onPrompt} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '润色提示词' }));
+    await waitFor(() => expect(onPrompt).toHaveBeenLastCalledWith('一只橘猫，电影感'));
+    await waitFor(() => expect(screen.getByRole('button', { name: '润色提示词' })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: '润色提示词' }));
+    await waitFor(() => expect(onPrompt).toHaveBeenLastCalledWith('一只橘猫，午后阳光，电影感'));
+
+    fireEvent.click(await screen.findByRole('button', { name: '还原提示词' }));
+    await waitFor(() => expect(onPrompt).toHaveBeenLastCalledWith('一只猫'));
+  });
+
+  it('does not open the @ suggestion popup when the polished text contains a mention label', async () => {
+    const onEnhancePrompt = enhanceReturning('参考 @视频1 的运镜，一只橘猫在窗台');
+    const onPrompt = vi.fn();
+    render(<Harness onEnhancePrompt={onEnhancePrompt} onPrompt={onPrompt} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '润色提示词' }));
+    await waitFor(() => expect(onPrompt).toHaveBeenLastCalledWith(expect.stringContaining('一只橘猫在窗台')));
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(screen.queryByText('没有匹配的素材或节点')).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '还原提示词' })).toBeInTheDocument();
   });
 });

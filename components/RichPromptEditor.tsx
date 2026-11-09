@@ -3,12 +3,13 @@ import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef 
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Extension } from '@tiptap/core';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { DOMSerializer, Slice } from '@tiptap/pm/model';
 import { Suggestion } from '@tiptap/suggestion';
 import tippy, { type Instance as TippyInstance } from 'tippy.js';
 import 'tippy.js/dist/tippy.css';
 import ReactDOM from 'react-dom/client';
-import MentionList, { type MentionItem, type AssetSuggestion, type MentionListHandle } from './MentionList';
+import MentionList, { type MentionItem, type AssetSuggestion, type MentionListHandle, type MentionCommandPayload } from './MentionList';
 import { MediaMentionNode, editorJSONToText, extractMentions, type MentionData } from './MediaMentionExtension';
 import type { AssetFolder } from '../types';
 import {
@@ -42,111 +43,212 @@ function normalizeDocument(
     return buildDocFromText(text);
 }
 
+// ---- @ 建议弹层：显式会话状态机 ----
+// 一次 @ 输入从 onStart 到 onExit 是一个会话；Escape 只隐藏（hidden），继续输入改变 query 时重新打开。
+export type MentionPopupPhase =
+    | { kind: 'closed' }
+    | { kind: 'open'; query: string }
+    | { kind: 'hidden'; query: string }
+    | { kind: 'exiting' };
+
+export type MentionPopupEvent =
+    | { type: 'start'; query: string }
+    | { type: 'update'; query: string }
+    | { type: 'escape' }
+    | { type: 'exit' };
+
+export function nextMentionPopupPhase(phase: MentionPopupPhase, event: MentionPopupEvent): MentionPopupPhase {
+    switch (event.type) {
+        case 'start':
+            return { kind: 'open', query: event.query };
+        case 'update':
+            if (phase.kind === 'open') return { kind: 'open', query: event.query };
+            if (phase.kind === 'hidden' && phase.query !== event.query) return { kind: 'open', query: event.query };
+            return phase;
+        case 'escape':
+            return phase.kind === 'open' ? { kind: 'hidden', query: phase.query } : phase;
+        case 'exit':
+            return phase.kind === 'open' || phase.kind === 'hidden' ? { kind: 'exiting' } : phase;
+    }
+}
+
+export type MentionKeyRoute = 'hide' | 'list' | 'editor';
+
+// 只有可见的列表才接管按键；隐藏后 Enter/方向键原样交给编辑器，避免对看不见的列表误操作。
+export function routeMentionKey(phase: MentionPopupPhase, key: string): MentionKeyRoute {
+    if (phase.kind !== 'open') return 'editor';
+    return key === 'Escape' || key === 'Esc' ? 'hide' : 'list';
+}
+
+// 程序化写回（润色/翻译/还原）带此 meta，不解除 @ 建议抑制。
+export const suggestionProgrammaticMeta = 'flovartProgrammaticWrite';
+
+// 真实用户输入事务（键入、IME、鼠标点选、拖放/剪切）解除抑制；插件追加的事务不算。
+export function releasesSuggestionSuppression(tr: { docChanged: boolean; getMeta: (key: string) => unknown }): boolean {
+    if (tr.getMeta(suggestionProgrammaticMeta) || tr.getMeta('appendedTransaction')) return false;
+    return tr.docChanged || !!tr.getMeta('pointer') || !!tr.getMeta('uiEvent') || tr.getMeta('composition') !== undefined;
+}
+
+interface MentionSuggestionProps {
+    query: string;
+    items: MentionItem[];
+    command: (payload: MentionCommandPayload) => void;
+    clientRect?: (() => DOMRect | null) | null;
+}
+
+export interface MentionPopupSession {
+    phase: MentionPopupPhase;
+    popup: TippyInstance | null;
+    readonly container: HTMLElement;
+    readonly root: ReactDOM.Root;
+    readonly listRef: React.RefObject<MentionListHandle>;
+}
+
+export interface MentionPopupRenderer {
+    readonly session: MentionPopupSession | null;
+    onStart(props: MentionSuggestionProps): void;
+    onUpdate(props: MentionSuggestionProps): void;
+    onKeyDown(props: { event: KeyboardEvent }): boolean;
+    onExit(): void;
+}
+
+export function createMentionPopupRenderer(
+    assetFoldersRef: { current: AssetFolder[] },
+    assetItemsRef: { current: AssetSuggestion[] },
+): MentionPopupRenderer {
+    let session: MentionPopupSession | null = null;
+
+    const renderList = (target: MentionPopupSession, props: MentionSuggestionProps) => {
+        target.root.render(
+            <MentionList
+                ref={target.listRef}
+                connectedItems={props.items}
+                assetFolders={assetFoldersRef.current}
+                assetItems={assetItemsRef.current}
+                query={props.query || ''}
+                command={props.command}
+            />
+        );
+    };
+
+    return {
+        get session() {
+            return session;
+        },
+        onStart(props) {
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+            const started: MentionPopupSession = {
+                phase: nextMentionPopupPhase({ kind: 'closed' }, { type: 'start', query: props.query || '' }),
+                popup: null,
+                container,
+                root: ReactDOM.createRoot(container),
+                listRef: React.createRef<MentionListHandle>(),
+            };
+            session = started;
+            renderList(started, props);
+            started.popup = tippy('body', {
+                getReferenceClientRect: props.clientRect as () => DOMRect,
+                appendTo: () => document.body,
+                content: container,
+                showOnCreate: true,
+                interactive: true,
+                trigger: 'manual',
+                placement: 'top-start',
+                theme: 'mention-popup',
+                arrow: false,
+                offset: [0, 4],
+                zIndex: 99999,
+                popperOptions: {
+                    strategy: 'fixed',
+                    modifiers: [
+                        {
+                            name: 'flip',
+                            enabled: true,
+                            options: {
+                                behavior: ['bottom-start', 'top-start'],
+                                padding: 8,
+                            },
+                        },
+                        { name: 'preventOverflow', enabled: true, options: { padding: 8 } },
+                    ],
+                },
+            })[0] ?? null;
+        },
+        onUpdate(props) {
+            const current = session;
+            if (!current) return;
+            const previous = current.phase;
+            current.phase = nextMentionPopupPhase(previous, { type: 'update', query: props.query || '' });
+            renderList(current, props);
+            if (props.clientRect) {
+                current.popup?.setProps({ getReferenceClientRect: props.clientRect as () => DOMRect });
+            }
+            if (previous.kind === 'hidden' && current.phase.kind === 'open') current.popup?.show();
+        },
+        onKeyDown({ event }) {
+            const current = session;
+            if (!current) return false;
+            const route = routeMentionKey(current.phase, event.key);
+            if (route === 'editor') return false;
+            if (route === 'hide') {
+                current.phase = nextMentionPopupPhase(current.phase, { type: 'escape' });
+                current.popup?.hide();
+                return true;
+            }
+            return current.listRef.current?.onKeyDown({ event }) ?? false;
+        },
+        onExit() {
+            const ending = session;
+            if (!ending) return;
+            session = null;
+            ending.phase = nextMentionPopupPhase(ending.phase, { type: 'exit' });
+            ending.popup?.destroy();
+            ending.popup = null;
+            // 推迟卸载避免在渲染中同步 unmount；只拆除本会话自己的 root，快速重开的新会话不受影响。
+            setTimeout(() => {
+                ending.root.unmount();
+                ending.container.remove();
+                ending.phase = { kind: 'closed' };
+            }, 0);
+        },
+    };
+}
+
 function buildSuggestionExtension(
     getItems: (query: string) => MentionItem[],
     assetFoldersRef: { current: AssetFolder[] },
     assetItemsRef: { current: AssetSuggestion[] },
     onSelectAssetRef: { current: ((assetId: string) => string | undefined) | null },
+    suppressSuggestionRef: { current: boolean },
 ) {
     return Extension.create({
         name: 'mediaMentionSuggestion',
         addProseMirrorPlugins() {
             return [
+                // 必须排在 Suggestion 之前：同一事务里先解除抑制，Suggestion 的 allow 才能看到最新值。
+                new Plugin({
+                    key: new PluginKey('mediaMentionSuggestionRelease'),
+                    state: {
+                        init: () => null,
+                        apply(tr, value) {
+                            if (releasesSuggestionSuppression(tr)) suppressSuggestionRef.current = false;
+                            return value;
+                        },
+                    },
+                }),
                 Suggestion({
                     editor: this.editor,
                     char: '@',
                     allowSpaces: false,
                     allowedPrefixes: null,
+                    // 润色/翻译/还原等程序化写回不应弹出 @ 建议层；任意真实用户输入后恢复。
+                    allow: () => !suppressSuggestionRef.current,
                     items: ({ query }) => getItems(query),
-                    render() {
-                        let reactRoot: ReactDOM.Root | null = null;
-                        let container: HTMLElement | null = null;
-                        let popup: TippyInstance[] | null = null;
-                        let componentRef: React.RefObject<MentionListHandle> = React.createRef();
-                        let currentQuery: string = '';
-
-                        const renderList = (items: MentionItem[], command: (payload: MentionItem | { batch: MentionItem[] }) => void) => {
-                            reactRoot?.render(
-                                <MentionList
-                                    ref={componentRef}
-                                    connectedItems={items}
-                                    assetFolders={assetFoldersRef.current}
-                                    assetItems={assetItemsRef.current}
-                                    query={currentQuery}
-                                    command={command}
-                                />
-                            );
-                        };
-
-                        return {
-                            onStart(props) {
-                                currentQuery = (props.query as string) || '';
-                                container = document.createElement('div');
-                                document.body.appendChild(container);
-
-                                componentRef = React.createRef<MentionListHandle>();
-                                reactRoot = ReactDOM.createRoot(container);
-                                renderList(props.items as MentionItem[], props.command);
-
-                                popup = tippy('body', {
-                                    getReferenceClientRect: props.clientRect as () => DOMRect,
-                                    appendTo: () => document.body,
-                                    content: container,
-                                    showOnCreate: true,
-                                    interactive: true,
-                                    trigger: 'manual',
-                                    placement: 'top-start',
-                                    theme: 'mention-popup',
-                                    arrow: false,
-                                    offset: [0, 4],
-                                    zIndex: 99999,
-                                    popperOptions: {
-                                        strategy: 'fixed',
-                                        modifiers: [
-                                            {
-                                                name: 'flip',
-                                                enabled: true,
-                                                options: {
-                                                    behavior: ['bottom-start', 'top-start'],
-                                                    padding: 8,
-                                                },
-                                            },
-                                            { name: 'preventOverflow', enabled: true, options: { padding: 8 } },
-                                        ],
-                                    },
-                                });
-                            },
-                            onUpdate(props) {
-                                currentQuery = (props.query as string) || '';
-                                renderList(props.items as MentionItem[], props.command);
-
-                                if (popup?.[0] && props.clientRect) {
-                                    popup[0].setProps({
-                                        getReferenceClientRect: props.clientRect as () => DOMRect,
-                                    });
-                                }
-                            },
-                            onKeyDown(props) {
-                                if (props.event.key === 'Escape') {
-                                    popup?.[0]?.hide();
-                                    return true;
-                                }
-
-                                return componentRef.current?.onKeyDown(props) ?? false;
-                            },
-                            onExit() {
-                                popup?.[0]?.destroy();
-                                popup = null;
-                                setTimeout(() => {
-                                    reactRoot?.unmount();
-                                    container?.remove();
-                                }, 0);
-                            },
-                        };
-                    },
+                    render: () => createMentionPopupRenderer(assetFoldersRef, assetItemsRef),
                     command({ editor, range, props }) {
                         // 单个条目或勾选后的批量条目；素材先物化为上游节点，物化失败的跳过。
-                        const payload = props as MentionItem | { batch: MentionItem[] };
+                        const payload = props as MentionCommandPayload;
                         const picked = 'batch' in payload ? payload.batch : [payload];
                         const content = picked.flatMap(item => {
                             let mentionId: string | undefined = item.id;
@@ -254,6 +356,7 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
             onPasteUnresolvedMentionsRef.current = onPasteUnresolvedMentions;
         }, [onPasteUnresolvedMentions]);
 
+        const suppressSuggestionRef = useRef(false);
         const getFilteredItems = useCallback((query: string): MentionItem[] => {
             const normalized = query.toLowerCase();
             return referenceItemsRef.current.filter(
@@ -281,7 +384,7 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
                     horizontalRule: false,
                 }),
                 MediaMentionNode,
-                buildSuggestionExtension(getFilteredItems, assetFoldersRef, assetItemsRef, onSelectAssetRef),
+                buildSuggestionExtension(getFilteredItems, assetFoldersRef, assetItemsRef, onSelectAssetRef, suppressSuggestionRef),
                 buildReferenceHintExtension(() => referenceItemsRef.current),
             ],
             content: normalizeDocument(initialText, initialDocument),
@@ -296,6 +399,7 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
                     'data-placeholder': placeholder,
                 },
                 handleKeyDown(_, event) {
+                    suppressSuggestionRef.current = false;
                     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                         event.preventDefault();
                         onSubmit?.();
@@ -304,6 +408,7 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
                     return false;
                 },
                 handlePaste(view, event) {
+                    suppressSuggestionRef.current = false;
                     const clipboard = event.clipboardData;
                     if (!clipboard) return false;
                     const encoded = clipboard.getData(FLOVART_PROMPT_CLIPBOARD_MIME);
@@ -378,11 +483,13 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
             setText(text: string) {
                 if (!editor) return;
                 // tiptap v3：setContent 的 emitUpdate 默认即为 true（此前传 false 也会走默认值），显式声明保持契约
-                editor.commands.setContent(buildDocFromText(text), { emitUpdate: true });
+                suppressSuggestionRef.current = true;
+                editor.chain().setMeta(suggestionProgrammaticMeta, true).setContent(buildDocFromText(text), { emitUpdate: true }).run();
             },
             setDocument(document: Record<string, unknown>) {
                 if (!editor) return;
-                editor.commands.setContent(normalizeDocument('', document), { emitUpdate: true });
+                suppressSuggestionRef.current = true;
+                editor.chain().setMeta(suggestionProgrammaticMeta, true).setContent(normalizeDocument('', document), { emitUpdate: true }).run();
             },
             getJSON() {
                 return (editor?.getJSON() ?? {}) as Record<string, unknown>;

@@ -97,13 +97,13 @@ import { runWorkflowAudioSpeedOperation, runWorkflowAudioStemSplitOperation, run
 import { exportMediaArchive } from '../../utils/batchMediaExport';
 import { exportWorkflowCanvas, pickWorkflowExportNodes, type WorkflowCanvasExportFormat } from './canvasExport';
 import { addWorkflowSnapshot, createWorkflowSnapshot, removeWorkflowSnapshot, workflowSnapshotFrame } from './snapshots';
+import { useToolSession } from './useToolSession';
 import { computeAutoLayout } from './layoutAlgorithm';
 import { usePromptHistoryStore } from '../../stores/usePromptHistoryStore';
 import { useClipboardStore, type ClipItem } from '../../stores/useClipboardStore';
 import { displayError } from '../../services/displayError';
 
 type Frame = Pick<WorkflowProject, 'nodes' | 'connections'>;
-type ImageToolTransaction = { id: string; projectId: string; nodeId: string; frame: Frame };
 type SelectionBox = { start: WorkflowPoint; current: WorkflowPoint; additive: boolean; initialIds: string[] };
 /** 拖拽过程中的预览状态：只改本地渲染，松手后才写回项目存储。 */
 type InteractionPreview =
@@ -462,17 +462,11 @@ export function InfiniteWorkflow({
   const [focusBadge, setFocusBadge] = useState(false);
   const [overlayHidden, setOverlayHidden] = useState(false);
   const [promptFocusSignal, setPromptFocusSignal] = useState(0);
-  const [imageTool, setImageTool] = useState<WorkflowImageToolState | null>(null);
+  const { tool: imageTool, busy: imageToolBusy, error: imageToolError, active: imageToolActive, controls: imageControls } = useToolSession<WorkflowImageToolState, Frame>();
   const [lassoNodeId, setLassoNodeId] = useState<string | null>(null);
   const [layerLassoPoints, setLayerLassoPoints] = useState<LassoPoint[] | undefined>(undefined);
-  const [imageToolBusy, setImageToolBusy] = useState(false);
-  const [imageToolError, setImageToolError] = useState<string | null>(null);
-  const [videoTool, setVideoTool] = useState<WorkflowVideoToolState | null>(null);
-  const [videoToolBusy, setVideoToolBusy] = useState(false);
-  const [videoToolError, setVideoToolError] = useState<string | null>(null);
-  const [audioTool, setAudioTool] = useState<WorkflowAudioToolState | null>(null);
-  const [audioToolBusy, setAudioToolBusy] = useState(false);
-  const [audioToolError, setAudioToolError] = useState<string | null>(null);
+  const { tool: videoTool, busy: videoToolBusy, error: videoToolError, active: videoToolActive, controls: videoControls } = useToolSession<WorkflowVideoToolState, Frame>();
+  const { tool: audioTool, busy: audioToolBusy, error: audioToolError, active: audioToolActive, controls: audioControls } = useToolSession<WorkflowAudioToolState, Frame>();
   const [storyboardNodeIds, setStoryboardNodeIds] = useState<string[] | null>(null);
   const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
   const [scriptEditorNodeId, setScriptEditorNodeId] = useState<string | null>(null);
@@ -490,12 +484,6 @@ export function InfiniteWorkflow({
       return next;
     });
   }, []);
-  const imageToolBusyRef = useRef(false);
-  const imageToolTransactionRef = useRef<ImageToolTransaction | null>(null);
-  const videoToolBusyRef = useRef(false);
-  const videoToolTransactionRef = useRef<ImageToolTransaction | null>(null);
-  const audioToolBusyRef = useRef(false);
-  const audioToolTransactionRef = useRef<ImageToolTransaction | null>(null);
 
   // 拖拽/缩放只产生本地预览副本，存储与历史在松手时一次性提交（见 finishInteraction）。
   const displayNodes = useMemo(() => {
@@ -579,11 +567,10 @@ export function InfiniteWorkflow({
     setSelectionBox(null);
     setConnectionDrag(null);
     setCreateMenu(null);
-    setImageTool(null);
-    setImageToolBusy(false);
-    setImageToolError(null);
-    imageToolBusyRef.current = false;
-    imageToolTransactionRef.current = null;
+    // 切换项目即结束所有工具会话；旧事务的异步收尾不再持有会话，不会改动新会话。
+    imageControls.reset();
+    videoControls.reset();
+    audioControls.reset();
     setActiveMedia(null);
     clipboardRef.current = [];
     setClipboardVersion(version => version + 1);
@@ -591,7 +578,7 @@ export function InfiniteWorkflow({
     createMenuOpenerRef.current = null;
     interactionRef.current = null;
     setInteractionPreview(null);
-  }, [project.id]);
+  }, [audioControls, imageControls, project.id, videoControls]);
 
   useEffect(() => {
     const ids = project.selectedNodeIds || [];
@@ -814,44 +801,28 @@ export function InfiniteWorkflow({
     },
   }), [applyDraftProject, confirmRouteFallback, userApiKeys]);
 
-  const ownsImageToolTransaction = useCallback((transaction: ImageToolTransaction) => {
-    const current = imageToolTransactionRef.current;
-    return current?.id === transaction.id && current.projectId === transaction.projectId && current.nodeId === transaction.nodeId;
-  }, []);
-
-  const releaseImageToolTransaction = useCallback((transaction: ImageToolTransaction) => {
-    if (!ownsImageToolTransaction(transaction)) return false;
-    imageToolTransactionRef.current = null;
-    imageToolBusyRef.current = false;
-    setImageToolBusy(false);
-    return true;
-  }, [ownsImageToolTransaction]);
-
   const openImageTool = useCallback((kind: WorkflowImageToolState['kind'], nodeId: string) => {
-    if (imageToolTransactionRef.current || imageTool || imageToolBusyRef.current) {
+    if (imageControls.isLocked()) {
       setNotice('请先完成或关闭当前图片工具');
       return;
     }
     if (projectRef.current.nodes.find(node => node.id === nodeId)?.metadata.status === 'loading') return;
-    setImageToolError(null);
     const transaction = { id: nanoid(), projectId: projectRef.current.id, nodeId, frame: currentFrame() };
-    imageToolTransactionRef.current = transaction;
-    if (kind === 'remove-background') {
-      imageToolBusyRef.current = true;
-      setImageToolBusy(true);
-      void runWorkflowRemoveBackgroundOperation(transaction.projectId, nodeId, imageToolRuntime).then(result => {
-        if (!ownsImageToolTransaction(transaction)) return;
-        if (result.status === 'committed' && result.project.id === transaction.projectId && projectRef.current.id === transaction.projectId && result.project.nodes.some(node => node.id === transaction.nodeId)) {
-          pushHistory(transaction.frame);
-          setNotice('背景移除完成');
-        }
-      }).catch(error => {
-        if (ownsImageToolTransaction(transaction)) setNotice(displayError(error, '背景移除失败'));
-      }).finally(() => { releaseImageToolTransaction(transaction); });
+    if (kind !== 'remove-background') {
+      imageControls.open({ kind, nodeId }, transaction);
       return;
     }
-    setImageTool({ kind, nodeId });
-  }, [currentFrame, imageTool, imageToolRuntime, ownsImageToolTransaction, pushHistory, releaseImageToolTransaction]);
+    imageControls.begin(transaction);
+    void runWorkflowRemoveBackgroundOperation(transaction.projectId, nodeId, imageToolRuntime).then(result => {
+      if (!imageControls.owns(transaction)) return;
+      if (result.status === 'committed' && result.project.id === transaction.projectId && projectRef.current.id === transaction.projectId && result.project.nodes.some(node => node.id === transaction.nodeId)) {
+        pushHistory(transaction.frame);
+        setNotice('背景移除完成');
+      }
+    }).catch(error => {
+      if (imageControls.owns(transaction)) setNotice(displayError(error, '背景移除失败'));
+    }).finally(() => { imageControls.settle(transaction); });
+  }, [currentFrame, imageControls, imageToolRuntime, pushHistory]);
 
   const builtInImageTools = useMemo<WorkflowImageToolHandlers>(() => ({
     crop: id => openImageTool('crop', id), filter: id => openImageTool('filter', id), upscale: id => openImageTool('upscale', id),
@@ -860,7 +831,7 @@ export function InfiniteWorkflow({
     layer: id => {
       const target = projectRef.current.nodes.find(node => node.id === id);
       // 有媒体的图片节点先在节点内圈选，再进入参数弹窗；其余情况直接弹窗。
-      if (target?.type === 'image' && (target.metadata.storageKey || target.metadata.href) && target.metadata.status !== 'loading' && !imageTool && !imageToolTransactionRef.current) {
+      if (target?.type === 'image' && (target.metadata.storageKey || target.metadata.href) && target.metadata.status !== 'loading' && !imageControls.isLocked()) {
         setLayerLassoPoints(undefined);
         setLassoNodeId(id);
         return;
@@ -868,10 +839,10 @@ export function InfiniteWorkflow({
       openImageTool('layer', id);
     },
     storyboard: ids => { setStoryboardNodeIds(ids); openImageTool('storyboard', ids[0]); },
-  }), [imageTool, openImageTool]);
+  }), [imageControls, openImageTool]);
 
   const openVideoTool = useCallback((kind: WorkflowVideoToolState['kind'], nodeId: string, nodeIds?: string[]) => {
-    if (videoToolTransactionRef.current || videoTool || videoToolBusyRef.current) {
+    if (videoControls.isLocked()) {
       setNotice('请先完成或关闭当前视频工具');
       return;
     }
@@ -883,60 +854,50 @@ export function InfiniteWorkflow({
       return;
     }
     if (target.metadata.status === 'loading') return;
-    setVideoToolError(null);
     const transaction = { id: nanoid(), projectId: projectRef.current.id, nodeId, frame: currentFrame() };
-    videoToolTransactionRef.current = transaction;
-    setVideoTool({ kind, nodeId, ...(nodeIds ? { nodeIds } : {}) });
-  }, [currentFrame, videoTool]);
+    videoControls.open({ kind, nodeId, ...(nodeIds ? { nodeIds } : {}) }, transaction);
+  }, [currentFrame, videoControls]);
 
   const handleExtractFrame = useCallback(async (id: string, position: 'first' | 'current' | 'last', currentTimeSec?: number) => {
-    if (videoToolBusyRef.current) return;
     const node = projectRef.current.nodes.find(item => item.id === id);
     if (!node || node.type !== 'video') return;
-    const projectId = projectRef.current.id;
-    const frame = currentFrame();
-    videoToolBusyRef.current = true;
-    setVideoToolBusy(true);
-    setVideoToolError(null);
+    const transaction = { id: nanoid(), projectId: projectRef.current.id, nodeId: id, frame: currentFrame() };
+    if (!videoControls.begin(transaction)) return;
     try {
-      const result = await runWorkflowVideoExtractFrameOperation(projectId, id, position, imageToolRuntime, currentTimeSec);
-      if (result.status === 'committed' && projectRef.current.id === projectId) {
-        pushHistory(frame);
+      const result = await runWorkflowVideoExtractFrameOperation(transaction.projectId, id, position, imageToolRuntime, currentTimeSec);
+      if (!videoControls.owns(transaction)) return;
+      if (result.status === 'committed' && projectRef.current.id === transaction.projectId) {
+        pushHistory(transaction.frame);
         setNotice(position === 'first' ? '首帧已通过 Operation 导出' : position === 'last' ? '尾帧已通过 Operation 导出' : '当前帧已通过 Operation 导出');
       }
     } catch (error) {
-      setNotice(displayError(error, '帧导出失败'));
+      if (videoControls.owns(transaction)) setNotice(displayError(error, '帧导出失败'));
     } finally {
-      videoToolBusyRef.current = false;
-      setVideoToolBusy(false);
+      videoControls.settle(transaction);
     }
-  }, [currentFrame, imageToolRuntime, pushHistory]);
+  }, [currentFrame, imageToolRuntime, pushHistory, videoControls]);
 
   // 工具栏「分离音视频 / 人声提取 / 背景音提取」直接执行：输出无声视频 + 音频节点，媒体写入本地存储。
   const handleAvSplit = useCallback(async (id: string, audio: WorkflowAvSplitAudio = 'full') => {
-    if (videoToolBusyRef.current) return;
     const node = projectRef.current.nodes.find(item => item.id === id);
     if (!node || node.type !== 'video' || node.metadata.status === 'loading') return;
-    const projectId = projectRef.current.id;
-    const frame = currentFrame();
+    const transaction = { id: nanoid(), projectId: projectRef.current.id, nodeId: id, frame: currentFrame() };
+    if (!videoControls.begin(transaction)) return;
     const what = audio === 'vocals' ? '人声' : audio === 'background' ? '背景音' : '音频';
-    videoToolBusyRef.current = true;
-    setVideoToolBusy(true);
-    setVideoToolError(null);
     setNotice(audio === 'full' ? '正在分离音视频…' : '正在提取' + what + '…');
     try {
-      const result = await runWorkflowVideoAvSplitOperation(projectId, id, imageToolRuntime, audio);
-      if (result.status === 'committed' && projectRef.current.id === projectId) {
-        pushHistory(frame);
+      const result = await runWorkflowVideoAvSplitOperation(transaction.projectId, id, imageToolRuntime, audio);
+      if (!videoControls.owns(transaction)) return;
+      if (result.status === 'committed' && projectRef.current.id === transaction.projectId) {
+        pushHistory(transaction.frame);
         setNotice('已创建无声视频与' + what + '节点，素材已保存');
       }
     } catch (error) {
-      setNotice(displayError(error, audio === 'full' ? '音视频分离失败' : what + '提取失败'));
+      if (videoControls.owns(transaction)) setNotice(displayError(error, audio === 'full' ? '音视频分离失败' : what + '提取失败'));
     } finally {
-      videoToolBusyRef.current = false;
-      setVideoToolBusy(false);
+      videoControls.settle(transaction);
     }
-  }, [currentFrame, imageToolRuntime, pushHistory]);
+  }, [currentFrame, imageToolRuntime, pushHistory, videoControls]);
 
   const builtInVideoTools = useMemo<WorkflowVideoToolHandlers>(() => ({
     trim: id => openVideoTool('trim', id),
@@ -970,7 +931,8 @@ export function InfiniteWorkflow({
             : await runWorkflowVideoExtractFrameOperation(projectId, task.nodeId, task.kind === 'first-frame' ? 'first' : 'last', imageToolRuntime);
           if (result.status === 'committed' && projectRef.current.id === projectId) pushHistory(frame);
         } catch (error) {
-          setNotice(displayError(error, task.kind === 'av-split' ? '自动音视频分离失败' : '自动截帧失败'));
+          // 项目已切换时不再为旧项目的自动派生弹出提示。
+          if (projectRef.current.id === projectId) setNotice(displayError(error, task.kind === 'av-split' ? '自动音视频分离失败' : '自动截帧失败'));
         }
       });
     }
@@ -980,23 +942,17 @@ export function InfiniteWorkflow({
   const activeVideoToolMedia = useWorkflowMediaUrl(activeVideoToolNode?.metadata.storageKey, activeVideoToolNode?.metadata.href, activeVideoToolNode?.metadata.artifactRef);
 
   const closeVideoTool = useCallback(() => {
-    const transaction = videoToolTransactionRef.current;
-    if (!videoTool || !transaction || videoToolBusyRef.current) return;
-    setVideoTool(null);
-    setVideoToolError(null);
-    videoToolTransactionRef.current = null;
-    videoToolBusyRef.current = false;
-    setVideoToolBusy(false);
-  }, [videoTool]);
+    const transaction = videoControls.current();
+    if (!videoTool || !transaction || videoControls.isBusy()) return;
+    videoControls.close(transaction);
+  }, [videoControls, videoTool]);
 
   const confirmVideoTool = useCallback(async (confirmation: WorkflowVideoToolConfirmation) => {
-    const transaction = videoToolTransactionRef.current;
-    if (!videoTool || !transaction || videoToolBusyRef.current) return;
+    const transaction = videoControls.current();
+    if (!videoTool || !transaction || videoControls.isBusy()) return;
     const node = projectRef.current.nodes.find(item => item.id === videoTool.nodeId);
     if (!node) return;
-    videoToolBusyRef.current = true;
-    setVideoToolBusy(true);
-    setVideoToolError(null);
+    videoControls.start(transaction);
     try {
       let result: WorkflowImageToolOutcome | null = null;
       let successNotice = '';
@@ -1011,43 +967,38 @@ export function InfiniteWorkflow({
         successNotice = '已创建无声视频与音频节点，素材已保存';
       } else if (confirmation.kind === 'extract-frame') {
         result = await runWorkflowVideoExtractFrameOperation(transaction.projectId, node.id, confirmation.position, imageToolRuntime, confirmation.currentTimeSec);
-        successNotice = `已提取 ${confirmation.currentTimeSec != null ? `${confirmation.currentTimeSec.toFixed(1)}s` : confirmation.position === 'last' ? '尾帧' : '首帧'}`;
+        successNotice = '已提取 ' + (confirmation.currentTimeSec != null ? confirmation.currentTimeSec.toFixed(1) + 's' : confirmation.position === 'last' ? '尾帧' : '首帧');
       } else if (confirmation.kind === 'merge') {
         // 只拼接确认时回传的真实选中集；空列表视为无效选择（不再回退为全库视频）。
         const selectedNodes = projectRef.current.nodes.filter(n => n.type === 'video' && confirmation.nodeIds.includes(n.id));
-        if (selectedNodes.length < 2) { setVideoToolError('至少需要选择 2 个视频节点'); return; }
+        if (selectedNodes.length < 2) { videoControls.fail(transaction, '至少需要选择 2 个视频节点'); return; }
         result = await runWorkflowVideoMergeOperation(transaction.projectId, selectedNodes.map(item => item.id), imageToolRuntime);
         successNotice = '视频拼接完成';
       }
+      if (!videoControls.owns(transaction)) return;
       if (result?.status === 'committed' && result.project.id === transaction.projectId && projectRef.current.id === transaction.projectId) {
         pushHistory(transaction.frame);
         setNotice(successNotice);
-        setVideoTool(null);
-        videoToolTransactionRef.current = null;
+        videoControls.close(transaction);
       } else if (result?.status === 'stale') {
-        setVideoTool(null);
-        setVideoToolError(null);
-        videoToolTransactionRef.current = null;
+        videoControls.close(transaction);
       }
     } catch (error) {
-      setVideoToolError(displayError(error, '视频处理失败'));
+      videoControls.fail(transaction, displayError(error, '视频处理失败'));
     } finally {
-      videoToolBusyRef.current = false;
-      setVideoToolBusy(false);
+      videoControls.settle(transaction);
     }
-  }, [imageToolRuntime, pushHistory, videoTool]);
+  }, [imageToolRuntime, pushHistory, videoControls, videoTool]);
 
   const openAudioTool = useCallback((kind: WorkflowAudioToolState['kind'], nodeId: string) => {
-    if (audioToolTransactionRef.current || audioTool || audioToolBusyRef.current) {
+    if (audioControls.isLocked()) {
       setNotice('请先完成或关闭当前音频工具');
       return;
     }
     if (projectRef.current.nodes.find(node => node.id === nodeId)?.metadata.status === 'loading') return;
-    setAudioToolError(null);
     const transaction = { id: nanoid(), projectId: projectRef.current.id, nodeId, frame: currentFrame() };
-    audioToolTransactionRef.current = transaction;
-    setAudioTool({ kind, nodeId });
-  }, [currentFrame, audioTool]);
+    audioControls.open({ kind, nodeId }, transaction);
+  }, [audioControls, currentFrame]);
 
   const builtInAudioTools = useMemo<WorkflowAudioToolHandlers>(() => ({
     trim: id => openAudioTool('trim', id),
@@ -1059,23 +1010,17 @@ export function InfiniteWorkflow({
   const activeAudioToolMedia = useWorkflowMediaUrl(activeAudioToolNode?.metadata.storageKey, activeAudioToolNode?.metadata.href);
 
   const closeAudioTool = useCallback(() => {
-    const transaction = audioToolTransactionRef.current;
-    if (!audioTool || !transaction || audioToolBusyRef.current) return;
-    setAudioTool(null);
-    setAudioToolError(null);
-    audioToolTransactionRef.current = null;
-    audioToolBusyRef.current = false;
-    setAudioToolBusy(false);
-  }, [audioTool]);
+    const transaction = audioControls.current();
+    if (!audioTool || !transaction || audioControls.isBusy()) return;
+    audioControls.close(transaction);
+  }, [audioControls, audioTool]);
 
   const confirmAudioTool = useCallback(async (confirmation: WorkflowAudioToolConfirmation) => {
-    const transaction = audioToolTransactionRef.current;
-    if (!audioTool || !transaction || audioToolBusyRef.current) return;
+    const transaction = audioControls.current();
+    if (!audioTool || !transaction || audioControls.isBusy()) return;
     const node = projectRef.current.nodes.find(item => item.id === audioTool.nodeId);
     if (!node) return;
-    audioToolBusyRef.current = true;
-    setAudioToolBusy(true);
-    setAudioToolError(null);
+    audioControls.start(transaction);
     try {
       let result: WorkflowImageToolOutcome;
       let successNotice: string;
@@ -1087,118 +1032,109 @@ export function InfiniteWorkflow({
         successNotice = '音频截取完成';
       } else if (confirmation.kind === 'speed') {
         result = await runWorkflowAudioSpeedOperation(transaction.projectId, node.id, confirmation.speed, imageToolRuntime);
-        successNotice = `音频变速完成 (${confirmation.speed.toFixed(2)}x)`;
+        successNotice = '音频变速完成 (' + confirmation.speed.toFixed(2) + 'x)';
       } else {
         result = await runWorkflowAudioStemSplitOperation(transaction.projectId, node.id, imageToolRuntime);
         successNotice = '人声/伴奏分离完成';
       }
+      if (!audioControls.owns(transaction)) return;
       if (result.status === 'committed' && result.project.id === transaction.projectId && projectRef.current.id === transaction.projectId) {
         pushHistory(transaction.frame);
         setNotice(successNotice);
-        setAudioTool(null);
-        audioToolTransactionRef.current = null;
+        audioControls.close(transaction);
       } else if (result.status === 'stale') {
-        setAudioTool(null);
-        setAudioToolError(null);
-        audioToolTransactionRef.current = null;
+        audioControls.close(transaction);
       }
     } catch (error) {
-      setAudioToolError(displayError(error, '音频处理失败'));
+      audioControls.fail(transaction, displayError(error, '音频处理失败'));
     } finally {
-      audioToolBusyRef.current = false;
-      setAudioToolBusy(false);
+      audioControls.settle(transaction);
     }
-  }, [audioTool, imageToolRuntime, pushHistory]);
+  }, [audioControls, audioTool, imageToolRuntime, pushHistory]);
 
   const activeImageToolNode = imageTool ? project.nodes.find(node => node.id === imageTool.nodeId) || null : null;
   const activeImageToolMedia = useWorkflowMediaUrl(activeImageToolNode?.metadata.storageKey, activeImageToolNode?.metadata.href);
 
   const previewImageFilters = useCallback((filters: NonNullable<WorkflowNodeData['metadata']['filters']>) => {
     if (!imageTool || imageTool.kind !== 'filter') return;
-    const transaction = imageToolTransactionRef.current;
+    const transaction = imageControls.current();
     if (!transaction || transaction.projectId !== projectRef.current.id || transaction.nodeId !== imageTool.nodeId) return;
     patchProject({ nodes: projectRef.current.nodes.map(node => node.id === imageTool.nodeId ? { ...node, metadata: { ...node.metadata, filters } } : node) });
-  }, [imageTool, patchProject]);
+  }, [imageControls, imageTool, patchProject]);
 
   const closeImageTool = useCallback(() => {
-    const transaction = imageToolTransactionRef.current;
-    if (!imageTool || !transaction || imageToolBusyRef.current || transaction.projectId !== projectRef.current.id || transaction.nodeId !== imageTool.nodeId) return;
+    const transaction = imageControls.current();
+    if (!imageTool || !transaction || imageControls.isBusy() || transaction.projectId !== projectRef.current.id || transaction.nodeId !== imageTool.nodeId) return;
     if (imageTool.kind === 'filter') {
       const original = transaction.frame.nodes.find(node => node.id === imageTool.nodeId);
       if (original && projectRef.current.nodes.some(node => node.id === imageTool.nodeId)) {
         patchProject({ nodes: projectRef.current.nodes.map(node => node.id === imageTool.nodeId ? { ...node, metadata: { ...node.metadata, filters: original.metadata.filters } } : node) });
       }
     }
-    setImageTool(null);
-    setImageToolError(null);
-    releaseImageToolTransaction(transaction);
-  }, [imageTool, patchProject, releaseImageToolTransaction]);
+    imageControls.close(transaction);
+  }, [imageControls, imageTool, patchProject]);
 
   const confirmImageTool = useCallback(async (confirmation: WorkflowImageToolConfirmation) => {
-    const transaction = imageToolTransactionRef.current;
-    if (!imageTool || !transaction || imageToolBusyRef.current || transaction.projectId !== projectRef.current.id || transaction.nodeId !== imageTool.nodeId) return;
+    const transaction = imageControls.current();
+    if (!imageTool || !transaction || imageControls.isBusy() || transaction.projectId !== projectRef.current.id || transaction.nodeId !== imageTool.nodeId) return;
     const node = projectRef.current.nodes.find(item => item.id === imageTool.nodeId);
     if (!node) return;
-    imageToolBusyRef.current = true;
-    setImageToolBusy(true);
-    setImageToolError(null);
+    imageControls.start(transaction);
     try {
       if (confirmation.kind === 'filter') {
-        if (!ownsImageToolTransaction(transaction) || !projectRef.current.nodes.some(item => item.id === node.id)) return;
+        if (!imageControls.owns(transaction) || !projectRef.current.nodes.some(item => item.id === node.id)) return;
         patchProject({ nodes: projectRef.current.nodes.map(item => item.id === node.id ? { ...item, metadata: { ...item.metadata, filters: confirmation.filters } } : item) });
         pushHistory(transaction.frame);
-        setImageTool(null);
-        releaseImageToolTransaction(transaction);
+        imageControls.close(transaction);
         return;
       }
       if (confirmation.kind === 'crop') {
         // 裁剪走显式 Operation：源图片 → Operation → 结果图片，不再原地覆盖源媒体。
         const result = await runWorkflowCropOperation(transaction.projectId, node.id, confirmation.crop, imageToolRuntime);
-        if (!ownsImageToolTransaction(transaction)) return;
+        if (!imageControls.owns(transaction)) return;
         if (result.status === 'committed' && result.project.id === transaction.projectId && result.project.nodes.some(item => item.id === transaction.nodeId)) {
           pushHistory(transaction.frame);
           setNotice('图片裁剪完成');
-          setImageTool(null);
-          releaseImageToolTransaction(transaction);
+          imageControls.close(transaction);
         }
-        else if (result?.status === 'stale') { setImageTool(null); setImageToolError(null); releaseImageToolTransaction(transaction); }
+        else if (result?.status === 'stale') imageControls.close(transaction);
         return;
       }
       if (confirmation.kind === 'vectorize') {
         const result = await runWorkflowVectorizeOperation(transaction.projectId, node.id, confirmation.preset, imageToolRuntime);
-        if (!ownsImageToolTransaction(transaction)) return;
-        if (result.status === 'committed') { pushHistory(transaction.frame); setNotice('矢量化完成'); setImageTool(null); releaseImageToolTransaction(transaction); }
-        else { setImageTool(null); setImageToolError(null); releaseImageToolTransaction(transaction); }
+        if (!imageControls.owns(transaction)) return;
+        if (result.status === 'committed') { pushHistory(transaction.frame); setNotice('矢量化完成'); }
+        imageControls.close(transaction);
         return;
       }
       if (confirmation.kind === 'rotate') {
         const result = await runWorkflowRotateOperation(transaction.projectId, node.id, confirmation.action, imageToolRuntime);
-        if (!ownsImageToolTransaction(transaction)) return;
-        if (result.status === 'committed') { pushHistory(transaction.frame); setNotice('旋转镜像完成'); setImageTool(null); releaseImageToolTransaction(transaction); }
-        else { setImageTool(null); setImageToolError(null); releaseImageToolTransaction(transaction); }
+        if (!imageControls.owns(transaction)) return;
+        if (result.status === 'committed') { pushHistory(transaction.frame); setNotice('旋转镜像完成'); }
+        imageControls.close(transaction);
         return;
       }
       if (confirmation.kind === 'splitGrid') {
         const result = await runWorkflowSplitGridOperation(transaction.projectId, node.id, { rows: confirmation.rows, cols: confirmation.cols }, imageToolRuntime);
-        if (!ownsImageToolTransaction(transaction)) return;
-        if (result.status === 'committed') { pushHistory(transaction.frame); setNotice(`宫格切分完成 (${confirmation.rows * confirmation.cols} 张)`); setImageTool(null); releaseImageToolTransaction(transaction); }
-        else { setImageTool(null); setImageToolError(null); releaseImageToolTransaction(transaction); }
+        if (!imageControls.owns(transaction)) return;
+        if (result.status === 'committed') { pushHistory(transaction.frame); setNotice('宫格切分完成 (' + confirmation.rows * confirmation.cols + ' 张)'); }
+        imageControls.close(transaction);
         return;
       }
       if (confirmation.kind === 'annotate') {
         const result = await runWorkflowImageEditOperation(transaction.projectId, node.id, '根据标注修改图片', 'annotate', { href: confirmation.annotatedDataUrl, mimeType: 'image/png' }, imageToolRuntime);
-        if (!ownsImageToolTransaction(transaction)) return;
-        if (result?.status === 'committed') { pushHistory(transaction.frame); setImageTool(null); releaseImageToolTransaction(transaction); }
-        else if (result?.status === 'stale') { setImageTool(null); setImageToolError(null); releaseImageToolTransaction(transaction); }
+        if (!imageControls.owns(transaction)) return;
+        if (result?.status === 'committed') { pushHistory(transaction.frame); imageControls.close(transaction); }
+        else if (result?.status === 'stale') imageControls.close(transaction);
         return;
       }
       if (confirmation.kind === 'relight') {
         const preset = LIGHTING_PRESETS.find(p => p.id === confirmation.preset)!;
         const prompt = buildRelightPrompt(preset, confirmation.intensity, confirmation.color, confirmation.smart);
         const result = await runWorkflowImageEditOperation(transaction.projectId, node.id, prompt, 'relight', undefined, imageToolRuntime);
-        if (!ownsImageToolTransaction(transaction)) return;
-        if (result?.status === 'committed') { pushHistory(transaction.frame); setImageTool(null); releaseImageToolTransaction(transaction); }
-        else if (result?.status === 'stale') { setImageTool(null); setImageToolError(null); releaseImageToolTransaction(transaction); }
+        if (!imageControls.owns(transaction)) return;
+        if (result?.status === 'committed') { pushHistory(transaction.frame); imageControls.close(transaction); }
+        else if (result?.status === 'stale') imageControls.close(transaction);
         return;
       }
       if (confirmation.kind === 'layer') {
@@ -1206,20 +1142,20 @@ export function InfiniteWorkflow({
           prompt: confirmation.prompt, style: confirmation.style, count: confirmation.count,
           mask: confirmation.maskDataUrl ? { href: confirmation.maskDataUrl, mimeType: 'image/png' } : undefined,
         }, imageToolRuntime);
-        if (!ownsImageToolTransaction(transaction)) return;
-        if (result?.status === 'committed') { pushHistory(transaction.frame); setNotice('叠加层已生成 ' + confirmation.count + ' 个候选'); setImageTool(null); releaseImageToolTransaction(transaction); }
-        else if (result?.status === 'stale') { setImageTool(null); setImageToolError(null); releaseImageToolTransaction(transaction); }
+        if (!imageControls.owns(transaction)) return;
+        if (result?.status === 'committed') { pushHistory(transaction.frame); setNotice('叠加层已生成 ' + confirmation.count + ' 个候选'); imageControls.close(transaction); }
+        else if (result?.status === 'stale') imageControls.close(transaction);
         return;
       }
       if (confirmation.kind === 'storyboard') {
         const ids = storyboardNodeIds || [];
         const sourceNodes = projectRef.current.nodes.filter(n => ids.includes(n.id) && n.type === 'image');
-        if (sourceNodes.length < 2) { setImageToolError('至少需要 2 张图片'); return; }
+        if (sourceNodes.length < 2) { imageControls.fail(transaction, '至少需要 2 张图片'); return; }
         const sources = sourceNodes.map(n => ({ storageKey: n.metadata.storageKey, href: n.metadata.href }));
-        const labels = confirmation.showIndex ? sourceNodes.map((_, i) => `#${i + 1}`) : undefined;
+        const labels = confirmation.showIndex ? sourceNodes.map((_, i) => '#' + (i + 1)) : undefined;
         const composedBlob = await composeImageGrid(sources, { cols: confirmation.cols, labels });
         const record = await ingestWorkflowMedia(new File([composedBlob], 'storyboard.png', { type: 'image/png' }));
-        if (!ownsImageToolTransaction(transaction)) { await discardWorkflowMediaRecord(record.storageKey); return; }
+        if (!imageControls.owns(transaction)) { await discardWorkflowMediaRecord(record.storageKey); return; }
         const lastNode = sourceNodes[sourceNodes.length - 1];
         const size = fitWorkflowMediaSize('image', record.naturalWidth || 1024, record.naturalHeight || 768);
         pushHistory(transaction.frame, {
@@ -1229,8 +1165,7 @@ export function InfiniteWorkflow({
         releaseWorkflowMediaRecord(record.storageKey);
         setNotice('分镜组拼接完成');
         setStoryboardNodeIds(null);
-        setImageTool(null);
-        releaseImageToolTransaction(transaction);
+        imageControls.close(transaction);
         return;
       }
       let result: WorkflowImageToolOutcome | null = null;
@@ -1240,26 +1175,20 @@ export function InfiniteWorkflow({
       if (confirmation.kind === 'outpaint') result = await runWorkflowOutpaintOperation(transaction.projectId, node.id, { direction: confirmation.direction, amount: confirmation.amount, prompt: confirmation.prompt }, imageToolRuntime);
       if (confirmation.kind === 'restyle') result = await runWorkflowImageEditOperation(transaction.projectId, node.id, confirmation.prompt, 'edit', undefined, imageToolRuntime);
       if (confirmation.kind === 'mask') result = await runWorkflowImageEditOperation(transaction.projectId, node.id, confirmation.prompt, 'mask', { href: confirmation.maskDataUrl, mimeType: 'image/png' }, imageToolRuntime);
-      if (!ownsImageToolTransaction(transaction)) return;
+      if (!imageControls.owns(transaction)) return;
       if (result?.status === 'committed' && result.project.id === transaction.projectId && projectRef.current.id === transaction.projectId && result.project.nodes.some(item => item.id === transaction.nodeId)) {
         pushHistory(transaction.frame);
         if (confirmation.kind === 'upscale') setNotice('高清放大完成');
-        setImageTool(null);
-        releaseImageToolTransaction(transaction);
+        imageControls.close(transaction);
       } else if (result?.status === 'stale') {
-        setImageTool(null);
-        setImageToolError(null);
-        releaseImageToolTransaction(transaction);
+        imageControls.close(transaction);
       }
     } catch (error) {
-      if (ownsImageToolTransaction(transaction)) setImageToolError(displayError(error, '图片处理失败'));
+      imageControls.fail(transaction, displayError(error, '图片处理失败'));
     } finally {
-      if (ownsImageToolTransaction(transaction)) {
-        imageToolBusyRef.current = false;
-        setImageToolBusy(false);
-      }
+      imageControls.settle(transaction);
     }
-  }, [imageTool, imageToolRuntime, ownsImageToolTransaction, patchProject, pushHistory, releaseImageToolTransaction]);
+  }, [imageControls, imageTool, imageToolRuntime, patchProject, pushHistory, storyboardNodeIds]);
 
   const applyOps = useCallback((ops: WorkflowDocumentOperation[]) => {
     // 自动命名：未自定义标题的新节点按「类型 + 序号」命名，避免画布上全是「图片」「视频」
@@ -3412,11 +3341,11 @@ export function InfiniteWorkflow({
                 .catch(error => setNotice(displayError(error, '反推 Prompt 失败')));
             } : undefined}
             imageTools={{ ...builtInImageTools, ...imageTools }}
-            imageToolBusy={Boolean(imageTool || imageToolBusy || imageToolTransactionRef.current)}
+            imageToolBusy={imageToolActive}
             videoTools={builtInVideoTools}
-            videoToolBusy={Boolean(videoTool || videoToolBusy)}
+            videoToolBusy={videoToolActive}
             audioTools={builtInAudioTools}
-            audioToolBusy={Boolean(audioTool || audioToolBusy)}
+            audioToolBusy={audioToolActive}
             onReplaceMedia={(id, file) => { const node = projectRef.current.nodes.find(item => item.id === id); if (node) void replaceMedia(node, file); }}
             onPreviewMedia={(id) => { const target = projectRef.current.nodes.find(n => n.id === id); if (target) setPreviewNode(target); }}
             onToggleFreeResize={id => { const node = projectRef.current.nodes.find(item => item.id === id); if (node) applyOps([{ type: 'update_node', id, patch: { freeResize: !node.freeResize } }]); }}

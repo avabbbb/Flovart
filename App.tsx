@@ -23,7 +23,7 @@ import { flushWorkflowPersistence, useWorkflowStore } from './components/workflo
 import { consumeWorkflowAgentDrawerRequest, subscribeWorkflowAgentDrawer } from './components/workflow/agentDrawerRequest';
 import type {  } from './components/workflow/WorkflowConfigPanel';
 import { getGenerationCapability, type GenerationMode } from './services/generationCapabilities';
-import { cancelWorkflowGeneration, findInterruptedWorkflowNodes, runWorkflowGeneration } from './services/workflowGeneration';
+import { cancelWorkflowGeneration, findInterruptedWorkflowNodes, runWorkflowGeneration, stopOrphanedWorkflowNode, terminalGenerationPatch } from './services/workflowGeneration';
 import { loadWorkflowMediaBlob } from './components/workflow/media';
 import { setWorkflowExecutor, setWorkflowNodeToolRunner } from './services/workflowDispatcher';
 import { createWorkflowExecutor, normalizeWorkflowExecutionError, WorkflowExecutionError, type WorkflowExecutionContext, type WorkflowRunAdapterResult, type WorkflowRunCommand } from './services/workflowExecutor';
@@ -412,12 +412,11 @@ const App: React.FC = () => {
         stopNode: ({ projectId, nodeId }) => {
             if (cancelWorkflowGeneration(projectId, nodeId)) return;
             // No live request behind this node (interrupted run, lost tab, recovery
-            // gave up): Stop must still free it, never leave it spinning.
+            // gave up): Stop must still free it, via the same billing-aware stopped
+            // patch as the UI path so a possible upstream charge is never hidden.
             const latest = useWorkflowStore.getState().projects.find(item => item.id === projectId);
-            if (!latest?.nodes.some(item => item.id === nodeId && item.metadata.status === 'loading')) return;
-            useWorkflowStore.getState().updateProject(projectId, {
-                nodes: latest.nodes.map(item => item.id === nodeId ? { ...item, metadata: { ...item.metadata, status: 'idle', error: undefined, progress: undefined, generationTransfer: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined } } : item),
-            });
+            const stopped = latest ? stopOrphanedWorkflowNode(latest, nodeId) : null;
+            if (stopped) useWorkflowStore.getState().updateProject(projectId, { nodes: stopped.nodes });
         },
     }), [handleRunWorkflowNode]);
     // 只有写入者标签页处理中断节点与续接；只读标签页看到的 loading 可能正由写入者在跑。
@@ -438,7 +437,7 @@ const App: React.FC = () => {
                 if (latest) {
                     useWorkflowStore.getState().updateProject(project.id, {
                         nodes: latest.nodes.map(item => interruptedIds.has(item.id) && item.metadata.status === 'loading'
-                            ? { ...item, metadata: { ...item.metadata, status: 'error', error: message, generationMessage: undefined, progress: undefined, generationTransfer: undefined, generationRequestId: undefined } }
+                            ? { ...item, metadata: { ...item.metadata, ...terminalGenerationPatch({ kind: 'interrupted', error: message }) } }
                             : item),
                     });
                 }
@@ -475,7 +474,7 @@ const App: React.FC = () => {
                         const latest = useWorkflowStore.getState().projects.find(item => item.id === project.id);
                         if (latest) {
                             useWorkflowStore.getState().updateProject(project.id, {
-                                nodes: latest.nodes.map(item => item.id === node.id ? { ...item, metadata: { ...item.metadata, status: 'error', error: message, generationMessage: undefined, progress: undefined, generationTransfer: undefined } } : item),
+                                nodes: latest.nodes.map(item => item.id === node.id ? { ...item, metadata: { ...item.metadata, ...terminalGenerationPatch({ kind: 'failed', error: message }) } } : item),
                             });
                         }
                     }

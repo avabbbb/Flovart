@@ -18,8 +18,9 @@ const CATALOG = getRouteCatalog();
 
 const ROUTE_IDS = CATALOG.map(r => r.routeId);
 
-const IMAGE_ROUTES = ROUTE_IDS.filter(id => !id.startsWith('rhart-video') && !id.includes('sparkvideo'));
-const VIDEO_ROUTES = ROUTE_IDS.filter(id => id.startsWith('rhart-video') || id.includes('sparkvideo'));
+const isVideoRouteId = (id: string) => id.startsWith('rhart-video') || id.includes('sparkvideo') || id.startsWith('bytedance/seedance-');
+const IMAGE_ROUTES = ROUTE_IDS.filter(id => !isVideoRouteId(id));
+const VIDEO_ROUTES = ROUTE_IDS.filter(isVideoRouteId);
 
 function schemaOf(routeId: string): RouteCapabilitySchema {
     const s = getRouteSchema(routeId);
@@ -45,8 +46,8 @@ describe('Route Catalog — structural integrity', () => {
         }
     });
 
-    it('contains exactly 18 routes', () => {
-        expect(CATALOG).toHaveLength(18);
+    it('contains exactly 21 routes', () => {
+        expect(CATALOG).toHaveLength(21);
     });
 
     it('every routeId is unique', () => {
@@ -56,13 +57,21 @@ describe('Route Catalog — structural integrity', () => {
 
     it('every officialEvidence URL is a valid RunningHub doc link', () => {
         for (const route of CATALOG) {
-            expect(route.officialEvidence).toMatch(/^https:\/\/www\.runninghub\.cn\/runninghub-api-doc-cn\/api-\d+$/);
+            expect(route.officialEvidence).toMatch(/^https:\/\/www\.runninghub\.(cn\/runninghub-api-doc-cn|ai\/runninghub-api-doc-en)\/api-\d+$/);
         }
     });
 
-    it('contains 7 image routes and 11 video routes', () => {
+    it('contains 7 image routes and 14 video routes', () => {
         expect(IMAGE_ROUTES).toHaveLength(7);
-        expect(VIDEO_ROUTES).toHaveLength(11);
+        expect(VIDEO_ROUTES).toHaveLength(14);
+    });
+
+    it('gives Seedance 2.5 4-30s string durations while Seedance 2.0 stays 4-15s', () => {
+        const durations25 = getRouteDurations('bytedance/seedance-2.5-token/text-to-video');
+        expect(durations25?.[0]).toBe(4);
+        expect(durations25?.[durations25.length - 1]).toBe(30);
+        expect(durations25).toContain(7);
+        expect(getRouteDurations('rhart-video/sparkvideo-2.0/text-to-video')?.at(-1)).toBe(15);
     });
 });
 

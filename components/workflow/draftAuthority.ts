@@ -191,7 +191,7 @@ export function applyWorkflowDraftChangeSet(
     nodes: applied.snapshot.nodes,
     connections: applied.snapshot.connections,
   }, request);
-  if (!recorded) return { ok: false, error: { code: 'BAD_REQUEST', message: '该操作没有修改 Workflow Draft' } };
+  if (!recorded) return { ok: false, error: { code: 'BAD_REQUEST', message: '该操作没有修改 Workflow Draft：写入内容与当前节点完全一致' } };
   return {
     ok: true,
     project: {

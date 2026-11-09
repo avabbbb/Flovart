@@ -123,6 +123,8 @@ export interface PromptBarProps {
     runWithoutPrompt?: boolean;
     providerOptional?: boolean;
     hideGenerationOptions?: boolean;
+    /** 润色/翻译还原快照的宿主键（如节点 id）；给出后快照在 PromptBar 重挂载后保留。 */
+    promptSnapshotKey?: string;
     runLabel?: string;
     autoFocus?: boolean;
     focusSignal?: number;
@@ -229,6 +231,22 @@ const isSupportedAttachment = (type: string) => type.startsWith('image/') || typ
 const SEEDANCE_RESOLUTIONS = ['480p', '720p', '1080p'] as const;
 
 const EMPTY_ATTACHMENTS: ChatAttachment[] = [];
+/** 润色/翻译前的提示词快照，按 promptSnapshotKey 保存，组件重挂载后仍可还原。 */
+const PRE_EDIT_PROMPT_SNAPSHOTS = new Map<string, string>();
+/** 一次润色/翻译请求的起点：结果落地时据此判断是否仍然有效。 */
+export interface EnhanceRequest {
+    id: number;
+    basePrompt: string;
+    snapshotKey?: string;
+}
+/** 结果只在「仍是最新请求、宿主键未切换、用户期间未改文本」时才可写回。 */
+export const isEnhanceResultCurrent = (
+    request: EnhanceRequest,
+    live: { latestRequestId: number; snapshotKey?: string; prompt: string },
+): boolean => request.id === live.latestRequestId
+    && request.snapshotKey === live.snapshotKey
+    && request.basePrompt === live.prompt;
+
 
 export const PromptBar: React.FC<PromptBarProps> = ({
     t,
@@ -322,6 +340,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     runWithoutPrompt = false,
     providerOptional = false,
     hideGenerationOptions = false,
+    promptSnapshotKey,
     runLabel,
     autoFocus = false,
     focusSignal,
@@ -354,6 +373,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     const latestPromptRef = useRef(prompt);
     // 防止提交链（@ 解析 + 生成）重入：双击发送/Enter 与按钮同帧触发时只生效一次
     const submittingRef = useRef(false);
+    // 提交链 await 之后读取实时值：闭包里的旧 isLoading/readyState 会让 Enter 与点击各触发一次生成
+    const isLoadingRef = useRef(isLoading);
+    isLoadingRef.current = isLoading;
 
     const [expandedPanel, setExpandedPanel] = useState<ExpandPanel>(null);
     const [popoverAnchor, setPopoverAnchor] = useState<HTMLElement | null>(null);
@@ -371,9 +393,26 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     const [resolvedAttachmentHrefs, setResolvedAttachmentHrefs] = useState<Record<string, string>>({});
     const [modelCapabilityFilter, setModelCapabilityFilter] = useState<ProductModelMode | 'all'>('all');
     const [activeModelFamily, setActiveModelFamily] = useState('');
-    const [isTranslating, setIsTranslating] = useState(false);
-    const [isPolishing, setIsPolishing] = useState(false);
-    const [preEditPrompt, setPreEditPrompt] = useState<string | null>(null);
+    // 润色与翻译互斥：同一时刻只有一个改写请求在途，用一个显式阶段表示，而不是两个可同时为真的布尔值。
+    const [enhancePhase, setEnhancePhase] = useState<'idle' | 'polishing' | 'translating'>('idle');
+    const enhanceBusy = enhancePhase !== 'idle';
+    // 同步防重入：同一次渲染内连点两下时 state 还未更新，靠 ref 拦住第二次请求。
+    const enhanceInFlightRef = useRef(false);
+    // 每次改写请求的序号与当前宿主键；结果落地时只接受最新、同键、文本未变的请求
+    const enhanceRequestIdRef = useRef(0);
+    const promptSnapshotKeyRef = useRef(promptSnapshotKey);
+    promptSnapshotKeyRef.current = promptSnapshotKey;
+    const [preEditPrompt, setPreEditPromptState] = useState<string | null>(() => (promptSnapshotKey ? PRE_EDIT_PROMPT_SNAPSHOTS.get(promptSnapshotKey) ?? null : null));
+    const setPreEditPrompt = useCallback((value: string | null) => {
+        if (promptSnapshotKey) {
+            if (value == null) PRE_EDIT_PROMPT_SNAPSHOTS.delete(promptSnapshotKey);
+            else PRE_EDIT_PROMPT_SNAPSHOTS.set(promptSnapshotKey, value);
+        }
+        setPreEditPromptState(value);
+    }, [promptSnapshotKey]);
+    useEffect(() => {
+        setPreEditPromptState(promptSnapshotKey ? PRE_EDIT_PROMPT_SNAPSHOTS.get(promptSnapshotKey) ?? null : null);
+    }, [promptSnapshotKey]);
     const [snippetMenu, setSnippetMenu] = useState<string | null>(null);
 
     const triggerClass = 'inline-flex items-center gap-1.5 rounded-lg border border-transparent bg-transparent px-2 font-medium text-[var(--isl-ink-soft)] transition-colors hover:bg-[var(--isl-surface-2)] hover:text-[var(--isl-ink)] ' + (compactMode ? 'h-7 text-[11px]' : 'h-8 text-[12px]');
@@ -462,6 +501,10 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                 : isLoading
                     ? 'generating'
                     : 'ready';
+    const readyStateRef = useRef(readyState);
+    readyStateRef.current = readyState;
+    const videoInputRequirementRef = useRef(videoInputRequirement);
+    videoInputRequirementRef.current = videoInputRequirement;
     const setupRequired = readyState === 'missing-key' && Boolean(onOpenSettings);
     const setupLabel = userApiKeys.length ? t('promptBarExtra.configureService') : t('promptBarExtra.addService');
     const readyCopy = readyState === 'missing-key'
@@ -513,8 +556,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                 // 等 editor 文档更新回流到 prompt 状态，再触发生成
                 await new Promise<void>(resolve => setTimeout(resolve, 0));
             }
-            if (!(runWithoutPrompt || latestPromptRef.current.trim()) || isLoading || videoInputRequirement) return;
-            if (readyState === 'missing-key') {
+            if (!(runWithoutPrompt || latestPromptRef.current.trim()) || isLoadingRef.current || videoInputRequirementRef.current) return;
+            if (readyStateRef.current === 'missing-key') {
                 onOpenSettings?.();
                 return;
             }
@@ -522,61 +565,62 @@ export const PromptBar: React.FC<PromptBarProps> = ({
         } finally {
             submittingRef.current = false;
         }
-    }, [isLoading, onGenerate, onOpenSettings, pasteReferenceItems, onResolvePastedMentions, readyState, runWithoutPrompt, videoInputRequirement]);
+    }, [onGenerate, onOpenSettings, pasteReferenceItems, onResolvePastedMentions, runWithoutPrompt]);
 
+    // 润色/翻译/还原共用的程序化写回：先写纯文本，再把 @名称 还原为 mention chip（与提交前解析同一套逻辑），
+    // 最后按编辑器真实文档回流宿主；不再用扁平文档覆盖，避免裸 @ 文本触发 mention 建议弹层。
     const replacePrompt = useCallback((value: string) => {
         latestPromptRef.current = value;
-        richEditorRef.current?.setText(value);
+        const editor = richEditorRef.current;
+        if (editor) {
+            editor.setText(value);
+            if (value.includes('@')) resolveEditorMentions(editor, pasteReferenceItems, onResolvePastedMentions);
+            handleEditorChange(editor.getText(), editor.getJSON());
+            return;
+        }
+        const document = { type: 'doc', content: value ? [{ type: 'paragraph', content: [{ type: 'text', text: value }] }] : [] };
         if (onPromptInputChange) {
-            onPromptInputChange({ plainText: value, document: { type: 'doc', content: value ? [{ type: 'paragraph', content: [{ type: 'text', text: value }] }] : [] }, mentionedElementIds: [] });
+            onPromptInputChange({ plainText: value, document, mentionedElementIds: [] });
         } else {
             setPrompt(value);
-            onPromptDocumentChange?.({ type: 'doc', content: value ? [{ type: 'paragraph', content: [{ type: 'text', text: value }] }] : [] });
+            onPromptDocumentChange?.(document);
             onMentionedElementIds?.([]);
         }
-    }, [onMentionedElementIds, onPromptDocumentChange, onPromptInputChange, setPrompt]);
+    }, [handleEditorChange, onMentionedElementIds, onPromptDocumentChange, onPromptInputChange, onResolvePastedMentions, pasteReferenceItems, setPrompt]);
 
-    const handleTranslatePrompt = useCallback(async () => {
-        if (!onEnhancePrompt || !prompt.trim() || isTranslating || isPolishing) return;
+    // ✧ 润色 / 翻译共用一条流程：idle → polishing|translating → idle。结果直接写回输入框，并共用一份编辑前快照，随时可「还原」。
+    const runEnhance = useCallback(async (mode: 'smart' | 'translate') => {
+        if (!onEnhancePrompt || !prompt.trim() || enhanceInFlightRef.current) return;
+        enhanceInFlightRef.current = true;
         const previous = prompt;
-        setIsTranslating(true);
+        const request: EnhanceRequest = { id: ++enhanceRequestIdRef.current, basePrompt: latestPromptRef.current, snapshotKey: promptSnapshotKey };
+        setEnhancePhase(mode === 'translate' ? 'translating' : 'polishing');
         try {
-            const result = await onEnhancePrompt({ prompt: prompt.trim(), mode: 'translate' });
+            const result = await onEnhancePrompt({ prompt: prompt.trim(), mode });
+            // 期间用户改了文本、切换了宿主键或已有更新请求：结果过期，既不写回也不记快照
+            if (!isEnhanceResultCurrent(request, { latestRequestId: enhanceRequestIdRef.current, snapshotKey: promptSnapshotKeyRef.current, prompt: latestPromptRef.current })) return;
             if (result.enhancedPrompt?.trim()) {
-                setPreEditPrompt(previous);
+                setPreEditPrompt(preEditPrompt ?? previous);
                 replacePrompt(result.enhancedPrompt.trim());
             }
         } catch (error) {
-            // 翻译线路异常（限流/网络/Key 失效等）：经 displayError 映射为可展示文案后提示，不再静默吞掉
-            alert(displayError(error, ui('翻译失败，请稍后重试。', 'Translation failed. Please try again.')));
+            // 改写线路异常（限流/网络/Key 失效等）：经 displayError 映射为可展示文案后提示，不再静默吞掉
+            alert(displayError(error, mode === 'translate'
+                ? ui('翻译失败，请稍后重试。', 'Translation failed. Please try again.')
+                : ui('润色失败，请稍后重试。', 'Enhancement failed. Please try again.')));
         } finally {
-            setIsTranslating(false);
+            enhanceInFlightRef.current = false;
+            setEnhancePhase('idle');
         }
-    }, [isPolishing, isTranslating, language, onEnhancePrompt, prompt, replacePrompt, ui]);
-
-    // ✧ 一次性润色：结果直接写回输入框，并与翻译共用一份编辑前快照，随时可「还原」。
-    const handlePolishPrompt = useCallback(async () => {
-        if (!onEnhancePrompt || !prompt.trim() || isPolishing || isTranslating) return;
-        const previous = prompt;
-        setIsPolishing(true);
-        try {
-            const result = await onEnhancePrompt({ prompt: prompt.trim(), mode: 'smart' });
-            if (result.enhancedPrompt?.trim()) {
-                setPreEditPrompt(previous);
-                replacePrompt(result.enhancedPrompt.trim());
-            }
-        } catch (error) {
-            alert(displayError(error, ui('润色失败，请稍后重试。', 'Enhancement failed. Please try again.')));
-        } finally {
-            setIsPolishing(false);
-        }
-    }, [isPolishing, isTranslating, onEnhancePrompt, prompt, replacePrompt, ui]);
+    }, [onEnhancePrompt, preEditPrompt, prompt, promptSnapshotKey, replacePrompt, setPreEditPrompt, ui]);
+    const handleTranslatePrompt = useCallback(() => runEnhance('translate'), [runEnhance]);
+    const handlePolishPrompt = useCallback(() => runEnhance('smart'), [runEnhance]);
 
     const handleRevertTranslate = useCallback(() => {
         if (preEditPrompt == null) return;
         replacePrompt(preEditPrompt);
         setPreEditPrompt(null);
-    }, [preEditPrompt, replacePrompt]);
+    }, [preEditPrompt, replacePrompt, setPreEditPrompt]);
 
     useEffect(() => {
         if (!activeCapabilities || generationMode === 'text') return;
@@ -693,6 +737,21 @@ export const PromptBar: React.FC<PromptBarProps> = ({
             onAddAttachments(media);
         }
     }, [onAddAttachments]);
+
+    // 拖拽在 PromptBar 外结束（松手在别处或按 Esc）不会触发本元素的 dragleave/drop，用全局事件收起遮罩
+    useEffect(() => {
+        if (!isDragActive) return;
+        const reset = () => {
+            dragDepthRef.current = 0;
+            setIsDragActive(false);
+        };
+        window.addEventListener('dragend', reset);
+        window.addEventListener('drop', reset);
+        return () => {
+            window.removeEventListener('dragend', reset);
+            window.removeEventListener('drop', reset);
+        };
+    }, [isDragActive]);
 
     return (
         <div ref={rootRef} className={`theme-aware w-full ${className || ''}`.trim()}>
@@ -1130,8 +1189,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                             disabled={(imageReferenceChips?.length || 0) === 0}
                                                             onClick={() => { if ((imageReferenceChips?.length || 0) > 0) onPreserveReferenceAspectRatioChange?.(true); }}
                                                             title={(imageReferenceChips?.length || 0) === 0 ? ui('请先添加参考图，才能使用原始宽高比', 'Add a reference image to use its original aspect ratio') : preserveReferenceAspectRatio ? ui('恢复手动选择比例', 'Return to manual aspect ratio') : ui('使用第一张参考图的原始宽高比，自动匹配最接近的支持比例', 'Match the closest supported ratio to the first reference image')}
-                                                            className={`h-8 w-full rounded-[6px] px-2 text-left text-[11px] font-medium transition ${preserveReferenceAspectRatio ? 'isl-chip--active' : 'isl-chip'} ${(imageReferenceChips?.length || 0) === 0 ? 'cursor-not-allowed opacity-40' : ''}`}
+                                                            className={'h-7 rounded-[6px] px-2 text-[11px] font-medium transition prompt-ratio-tile ' + (preserveReferenceAspectRatio ? 'isl-chip--active' : 'isl-chip') + ((imageReferenceChips?.length || 0) === 0 ? ' cursor-not-allowed opacity-40' : '')}
                                                         >
+                                                            <span aria-hidden="true" className="prompt-ratio-shape prompt-ratio-shape--original" style={{ width: 12, height: 12 }} />
                                                             {ui('原比例', 'Original')}
                                                         </button>
                                                     )}
@@ -1493,9 +1553,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             {!hideGenerationOptions && <button
                                 type="button"
                                 onClick={() => void handlePolishPrompt()}
-                                disabled={!onEnhancePrompt || !prompt.trim() || isPolishing || isTranslating}
+                                disabled={!onEnhancePrompt || !prompt.trim() || enhanceBusy}
                                 title={ui('润色提示词（结果写回输入框，可还原）', 'Enhance prompt (written back, can be restored)')}
-                                className={triggerClass + ' shrink-0 disabled:cursor-not-allowed disabled:opacity-40' + (isPolishing ? ' animate-pulse' : '')}
+                                className={triggerClass + ' shrink-0 disabled:cursor-not-allowed disabled:opacity-40' + (enhancePhase === 'polishing' ? ' animate-pulse' : '')}
                             >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z" />
@@ -1503,10 +1563,10 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                 <span className="sr-only">{ui('润色提示词', 'Enhance prompt')}</span>
                             </button>}
 
-                            {!hideGenerationOptions && <button type="button" onClick={() => void handleTranslatePrompt()} disabled={!onEnhancePrompt || !prompt.trim() || isTranslating || isPolishing} className={`${triggerClass} shrink-0 disabled:cursor-not-allowed disabled:opacity-40`} title={ui('翻译提示词', 'Translate prompt')}>
-                                <span className="text-sm font-black">{isTranslating ? '…' : ui('译', 'EN')}</span><span className="sr-only">{ui('翻译提示词', 'Translate prompt')}</span>
+                            {!hideGenerationOptions && <button type="button" onClick={() => void handleTranslatePrompt()} disabled={!onEnhancePrompt || !prompt.trim() || enhanceBusy} className={triggerClass + ' shrink-0 disabled:cursor-not-allowed disabled:opacity-40'} title={ui('翻译提示词', 'Translate prompt')}>
+                                <span className="text-sm font-black">{enhancePhase === 'translating' ? '…' : ui('译', 'EN')}</span><span className="sr-only">{ui('翻译提示词', 'Translate prompt')}</span>
                             </button>}
-                            {!hideGenerationOptions && preEditPrompt != null && (
+                            {preEditPrompt != null && (
                                 <button type="button" onClick={handleRevertTranslate} className={`${triggerClass} shrink-0`} title={ui('还原到润色/翻译前的提示词', 'Restore prompt before enhance/translate')}>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-15-6.7L3 13" /></svg>
                                     <span className="sr-only">{ui('还原提示词', 'Restore prompt')}</span>

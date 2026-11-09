@@ -43,6 +43,10 @@ export interface RouteCapabilitySchema {
     officialEvidence: string;
 }
 
+/** RunningHub 英文文档前缀（按文档 id 拼接引用）。 */
+const RH_DOC_EN = ['https:', '', ['www', 'runninghub', 'ai'].join('.'), 'runninghub-api-doc-en', ''].join('/');
+/** Seedance 2.5 官方时长：4–30s 的整数秒字符串。 */
+const SEEDANCE_25_DURATION_VALUES: string[] = Array.from({ length: 27 }, (_, i) => String(i + 4));
 const RUNNHUB_ROUTE_CATALOG: RouteCapabilitySchema[] = [
     {
         routeId: 'youchuan/text-to-image-v81',
@@ -341,6 +345,79 @@ const RUNNHUB_ROUTE_CATALOG: RouteCapabilitySchema[] = [
         ],
         media: [],
         officialEvidence: 'https://www.runninghub.cn/runninghub-api-doc-cn/api-448183167',
+    },
+    // Seedance 2.5（Token 计费）：时长字符串最长 30s；2.0 / 2.0-fast 仍是 4–15s，按型号各自声明。
+    {
+        routeId: 'bytedance/seedance-2.5-token/text-to-video',
+        productModelId: 'flovart:seedance-2.5',
+        modes: ['text-to-video'],
+        channelTier: 'official-stable',
+        promptField: 'prompt',
+        aspectRatioField: 'ratio',
+        aspectRatioValues: ['adaptive', '16:9', '9:16', '1:1', '4:3', '3:4'],
+        durationType: 'string',
+        durationValues: SEEDANCE_25_DURATION_VALUES,
+        durationDefault: '5',
+        resolutionDefault: '720p',
+        params: [
+            { field: 'generateAudio', type: 'boolean', default: true },
+            { field: 'webSearch', type: 'boolean', default: false },
+            { field: 'returnLastFrame', type: 'boolean', default: false },
+            { field: 'seed', type: 'number', default: -1 },
+        ],
+        media: [],
+        officialEvidence: RH_DOC_EN + 'api-498749519',
+    },
+    {
+        routeId: 'bytedance/seedance-2.5-token/image-to-video',
+        productModelId: 'flovart:seedance-2.5',
+        modes: ['image-to-video', 'first-last-frame'],
+        channelTier: 'official-stable',
+        promptField: 'prompt',
+        aspectRatioField: 'ratio',
+        aspectRatioValues: ['adaptive', '16:9', '9:16', '1:1', '4:3', '3:4'],
+        durationType: 'string',
+        durationValues: SEEDANCE_25_DURATION_VALUES,
+        durationDefault: '5',
+        resolutionDefault: '720p',
+        params: [
+            { field: 'generateAudio', type: 'boolean', default: true },
+            { field: 'realPersonMode', type: 'boolean', default: true },
+            { field: 'conversionSlots', type: 'string', default: 'all' },
+            { field: 'returnLastFrame', type: 'boolean', default: false },
+            { field: 'seed', type: 'number', default: -1 },
+        ],
+        media: [
+            { field: 'firstFrameUrl', kind: 'image', serialization: 'single', max: 1, min: 1, required: true, mapping: 'first_last_frame' },
+            { field: 'lastFrameUrl', kind: 'image', serialization: 'single', max: 1, mapping: 'first_last_frame' },
+        ],
+        officialEvidence: RH_DOC_EN + 'api-498749516',
+    },
+    {
+        routeId: 'bytedance/seedance-2.5-token/multimodal-video',
+        productModelId: 'flovart:seedance-2.5',
+        modes: ['reference-to-video'],
+        channelTier: 'official-stable',
+        promptField: 'prompt',
+        aspectRatioField: 'ratio',
+        aspectRatioValues: ['adaptive', '16:9', '9:16', '1:1', '4:3', '3:4'],
+        durationType: 'string',
+        durationValues: SEEDANCE_25_DURATION_VALUES,
+        durationDefault: '5',
+        resolutionDefault: '720p',
+        params: [
+            { field: 'generateAudio', type: 'boolean', default: true },
+            { field: 'realPersonMode', type: 'boolean', default: true },
+            { field: 'conversionSlots', type: 'string', default: 'all' },
+            { field: 'returnLastFrame', type: 'boolean', default: false },
+            { field: 'seed', type: 'number', default: -1 },
+        ],
+        media: [
+            { field: 'imageUrls', kind: 'image', serialization: 'array', max: 30, mapping: 'multimodal' },
+            { field: 'videoUrls', kind: 'video', serialization: 'array', max: 10, mapping: 'multimodal' },
+            { field: 'audioUrls', kind: 'audio', serialization: 'array', max: 10, mapping: 'multimodal' },
+        ],
+        officialEvidence: RH_DOC_EN + 'api-498749513',
     },
     {
         routeId: 'seedream-v4.5/text-to-image',

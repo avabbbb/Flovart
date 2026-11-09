@@ -283,6 +283,7 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         runWithoutPrompt={Boolean(operationCapability && !operationCapability.promptRequired)}
         providerOptional={isLocalOperation}
         hideGenerationOptions={isLocalOperation}
+        promptSnapshotKey={'workflow-node:' + node.id}
         runLabel={operationCapability ? (language === 'en' ? 'Run' : '运行') : undefined}
         isLoading={node.metadata.status === 'loading'}
         isSelectionActive={false}

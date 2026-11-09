@@ -255,7 +255,10 @@ function normalizeDocumentNode(node: WorkflowNode): WorkflowNode {
     }
     if (op.type === 'update_node') {
       const current = snapshot.nodes.find(node => node.id === op.id);
-      if (!current) return;
+      if (!current) {
+        reject(opIndex, op, '节点不存在：' + op.id);
+        return;
+      }
       const metadataPatch = { ...(op.patch?.metadata || {}), ...(op.metadata || {}) };
       const base = { ...current, ...op.patch, metadata: current.metadata };
       const updated = op.replaceMetadata

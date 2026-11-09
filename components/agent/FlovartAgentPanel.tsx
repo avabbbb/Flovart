@@ -1,5 +1,5 @@
 import { AtSign, Box, Check, ChevronDown, Hand, Image as ImageIcon, KeyRound, LayoutGrid, Plus, RotateCw, Send, Square, Trash2, Video, X } from 'lucide-react';
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
 import { isTauri } from '@tauri-apps/api/core';
 import {
@@ -41,6 +41,7 @@ import { AGENT_TODO_TOOL_NAME, latestTodoFromMessages, todoFromToolResult, type 
 import { AgentHeaderLeadingContext } from './agentHeaderSlot';
 import { DrawerChromeCollapse, DrawerChromeTabs } from '../studio/drawerChrome';
 import { GenerationPlanCard } from '../GenerationPlanCard';
+import { activityAfterConfirmation, agentLayerReducer, blockerAfterCredentialSignal, closedLayers, needsCredential, replacePendingConfirmation, useAgentTurn } from './agentPanelState';
 
 interface FlovartAgentPanelProps {
   project: WorkflowProject;
@@ -153,28 +154,47 @@ const userApiKeysRef = useRef(userApiKeys);
   const [skillAttachment, setSkillAttachment] = useState<ProductionSkillAttachment>();
   const [status, setStatus] = useState<'connecting' | 'ready' | 'error'>('connecting');
   const [workspaceStatus, setWorkspaceStatus] = useState<'connecting' | 'ready' | 'error'>('connecting');
-  const [sending, setSending] = useState(false);
-  const [needsConfiguration, setNeedsConfiguration] = useState(false);
+  // 一轮对话的显式状态：idle | sending | awaitingConfirmation | stopping；sending 只是派生值。
+  const { turn, turnRef, dispatchTurn } = useAgentTurn();
+  const sending = turn.phase !== 'idle';
   const [confirmation, setConfirmation] = useState<PendingConfirmation>();
   const [mandate, setMandate] = useState<AgentSpendMandate | null>(null);
   const [mandateTasks, setMandateTasks] = useState(10);
   const [mode, setMode] = useState<'manual' | 'auto'>('auto');
-  const [modeOpen, setModeOpen] = useState(false);
+  // 面板内所有浮层共用一个 openLayer：同一时刻只开一个，Escape/外部点击统一关闭。
+  const [layers, dispatchLayer] = useReducer(agentLayerReducer, closedLayers);
+  const { layer: openLayer, slashQuery } = layers;
+  const modeOpen = openLayer === 'mode';
+  const sessionsOpen = openLayer === 'sessions';
+  const mentionOpen = openLayer === 'mention';
+  const attachmentOpen = openLayer === 'attachment';
+  const creationModeOpen = openLayer === 'creationMode';
+  const modelPickerOpen = openLayer === 'modelPicker';
+  const skillOpen = openLayer === 'skill';
   const [references, setReferences] = useState<AgentReference[]>([]);
-  const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
-  const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [creationMode, setCreationMode] = useState<AgentCreationMode>('all');
-  const [creationModeOpen, setCreationModeOpen] = useState(false);
   const [preferredModel, setPreferredModel] = useState<AgentModelSelection | null>(null);
-  const [modelPickerOpen, setModelPickerOpen] = useState(false);
-  const [skillOpen, setSkillOpen] = useState(false);
-  // null = Skill picker not opened by typing "/"; otherwise the text after "/".
-  const [slashQuery, setSlashQuery] = useState<string | null>(null);
   // ProductionSkillDeck 注册的键盘处理：返回 true 表示该按键已被 Skill 列表消费。
   const skillNav = useRef<((key: string) => boolean) | null>(null);
   const [groupBanner, setGroupBanner] = useState<(AgentGroupPayload & { saved?: boolean }) | null>(null);
+  const presentConfirmation = (next: PendingConfirmation) => {
+    replacePendingConfirmation(confirmationRef, next); // a newer request supersedes; never leave the agent waiting
+    setConfirmation(next);
+    dispatchTurn({ type: 'confirmRequested' });
+    activity.current('waiting');
+  };
+  const settleConfirmation = (pending: PendingConfirmation, approved: boolean) => {
+    const nextActivity = activityAfterConfirmation(turnRef.current.phase);
+    confirmationRef.current = undefined;
+    pending.resolve(approved);
+    setConfirmation(undefined);
+    dispatchTurn({ type: 'confirmResolved' });
+    if (nextActivity) activity.current(nextActivity);
+  };
   const askConfirmation = useRef((summary: string, request?: AgentConfirmRequest): Promise<boolean> => {
+    // 停止中的轮次不再弹确认卡：直接拒绝，让内核尽快收尾。
+    if (turnRef.current.phase === 'stopping') return Promise.resolve(false);
     const current = mandateRef.current;
     if (modeRef.current === 'auto' && current && request && evaluateSpendMandate(current, request).allow) {
       const next = consumeSpendMandate(current, request);
@@ -186,11 +206,7 @@ const userApiKeysRef = useRef(userApiKeys);
       const offerMandate = modeRef.current === 'auto' && request?.kind === 'generation' && (request.gates?.length ?? 0) > 0 && !planBlocked(request);
       if (offerMandate) setMandateTasks(defaultMandateTasks(request));
       // 有计划时由 GenerationPlanCard 展示，文本摘要只给 CLI/无宿主。
-      const next: PendingConfirmation = { summary: request?.gates?.length ? '' : summary, resolve, request, offerMandate, blocked: planBlocked(request) };
-      confirmationRef.current?.resolve(false); // a newer request supersedes; never leave the agent waiting
-      confirmationRef.current = next;
-      setConfirmation(next);
-      activity.current('waiting');
+      presentConfirmation({ summary: request?.gates?.length ? '' : summary, resolve, request, offerMandate, blocked: planBlocked(request) });
     });
   }).current;
   useEffect(() => {
@@ -198,14 +214,13 @@ const userApiKeysRef = useRef(userApiKeys);
     return () => setAgentGateKeysProvider(null);
   }, []);
   const [replaceTarget, setReplaceTarget] = useState<AgentReference | null>(null);
-  const [infoPanel, setInfoPanel] = useState<'context' | 'safety' | null>(null);
-  const [sessionsOpen, setSessionsOpen] = useState(false);
   const [sessionList, setSessionList] = useState<Array<{ id: string; title: string; updatedAt: string }>>([]);
   const [activeSessionId, setActiveSessionId] = useState('');
   // Lane15 first-run UX: setupBlocker classifies a cold-open/send failure via
   // the executor taxonomy (runtimeHealth) instead of raw strings, so the panel
   // can render a real next step ('Add API key') instead of a jargon dead end.
   const [setupBlocker, setSetupBlocker] = useState<AgentSetupBlocker | null>(null);
+  const needsConfiguration = needsCredential(setupBlocker);
   const language = useWorkspaceStore(s => s.language);
   const languageRef = useRef(language);
   languageRef.current = language;
@@ -236,24 +251,13 @@ const userApiKeysRef = useRef(userApiKeys);
 
   useEffect(() => { activity.current = onActivityChange; }, [onActivityChange]);
 
-  // UX-AGT-02: every popover in the agent panel (生成模式 menu, 制作上下文 /
-  // 安全边界 info panes, 历史对话 list) must dismiss on Escape and on outside
-  // click — the standard transient-layer contract. While open they cover the
-  // composer textarea, so leaving them pinned is a real blocker.
+  // UX-AGT-02: every popover in the agent panel (生成模式 menu, 历史对话 list,
+  // @ picker, Skill picker) must dismiss on Escape and on outside click — the
+  // standard transient-layer contract. While open they cover the composer
+  // textarea, so leaving them pinned is a real blocker.
   useEffect(() => {
-    const anyOpen = modeOpen || infoPanel !== null || sessionsOpen || mentionOpen || attachmentOpen || creationModeOpen || modelPickerOpen || skillOpen;
-    if (!anyOpen) return;
-    const closeAll = () => {
-      setModeOpen(false);
-      setInfoPanel(null);
-      setSessionsOpen(false);
-      setMentionOpen(false);
-      setAttachmentOpen(false);
-      setCreationModeOpen(false);
-      setModelPickerOpen(false);
-      setSkillOpen(false);
-      setSlashQuery(null);
-    };
+    if (openLayer === null) return;
+    const closeAll = () => dispatchLayer({ type: 'closeAll' });
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') closeAll();
     };
@@ -278,14 +282,14 @@ const userApiKeysRef = useRef(userApiKeys);
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('pointerdown', onPointer);
     };
-  }, [modeOpen, infoPanel, sessionsOpen, mentionOpen, attachmentOpen, creationModeOpen, modelPickerOpen, skillOpen]);
+  }, [openLayer]);
   useEffect(() => {
     // 与下方主连接 effect 相同的 active 防护：异步 settle 后组件可能已卸载/切换项目
     let active = true;
     skillAttachmentDirty.current = false;
     setSkillAttachment(undefined);
     setReferences([]);
-    setMentionOpen(false);
+    dispatchLayer({ type: 'close', layer: 'mention' });
     const pending = consumePendingProductionSkill(project.id);
     if (!pending) return () => { active = false; };
     setPrompt(pending.prompt);
@@ -344,7 +348,6 @@ const userApiKeysRef = useRef(userApiKeys);
         if (!active) return;
         setStatus('ready');
         setWorkspaceStatus('ready');
-        setNeedsConfiguration(true);
         setSetupBlocker('credential');
         setMessages([{ id: 'agent-text-config', role: 'error', text: translations[language].agentPanel.textRouteRequired }]);
         activity.current('error');
@@ -374,7 +377,6 @@ const userApiKeysRef = useRef(userApiKeys);
       if (snapshot.boundProductionSkill) setSkillAttachment(snapshot.boundProductionSkill);
       setStatus('ready');
       setWorkspaceStatus('ready');
-      setNeedsConfiguration(false);
       setSetupBlocker(null);
       activity.current(snapshot.messages.length ? 'done' : 'idle');
       void refreshSessions();
@@ -394,13 +396,7 @@ const userApiKeysRef = useRef(userApiKeys);
             url: connection.url,
             token: connection.token,
             confirm: askConfirmation,
-            confirmWrite: summary => modeRef.current === 'auto' || new Promise<boolean>(resolve => {
-              const next = { summary, resolve };
-              confirmationRef.current?.resolve(false); // a newer request supersedes; never leave the agent waiting
-              confirmationRef.current = next;
-              setConfirmation(next);
-              activity.current('waiting');
-            }),
+            confirmWrite: summary => modeRef.current === 'auto' || new Promise<boolean>(resolve => presentConfirmation({ summary, resolve })),
             onStatus: nextStatus => {
               if (!active) return;
               setWorkspaceStatus(nextStatus === 'connected' ? 'ready' : nextStatus === 'error' ? 'error' : 'connecting');
@@ -419,7 +415,6 @@ const userApiKeysRef = useRef(userApiKeys);
         setStatus('ready');
         // 旧会话里残留的「No agent-text route」错误不能在已有可用线路后继续拦截；真缺线路时发送会再报错并重新拦截。
         const configurationNeeded = !browserRouteSignature && snapshotNeedsConfiguration(snapshot);
-        setNeedsConfiguration(configurationNeeded);
         setSetupBlocker(configurationNeeded ? 'credential' : null);
         activity.current(configurationNeeded ? 'error' : snapshot.messages.length ? 'done' : 'idle');
       })
@@ -430,7 +425,6 @@ const userApiKeysRef = useRef(userApiKeys);
         const blocker = classifyAgentSetupError(error);
         setStatus('error');
         setWorkspaceStatus('error');
-        setNeedsConfiguration(blocker === 'credential');
         setSetupBlocker(blocker === 'unknown' ? 'offline' : blocker);
         setMessages([{ id: 'connection-error', role: 'error', text: localizedAgentSetupMessage(blocker === 'unknown' ? 'offline' : blocker, error, language) }]);
         activity.current('error');
@@ -438,8 +432,7 @@ const userApiKeysRef = useRef(userApiKeys);
     return () => {
       active = false;
       abort.current?.abort();
-      confirmationRef.current?.resolve(false);
-      confirmationRef.current = undefined;
+      replacePendingConfirmation(confirmationRef, undefined);
       workspaceBridge.current?.disconnect();
       workspaceBridge.current = undefined;
       unsubscribeRef.current?.();
@@ -529,7 +522,7 @@ const userApiKeysRef = useRef(userApiKeys);
     try {
       await kernel.newSession();
       await refreshSessions();
-      setSessionsOpen(false);
+      dispatchLayer({ type: 'close', layer: 'sessions' });
     } catch (error) {
       setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: errorMessage(error) }]);
     }
@@ -542,7 +535,7 @@ const userApiKeysRef = useRef(userApiKeys);
       abort.current?.abort();
       await kernel.openSessionById(sessionId);
       await refreshSessions();
-      setSessionsOpen(false);
+      dispatchLayer({ type: 'close', layer: 'sessions' });
     } catch (error) {
       setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: errorMessage(error) }]);
     }
@@ -562,12 +555,12 @@ const userApiKeysRef = useRef(userApiKeys);
   useEffect(() => { handleEventRef.current = handleEvent; });
 
   const handleEvent = (event: FlovartAgentTurnEvent, assistantId: string) => {    if (event.type === 'text-delta') {
-      setNeedsConfiguration(false);
+      setSetupBlocker(current => blockerAfterCredentialSignal(current, false));
       setMessages(items => items.some(item => item.id === assistantId)
         ? items.map(item => item.id === assistantId ? { ...item, text: item.text + event.delta } : item)
         : [...items, { id: assistantId, role: 'assistant', text: event.delta }]);
     } else if (event.type === 'snapshot') {
-      setNeedsConfiguration(snapshotNeedsConfiguration(event.snapshot));
+      setSetupBlocker(current => blockerAfterCredentialSignal(current, snapshotNeedsConfiguration(event.snapshot)));
       setMessages(displayMessages(event.snapshot, language));
       setTodoItems(latestTodoFromMessages(event.snapshot.messages) || []);
       skillAttachmentDirty.current = false;
@@ -600,17 +593,16 @@ const userApiKeysRef = useRef(userApiKeys);
       // Mid-turn errors are usually transient; only a credential wall earns the
       // guided-action card — everything else stays a plain message.
       const blocker = classifyAgentSetupError(event.message);
-      if (blocker === 'credential' || isAgentTextConfigurationError(event.message)) {
-        setNeedsConfiguration(true);
-        setSetupBlocker('credential');
-      }
+      if (blocker === 'credential' || isAgentTextConfigurationError(event.message)) setSetupBlocker('credential');
       setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: agentMessageText(event.message, language) }]);
     }
   };
 
   const send = async () => {
     const text = prompt.trim();
-    if ((!text && references.length === 0) || sending) return;
+    if ((!text && references.length === 0) || turnRef.current.phase !== 'idle') return;
+    // 连接中不发送（按钮本就禁用）；不再在发送时强行把连接状态改成 ready。
+    if (status === 'connecting') return;
     if (!client.current && !kernelRef.current) {
       // Agents-offline / credential wall: never dump '仅桌面端可用'. When the
       // missing piece is an agent-text route the blocker is credential (a key
@@ -630,10 +622,8 @@ const userApiKeysRef = useRef(userApiKeys);
     setMessages(items => [...items, { id: crypto.randomUUID(), role: 'user', text: displayText }]);
     setPrompt('');
     setReferences([]);
-    setMentionOpen(false);
-    setSending(true);
-    setStatus('ready');
-    setNeedsConfiguration(false);
+    dispatchLayer({ type: 'close', layer: 'mention' });
+    const { turnId } = dispatchTurn({ type: 'send' });
     setSetupBlocker(null);
     activity.current('running');
     const controller = new AbortController();
@@ -665,27 +655,34 @@ const userApiKeysRef = useRef(userApiKeys);
       if (!controller.signal.aborted) {
         const message = errorMessage(error);
         const blocker = classifyAgentSetupError(error);
-        if (blocker === 'credential' || isAgentTextConfigurationError(message)) {
-          setNeedsConfiguration(true);
-          setSetupBlocker('credential');
-        }
+        if (blocker === 'credential' || isAgentTextConfigurationError(message)) setSetupBlocker('credential');
         setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: agentMessageText(message, language) }]);
         activity.current('error');
       }
     } finally {
-      setSending(false);
+      dispatchTurn({ type: 'settled', turnId });
     }
+  };
+
+  // 停止：本轮进入 stopping；发送 promise 结束或取消请求结束，先到者把输入框收回 idle，停止按钮不会卡住。
+  const stop = () => {
+    const { phase, turnId } = turnRef.current;
+    if (phase !== 'sending' && phase !== 'awaitingConfirmation') return;
+    dispatchTurn({ type: 'stop' });
+    replacePendingConfirmation(confirmationRef, undefined);
+    setConfirmation(undefined);
+    abort.current?.abort();
+    activity.current('idle');
+    const cancelled = kernelRef.current ? kernelRef.current.cancel() : client.current?.cancel(project.id);
+    void Promise.resolve(cancelled).catch(() => undefined).finally(() => dispatchTurn({ type: 'settled', turnId }));
   };
 
   const updatePrompt = (value: string) => {
     setPrompt(value);
     const match = value.match(/@([^@\s]*)$/);
-    setMentionOpen(Boolean(match));
     setMentionQuery(match?.[1] || '');
     const slash = match ? null : value.match(/(?:^|\s)\/([^\s/]*)$/);
-    if (slash) { setSlashQuery(slash[1]); setSkillOpen(true); setModeOpen(false); setCreationModeOpen(false); }
-    else if (slashQuery !== null) { setSlashQuery(null); setSkillOpen(false); }
-    setAttachmentOpen(false);
+    dispatchLayer({ type: 'promptChanged', mention: match ? match[1] : null, slash: slash ? slash[1] : null });
     setReplaceTarget(null);
   };
 
@@ -698,15 +695,14 @@ const userApiKeysRef = useRef(userApiKeys);
       setReferences(current => current.some(item => item.id === reference.id && item.type === reference.type) ? current : [...current, reference]);
     }
     setPrompt(current => current.replace(/@([^@\s]*)$/, ''));
-    setMentionOpen(false);
+    dispatchLayer({ type: 'close', layer: 'mention' });
     setMentionQuery('');
     window.requestAnimationFrame(() => textarea.current?.focus());
   };
 
   const openReferencePicker = (type?: AgentReference['type']) => {
-    setAttachmentOpen(false);
     setMentionQuery('');
-    setMentionOpen(true);
+    dispatchLayer({ type: 'open', layer: 'mention' });
     if (type === 'asset') setPrompt(current => current.replace(/@([^@\s]*)$/, ''));
     window.requestAnimationFrame(() => textarea.current?.focus());
   };
@@ -780,7 +776,7 @@ const userApiKeysRef = useRef(userApiKeys);
           aria-label={t('agentPanel.history')}
           aria-expanded={sessionsOpen}
           title={t('agentPanel.history')}
-          onClick={() => { setSessionsOpen(open => !open); if (!sessionsOpen) void refreshSessions(); }}
+          onClick={() => { dispatchLayer({ type: 'toggle', layer: 'sessions' }); if (!sessionsOpen) void refreshSessions(); }}
         ><span>{activeSessionTitle}</span><ChevronDown size={13} /></button>
         {sessionsOpen && (
           <div className="agent-session-menu agent-header-menu is-left" role="menu" aria-label={t('agentPanel.history')}>
@@ -838,15 +834,15 @@ const userApiKeysRef = useRef(userApiKeys);
             <label>批准后，本会话自动模式最多自动生成 <input type="number" min={1} value={mandateTasks} onChange={event => setMandateTasks(Math.max(1, Math.floor(Number(event.target.value) || 1)))} aria-label="自动生成任务上限" /> 个任务（含本批），超出会再次询问；删除、取消始终单独确认。</label>
           </div>}
           <div>
-            <button type="button" onClick={() => { confirmationRef.current = undefined; confirmation.resolve(false); setConfirmation(undefined); activity.current('running'); }}>{t('agentPanel.deny')}</button>
+            <button type="button" onClick={() => settleConfirmation(confirmation, false)}>{t('agentPanel.deny')}</button>
             {confirmation.offerMandate && confirmation.request && <button type="button" onClick={() => {
               const request = confirmation.request!;
               const granted = consumeSpendMandate(createSpendMandate({ maxTasks: Math.max(mandateTasks, spendDemand(request.gates).tasks) }), request);
               mandateRef.current = granted;
               setMandate(granted);
-              confirmationRef.current = undefined; confirmation.resolve(true); setConfirmation(undefined); activity.current('running');
+              settleConfirmation(confirmation, true);
             }}>批准并自动进行</button>}
-            <button type={'button'} disabled={confirmation.blocked} onClick={() => { confirmationRef.current = undefined; confirmation.resolve(true); setConfirmation(undefined); activity.current('running'); }}>{confirmation.offerMandate ? '仅批准本次' : t('agentPanel.allow')}</button>
+            <button type={'button'} disabled={confirmation.blocked} onClick={() => settleConfirmation(confirmation, true)}>{confirmation.offerMandate ? '仅批准本次' : t('agentPanel.allow')}</button>
           </div>
         </div>}
         <div ref={composer} className="workflow-agent__composer">
@@ -856,16 +852,12 @@ const userApiKeysRef = useRef(userApiKeys);
               skillAttachmentDirty.current = true;
               setSkillAttachment(value);
               if (value && slashQuery !== null) setPrompt(current => current.replace(/(^|\s)\/[^\s/]*$/, '$1'));
-              setSlashQuery(null);
+              dispatchLayer({ type: 'clearSlash' });
               if (value) focusComposer();
             }}
             dropTargetRef={composer}
             open={skillOpen}
-            onOpenChange={next => {
-              setSkillOpen(next);
-              if (!next) setSlashQuery(null);
-              else { setModeOpen(false); setCreationModeOpen(false); setMentionOpen(false); setAttachmentOpen(false); }
-            }}
+            onOpenChange={next => dispatchLayer(next ? { type: 'open', layer: 'skill' } : { type: 'close', layer: 'skill' })}
             searchQuery={slashQuery ?? undefined}
             keyboardRef={skillNav}
           />
@@ -895,9 +887,9 @@ const userApiKeysRef = useRef(userApiKeys);
             value={prompt}
             onChange={event => updatePrompt(event.target.value)}
             onKeyDown={event => {
-              if (event.key === 'Escape' && skillOpen) { event.preventDefault(); setSkillOpen(false); setSlashQuery(null); return; }
+              if (event.key === 'Escape' && skillOpen) { event.preventDefault(); dispatchLayer({ type: 'close', layer: 'skill' }); return; }
               if (skillOpen && !event.nativeEvent.isComposing && skillNav.current?.(event.key)) { event.preventDefault(); return; }
-              if (event.key === 'Escape' && mentionOpen) { event.preventDefault(); setMentionOpen(false); setReplaceTarget(null); return; }
+              if (event.key === 'Escape' && mentionOpen) { event.preventDefault(); dispatchLayer({ type: 'close', layer: 'mention' }); setReplaceTarget(null); return; }
               if (event.key === 'Backspace' && !prompt && references.length) { event.preventDefault(); setReferences(current => current.slice(0, -1)); return; }
               if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
@@ -911,25 +903,25 @@ const userApiKeysRef = useRef(userApiKeys);
           <div className="agent-composer__controls">
             <div className="agent-composer__tools">
               <div className="agent-attachment-control">
-                <button type="button" aria-label={t('agentPanel.addAttachment')} aria-expanded={attachmentOpen} onClick={() => { setAttachmentOpen(open => !open); setMentionOpen(false); }}><Plus size={17} /></button>
+                <button type="button" aria-label={t('agentPanel.addAttachment')} aria-expanded={attachmentOpen} onClick={() => dispatchLayer({ type: 'toggle', layer: 'attachment' })}><Plus size={17} /></button>
                 {attachmentOpen && <div className="agent-attachment-menu" role="menu" aria-label={t('agentPanel.addAttachment')}>
                   <button type="button" role="menuitem" onClick={() => openReferencePicker('node')}><Box size={15} /><span><strong>{t('agentPanel.referenceNodes')}</strong><small>{t('agentPanel.referenceNodesHint')}</small></span></button>
                   <button type="button" role="menuitem" onClick={() => openReferencePicker('asset')}><ImageIcon size={15} /><span><strong>{t('agentPanel.referenceAssets')}</strong><small>{t('agentPanel.referenceAssetCount', assetLibrary?.items.length || 0)}</small></span></button>
                 </div>}
               </div>
-              <CreationModeControl value={creationMode} onChange={setCreationMode} open={creationModeOpen} onOpenChange={open => { setCreationModeOpen(open); if (open) { setModelPickerOpen(false); setModeOpen(false); setSkillOpen(false); } }} language={language} />
-              <AgentModelPicker userApiKeys={userApiKeys} onAddApiKey={onAddApiKey} onUpdateApiKey={onUpdateApiKey} open={modelPickerOpen} onOpenChange={open => { setModelPickerOpen(open); if (open) { setCreationModeOpen(false); setModeOpen(false); setSkillOpen(false); setMentionOpen(false); setAttachmentOpen(false); } }} language={language} />
+              <CreationModeControl value={creationMode} onChange={setCreationMode} open={creationModeOpen} onOpenChange={open => dispatchLayer(open ? { type: 'open', layer: 'creationMode' } : { type: 'close', layer: 'creationMode' })} language={language} />
+              <AgentModelPicker userApiKeys={userApiKeys} onAddApiKey={onAddApiKey} onUpdateApiKey={onUpdateApiKey} open={modelPickerOpen} onOpenChange={open => dispatchLayer(open ? { type: 'open', layer: 'modelPicker' } : { type: 'close', layer: 'modelPicker' })} language={language} />
               <div className="agent-mode-control">
-                <button type="button" aria-label={t('agentPanel.generationMode')} title={mode === 'manual' ? t('agentPanel.manualModeHint') : t('agentPanel.autoModeHint')} aria-expanded={modeOpen} onClick={() => { setModeOpen(value => !value); setCreationModeOpen(false); setModelPickerOpen(false); setSkillOpen(false); }}><Hand size={15} /><span>{mode === 'manual' ? t('agentPanel.manualMode') : t('agentPanel.autoMode')}</span></button>
+                <button type="button" aria-label={t('agentPanel.generationMode')} title={mode === 'manual' ? t('agentPanel.manualModeHint') : t('agentPanel.autoModeHint')} aria-expanded={modeOpen} onClick={() => dispatchLayer({ type: 'toggle', layer: 'mode' })}><Hand size={15} /><span>{mode === 'manual' ? t('agentPanel.manualMode') : t('agentPanel.autoMode')}</span></button>
                 {modeOpen && <div className="agent-mode-menu" role="menu" aria-label={t('agentPanel.generationMode')}>
-                  <button type="button" role="menuitem" aria-pressed={mode === 'manual'} onClick={() => { modeRef.current = 'manual'; mandateRef.current = null; setMandate(null); setMode('manual'); setModeOpen(false); }}><Hand size={17} /><span><strong>{t('agentPanel.manualMode')}</strong><small>{t('agentPanel.manualModeHint')}</small></span>{mode === 'manual' && <Check size={15} />}</button>
-                  <button type="button" role="menuitem" aria-pressed={mode === 'auto'} onClick={() => { modeRef.current = 'auto'; setMode('auto'); setModeOpen(false); }}><RotateCw size={17} /><span><strong>{t('agentPanel.autoMode')}</strong><small>{t('agentPanel.autoModeHint')}</small></span>{mode === 'auto' && <Check size={15} />}</button>
+                  <button type="button" role="menuitem" aria-pressed={mode === 'manual'} onClick={() => { modeRef.current = 'manual'; mandateRef.current = null; setMandate(null); setMode('manual'); dispatchLayer({ type: 'close', layer: 'mode' }); }}><Hand size={17} /><span><strong>{t('agentPanel.manualMode')}</strong><small>{t('agentPanel.manualModeHint')}</small></span>{mode === 'manual' && <Check size={15} />}</button>
+                  <button type="button" role="menuitem" aria-pressed={mode === 'auto'} onClick={() => { modeRef.current = 'auto'; setMode('auto'); dispatchLayer({ type: 'close', layer: 'mode' }); }}><RotateCw size={17} /><span><strong>{t('agentPanel.autoMode')}</strong><small>{t('agentPanel.autoModeHint')}</small></span>{mode === 'auto' && <Check size={15} />}</button>
                   <p style={{ margin: 0, padding: '6px 12px 8px', fontSize: 10, lineHeight: 1.6, color: 'var(--isl-ink-ghost)' }}>删除、付费生成、Production 批准/运行、任务取消始终单独确认。</p>
                 </div>}
               </div>
             </div>
             {sending
-              ? <button type="button" className="agent-composer__send" aria-label="停止" onClick={() => { confirmationRef.current?.resolve(false); confirmationRef.current = undefined; setConfirmation(undefined); abort.current?.abort(); activity.current('idle'); if (kernelRef.current) kernelRef.current.cancel(); else void client.current?.cancel(project.id); }}><Square size={13} /></button>
+              ? <button type="button" className="agent-composer__send" aria-label="停止" onClick={stop}><Square size={13} /></button>
               : <button type="button" className="agent-composer__send" aria-label="发送" onClick={() => void send()} disabled={status !== 'ready' || (!prompt.trim() && references.length === 0)}><Send size={16} /></button>}
           </div>
         </div>

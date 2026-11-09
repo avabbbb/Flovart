@@ -153,10 +153,10 @@ export const BUILTIN_RUNNINGHUB_MODELS: Array<{ id: string; capability: 'image' 
   { id: 'rhart-video-x-v1.5/text-to-video', capability: 'video', description: '全能视频X v1.5 文生视频' },
   { id: 'rhart-video-x-v1.5/image-to-video', capability: 'video', description: '全能视频X v1.5 图生视频' },
   { id: 'rhart-video-x-v1.5/reference-to-video', capability: 'video', description: '全能视频X v1.5 参考生视频' },
-  // seedance 2.5（文档 498749503-498749507）
-  { id: 'rhart-video/sparkvideo-2.5/text-to-video', capability: 'video', description: 'Seedance 2.5 文生视频' },
-  { id: 'rhart-video/sparkvideo-2.5/image-to-video', capability: 'video', description: 'Seedance 2.5 图生视频' },
-  { id: 'rhart-video/sparkvideo-2.5/multimodal-video', capability: 'video', description: 'Seedance 2.5 多模态视频' },
+  // seedance 2.5（Token 渠道，英文文档 498749519 / 498749516 / 498749513）
+  { id: 'bytedance/seedance-2.5-token/text-to-video', capability: 'video', description: 'Seedance 2.5 文生视频' },
+  { id: 'bytedance/seedance-2.5-token/image-to-video', capability: 'video', description: 'Seedance 2.5 图生视频' },
+  { id: 'bytedance/seedance-2.5-token/multimodal-video', capability: 'video', description: 'Seedance 2.5 多模态视频' },
 ];
 
 // RunningHub 产品展示名 → 真实 API endpoint 的别名映射。
@@ -186,9 +186,9 @@ const RUNNINGHUB_FAMILY_ALIASES: Record<string, string> = {
   'Vidu首尾帧生视频': 'vidu/start-end-to-video-q3-pro',
   '海螺文生视频': 'rhart-video/hailuo-2.3/text-to-video',
   '海螺图生视频': 'rhart-video/hailuo-2.3/image-to-video',
-  'seedance文生视频': 'rhart-video/sparkvideo-2.5/text-to-video',
-  'seedance图生视频': 'rhart-video/sparkvideo-2.5/image-to-video',
-  'seedance多模态视频': 'rhart-video/sparkvideo-2.5/multimodal-video',
+  'seedance文生视频': 'bytedance/seedance-2.5-token/text-to-video',
+  'seedance图生视频': 'bytedance/seedance-2.5-token/image-to-video',
+  'seedance多模态视频': 'bytedance/seedance-2.5-token/multimodal-video',
   'seedream文生图': 'rhart-image/seedream-v5/text-to-image',
   'seedream图生图': 'rhart-image/seedream-v5/image-to-image',
   '全能视频X文生视频': 'rhart-video-x-v1.5/text-to-video',
@@ -304,10 +304,13 @@ const RUNNINGHUB_PRODUCT_ALIASES: Record<string, string> = {
   'seedream-v5-pro-文生图': 'rhart-image/seedream-v5/text-to-image',
   'seedream-v5-pro-图生图': 'rhart-image/seedream-v5/image-to-image',
   'seedream-v4.5-文生图': 'seedream-v4.5/text-to-image',
-  'sparkvideo-2.5/text-to-video': 'rhart-video/sparkvideo-2.5/text-to-video',
-  'seedance2.5/文生视频': 'rhart-video/sparkvideo-2.5/text-to-video',
-  'seedance2.5/图生视频': 'rhart-video/sparkvideo-2.5/image-to-video',
-  'seedance2.5/多模态视频': 'rhart-video/sparkvideo-2.5/multimodal-video',
+  'sparkvideo-2.5/text-to-video': 'bytedance/seedance-2.5-token/text-to-video',
+  'rhart-video/sparkvideo-2.5/text-to-video': 'bytedance/seedance-2.5-token/text-to-video',
+  'rhart-video/sparkvideo-2.5/image-to-video': 'bytedance/seedance-2.5-token/image-to-video',
+  'rhart-video/sparkvideo-2.5/multimodal-video': 'bytedance/seedance-2.5-token/multimodal-video',
+  'seedance2.5/文生视频': 'bytedance/seedance-2.5-token/text-to-video',
+  'seedance2.5/图生视频': 'bytedance/seedance-2.5-token/image-to-video',
+  'seedance2.5/多模态视频': 'bytedance/seedance-2.5-token/multimodal-video',
   // 全能视频 V3.1 低价渠道展示名（页面 slug）→ 官方标准模型 endpoint
   'google/veo3.1-fast/text-to-video-channel-low-price': 'rhart-video-v3.1-fast/text-to-video',
   'google/veo3.1-fast/image-to-video-channel-low-price': 'rhart-video-v3.1-fast/image-to-video',
@@ -747,6 +750,28 @@ export async function rhUploadDataUrl(
   return rhUploadFile(apiKey, blob, `upload.${ext}`, options);
 }
 
+/** RunningHub 任务状态 → 显式阶段。取消类状态是终态；未知状态按进行中处理，由轮询上限兜底。 */
+export type RHTaskPhase = 'pending' | 'succeeded' | 'failed' | 'cancelled';
+export function rhTaskPhase(status: string | undefined): RHTaskPhase {
+  switch ((status || '').toUpperCase()) {
+    case 'SUCCESS':
+      return 'succeeded';
+    case 'FAILED':
+    case 'ERROR':
+      return 'failed';
+    case 'CANCEL':
+    case 'CANCELED':
+    case 'CANCELLED':
+      return 'cancelled';
+    default:
+      return 'pending';
+  }
+}
+
+function rhTerminalMessage(phase: 'failed' | 'cancelled', errorMessage: string | undefined): string {
+  return (phase === 'cancelled' ? 'RunningHub task cancelled: ' : 'RunningHub task failed: ') + (errorMessage || 'Unknown error');
+}
+
 /**
  * Submit a task and poll until completion.
  * Returns the final task response with results.
@@ -765,9 +790,11 @@ export async function rhRunTask(
     ? { taskId: options.resumeTaskId, status: 'QUEUED' as const, errorCode: '', errorMessage: '' }
     : await rhSubmitTask(apiKey, modelEndpoint, payload, options);
   if (submitResult.taskId) await options.onTaskId?.(submitResult.taskId);
-  if (submitResult.status === 'SUCCESS') return submitResult;
-  if (submitResult.status === 'FAILED') {
-    throw new Error(withRunningHubDebug(`RunningHub task failed: ${submitResult.errorMessage || 'Unknown error'}`, {
+  const submitPhase = rhTaskPhase(submitResult.status);
+  // 续跑占位永远是 QUEUED，只有真实的提交响应会走到这里。
+  if (submitPhase === 'succeeded') return submitResult as RHTaskResponse;
+  if (submitPhase === 'failed' || submitPhase === 'cancelled') {
+    throw new Error(withRunningHubDebug(rhTerminalMessage(submitPhase, submitResult.errorMessage), {
       ...debugContext,
       response: { ...submitResult },
     }));
@@ -779,29 +806,32 @@ export async function rhRunTask(
       response: { ...submitResult },
     }));
   }
+  // 尽力取消上游任务，避免继续消耗额度；取消失败只告警，不能掩盖原始错误。
+  const cancelBestEffort = () => rhCancelTask(apiKey, taskId, { baseUrl: options.baseUrl }).catch(cancelError => {
+    console.warn('[RunningHub] cancel request failed', { taskId, error: cancelError instanceof Error ? cancelError.message : String(cancelError) });
+  });
   for (let i = 0; i < MAX_POLL_ATTEMPTS; i++) {
     try {
       await delay(POLL_INTERVAL, options.signal);
       const result = await rhQueryTask(apiKey, taskId, options);
       options.onProgress?.(result.status, i + 1);
 
-      if (result.status === 'SUCCESS') return result;
-      if (result.status === 'FAILED') {
+      const phase = rhTaskPhase(result.status);
+      if (phase === 'succeeded') return result;
+      if (phase === 'failed' || phase === 'cancelled') {
         throw new Error(
-          withRunningHubDebug(`RunningHub task failed: ${result.errorMessage || 'Unknown error'}`, {
+          withRunningHubDebug(rhTerminalMessage(phase, result.errorMessage), {
             ...debugContext,
             taskId,
             response: { ...result },
           }),
         );
       }
-      // QUEUED or RUNNING — continue polling
+      // pending（QUEUED / RUNNING / 未知非终态）— 继续轮询
     } catch (err) {
       // User abort: stop polling AND cancel the server task so it stops consuming quota.
       if (options.signal?.aborted) {
-        await rhCancelTask(apiKey, taskId, { baseUrl: options.baseUrl }).catch(cancelError => {
-          console.warn('[RunningHub] cancel request failed', { taskId, error: cancelError instanceof Error ? cancelError.message : String(cancelError) });
-        });
+        await cancelBestEffort();
         throw err;
       }
       // Query timeout: log and continue polling (server task may still be running fine).
@@ -814,6 +844,8 @@ export async function rhRunTask(
     }
   }
 
+  // 轮询耗尽：上游任务可能仍在跑并计费，先取消再报超时。
+  await cancelBestEffort();
   throw new Error(withRunningHubDebug('RunningHub task timed out after polling', {
     ...debugContext,
     taskId,

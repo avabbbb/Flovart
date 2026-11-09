@@ -2093,6 +2093,10 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
   opacity: 0.75;
 }
 
+.prompt-ratio-shape--original {
+  border-style: dashed;
+}
+
 .prompt-ratio-grid {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }

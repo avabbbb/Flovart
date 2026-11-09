@@ -216,14 +216,21 @@ export function autoPlaceDocumentOperations(nodes: WorkflowNode[], operations: W
   });
 }
 
-function documentOperationsArg(value: unknown): WorkflowDocumentOperation[] {
+export function documentOperationsArg(value: unknown): WorkflowDocumentOperation[] {
   if (!Array.isArray(value) || value.length === 0) throw new Error('operations 必须是非空数组');
-  value.forEach((operation, index) => {
+  return value.map((operation, index) => {
     if (!isRecord(operation) || typeof operation.type !== 'string' || !DOCUMENT_OPERATION_TYPES.has(operation.type as WorkflowDocumentOperation['type'])) {
-      throw new Error(`operations[${index}] 不是受支持的 Document Operation`);
+      throw new Error('operations[' + index + '] 不是受支持的 Document Operation');
     }
+    if (operation.type !== 'update_node') return operation as unknown as WorkflowDocumentOperation;
+    // Agent 常把节点 id 写成 nodeId：归一化为 id；缺失时显式报错，不再落成静默空操作。
+    const { nodeId, ...rest } = operation;
+    const id = typeof rest.id === 'string' && rest.id.trim() ? rest.id
+      : typeof nodeId === 'string' && nodeId.trim() ? nodeId
+      : '';
+    if (!id) throw new Error('operations[' + index + '] update_node 缺少节点 id');
+    return { ...rest, id } as unknown as WorkflowDocumentOperation;
   });
-  return value as WorkflowDocumentOperation[];
 }
 
 const mutationSource = (source: WorkflowCommandEnvelope['source']): WorkflowMutationSource => (

@@ -207,15 +207,38 @@ export function isWorkflowGenerationActive(projectId: string, nodeId: string) {
 
 const STOPPED_BILLING_UNKNOWN = '已停止本地等待；上游可能仍在运行并计费，请在用量记录中核对后再重跑。';
 
-/** Stop must not hide a possible upstream charge: an unrefunded submitted task stays visible as an error. */
-function stoppedPatch(node: WorkflowNode | undefined) {
-  const meta = node?.metadata;
-  const billingUnknown = meta?.generationBillableState === 'unknown'
-    || (Boolean(meta?.generationProviderTaskId) && meta?.generationBillableState !== 'refunded');
-  const cleared = { progress: undefined, generationTransfer: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined };
-  return billingUnknown
-    ? { ...cleared, status: 'error' as const, error: STOPPED_BILLING_UNKNOWN, generationBillableState: 'unknown' as const }
-    : { ...cleared, status: 'idle' as const, error: undefined };
+/** 生成结局：每种终态只在 terminalGenerationPatch 一处构造。 */
+export type WorkflowGenerationOutcome =
+  | { readonly kind: 'succeeded' }
+  | { readonly kind: 'failed'; readonly error: string; readonly download?: { readonly providerTaskId: string | undefined } }
+  | { readonly kind: 'stopped'; readonly node: WorkflowNode | undefined }
+  | { readonly kind: 'interrupted'; readonly error: string };
+
+// 在途字段：任何终态都必须清空，否则残留 requestId/文案会让节点看起来仍在跑。
+// generationProviderTaskId 不在此列：终态上的残留任务 ID 只作溯源，不会被恢复（见 resumeProviderTaskId 注释）。
+const IN_FLIGHT_CLEARED = { generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined, generationTransfer: undefined } as const;
+
+export function terminalGenerationPatch(outcome: WorkflowGenerationOutcome): Partial<WorkflowNode['metadata']> {
+  switch (outcome.kind) {
+    case 'succeeded':
+      return { ...IN_FLIGHT_CLEARED, status: 'success', error: undefined, progress: 100, generationDownloadPending: undefined };
+    case 'failed':
+      // 下载失败：保留上游任务并标记待下载，重试只查询下载、不重新提交。
+      return outcome.download
+        ? { ...IN_FLIGHT_CLEARED, status: 'error', error: outcome.error, progress: undefined, generationProviderTaskId: outcome.download.providerTaskId, generationDownloadPending: true }
+        : { ...IN_FLIGHT_CLEARED, status: 'error', error: outcome.error, progress: undefined };
+    case 'interrupted':
+      return { ...IN_FLIGHT_CLEARED, status: 'error', error: outcome.error, progress: undefined };
+    case 'stopped': {
+      // 停止不能掩盖可能的上游计费：已提交且未退款的任务保持可见的错误态。
+      const meta = outcome.node?.metadata;
+      const billingUnknown = meta?.generationBillableState === 'unknown'
+        || (Boolean(meta?.generationProviderTaskId) && meta?.generationBillableState !== 'refunded');
+      return billingUnknown
+        ? { ...IN_FLIGHT_CLEARED, progress: undefined, status: 'error', error: STOPPED_BILLING_UNKNOWN, generationBillableState: 'unknown' }
+        : { ...IN_FLIGHT_CLEARED, progress: undefined, status: 'idle', error: undefined };
+    }
+  }
 }
 
 export function cancelWorkflowGeneration(projectId: string, nodeId: string) {
@@ -225,9 +248,19 @@ export function cancelWorkflowGeneration(projectId: string, nodeId: string) {
   activeRequests.delete(key);
   active.controller.abort();
   const project = active.runtime.getProject?.();
-  if (project) publish(active.runtime, patchInitiator(project, nodeId, stoppedPatch(project.nodes.find(item => item.id === nodeId))))
+  if (project) publish(active.runtime, patchInitiator(project, nodeId, terminalGenerationPatch({ kind: 'stopped', node: project.nodes.find(item => item.id === nodeId) })))
     .catch(error => console.warn('[Workflow] Stop state publish failed.', error));
   return true;
+}
+
+/**
+ * 本会话没有在途请求的 loading 节点（中断、丢失标签页、恢复放弃）被停止时的终态：
+ * 与 UI 停止走同一计费感知补丁。非 loading 节点返回 null（无事可做）。
+ */
+export function stopOrphanedWorkflowNode(project: WorkflowProject, nodeId: string): WorkflowProject | null {
+  const node = project.nodes.find(item => item.id === nodeId);
+  if (node?.metadata.status !== 'loading') return null;
+  return patchInitiator(project, nodeId, terminalGenerationPatch({ kind: 'stopped', node }));
 }
 
 /**
@@ -378,7 +411,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     });
     const effectivePrompt = preflight.optimizedPrompt;
     if (preflight.complianceWarnings.length > 0) {
-      current = patchInitiator(canonical(runtime, current), nodeId, { status: 'error', error: `合规警告：检测到敏感关键词 ${preflight.complianceWarnings.join(', ')}，请修改提示词后重试。`, generationRequestId: requestId });
+      current = patchInitiator(canonical(runtime, current), nodeId, terminalGenerationPatch({ kind: 'failed', error: `合规警告：检测到敏感关键词 ${preflight.complianceWarnings.join(', ')}，请修改提示词后重试。` }));
       await publish(runtime, current);
       throw new Error(`合规校验未通过：${preflight.complianceWarnings.join(', ')}`);
     }
@@ -757,7 +790,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       const latest = canonical(runtime, current);
       current = {
         ...latest,
-        nodes: [...latest.nodes.map(node => node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: 'success' as const, error: undefined, progress: 100, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined, generationDownloadPending: undefined } } : node), ...preparedNodes],
+        nodes: [...latest.nodes.map(node => node.id === nodeId ? { ...node, metadata: { ...node.metadata, ...terminalGenerationPatch({ kind: 'succeeded' }) } } : node), ...preparedNodes],
         connections: [...latest.connections, ...preparedConnections],
       };
     } else {
@@ -780,12 +813,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
               metadata: {
                 ...node.metadata,
                 content: singleTextContent ?? node.metadata.content,
-                status: 'success' as const,
-                error: undefined,
-                progress: 100,
-                generationRequestId: undefined,
-                generationStartedAt: undefined,
-                generationMessage: undefined,
+                ...terminalGenerationPatch({ kind: 'succeeded' }),
               },
             };
           }
@@ -794,13 +822,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
               ...node,
               metadata: {
                 ...node.metadata,
-                status: 'success' as const,
-                error: undefined,
-                progress: 100,
-                generationRequestId: undefined,
-                generationStartedAt: undefined,
-                generationMessage: undefined,
-                generationDownloadPending: undefined,
+                ...terminalGenerationPatch({ kind: 'succeeded' }),
               },
             };
           }
@@ -814,13 +836,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
               ...node.metadata,
               ...singleMediaRecord,
               href: undefined,
-              status: 'success' as const,
-              error: undefined,
-              progress: 100,
-              generationRequestId: undefined,
-              generationStartedAt: undefined,
-              generationMessage: undefined,
-              generationDownloadPending: undefined,
+              ...terminalGenerationPatch({ kind: 'succeeded' }),
               ...(operationTakeId ? { operationTakeId, sourceOperationNodeId: nodeId } : {}),
             },
           };
@@ -880,11 +896,11 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         latest = { ...latest, nodes: latest.nodes.map(node => node.id === nodeId ? completed : node) };
       }
     }
-    current = patchInitiator(latest, nodeId, aborted
-      ? stoppedPatch(latest.nodes.find(node => node.id === nodeId))
+    current = patchInitiator(latest, nodeId, terminalGenerationPatch(aborted
+      ? { kind: 'stopped', node: latest.nodes.find(node => node.id === nodeId) }
       : error instanceof ProviderDownloadError
-        ? { status: 'error', error: displayError(error, '视频已生成，但下载失败，可重试下载。'), progress: undefined, generationTransfer: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined, generationProviderTaskId: error.providerTaskId, generationDownloadPending: true }
-        : { status: 'error', error: displayError(error, '生成失败，请重试。'), progress: undefined, generationTransfer: undefined, generationRequestId: undefined, generationStartedAt: undefined, generationMessage: undefined });
+        ? { kind: 'failed', error: displayError(error, '视频已生成，但下载失败，可重试下载。'), download: { providerTaskId: error.providerTaskId } }
+        : { kind: 'failed', error: displayError(error, '生成失败，请重试。') }));
     return publish(runtime, current);
   } finally {
     temporaryUrls.forEach(url => URL.revokeObjectURL(url));
