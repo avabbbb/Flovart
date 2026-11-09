@@ -18,7 +18,8 @@ import type { CommandMeta, FlovartService } from './service.ts'
 import { runCli } from './cli.ts'
 // Type-only: erased at build; runtime access is dynamic (see ensureToolsApi).
 import type { defineTool as DefineTool } from '@deepseek-ai/dsh-tools'
-import type { JsonValue, ParameterPropertySpec, ParameterSchemaSpec } from '@deepseek-ai/dsh-tools'
+import type { ParameterPropertySpec, ParameterSchemaSpec } from '@deepseek-ai/dsh-tools'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
 /**
  * The DSH projection exposes the same five model-facing commands as every

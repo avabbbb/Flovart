@@ -104,3 +104,4 @@ tools/flovart/evaluations/**/*.jpeg
 
 # local reference clones (license-incompatible, never commit)
 _ref/
+dsh-plugin/webui/

@@ -92,7 +92,7 @@ export default defineConfig(() => {
         maxWorkers: 4,
         // Stale worktrees, backups and build output carry their own React copies;
         // collecting tests from them fails with invalid hook calls.
-        exclude: [...configDefaults.exclude, '**/.tmp/**', '**/.temp/**', '**/.claude/**', '**/dist-*/**', '_ref/**'],
+        exclude: [...configDefaults.exclude, '**/.tmp/**', '**/.temp/**', '**/.claude/**', '**/dist-*/**', '_ref/**', 'dsh-plugin/test/**'],
       },
     };
 });

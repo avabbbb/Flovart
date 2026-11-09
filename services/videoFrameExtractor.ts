@@ -1,7 +1,7 @@
 // 视频帧抽取：使用 <video> + canvas 客户端截帧，避免 ffmpeg.wasm 重型依赖。
 // 仅用于一次截帧并落库到工作流节点，不做批量或精确定位。
 
-export type VideoFramePosition = 'first' | 'current' | 'last';
+export type VideoFramePosition = 'first' | 'middle' | 'current' | 'last';
 
 export interface ExtractedVideoFrame {
   blob: Blob;
@@ -28,7 +28,9 @@ export async function extractVideoFrame(blob: Blob, position: VideoFramePosition
     const duration = Number.isFinite(video.duration) ? video.duration : 0;
     const targetTime = position === 'last'
       ? Math.max(0, duration - 0.01)
-      : position === 'current' ? Math.min(Math.max(0, currentTimeSec), Math.max(0, duration - 0.01)) : 0;
+      : position === 'middle'
+        ? duration / 2
+        : position === 'current' ? Math.min(Math.max(0, currentTimeSec), Math.max(0, duration - 0.01)) : 0;
 
     if (Math.abs(video.currentTime - targetTime) > SEEK_EPSILON_SEC) {
       await seekTo(video, targetTime);

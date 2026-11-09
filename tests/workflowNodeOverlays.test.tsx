@@ -86,7 +86,7 @@ describe('workflow node overlays', () => {
     fireEvent.click(screen.getByTitle('生成参数'));
     expect(screen.getByText('比例')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '16:9' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '4s' })).toBeInTheDocument();
+    expect(screen.getByRole('slider', { name: '视频时长' })).toBeInTheDocument();
   });
 
   it('shows a mapped default model without persisting it until Generate is clicked', async () => {
@@ -241,7 +241,7 @@ describe('workflow node overlays', () => {
     expect(screen.getByTestId('prompt-parameter-panel')).toHaveAttribute('data-density', 'compact');
     expect(screen.getByText('分辨率')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '720p' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '5s' })).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: '时长（秒）' })).toHaveValue(5);
   });
 
   it('shows only durations accepted by the final mapped video route', () => {

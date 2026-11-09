@@ -71,4 +71,37 @@ describe('Flovart Agent panel browser kernel route', () => {
     expect(spies.close).toHaveBeenCalled();
     expect(spies.construct.mock.calls[1][0].route).toMatchObject({ model: 'hark-2' });
   });
+
+  it('starts the browser kernel from a plain text key without an explicit agent-text mapping', async () => {
+    // 回归：Key 已配好但没在模型映射里选 Agent 文本模型时，面板曾一直显示缺凭证。
+    const project = { ...createWorkflowProject('Agent 回退'), id: 'project-fallback' };
+    const plainKey = {
+      id: 'key-plain',
+      provider: 'openai_compatible',
+      baseUrl: 'https://gw.example.com/v1',
+      key: 'sk-plain',
+      capabilities: ['text'],
+      status: 'ok',
+      customModels: ['chat-x'],
+      defaultModel: 'chat-x',
+      createdAt: 1,
+      updatedAt: 1,
+    } as never;
+    render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} userApiKeys={[plainKey]} />);
+
+    await waitFor(() => expect(spies.construct).toHaveBeenCalledTimes(1));
+    expect(spies.construct.mock.calls[0][0].route).toMatchObject({ model: 'chat-x', apiKey: 'sk-plain' });
+    await waitFor(() => expect(screen.queryByTestId('agent-setup-card')).not.toBeInTheDocument());
+  });
+
+  it('uses the browser kernel on web even when the local managed Agent is connected', async () => {
+    // 回归：网页端检测到本机 Agent 就走托管路径，而托管 Agent 只会转发给桌面 Runtime，网页端永远报缺凭证。
+    vi.mocked(getManagedAgentConnection).mockResolvedValue({ state: 'ready', url: 'agent.local', token: 't', managed: true } as never);
+    const project = { ...createWorkflowProject('Agent 网页'), id: 'project-web' };
+    render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} userApiKeys={[keyFor('hark')]} />);
+
+    await waitFor(() => expect(spies.construct).toHaveBeenCalledTimes(1));
+    expect(spies.construct.mock.calls[0][0].route).toMatchObject({ model: 'hark', apiKey: 'sk-test' });
+    await waitFor(() => expect(screen.queryByTestId('agent-setup-card')).not.toBeInTheDocument());
+  });
 });

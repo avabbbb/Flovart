@@ -4,6 +4,7 @@ import '../../styles/agentDrawerSections.css';
 import { AgentActivityPanel } from './AgentActivityPanel';
 import { AgentHostPicker } from './AgentHostPicker';
 import { AgentHeaderLeadingContext } from './agentHeaderSlot';
+import { DrawerChromeCollapse, DrawerChromeTabs } from '../studio/drawerChrome';
 
 export type AgentDrawerSection = 'chat' | 'connect' | 'status' | 'log';
 
@@ -91,6 +92,8 @@ export function AgentDrawerSections({ projectTitle, language = 'zho', chatHasHea
         <header className="agent-drawer-header">
           {leading}
           <strong className="agent-drawer-header__title">{zh ? current.zho : current.en}</strong>
+          <DrawerChromeTabs />
+          <DrawerChromeCollapse />
         </header>
       )}
       <div className="min-h-0 flex-1 overflow-hidden">

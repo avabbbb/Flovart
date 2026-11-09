@@ -6,7 +6,7 @@
   "compatibleSets": [
     {
       "setId": "flovart-2026-08-rc8",
-      "deepseekHarness": "0.1.0-rc.8",
+      "deepseekHarness": "0.2.2-rc.1",
       "deepseekHarnessCommit": "141eb6f",
       "node": "^22.19.0 || >=24.0.0",
       "flovartRuntime": ">=0.3.2",
@@ -29,12 +29,22 @@
       "kind": "contextual-conversation-view",
       "slot": "conversation.view",
       "surface": "production",
-      "badges": ["waiting", "error", "artifacts"],
+      "badges": [
+        "waiting",
+        "error",
+        "artifacts"
+      ],
       "briefLedStart": false,
       "autoWorkspace": true,
-      "sidebarEntry": false,
-      "iframe": false,
-      "workspaceProxyPath": "/flovart-workspace"
+      "sidebarEntry": true,
+      "iframe": true,
+      "iframeSrc": "/flovart-app/?embed=dsh#/app",
+      "workspaceProxyPath": "/flovart-workspace",
+      "webui": {
+      "routePrefix": "/flovart-app",
+      "root": "./webui",
+      "bootstrapPath": "/flovart-app/api/bootstrap"
+    }
     },
     "hostTools": {
       "kind": "cli-derivation",

@@ -1,3 +1,4 @@
+import { isDshEmbed } from './services/dshEmbedBridge';
 import React, { useState, useCallback, useEffect, useMemo, Suspense } from 'react';
 import { generateId } from './utils/helpers';
 import type { AssetLibrary, UserApiKey, PromptEnhanceMode, GenerationHistoryItem, ThemeMode } from './types';
@@ -20,11 +21,10 @@ import { useMediaQuery } from './hooks/useMediaQuery';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
 import { flushWorkflowPersistence, useWorkflowStore } from './components/workflow/store';
 import { consumeWorkflowAgentDrawerRequest, subscribeWorkflowAgentDrawer } from './components/workflow/agentDrawerRequest';
-import type { WorkflowSharedMedia } from './components/workflow/WorkflowConfigPanel';
+import type {  } from './components/workflow/WorkflowConfigPanel';
 import { getGenerationCapability, type GenerationMode } from './services/generationCapabilities';
 import { cancelWorkflowGeneration, findInterruptedWorkflowNodes, runWorkflowGeneration } from './services/workflowGeneration';
-import { loadWorkflowMediaBlob, workflowBlobToDataUrl } from './components/workflow/media';
-import { insertSharedMediaIntoProject } from './components/workflow/WorkflowWorkspace';
+import { loadWorkflowMediaBlob } from './components/workflow/media';
 import { setWorkflowExecutor, setWorkflowNodeToolRunner } from './services/workflowDispatcher';
 import { createWorkflowExecutor, normalizeWorkflowExecutionError, WorkflowExecutionError, type WorkflowExecutionContext, type WorkflowRunAdapterResult, type WorkflowRunCommand } from './services/workflowExecutor';
 import type { CanonicalGenerationInput } from './components/workflow/inputResolver';
@@ -98,7 +98,7 @@ const App: React.FC = () => {
     const setRightOpen = useCallback((open: boolean) => {
         if (mediumViewport) setMobileRightOpen(open); else setDesktopRightOpen(open);
     }, [mediumViewport]);
-    const [rightTab, setRightTab] = useState<'agent' | 'hosts' | 'history'>('agent');
+    const [rightTab, setRightTab] = useState<'agent' | 'hosts'>('agent');
     const [rightWidth, setRightWidth] = useState(() => {
         try {
             const stored = Number(localStorage.getItem('workflowRightPanelWidth'));
@@ -225,7 +225,8 @@ const App: React.FC = () => {
         root.dataset.theme = resolvedTheme;
         root.style.setProperty('--ui-bg-color', themePalette.uiBgColor);
         root.style.setProperty('--button-bg-color', themePalette.buttonBgColor);
-        document.body.style.backgroundColor = themePalette.appBackground;
+        // Embedded in DSH, the host shell paints the backdrop; keep the page body transparent.
+        document.body.style.backgroundColor = isDshEmbed() ? 'transparent' : themePalette.appBackground;
     }, [resolvedTheme, themePalette]);
 
     const t = useCallback((key: string, ...args: any[]): any => {
@@ -602,13 +603,6 @@ const App: React.FC = () => {
         },
     }), [activeView, canvasView, activeWorkflowTitle, resolvedTheme, themeMode, language, setActiveView, setThemeMode, setLanguage, studioRuntimeStatus, workflowProjects, activeWorkflowIndex, activeWorkflowProjectId, workflowCreateProject, workflowDeleteProjects, workflowRenameProject, workflowSetActiveProject]);
 
-    const historyDrawerMedia = workflowSharedMedia.filter(media => (media.source || (media.id.startsWith('history:') ? 'history' : 'asset')) === 'history');
-
-    const insertDrawerMedia = useCallback((media: WorkflowSharedMedia) => {
-        void insertSharedMediaIntoProject(media)
-            .then(result => { if (!result.ok && result.error) toast.show(result.error, 'warning'); });
-    }, [toast]);
-
     const main = (
         // One global right drawer spans Canvas and Reverse; Agent is the
         // connection/control page beside them.
@@ -677,11 +671,11 @@ const App: React.FC = () => {
                 onWidthChange={setRightWidth}
                 flush
                 docked={!mediumViewport}
+                inlineChromeTabs={['agent']}
                 activeTab={rightTab}
-                onTabChange={tab => setRightTab(tab as 'agent' | 'history')}
+                onTabChange={tab => setRightTab(tab as 'agent' | 'hosts')}
                 tabs={[
-                    { id: 'agent', label: language === 'zho' ? '助手' : 'Assistant', icon: undefined },
-                    { id: 'history', label: language === 'zho' ? '生成历史' : 'History', icon: undefined },
+                    { id: 'agent', label: language === 'zho' ? '对话' : 'Chat', icon: undefined },
                 ]}
             >
                 {rightTab === 'agent' && (<AgentDrawerSections projectTitle={activeWorkflowProject?.title} language={language} chatHasHeader={Boolean(activeWorkflowProject)}>{activeWorkflowProject ? (
@@ -703,20 +697,6 @@ const App: React.FC = () => {
                         onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
                     />
                 )}</AgentDrawerSections>)}
-                {rightTab === 'history' && (
-                    <StudioMediaBrowser
-                        mode="history"
-                        items={historyDrawerMedia}
-                        language={language}
-                        projects={workflowProjects.map(project => ({ id: project.id, title: project.title }))}
-                        activeProjectId={activeWorkflowProjectId}
-                        onInsert={media => insertDrawerMedia(media)}
-                        onReversePrompt={async media => {
-                            const blob = await loadWorkflowMediaBlob(undefined, media.href);
-                            return handleWorkflowReversePrompt(await workflowBlobToDataUrl(blob), media.mimeType || blob.type, media.width, media.height);
-                        }}
-                    />
-                )}
             </StudioRightDrawer>
         </div>
     );

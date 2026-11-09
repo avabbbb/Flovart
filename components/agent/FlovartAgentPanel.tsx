@@ -1,6 +1,7 @@
 import { AtSign, Box, Check, ChevronDown, Hand, Image as ImageIcon, KeyRound, LayoutGrid, Plus, RotateCw, Send, Square, Trash2, Video, X } from 'lucide-react';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
+import { isTauri } from '@tauri-apps/api/core';
 import {
   ManagedFlovartAgentClient,
   type FlovartAgentSnapshot,
@@ -21,6 +22,7 @@ import {
 import { createLocalSkillRegistry } from '../../services/localSkillRegistry';
 import { consumePendingProductionSkill } from '../../stores/useProductionSkillComposerStore';
 import { BROWSER_DEFAULT_SYSTEM_PROMPT, BrowserAgentKernel, createBrowserAgentTools, resolveBrowserAgentTextRoute } from '../../services/browserAgentKernel';
+import { loadAgentNodeMedia } from '../../services/agentMediaView';
 import { formatReceiptContext } from '../../services/agentReceipts';
 import { useAgentReceiptStore } from '../../stores/useAgentReceiptStore';
 import { displayError as toDisplayError } from '../../services/displayError';
@@ -37,6 +39,7 @@ import { AgentReferenceChip } from './AgentReferenceChip';
 import { AgentTodoCard } from './AgentTodoCard';
 import { AGENT_TODO_TOOL_NAME, latestTodoFromMessages, todoFromToolResult, type AgentTodoItem } from './agentTodo';
 import { AgentHeaderLeadingContext } from './agentHeaderSlot';
+import { DrawerChromeCollapse, DrawerChromeTabs } from '../studio/drawerChrome';
 import { GenerationPlanCard } from '../GenerationPlanCard';
 
 interface FlovartAgentPanelProps {
@@ -142,6 +145,9 @@ const userApiKeysRef = useRef(userApiKeys);
   const confirmationRef = useRef<PendingConfirmation | undefined>(undefined);
   // 自动模式付费授权：第一次生成时确认上限，之后上限内的生成自动批准。
   const mandateRef = useRef<AgentSpendMandate | null>(null);
+  // 内核工具（media_view）在会话期间读取最新画布节点。
+  const projectRef = useRef(project);
+  projectRef.current = project;
   const [messages, setMessages] = useState<WorkflowAgentDisplayMessage[]>([]);
   const [prompt, setPrompt] = useState('');
   const [skillAttachment, setSkillAttachment] = useState<ProductionSkillAttachment>();
@@ -350,7 +356,7 @@ const userApiKeysRef = useRef(userApiKeys);
       const kernel = new BrowserAgentKernel({
         projectId: project.id,
         route,
-        tools: createBrowserAgentTools({ projectId: project.id, confirm, activeChangeSetId: '' }),
+        tools: createBrowserAgentTools({ projectId: project.id, confirm, activeChangeSetId: '', getNodes: () => projectRef.current.nodes }),
         confirm,
         systemPrompt: BROWSER_DEFAULT_SYSTEM_PROMPT + receiptContext,
       });
@@ -376,7 +382,9 @@ const userApiKeysRef = useRef(userApiKeys);
 
     void getManagedAgentConnection()
       .then(async connection => {
-        if (!connection) return startBrowserKernel();
+        // 网页端没有桌面 Runtime：托管 Agent 的文本出口（/v1/agent-text/stream）不可用。
+        // 有可用的浏览器文本线路时，对话走浏览器内核，Key 直连；桌面端仍走托管 Agent。
+        if (!connection || (!isTauri() && resolveBrowserAgentTextRoute(userApiKeysRef.current))) return startBrowserKernel();
         const next = new ManagedFlovartAgentClient(connection);
         const snapshot = await next.session(project.id);
         if (!active) return;
@@ -409,7 +417,8 @@ const userApiKeysRef = useRef(userApiKeys);
           setMessages(items => [...items, { id: 'skill-binding-error', role: 'error', text: snapshot.productionSkillBindingError! }]);
         }
         setStatus('ready');
-        const configurationNeeded = snapshotNeedsConfiguration(snapshot);
+        // 旧会话里残留的「No agent-text route」错误不能在已有可用线路后继续拦截；真缺线路时发送会再报错并重新拦截。
+        const configurationNeeded = !browserRouteSignature && snapshotNeedsConfiguration(snapshot);
         setNeedsConfiguration(configurationNeeded);
         setSetupBlocker(configurationNeeded ? 'credential' : null);
         activity.current(configurationNeeded ? 'error' : snapshot.messages.length ? 'done' : 'idle');
@@ -633,7 +642,15 @@ const userApiKeysRef = useRef(userApiKeys);
     try {
       if (kernelRef.current) {
         // 浏览器内置 PI 内核：事件已通过 subscribe 实时推送，这里只需等待完成并同步 snapshot
-        await kernelRef.current.send(requestText, [], skillAttachment);
+        // @引用的图片/视频节点自动附带画面（图片 ≤1024px，视频首/中/尾帧，最多 6 张）。
+        const referencedNodes = references.flatMap(reference => {
+          if (reference.type !== 'node') return [];
+          const node = project.nodes.find(item => item.id === reference.id);
+          return node ? [node] : [];
+        });
+        const media = referencedNodes.length > 0 ? await loadAgentNodeMedia(referencedNodes) : { images: [], notes: [] };
+        const kernelText = media.notes.length > 0 ? requestText + '\n\n已附带引用画面：\n' + media.notes.join('\n') : requestText;
+        await kernelRef.current.send(kernelText, media.images, skillAttachment);
         const snapshot = await kernelRef.current.snapshot();
         if (snapshot.messages.some(message => message.error)) failed = true;
         handleEvent({ type: 'snapshot', snapshot: snapshot as FlovartAgentSnapshot }, assistantId);
@@ -782,8 +799,10 @@ const userApiKeysRef = useRef(userApiKeys);
             </div>
           </div>
         )}
+        <DrawerChromeTabs />
         <span className="agent-header-actions">
-          <button type="button" className="agent-new-chat-btn" aria-label={t('agentPanel.newChat')} title={t('agentPanel.newChat')} onClick={() => void handleNewConversation()}><Plus size={14} /><span>{t('agentPanel.newChat')}</span></button>
+          <button type="button" className="agent-new-chat-btn is-icon" aria-label={t('agentPanel.newChat')} title={t('agentPanel.newChat')} onClick={() => void handleNewConversation()}><Plus size={15} /></button>
+          <DrawerChromeCollapse />
         </span>
       </header>
       <section className="workflow-agent__body">

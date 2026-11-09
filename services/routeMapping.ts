@@ -41,6 +41,18 @@ const routeAvailable = (key: UserApiKey, target: RouteMappingTarget, routeId: st
   && (key.provider !== 'runningHub' || isVerifiedRoute(routeId.trim()))
 );
 
+// 文本类运行时能力（润色/翻译/Agent 文本）未显式配置映射时，回退到可用文本 Key 的默认模型（默认 Key 优先）。
+// 显式映射存在但全部不可用时仍返回 null，不绕过用户的映射选择。
+function implicitTextRoute(target: RouteMappingTarget, keys: UserApiKey[]): RouteMappingResolution | null {
+  if (target.kind !== 'runtime-capability') return null;
+  const ordered = [...keys].sort((left, right) => Number(Boolean(right.isDefault)) - Number(Boolean(left.isDefault)) || left.id.localeCompare(right.id));
+  for (const key of ordered) {
+    const routeId = [key.defaultModel, ...(key.models || []).map(model => model.id), ...(key.customModels || [])].find(value => value?.trim())?.trim();
+    if (routeId && routeAvailable(key, target, routeId)) return { status: 'ready', routeId, key };
+  }
+  return null;
+}
+
 export function resolveRouteMapping(
   target: RouteMappingTarget,
   keys: UserApiKey[],
@@ -56,7 +68,8 @@ export function resolveRouteMapping(
     ));
   const primary = candidates[0];
   const selected = candidates.find(({ key, mapping }) => routeAvailable(key, target, mapping.routeId));
-  if (!primary || !selected) return null;
+  if (!primary) return implicitTextRoute(target, keys);
+  if (!selected) return null;
   const routeId = selected.mapping.routeId.trim();
   if (selected === primary) return { status: 'ready', routeId, key: selected.key };
   return {

@@ -1,47 +1,26 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { UserApiKey } from '../types';
-import { isOpenAICompatibleProvider, resolveProviderBaseUrl } from './baseUrl';
+import { resolveAgentTextRoutes, type AgentTextRouteKey } from './agentTextRoutes';
 
 type Invoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
-type RuntimeAgentTextRouteKey = Pick<
-  UserApiKey,
-  'id' | 'provider' | 'baseUrl' | 'routeMappings' | 'isDefault' | 'capabilities' | 'status'
->;
 
 export async function syncRuntimeAgentTextRoutes(
-  keys: RuntimeAgentTextRouteKey[],
+  keys: readonly AgentTextRouteKey[],
   runtimeInvoke: Invoke = invoke,
 ): Promise<number> {
-  const routes = keys
-    .filter(key => (
-      isOpenAICompatibleProvider(key.provider)
-      && key.id
-      && key.status !== 'error'
-      && (!key.capabilities || key.capabilities.includes('text'))
-    ))
-    .flatMap(key => (key.routeMappings || [])
-      .filter(mapping => mapping.target.kind === 'runtime-capability' && mapping.target.capability === 'agent-text')
-      .map(mapping => ({
-        provider: key.provider,
-        credentialId: key.id,
-        model: mapping.routeId.trim(),
-        baseUrl: resolveProviderBaseUrl(key.provider, key.baseUrl),
-        protocol: 'openai-chat-completions',
-        sourceOrder: mapping.order,
-        preferred: Boolean(key.isDefault),
-      })))
-    .filter(route => route.model && route.baseUrl)
-    .sort((left, right) => (
-      left.sourceOrder - right.sourceOrder
-      || Number(right.preferred) - Number(left.preferred)
-      || left.credentialId.localeCompare(right.credentialId)
-    ))
-    .map(({ sourceOrder: _sourceOrder, preferred: _preferred, ...route }, order) => ({ ...route, order }));
+  // 与浏览器内核同一解析：显式 agent-text 映射优先，否则回退到默认文本 Key 的默认模型。
+  const routes = resolveAgentTextRoutes(keys).map((route, order) => ({
+    provider: route.key.provider,
+    credentialId: route.key.id,
+    model: route.model,
+    baseUrl: route.baseUrl,
+    protocol: 'openai-chat-completions',
+    order,
+  }));
 
   await runtimeInvoke('runtime_execute', {
     envelope: {
       protocolVersion: '1',
-      commandId: `cmd_${crypto.randomUUID()}`,
+      commandId: 'cmd_' + crypto.randomUUID(),
       command: 'agent-text.route.sync',
       args: { routes },
       actor: { kind: 'ui', instanceId: 'flovart-webui' },

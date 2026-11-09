@@ -10,6 +10,7 @@ import { useProductionProjectionAdapter } from './components/workflow/useProduct
 import { useWorkflowWorkspaceAdapter } from './components/workflow/useWorkflowWorkspaceAdapter';
 import { useUpdaterStore } from './stores/useUpdaterStore';
 import { bootstrapLocalAgentConnection } from './services/agentConnectionBootstrap';
+import { isDshEmbed } from './services/dshEmbedBridge';
 
 export function RouterHost() {
   const projects = useWorkflowStore(state => state.projects);
@@ -17,6 +18,8 @@ export function RouterHost() {
   const activeProject = projects.find(project => project.id === activeProjectId) || projects[0] || null;
 
   useEffect(() => {
+    // In the DSH embed the bridge owns bootstrap: the host posts a one-time token.
+    if (isDshEmbed()) return;
     void bootstrapLocalAgentConnection().catch(error => {
       console.warn('Flovart Agent auto-bootstrap unavailable.', error);
     });

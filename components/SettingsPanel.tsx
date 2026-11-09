@@ -399,7 +399,9 @@ type ProviderPreset = {
     featured?: boolean;
 };
 
-// 只内置三种协议入口；其他服务由用户让 Agent 写适配脚本（见 userScriptAuthoring）。
+// 内置五种协议入口（OpenAI compatible / Gemini / 火山 / RunningHub / 自定义配置）。
+// 「自定义配置」不走任何固定协议：请求地址/鉴权/请求体/响应映射全部由绑定的适配脚本描述（见 userScriptAuthoring）。
+const USER_SCRIPT_PRESET_ID = 'user-script';
 const PROVIDER_PRESETS: ProviderPreset[] = [
     {
         id: 'custom',
@@ -437,6 +439,32 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
         baseUrl: providerBaseUrl.volcengine,
         capabilities: ['video'],
         requestFormat: 'openai',
+        models: [],
+    },
+    {
+        id: 'runninghub',
+        name: 'RunningHub',
+        shortName: 'RH',
+        provider: 'runningHub',
+        websiteUrl: '',
+        baseUrl: providerBaseUrl.runningHub,
+        capabilities: ['image', 'video'],
+        requestFormat: 'native',
+        // 模型不自动发现，由内置 Route Catalog 提供线路。
+        models: [],
+    },
+    {
+        id: USER_SCRIPT_PRESET_ID,
+        name: 'Custom config',
+        shortName: 'CU',
+        labelKey: 'settingsExtra.preset.userScript',
+        shortNameKey: 'settingsExtra.preset.userScriptShort',
+        provider: 'custom',
+        websiteUrl: '',
+        baseUrl: '',
+        capabilities: ['image', 'video'],
+        requestFormat: 'native',
+        extraConfig: { protocolPreset: USER_SCRIPT_PRESET_ID },
         models: [],
     },
 ];
@@ -525,6 +553,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     const isDark = resolvedTheme === 'dark';
     const presetLabel = (preset: ProviderPreset) => preset.labelKey ? t(preset.labelKey) : preset.name;
     const presetShortLabel = (preset: ProviderPreset) => preset.shortNameKey ? t(preset.shortNameKey) : preset.shortName;
+    const isUserScriptProtocol = provider === 'custom' && (extraConfig.protocolPreset === USER_SCRIPT_PRESET_ID || !!extraConfig.providerScriptId);
 
     const inputClass = 'isl-well w-full px-3 py-2.5 text-sm text-[var(--isl-ink)] outline-none placeholder:text-[var(--isl-ink-ghost)]';
     const chipClass = 'isl-chip px-3 py-2 text-sm';
@@ -556,7 +585,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
             ...(preset.authHeaderName ? { authHeaderName: preset.authHeaderName } : {}),
             ...(preset.authScheme !== undefined ? { authScheme: preset.authScheme } : {}),
             ...(preset.provider === 'openrouter' ? { endpointFlavor: 'openrouter-compatible' } : {}),
-            ...(preset.provider === 'custom' ? { endpointFlavor: 'openai-compatible' } : {}),
+            ...(preset.provider === 'custom' && preset.requestFormat === 'openai' ? { endpointFlavor: 'openai-compatible' } : {}),
         };
 
         setProvider(preset.provider);
@@ -569,7 +598,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         setEndpointFlavor(
             preset.provider === 'openrouter'
                 ? 'openrouter-compatible'
-                : preset.provider === 'custom'
+                : preset.provider === 'custom' && preset.requestFormat === 'openai'
                     ? 'openai-compatible'
                     : null
         );
@@ -583,7 +612,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     };
 
     const handleProviderChange = (next: AIProvider) => {
-        const preset = PROVIDER_PRESETS.find(item => item.provider === next && item.id !== 'custom');
+        const preset = PROVIDER_PRESETS.find(item => item.provider === next && item.provider !== 'custom');
         if (preset) {
             applyProviderPreset(preset);
             return;
@@ -685,7 +714,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
             : finalModels[0]?.id;
         const modelsToSave = finalModels.length > 0 ? finalModels : undefined;
         const customModelsToSave = finalModels.map(m => m.id);
-        const fallbackEndpointFlavor = provider === 'custom'
+        const fallbackEndpointFlavor = provider === 'custom' && !isUserScriptProtocol
             ? (result.endpointFlavor || endpointFlavor || (/openrouter/i.test(baseUrl) ? 'openrouter-compatible' : 'openai-compatible'))
             : undefined;
         const extraToSave = Object.keys(extraConfig).length > 0 || fallbackEndpointFlavor
@@ -1393,7 +1422,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                         testId="key-dialog-protocol"
                                         disabled={!!editingKeyId}
                                         recommendedLabel={t('settingsExtra.keyDialog.recommended')}
-                                        value={(PROVIDER_PRESETS.find(item => item.provider === provider && displayName === presetLabel(item)) ?? PROVIDER_PRESETS.find(item => item.provider === provider) ?? PROVIDER_PRESETS[0]).id}
+                                        value={((isUserScriptProtocol ? PROVIDER_PRESETS.find(item => item.id === USER_SCRIPT_PRESET_ID) : undefined) ?? PROVIDER_PRESETS.find(item => item.provider === provider && item.id !== USER_SCRIPT_PRESET_ID && displayName === presetLabel(item)) ?? PROVIDER_PRESETS.find(item => item.provider === provider && item.id !== USER_SCRIPT_PRESET_ID) ?? PROVIDER_PRESETS[0]).id}
                                         options={PROVIDER_PRESETS.map(preset => ({
                                             id: preset.id,
                                             label: presetLabel(preset),
@@ -1474,13 +1503,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                 </div>
                             </details>
 
-                            {provider === 'custom' && (
-                                <details className="group rounded-xl border border-dashed border-[var(--isl-border)]" open={!!extraConfig.providerScriptId} data-testid="key-dialog-adapter-disclosure">
-                                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-3 py-2 [&::-webkit-details-marker]:hidden">
-                                        <span className="min-w-0"><span className="block text-sm font-bold text-[var(--isl-ink)]">{t('settingsExtra.keyDialog.adapterToggle')}</span><span className="mt-0.5 block truncate text-[11px] text-[var(--isl-ink-soft)]">{t('settingsExtra.keyDialog.adapterToggleHint')}</span></span>
-                                        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 opacity-60 transition-transform group-open:rotate-180"><path d="m6 9 6 6 6-6" /></svg>
-                                    </summary>
-                                    <div className="px-2 pb-2">
+                            {isUserScriptProtocol && (
                                 <UserScriptAdapterSection
                                     key={editingKeyId || 'new'}
                                     scriptId={extraConfig.providerScriptId}
@@ -1493,8 +1516,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                         return next;
                                     })}
                                 />
-                                    </div>
-                                </details>
                             )}
 
                             {provider === 'runningHub' && (

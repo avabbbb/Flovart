@@ -56,10 +56,10 @@ describe('Flovart Agent panel', () => {
 
     render(<FlovartAgentPanel project={{ ...createWorkflowProject('Agent 项目'), id: 'project-1' }} onActivityChange={vi.fn()} onOpenSettings={onOpenSettings} />);
 
-    expect(await screen.findByText('请在设置的“模型映射”中为 Agent 文本能力配置可用线路。')).toBeInTheDocument();
+    expect(await screen.findByText('还没有可用的文本模型：请添加一个带文本模型的 OpenAI 兼容 API Key，或在下方“选择模型”里选一个。')).toBeInTheDocument();
     expect(screen.queryByText('No agent-text route is configured')).not.toBeInTheDocument();
 
-    const composer = screen.getByPlaceholderText('请先配置 Agent 文本模型映射');
+    const composer = screen.getByPlaceholderText('请添加文本 API Key，或在“选择模型”里选一个模型');
     // Lane15 credential wall: the cold-open config error carries one real
     // product action, 'Add API key', which opens Settings. No offline mode.
     const card = screen.getByTestId('agent-setup-card');

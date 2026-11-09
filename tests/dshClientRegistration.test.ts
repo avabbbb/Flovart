@@ -3,14 +3,21 @@ import { describe, expect, it, vi } from 'vitest';
 import { apply } from '../dsh-plugin/src/client/index';
 
 describe('DeepSeek Harness client registration', () => {
-  it('registers contextual additions through the RC8 slot lifecycle only', () => {
+  it('registers the Flovart iframe view, sidebar entry, main pane and status overlay once each', () => {
     const injected: string[] = [];
-    const registered: Array<{ name: string; id: string }> = [];
-    const register = vi.fn((options: { name: string; id: string }) => {
+    const scopedServices: string[][] = [];
+    const registered: Array<{ name: string; id?: string; key?: string }> = [];
+    const register = vi.fn((options: { name: string; id?: string; key?: string }) => {
       registered.push(options);
       return () => undefined;
     });
     const ctx = {
+      inject(services: string[]) {
+        scopedServices.push(services);
+      },
+      effect() {
+        return () => undefined;
+      },
       slots: {
         inject(name: string, callback: () => void) {
           injected.push(name);
@@ -22,9 +29,12 @@ describe('DeepSeek Harness client registration', () => {
 
     apply(ctx as never);
 
-    expect(injected).toEqual(['conversation.view', 'shell.overlay']);
-    expect(registered.map(({ name, id }) => ({ name, id }))).toEqual([
+    expect(scopedServices).toEqual([['uiWorkspace'], ['locale'], ['theme']]);
+    expect(injected).toEqual(['conversation.view', 'sidebar.panellist', 'main', 'shell.overlay']);
+    expect(registered.map(({ name, id, key }) => ({ name, id: id ?? key }))).toEqual([
       { name: 'conversation.view', id: 'flovart' },
+      { name: 'sidebar.panellist', id: 'flovart' },
+      { name: 'main', id: 'flovart' },
       { name: 'shell.overlay', id: 'flovart-status' },
     ]);
   });

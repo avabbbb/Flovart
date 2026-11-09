@@ -389,10 +389,9 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
             <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full" style={{ background: ready ? 'var(--isl-mint)' : 'var(--isl-ink-ghost)' }} />
             <span className="whitespace-nowrap text-[11px] font-semibold">{label}</span>
           </>;
-          return ready ? (
-            <span data-testid="runtime-status-chip" role="status" aria-label={`${label}: ${status.detail}`} title={title} className="flex h-8 shrink-0 cursor-default items-center gap-1.5 px-2" style={{ color }}>{content}</span>
-          ) : (
-            <button type="button" data-testid="runtime-status-chip" aria-label={`${label}: ${status.detail}`} title={title} onClick={actions.openSettings} className="isl-icon-btn flex h-8 w-auto shrink-0 items-center gap-1.5 px-2" style={{ color }}>{content}</button>
+          // 就绪后仍可点：用户需要随时回到设置换 Key / 改模型映射，不能因为已配置就变成不可交互的文字。
+          return (
+            <button type="button" data-testid="runtime-status-chip" aria-label={label + ': ' + status.detail} title={title} onClick={actions.openSettings} className="isl-icon-btn flex h-8 w-auto shrink-0 items-center gap-1.5 px-2" style={{ color }}>{content}</button>
           );
         })()}
         <button type="button" className="isl-icon-btn h-8 w-8 shrink-0" onClick={actions.toggleLanguage} title={isChinese ? 'Switch to English' : '切换到中文'}>

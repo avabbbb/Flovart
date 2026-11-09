@@ -194,17 +194,22 @@ describe('SettingsPanel provider configuration UI', () => {
     });
   });
 
-  it('ships only the OpenAI-compatible, Gemini and Seedance protocol presets', async () => {
+  it('ships the five protocol presets with a standalone custom-config protocol', async () => {
     renderSettings();
 
     fireEvent.click(screen.getByRole('button', { name: /添加 API Key|添加供应商|添加 AI 服务/i }));
+    // OpenAI compatible 不再夹带适配脚本；它属于独立的「自定义配置」协议。
+    expect(screen.queryByText('适配脚本（可选）')).toBeNull();
 
     fireEvent.click(screen.getByRole('combobox', { name: '协议' }));
     expect(screen.getByText('Volcengine Seedance')).toBeTruthy();
+    expect(screen.getByText('RunningHub')).toBeTruthy();
     for (const removed of ['RunningHub 标准模型', 'RunningHub 海外站', 'Claude Official', 'DeepSeek', 'OpenRouter', 'SiliconFlow', 'Kling VIDEO']) {
       expect(screen.queryByText(removed)).toBeNull();
     }
-    expect(screen.getByText('适配脚本（可选）')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('自定义配置'));
+    expect(await screen.findByText('适配脚本（可选）')).toBeTruthy();
   });
 
   it('does not expose a separate Agent model preference in the creative model list', () => {

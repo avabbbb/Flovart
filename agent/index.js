@@ -2,7 +2,8 @@ import http from 'node:http';
 import { BootstrapCredentialError, BootstrapCredentialStore } from './bootstrap-credentials.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_AGENT_PORT, loadAgentConfig, saveAgentConfig } from './config.js';
+import { DEFAULT_AGENT_PORT, loadAgentConfig } from './config.js';
+import { persistAgentConfig } from './persist-config.js';
 import { FlovartAgentService } from './flovart.js';
 import { createFlovartAgentTools } from './tools.js';
 import { SkillRegistry, BUNDLED_SKILL_IDS } from './skill-registry.js';
@@ -114,7 +115,7 @@ function rememberOrigin(config, origin) {
   const list = authorizedOrigins(config).filter(item => item !== origin);
   config.origins = [origin, ...list].slice(0, MAX_AUTHORIZED_ORIGINS);
   config.origin = origin;
-  saveAgentConfig(config);
+  persistAgentConfig(config, 'authorized origin');
 }
 
 function originTokenAllowed(request, url, config, credentials) {
@@ -565,7 +566,7 @@ export function startHttpServer() {
       const address = server.address();
       const actualPort = typeof address === 'object' && address ? address.port : port;
       config.url = `http://127.0.0.1:${actualPort}`;
-      saveAgentConfig(config);
+      if (!persistAgentConfig(config, 'listen url')) console.warn('[flovart-agent] agent.json does not record ' + config.url + '; clients reading it may use a stale URL.');
       console.log(WORKSPACE_ONLY ? 'Flovart Workspace Operator' : 'Flovart Agent');
       console.log(`Local URL: ${config.url}`);
     });
