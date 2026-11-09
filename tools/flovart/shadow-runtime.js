@@ -117,9 +117,9 @@ function buildProviderReadiness(provider = {}, purpose = 'both') {
       ok: seedanceReady,
       model: videoModel,
       message: seedanceReady ? 'Seedance 2.0 model is selected.' : 'Selected video model is not a Seedance 2.0 model.',
-      expectedProductModelIds: ['flovart:seedance-2', 'flovart:seedance-2-fast'],
+      expectedProductModelIds: ['flovart:seedance-2', 'flovart:seedance-2-fast', 'flovart:seedance-2.5'],
       slots: { image: 9, video: 3, audio: 3 },
-      durationSec: { min: 4, max: 15 },
+      durationSec: { min: 4, max: videoModel.toLowerCase() === 'flovart:seedance-2.5' ? 30 : 15 },
       resolutions: ['480p', '720p', '1080p'],
       nextAction: seedanceReady ? undefined : PROVIDER_GUIDANCE.seedanceModel,
     });

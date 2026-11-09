@@ -178,6 +178,13 @@ function flovartModuleInliningPlugin() {
         return { path: args.path, external: true };
       });
 
+      // Native addons (.node) cannot be bundled into the SEA. agent/credentials.js
+      // imports @napi-rs/keyring lazily inside try/catch and reports
+      // KEYRING_UNAVAILABLE, so leaving it external is safe.
+      build.onResolve({ filter: /^@napi-rs\/keyring(?:-|$)/ }, args => (
+        { path: args.path, external: true }
+      ));
+
       // Optional bare-specifier externals (dev-only ink/devtools deps) are
       // stubbed to empty modules — the bundle runs under a data: URL where
       // runtime bare-specifier resolution would fail, and these code paths are

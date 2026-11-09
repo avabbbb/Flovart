@@ -14,7 +14,7 @@ const PACKAGE_DIR = dirname(fileURLToPath(import.meta.url));
 const CONFIG_DIR = process.env.FLOVART_AGENT_CONFIG_DIR || join(process.env.APPDATA || process.env.HOME || homedir(), 'Flovart');
 const PREFS_FILE = join(CONFIG_DIR, 'agent-preferences.json');
 
-const SEEDANCE2_PRODUCT_IDS = ['flovart:seedance-2', 'flovart:seedance-2-fast'];
+const SEEDANCE2_PRODUCT_IDS = ['flovart:seedance-2', 'flovart:seedance-2-fast', 'flovart:seedance-2.5'];
 const SEEDANCE2_ALIASES = ['doubao-seedance-2.0', 'seedance-2.0', 'dreamina-seedance-2-0-260128', 'doubao-seedance-2-0-260128', 'doubao-seedance-2-0-fast-260128'];
 const SEEDANCE2_REQUIREMENTS = {
   provider: 'volcengine',
@@ -24,6 +24,11 @@ const SEEDANCE2_REQUIREMENTS = {
   resolutions: ['480p', '720p', '1080p'],
   videoAudioReferenceUrls: 'public-url-or-asset',
 };
+// Per-model duration bounds; mirrors capabilities.durations in services/productModelCatalog.ts.
+const SEEDANCE_DURATION_OVERRIDES = { 'flovart:seedance-2.5': { min: 4, max: 30 } };
+function seedanceDurationFor(modelId) {
+  return SEEDANCE_DURATION_OVERRIDES[String(modelId || '').toLowerCase()] || SEEDANCE2_REQUIREMENTS.durationSec;
+}
 
 const STYLE_PRESETS = {
   cinematic: 'cinematic composition, expressive lighting, controlled contrast, production design details',
@@ -165,7 +170,7 @@ function diagnoseSeedance2(provider) {
       id: 'seedance2.multimodalLimits',
       ok: true,
       slots: SEEDANCE2_REQUIREMENTS.slots,
-      durationSec: SEEDANCE2_REQUIREMENTS.durationSec,
+      durationSec: seedanceDurationFor(normalizedModel),
       resolutions: SEEDANCE2_REQUIREMENTS.resolutions,
       videoAudioReferenceUrls: SEEDANCE2_REQUIREMENTS.videoAudioReferenceUrls,
       message: 'Seedance 2.0 gateway supports image, video, and audio reference slots.',
@@ -316,11 +321,10 @@ export function listAgentModels(input = {}) {
   }
   const imageModels = models.image || [];
   const videoModels = models.video || [];
-  const seedance2 = videoModels.find(m => SEEDANCE2_PRODUCT_IDS.includes(m.id.toLowerCase()));
-  if (seedance2) {
-    seedance2.slots = SEEDANCE2_REQUIREMENTS.slots;
-    seedance2.durationSec = SEEDANCE2_REQUIREMENTS.durationSec;
-    seedance2.resolutions = SEEDANCE2_REQUIREMENTS.resolutions;
+  for (const model of videoModels.filter(m => SEEDANCE2_PRODUCT_IDS.includes(m.id.toLowerCase()))) {
+    model.slots = SEEDANCE2_REQUIREMENTS.slots;
+    model.durationSec = seedanceDurationFor(model.id);
+    model.resolutions = SEEDANCE2_REQUIREMENTS.resolutions;
   }
   return {
     ok: true,

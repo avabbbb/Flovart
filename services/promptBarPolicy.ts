@@ -65,6 +65,13 @@ export function promptModelLabel(mode: GenerationMode, textModel?: string, image
   return `${shortProvider} · ${modelRefModelId(model).replace(/^(google|openai|anthropic|openrouter)\//, '')}`;
 }
 
+// 底栏触发器空间窄：产品模型用 shortName（S2 / S2.5）区分同族版本，完整名留在 title。
+export function promptModelShortLabel(mode: GenerationMode, textModel?: string, imageModel?: string, videoModel?: string, userApiKeys: UserApiKey[] = []) {
+  const model = mode === 'video' || mode === 'keyframe' ? videoModel : mode === 'text' ? undefined : imageModel;
+  const product = model ? getProductModel(model) : undefined;
+  return product?.shortName || promptModelLabel(mode, textModel, imageModel, videoModel, userApiKeys);
+}
+
 export function createPromptBarGenerationPolicy(input: {
   generationMode: GenerationMode;
   selectedTextModel?: string;
@@ -187,5 +194,6 @@ export function createPromptBarGenerationPolicy(input: {
       ? sanitizeProductGenerationParams(activeProductModel.id, { mode, aspectRatio, resolution, durationSec }, activeRouteContext)
       : {},
     modelLabelForMode: () => promptModelLabel(input.generationMode, input.selectedTextModel, input.selectedImageModel, input.selectedVideoModel, input.userApiKeys),
+    modelShortLabelForMode: () => promptModelShortLabel(input.generationMode, input.selectedTextModel, input.selectedImageModel, input.selectedVideoModel, input.userApiKeys),
   };
 }

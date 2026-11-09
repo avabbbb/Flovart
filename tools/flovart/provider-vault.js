@@ -12,7 +12,7 @@ export const PROVIDER_GUIDANCE = Object.freeze({
   image: `在 Flovart 设置里添加图片 Provider（OpenAI、Gemini 等）的 Key。${ENTRY}${VERIFY}`,
   video: `在 Flovart 设置里添加火山方舟（Seedance）或 RunningHub 的 Key。${ENTRY}${VERIFY}`,
   text: `在 Flovart 设置里添加文本 Provider（Gemini、OpenAI 等）的 Key。${ENTRY}${VERIFY}`,
-  seedanceModel: '在 Flovart 设置里把视频模型选为 Seedance 2.0（flovart:seedance-2）。',
+  seedanceModel: '在 Flovart 设置里把视频模型选为 Seedance 2.0（flovart:seedance-2）；需要 15s 以上时长选 Seedance 2.5（flovart:seedance-2.5，经 RunningHub 调用）。',
 });
 
 // Providers that can serve Seedance 2.0 video (aiGateway: volcengine Ark, RunningHub).

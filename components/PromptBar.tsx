@@ -1520,7 +1520,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                             {!hideGenerationOptions && <div className="relative min-w-[5.5rem] shrink-[2]">
                                 <button type="button" aria-haspopup="dialog" aria-expanded={expandedPanel === 'model'} onClick={event => togglePanel('model', event.currentTarget)} className={triggerClass + ' min-w-0 max-w-full ' + (expandedPanel === 'model' ? activeTriggerClass : '')} title={policy.modelLabelForMode() || (videoLikeMode ? ui('选择视频模型', 'Choose video model') : ui('选择图片模型', 'Choose image model'))}>
                                     <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ background: activeRoute ? 'var(--isl-mint)' : 'var(--isl-ink-ghost)' }} />
-                                    <span className="min-w-0 max-w-[150px] truncate font-semibold text-[var(--isl-ink)]">{policy.modelLabelForMode() || (videoLikeMode ? ui('选择视频模型', 'Choose video model') : ui('选择图片模型', 'Choose image model'))}</span>
+                                    <span className="min-w-0 max-w-[150px] truncate font-semibold text-[var(--isl-ink)]">{policy.modelShortLabelForMode() || (videoLikeMode ? ui('选择视频模型', 'Choose video model') : ui('选择图片模型', 'Choose image model'))}</span>
                                     <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-60"><path d="m6 9 6 6 6-6" /></svg>
                                 </button>
                             </div>}
