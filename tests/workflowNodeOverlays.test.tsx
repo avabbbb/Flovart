@@ -82,7 +82,7 @@ describe('workflow node overlays', () => {
     };
 
     render(<Harness />);
-    await waitFor(() => expect(screen.getByText(/Seedance/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTitle(/Seedance/)).toBeInTheDocument());
     fireEvent.click(screen.getByTitle('生成参数'));
     expect(screen.getByText('比例')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '16:9' })).toBeInTheDocument();
@@ -109,7 +109,7 @@ describe('workflow node overlays', () => {
       onRun={onRun}
     />);
 
-    await waitFor(() => expect(screen.getByText(/Seedance/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTitle(/Seedance/)).toBeInTheDocument());
     const generate = screen.getByRole('button', { name: '生成' });
     expect(generate).toBeEnabled();
     expect(onChange).not.toHaveBeenCalled();
@@ -198,7 +198,7 @@ describe('workflow node overlays', () => {
     />);
     expect(screen.getByTestId('workflow-node-prompt-bar')).toBeInTheDocument();
     expect(screen.getByText('初始提示词')).toBeInTheDocument();
-    fireEvent.click(screen.getAllByText('GPT Image 2')[0].closest('button')!);
+    fireEvent.click(screen.getAllByTitle('GPT Image 2')[0]);
     expect(screen.getByTestId('prompt-model-progressive')).toHaveAttribute('data-density', 'compact');
     expect(screen.queryByTestId('prompt-model-carousel')).not.toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: /GPT Image 2/ }).at(-1)!);
