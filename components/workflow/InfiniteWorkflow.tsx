@@ -2735,12 +2735,12 @@ export function InfiniteWorkflow({
   const overlayTop = overlayBounds ? Math.min(overlayBounds.top, selectedGroupTop) : 0;
   const toolbarTop = overlayBounds ? Math.max(8, project.viewport.y + overlayTop * project.viewport.k - Math.max(72, 56 + 28 * project.viewport.k) + (overlayTop < overlayBounds.top ? 24 : 0)) : 0;
   const promptWorkflowWidth = workflowWidth;
-  // The prompt bar belongs to the node but reads as a roomy composer (LibTV ratio):
-  // about 1.4x the node's on-screen width, 520-760px, clamped to the workflow area.
+  // The prompt bar belongs to the node but reads as a wide, landscape composer:
+  // about 2x the node's on-screen width, 680-960px, clamped to the workflow area.
   const overlayScreenWidth = overlayBounds ? (overlayBounds.right - overlayBounds.left) * project.viewport.k : 0;
-  const compactPromptWidth = Math.min(promptWorkflowWidth - 16, Math.max(520, Math.min(760, overlayScreenWidth * 1.4)));
-  // 放大态（LibTV 式）：居中的大编辑框，宽 ≤720px，避开底部 dock。
-  const promptWidth = promptExpanded ? Math.max(360, Math.min(promptWorkflowWidth - 32, 720)) : compactPromptWidth;
+  const compactPromptWidth = Math.min(promptWorkflowWidth - 16, Math.max(680, Math.min(960, overlayScreenWidth * 2)));
+  // 放大态（LibTV 式）：居中的大编辑框，宽 ≤960px（不比紧凑态窄），避开底部 dock。
+  const promptWidth = promptExpanded ? Math.max(360, Math.min(promptWorkflowWidth - 32, 960)) : compactPromptWidth;
   const promptLeft = promptExpanded
     ? Math.max(8, (promptWorkflowWidth - promptWidth) / 2)
     : Math.max(8, Math.min(overlayCenter - promptWidth / 2, promptWorkflowWidth - promptWidth - 8));

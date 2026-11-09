@@ -1,5 +1,5 @@
 import { AtSign, Box, Check, ChevronDown, Hand, Image as ImageIcon, KeyRound, LayoutGrid, Plus, RotateCw, Send, Square, Trash2, Video, X } from 'lucide-react';
-import { useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
 import { isTauri } from '@tauri-apps/api/core';
 import {
@@ -140,6 +140,9 @@ const userApiKeysRef = useRef(userApiKeys);
   const composer = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
+  // 跟随到底部：贴近底部（或刚发送）时，新消息和流式增量自动滚到底；用户上翻阅读历史时不打扰。
+  const stickToBottom = useRef(true);
   const skillAttachmentDirty = useRef(false);
   const activity = useRef(onActivityChange);
   const modeRef = useRef<'manual' | 'auto'>('auto');
@@ -161,6 +164,20 @@ const userApiKeysRef = useRef(userApiKeys);
   const [mandate, setMandate] = useState<AgentSpendMandate | null>(null);
   const [mandateTasks, setMandateTasks] = useState(10);
   const [mode, setMode] = useState<'manual' | 'auto'>('auto');
+  const hasMessages = messages.length > 0;
+  useLayoutEffect(() => {
+    const scrollers = messageScrollers(messagesRef.current);
+    const onScroll = (event: Event) => {
+      const el = event.currentTarget as HTMLElement;
+      stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    };
+    scrollers.forEach(el => el.addEventListener('scroll', onScroll, { passive: true }));
+    return () => scrollers.forEach(el => el.removeEventListener('scroll', onScroll));
+  }, [hasMessages]);
+  useLayoutEffect(() => {
+    if (!stickToBottom.current) return;
+    for (const el of messageScrollers(messagesRef.current)) el.scrollTop = el.scrollHeight;
+  }, [messages, sending]);
   // 面板内所有浮层共用一个 openLayer：同一时刻只开一个，Escape/外部点击统一关闭。
   const [layers, dispatchLayer] = useReducer(agentLayerReducer, closedLayers);
   const { layer: openLayer, slashQuery } = layers;
@@ -619,6 +636,7 @@ const userApiKeysRef = useRef(userApiKeys);
     });
     const displayText = [text, references.length ? `引用：${references.map(reference => `@${reference.label}`).join('、')}` : ''].filter(Boolean).join('\n\n');
     const assistantId = `stream-${crypto.randomUUID()}`;
+    stickToBottom.current = true;
     setMessages(items => [...items, { id: crypto.randomUUID(), role: 'user', text: displayText }]);
     setPrompt('');
     setReferences([]);
@@ -803,7 +821,7 @@ const userApiKeysRef = useRef(userApiKeys);
       </header>
       <section className="workflow-agent__body">
         {/* When setup is the blocker, the setup card is the one thing to read: drop the duplicate red config error and the browse/skill decks under it. */}
-        <div className="agent-conversation__messages"><WorkflowAgentMessages messages={setupGate ? messages.filter(message => message.id !== 'agent-text-config') : messages} running={sending} language={language} /></div>
+        <div ref={messagesRef} className="agent-conversation__messages"><WorkflowAgentMessages messages={setupGate ? messages.filter(message => message.id !== 'agent-text-config') : messages} running={sending} language={language} /></div>
         {todoItems.length > 0 && !setupGate && <div className='mx-3'><AgentTodoCard items={todoItems} language={language} /></div>}
         {setupBlocker && (
           <div role="alert" data-testid="agent-setup-card" className="mx-3 mb-2 rounded-xl border px-3 py-2.5" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}>
@@ -936,3 +954,10 @@ function ReferenceGroup({ label, items, onSelect, icon, empty }: { label: string
     : <p>{empty}</p>}</section>;
 }
 
+
+// 消息区真正的滚动层可能是外层容器，也可能是 WorkflowAgentMessages 的根节点（取决于样式），两者都处理。
+function messageScrollers(root: HTMLElement | null): HTMLElement[] {
+  if (!root) return [];
+  const inner = root.firstElementChild;
+  return inner instanceof HTMLElement ? [root, inner] : [root];
+}
