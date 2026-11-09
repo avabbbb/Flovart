@@ -364,6 +364,10 @@ body {
   padding: 0;
   background: transparent;
 }
+:root[data-theme='dark'] .compact-right-panel__quicktabs .isl-tabbar {
+  border: 0;
+  background: transparent;
+}
 .compact-right-panel__quicktabs .isl-tab {
     display: inline-flex;
     min-width: 0;
@@ -403,7 +407,8 @@ body {
     width: max-content;
     flex: 0 0 auto;
     display: grid;
-    grid-template-columns: repeat(3, 36px);
+    grid-auto-flow: column;
+    grid-auto-columns: 36px;
     gap: 4px;
     transform: translateX(-50%);
 }
@@ -2278,3 +2283,8 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
 .prompt-snippets button:hover {
   color: var(--isl-ink);
 }
+
+.prompt-duration-value { display: inline-flex; align-items: center; gap: 4px; }
+.prompt-duration-input { width: 44px; height: 26px; border: 1px solid var(--isl-border); border-radius: 6px; padding: 0 4px; color: var(--isl-ink); background: var(--isl-surface-2, transparent); font-size: 12px; font-weight: 600; text-align: center; -moz-appearance: textfield; }
+.prompt-duration-input::-webkit-outer-spin-button, .prompt-duration-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.prompt-duration-input:disabled, .prompt-duration input[type="range"]:disabled { opacity: .4; }

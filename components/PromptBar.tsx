@@ -372,7 +372,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     const [modelCapabilityFilter, setModelCapabilityFilter] = useState<ProductModelMode | 'all'>('all');
     const [activeModelFamily, setActiveModelFamily] = useState('');
     const [isTranslating, setIsTranslating] = useState(false);
-    const [preTranslatePrompt, setPreTranslatePrompt] = useState<string | null>(null);
+    const [isPolishing, setIsPolishing] = useState(false);
+    const [preEditPrompt, setPreEditPrompt] = useState<string | null>(null);
     const [snippetMenu, setSnippetMenu] = useState<string | null>(null);
 
     const triggerClass = 'inline-flex items-center gap-1.5 rounded-lg border border-transparent bg-transparent px-2 font-medium text-[var(--isl-ink-soft)] transition-colors hover:bg-[var(--isl-surface-2)] hover:text-[var(--isl-ink)] ' + (compactMode ? 'h-7 text-[11px]' : 'h-8 text-[12px]');
@@ -536,13 +537,13 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     }, [onMentionedElementIds, onPromptDocumentChange, onPromptInputChange, setPrompt]);
 
     const handleTranslatePrompt = useCallback(async () => {
-        if (!onEnhancePrompt || !prompt.trim() || isTranslating) return;
+        if (!onEnhancePrompt || !prompt.trim() || isTranslating || isPolishing) return;
         const previous = prompt;
         setIsTranslating(true);
         try {
             const result = await onEnhancePrompt({ prompt: prompt.trim(), mode: 'translate' });
             if (result.enhancedPrompt?.trim()) {
-                setPreTranslatePrompt(previous);
+                setPreEditPrompt(previous);
                 replacePrompt(result.enhancedPrompt.trim());
             }
         } catch (error) {
@@ -551,13 +552,31 @@ export const PromptBar: React.FC<PromptBarProps> = ({
         } finally {
             setIsTranslating(false);
         }
-    }, [isTranslating, language, onEnhancePrompt, prompt, replacePrompt, ui]);
+    }, [isPolishing, isTranslating, language, onEnhancePrompt, prompt, replacePrompt, ui]);
+
+    // ✧ 一次性润色：结果直接写回输入框，并与翻译共用一份编辑前快照，随时可「还原」。
+    const handlePolishPrompt = useCallback(async () => {
+        if (!onEnhancePrompt || !prompt.trim() || isPolishing || isTranslating) return;
+        const previous = prompt;
+        setIsPolishing(true);
+        try {
+            const result = await onEnhancePrompt({ prompt: prompt.trim(), mode: 'smart' });
+            if (result.enhancedPrompt?.trim()) {
+                setPreEditPrompt(previous);
+                replacePrompt(result.enhancedPrompt.trim());
+            }
+        } catch (error) {
+            alert(displayError(error, ui('润色失败，请稍后重试。', 'Enhancement failed. Please try again.')));
+        } finally {
+            setIsPolishing(false);
+        }
+    }, [isPolishing, isTranslating, onEnhancePrompt, prompt, replacePrompt, ui]);
 
     const handleRevertTranslate = useCallback(() => {
-        if (preTranslatePrompt == null) return;
-        replacePrompt(preTranslatePrompt);
-        setPreTranslatePrompt(null);
-    }, [preTranslatePrompt, replacePrompt]);
+        if (preEditPrompt == null) return;
+        replacePrompt(preEditPrompt);
+        setPreEditPrompt(null);
+    }, [preEditPrompt, replacePrompt]);
 
     useEffect(() => {
         if (!activeCapabilities || generationMode === 'text') return;
@@ -1125,9 +1144,15 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                 {(() => {
                                                     // LibTV 式：连续可选的时长用滑块；只有少数固定档位时保留分段按钮。
                                                     const durations = activeCapabilities.durations.filter(duration => duration > 0);
-                                                    const useSlider = durations.length > 3 && durations.length === activeCapabilities.durations.length;
+                                                    const allowsAuto = activeCapabilities.durations.includes(-1);
+                                                    // 档位多于 3 个就用滑块 + 秒数输入；-1（不限/自适应）单独做开关，不再让滑块整体退化成按钮。
+                                                    const useSlider = durations.length > 3;
                                                     if (useSlider) {
-                                                        const index = Math.max(0, durations.indexOf(videoDurationSec ?? durations[0]));
+                                                        const isAuto = videoDurationSec === -1;
+                                                        const current = videoDurationSec !== undefined && durations.includes(videoDurationSec) ? videoDurationSec : durations[0];
+                                                        const index = Math.max(0, durations.indexOf(current));
+                                                        const pick = (next: number | undefined) => { if (next !== undefined && !getParamDisabledReason('durationSec', next)) onVideoDurationSecChange?.(next); };
+                                                        const nearest = (value: number) => durations.reduce((best, item) => (Math.abs(item - value) < Math.abs(best - value) ? item : best), durations[0]);
                                                         return (
                                                             <div className="prompt-duration" data-testid="prompt-duration-slider">
                                                                 <input
@@ -1136,14 +1161,31 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                                                     max={durations.length - 1}
                                                                     step={1}
                                                                     value={index}
+                                                                    disabled={isAuto}
                                                                     aria-label={ui('视频时长', 'Video duration')}
                                                                     aria-valuetext={durations[index] + 's'}
-                                                                    onChange={event => {
-                                                                        const next = durations[Number(event.target.value)];
-                                                                        if (next !== undefined && !getParamDisabledReason('durationSec', next)) onVideoDurationSecChange?.(next);
-                                                                    }}
+                                                                    onChange={event => pick(durations[Number(event.target.value)])}
                                                                 />
-                                                                <span className="prompt-duration-value">{durations[index]}<small>s</small></span>
+                                                                <span className="prompt-duration-value">
+                                                                    <input
+                                                                        key={isAuto ? 'auto' : current}
+                                                                        type="number"
+                                                                        className="prompt-duration-input"
+                                                                        data-testid="prompt-duration-input"
+                                                                        min={durations[0]}
+                                                                        max={durations[durations.length - 1]}
+                                                                        step={1}
+                                                                        disabled={isAuto}
+                                                                        defaultValue={isAuto ? '' : current}
+                                                                        aria-label={ui('时长（秒）', 'Duration (seconds)')}
+                                                                        onBlur={event => { const value = Number(event.target.value); if (event.target.value !== '' && Number.isFinite(value)) pick(nearest(value)); }}
+                                                                        onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }}
+                                                                    />
+                                                                    <small>{ui('秒', 's')}</small>
+                                                                </span>
+                                                                {allowsAuto && (
+                                                                    <button type="button" aria-pressed={isAuto} onClick={() => pick(isAuto ? current : -1)} title={ui('由模型自动决定时长', 'Let the model choose the length')} className={'h-7 shrink-0 rounded-[6px] px-2 text-[11px] font-medium ' + (isAuto ? 'isl-chip--active' : 'isl-chip')}>{ui('不限', 'Auto')}</button>
+                                                                )}
                                                             </div>
                                                         );
                                                     }
@@ -1230,6 +1272,9 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                         </div>
                                     )}
                                     <div className="px-1 pb-1 text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--isl-ink-soft)' }}>{ui('更多操作', 'More options')}</div>
+                                    {onAutoEnhanceToggle && (
+                                        <button type="button" aria-pressed={isAutoEnhanceEnabled} onClick={onAutoEnhanceToggle} title={ui('开启后每次生成前自动用 LLM 优化提示词', 'Automatically enhance the prompt with an LLM before each generation')} className={'mb-1 flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs font-bold transition-colors hover:bg-[var(--isl-surface-2)]' + (isAutoEnhanceEnabled ? ' text-[var(--isl-mint-deep)]' : '')}><span>{ui('生成前自动润色', 'Auto-enhance before generating')}</span><span>{isAutoEnhanceEnabled ? 'ON' : 'OFF'}</span></button>
+                                    )}
                                     {isSeedanceVideoModel && !activeProductModel && (
                                         <div className="mx-1 mb-2 rounded-[18px] border-[1.5px] p-3" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}>
                                             <div className="flex items-center justify-between gap-3">
@@ -1447,23 +1492,24 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                     <div className="flex shrink-0 items-center gap-2">
                             {!hideGenerationOptions && <button
                                 type="button"
-                                onClick={onAutoEnhanceToggle}
-                                title={isAutoEnhanceEnabled ? ui('关闭自动润色（生成前不再自动优化提示词）', 'Turn off automatic prompt enhancement') : ui('开启自动润色（生成前自动用 LLM 优化提示词）', 'Turn on automatic prompt enhancement before generation')}
-                                className={`${triggerClass} shrink-0 ${isAutoEnhanceEnabled ? activeTriggerClass : ''}`}
+                                onClick={() => void handlePolishPrompt()}
+                                disabled={!onEnhancePrompt || !prompt.trim() || isPolishing || isTranslating}
+                                title={ui('润色提示词（结果写回输入框，可还原）', 'Enhance prompt (written back, can be restored)')}
+                                className={triggerClass + ' shrink-0 disabled:cursor-not-allowed disabled:opacity-40' + (isPolishing ? ' animate-pulse' : '')}
                             >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3Z" />
                                 </svg>
-                                <span className="sr-only">{isAutoEnhanceEnabled ? ui('润色已开启', 'Prompt enhancement on') : ui('润色', 'Enhance prompt')}</span>
+                                <span className="sr-only">{ui('润色提示词', 'Enhance prompt')}</span>
                             </button>}
 
-                            {!hideGenerationOptions && <button type="button" onClick={() => void handleTranslatePrompt()} disabled={!onEnhancePrompt || !prompt.trim() || isTranslating} className={`${triggerClass} shrink-0 disabled:cursor-not-allowed disabled:opacity-40`} title={ui('翻译提示词', 'Translate prompt')}>
+                            {!hideGenerationOptions && <button type="button" onClick={() => void handleTranslatePrompt()} disabled={!onEnhancePrompt || !prompt.trim() || isTranslating || isPolishing} className={`${triggerClass} shrink-0 disabled:cursor-not-allowed disabled:opacity-40`} title={ui('翻译提示词', 'Translate prompt')}>
                                 <span className="text-sm font-black">{isTranslating ? '…' : ui('译', 'EN')}</span><span className="sr-only">{ui('翻译提示词', 'Translate prompt')}</span>
                             </button>}
-                            {!hideGenerationOptions && preTranslatePrompt != null && (
-                                <button type="button" onClick={handleRevertTranslate} className={`${triggerClass} shrink-0`} title={ui('还原翻译前的提示词', 'Restore prompt before translation')}>
+                            {!hideGenerationOptions && preEditPrompt != null && (
+                                <button type="button" onClick={handleRevertTranslate} className={`${triggerClass} shrink-0`} title={ui('还原到润色/翻译前的提示词', 'Restore prompt before enhance/translate')}>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-15-6.7L3 13" /></svg>
-                                    <span className="sr-only">{ui('还原翻译', 'Restore translation')}</span>
+                                    <span className="sr-only">{ui('还原提示词', 'Restore prompt')}</span>
                                 </button>
                             )}
 

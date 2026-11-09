@@ -315,7 +315,7 @@ body,
   scrollbar-width: none;
 }
 
-.workflow-toolbar__library,
+.workflow-toolbar__history-browser,
 .workflow-toolbar__shortcut-card,
 .workflow-toolbar__compact-menu {
   /* Keep portaled toolbar popovers within the viewport. */
@@ -488,7 +488,8 @@ body,
     width: max-content;
     flex: 0 0 auto;
     display: grid;
-    grid-template-columns: repeat(3, 36px);
+    grid-auto-flow: column;
+    grid-auto-columns: 36px;
     gap: 4px;
     transform: translateX(-50%);
   }

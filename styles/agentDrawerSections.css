@@ -10,3 +10,10 @@
 .agent-logo-menu__list button.is-active{color:var(--isl-mint-deep,#22a06b);background:var(--isl-mint-bg,rgba(34,160,107,.12))}
 .agent-new-chat-btn{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 10px;border:1px solid var(--isl-border);border-radius:8px;background:transparent;color:var(--isl-ink);font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer}
 .agent-new-chat-btn:hover{background:var(--agent-subtle,rgba(127,127,127,.12))}
+.agent-new-chat-btn.is-icon{width:28px;padding:0;justify-content:center;border-color:transparent}
+
+/* 抽屉标签 + 收起并入 Agent 顶栏：Logo/会话标题 | 对话/历史 | + 收起 — 一行 */
+.drawer-chrome-tabs { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 2px; margin-left: auto; }
+.drawer-chrome-tabs .isl-tab { flex: 0 0 auto; min-height: 26px; padding: 3px 10px; font-size: 12px; }
+.drawer-chrome-tabs + .agent-header-actions { margin-left: 4px; }
+.drawer-chrome-collapse { flex: 0 0 auto; width: 28px; height: 28px; }

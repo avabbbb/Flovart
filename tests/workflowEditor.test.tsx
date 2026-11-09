@@ -933,7 +933,7 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(screen.getByTestId('workflow-project-state')).toHaveTextContent('second.png');
   });
 
-  it('persists data and blob shared media without temporary hrefs in project JSON', async () => {
+  it('persists data and blob history media without temporary hrefs in project JSON', async () => {
     class TestImage {
       naturalWidth = 800;
       naturalHeight = 600;
@@ -949,10 +949,10 @@ describe('InfiniteWorkflow surface interactions', () => {
     ];
     render(<Harness sharedMedia={sharedMedia} />);
 
-    fireEvent.click(screen.getByRole('button', { name: '共享素材' }));
+    fireEvent.click(screen.getByRole('button', { name: '历史生成' }));
     fireEvent.click(screen.getByRole('button', { name: 'data.png' }));
     await waitFor(() => expect(editor().querySelectorAll('[data-workflow-node-id]')).toHaveLength(3));
-    fireEvent.click(screen.getByRole('button', { name: '共享素材' }));
+    fireEvent.click(screen.getByRole('button', { name: '历史生成' }));
     fireEvent.click(screen.getByRole('button', { name: 'blob.png' }));
     await waitFor(() => expect(editor().querySelectorAll('[data-workflow-node-id]')).toHaveLength(4));
     // Shared media now land as "uploading" placeholders first; both must commit a durable storageKey.

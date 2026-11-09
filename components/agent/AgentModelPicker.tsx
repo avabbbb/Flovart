@@ -1,19 +1,13 @@
 import { Box, Check, KeyRound, Loader2, Plus, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { AICapability, ModelItem, RouteMappingBinding, UserApiKey } from '../../types';
-import { isOpenAICompatibleProvider } from '../../services/baseUrl';
-import { resolveBrowserAgentTextRoute } from '../../services/browserAgentKernel';
+import { isAgentTextKey, isAgentTextMapping, resolveAgentTextRoutes } from '../../services/agentTextRoutes';
 import { fetchModelsForProvider } from '../../services/modelFetcher';
 
 type Lang = 'en' | 'zho';
 const ui = (language: Lang, zho: string, en: string) => (language === 'en' ? en : zho);
 
-const isAgentText = (mapping: RouteMappingBinding) => mapping.target.kind === 'runtime-capability' && mapping.target.capability === 'agent-text';
 const agentTextMapping = (routeId: string): RouteMappingBinding => ({ target: { kind: 'runtime-capability', capability: 'agent-text' }, routeId, order: 0 });
-
-function textKeys(keys: UserApiKey[]) {
-  return keys.filter(key => isOpenAICompatibleProvider(key.provider) && key.status !== 'error' && (!key.capabilities?.length || key.capabilities.includes('text')));
-}
 
 function keyModels(key: UserApiKey): ModelItem[] {
   const items: ModelItem[] = key.models?.length
@@ -43,9 +37,10 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const keys = useMemo(() => textKeys(userApiKeys), [userApiKeys]);
-  const current = useMemo(() => resolveBrowserAgentTextRoute(userApiKeys), [userApiKeys]);
-  const currentKeyId = useMemo(() => keys.find(key => key.routeMappings?.some(mapping => isAgentText(mapping) && mapping.routeId.trim() === current?.model))?.id, [keys, current]);
+  const keys = useMemo(() => userApiKeys.filter(isAgentTextKey), [userApiKeys]);
+  // 与 Agent 内核同一解析：没有显式映射时，回退选中的模型也会显示为当前模型。
+  const current = useMemo(() => resolveAgentTextRoutes(userApiKeys)[0], [userApiKeys]);
+  const currentKeyId = current?.key.id;
   const groups = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return keys
@@ -58,7 +53,7 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
   // 只保留一条 agent-text 映射，选哪个就是哪个，避免排序规则让别的 Key 抢先。
   const select = (keyId: string, modelId: string) => {
     for (const key of keys) {
-      const others = (key.routeMappings || []).filter(mapping => !isAgentText(mapping));
+      const others = (key.routeMappings || []).filter(mapping => !isAgentTextMapping(mapping));
       const next = key.id === keyId ? [...others, agentTextMapping(modelId)] : others;
       if (next.length !== (key.routeMappings || []).length || key.id === keyId) onUpdateApiKey?.(key.id, { routeMappings: next });
     }
@@ -82,7 +77,7 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
       const firstText = models.find(model => model.capability === 'text') || models[0];
       // 新 Key 接管 Agent：先清掉其他 Key 的 agent-text 映射。
       for (const key of keys) {
-        const others = (key.routeMappings || []).filter(mapping => !isAgentText(mapping));
+        const others = (key.routeMappings || []).filter(mapping => !isAgentTextMapping(mapping));
         if (others.length !== (key.routeMappings || []).length) onUpdateApiKey?.(key.id, { routeMappings: others });
       }
       const effectiveBaseUrl = result.effectiveBaseUrl || url;

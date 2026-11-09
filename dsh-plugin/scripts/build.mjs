@@ -24,7 +24,7 @@ const PLATFORM_MODULES = [
   'react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', '@deepseek-ai/cordis',
   '@deepseek-ai/dsh-client-ui-slots', '@deepseek-ai/dsh-client-ui-primitives',
 ]
-const PRELOADED_EXTERNALS = ['@deepseek-ai/dsh-client-runtime/client']
+const PRELOADED_EXTERNALS = ['@deepseek-ai/dsh-api-session-controller/client']
 const CLIENT_EXTERNALS = [...PLATFORM_MODULES, ...PRELOADED_EXTERNALS]
 
 async function buildNodeHalf() {

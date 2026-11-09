@@ -1,4 +1,5 @@
 import { CheckCircle2, CircleAlert, LoaderCircle, Wrench, XCircle } from 'lucide-react';
+import { AgentMarkdown } from './AgentMarkdown';
 
 export interface WorkflowAgentDisplayAttachment {
   id: string;
@@ -27,7 +28,7 @@ export function WorkflowAgentMessages({ messages, running, language = 'zho' }: {
         : (
           <div key={message.id} className={`workflow-agent__message workflow-agent__message--${message.role}`}>
             <span>{message.role === 'user' ? (en ? 'You' : '你') : message.role === 'assistant' ? 'Agent' : message.role === 'error' ? (en ? 'Error' : '错误') : (en ? 'System' : '系统')}</span>
-            <p>{message.text}</p>
+            {message.role === 'assistant' ? <AgentMarkdown text={message.text} language={language} /> : <p>{message.text}</p>}
             {message.attachments?.length ? <div className="workflow-agent__message-attachments">{message.attachments.map(item => <img key={item.id} src={item.previewUrl} alt={item.name} title={item.name} />)}</div> : null}
           </div>
         ))}

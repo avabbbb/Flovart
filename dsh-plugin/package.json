@@ -12,6 +12,7 @@
   },
   "files": [
     "lib",
+    "webui",
     "cordis.patch.yml"
   ],
   "license": "MIT",
@@ -31,18 +32,20 @@
     }
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-host-webserver": "0.1.0-rc.8",
-    "@deepseek-ai/dsh-tools": "0.1.0-rc.8"
+    "@deepseek-ai/cordis": "~4.1.0",
+    "@deepseek-ai/dsh-host-webserver": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.1"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.1",
-    "@deepseek-ai/dsh-client-runtime": "0.1.0-rc.8",
-    "@deepseek-ai/dsh-client-ui-conversation": "0.1.0-rc.8",
-    "@deepseek-ai/dsh-client-ui-layout": "0.1.0-rc.8",
-    "@deepseek-ai/dsh-client-ui-slots": "0.1.0-rc.8",
-    "@deepseek-ai/dsh-host-webserver": "0.1.0-rc.8",
-    "@deepseek-ai/dsh-tools": "0.1.0-rc.8",
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-api-session-controller": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-layout": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-session": "^0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-host-webserver": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-util-values": "^0.2.2-rc.1",
     "@types/node": "^22.14.0",
     "@types/react": "^18.3.1",
     "esbuild": "^0.28.2",
@@ -56,6 +59,13 @@
     "profile:install": "node scripts/profile.mjs install",
     "profile:doctor": "node scripts/profile.mjs doctor",
     "profile:start": "node scripts/profile.mjs start",
-    "profile:uninstall": "node scripts/profile.mjs uninstall"
+    "profile:uninstall": "node scripts/profile.mjs uninstall",
+    "build:webui": "node scripts/build-webui.mjs",
+    "prepack": "node scripts/build-webui.mjs && node scripts/build.mjs",
+    "test": "node --test test/tools.test.ts test/webui.test.ts test/workspaceTarget.test.ts"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-util-values": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-session": "0.2.2-rc.1"
   }
 }

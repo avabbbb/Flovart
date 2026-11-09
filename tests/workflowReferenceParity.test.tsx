@@ -70,7 +70,7 @@ describe('workflow reference parity', () => {
     expect(screen.getByRole('button', { name: '暂不支持' })).toBeDisabled();
   });
 
-  it('searches and filters shared image and video resources', () => {
+  it('searches and filters generation history from the toolbar', () => {
     const onAddSharedMedia = vi.fn();
     render(<WorkflowGenerationCapabilitiesProvider sharedMedia={[
       { id: 'image', name: '产品主图', href: 'data:image/png;base64,AA==', mimeType: 'image/png', type: 'image' },
@@ -79,10 +79,11 @@ describe('workflow reference parity', () => {
       <WorkflowToolbar tool="select" canUndo={false} canRedo={false} onToolChange={vi.fn()} onAddNode={vi.fn()} onAddSharedMedia={onAddSharedMedia} onUndo={vi.fn()} onRedo={vi.fn()} onFit={vi.fn()} onToggleGrid={vi.fn()} />
     </WorkflowGenerationCapabilitiesProvider>);
 
-    fireEvent.click(screen.getByRole('button', { name: '共享素材' }));
+    fireEvent.click(screen.getByRole('button', { name: '历史生成' }));
+    expect(screen.getByTestId('workflow-toolbar-history')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '视频' }));
     expect(screen.queryByRole('button', { name: '产品主图' })).not.toBeInTheDocument();
-    fireEvent.change(screen.getByRole('textbox', { name: '搜索共享素材' }), { target: { value: '运动' } });
+    fireEvent.change(screen.getByRole('searchbox', { name: '搜索生成历史' }), { target: { value: '运动' } });
     fireEvent.click(screen.getByRole('button', { name: '运动参考' }));
     expect(onAddSharedMedia).toHaveBeenCalledWith(expect.objectContaining({ id: 'video', type: 'video' }));
   });

@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { FlovartPluginConfig } from './config.ts'
+import { connectionErrorCode, logWorkspaceTargetFailure, resolveWorkspaceTarget, type WorkspaceTargetOptions } from './workspaceTarget.ts'
 
 export const WORKSPACE_PROXY_PATH = '/flovart-workspace'
 
@@ -24,7 +25,7 @@ class RequestBodyTooLargeError extends Error {
  * request actually reached (the Host it dialed); requests without fetch
  * metadata (local CLI/tooling) are not browser CSRF traffic and pass through.
  */
-function sameOriginRequest(request: IncomingMessage): boolean {
+export function sameOriginRequest(request: IncomingMessage): boolean {
   const site = request.headers['sec-fetch-site']
   if (typeof site === 'string' && site !== 'same-origin' && site !== 'none') return false
   const origin = request.headers.origin
@@ -46,45 +47,12 @@ function json(response: ServerResponse, status: number, body: unknown): void {
   response.end(JSON.stringify(body, (key, value) => key === 'stack' || key === 'cause' ? undefined : value))
 }
 
-function workspaceOrigin(value: string): URL {
-  const configured = new URL(value)
-  if (
-    configured.protocol !== 'http:' ||
-    configured.hostname !== '127.0.0.1' ||
-    !configured.port ||
-    configured.pathname !== '/' ||
-    configured.search ||
-    configured.hash ||
-    configured.username ||
-    configured.password
-  ) throw new Error('Workspace Operator 必须使用带显式端口的 127.0.0.1 http 地址。')
-  const port = Number(configured.port)
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error('Workspace Operator 端口无效。')
-  }
-  const target = new URL('http://127.0.0.1:1')
-  target.port = String(port)
-  return target
-}
-
-export function resolveWorkspaceProxyTarget(workspaceUrl: string, requestUrl: string, method = 'GET'): URL | null {
-  const incoming = new URL(requestUrl, 'http://dsh.local')
-  if (incoming.pathname !== WORKSPACE_PROXY_PATH && !incoming.pathname.startsWith(`${WORKSPACE_PROXY_PATH}/`)) return null
+// The Operator path an allowed proxy request maps to, or null.
+export function resolveWorkspaceProxyPath(requestUrl: string, method = 'GET'): string | null {
+  const incoming = new URL(requestUrl, 'http:' + '//' + 'dsh.local')
+  if (incoming.pathname !== WORKSPACE_PROXY_PATH && !incoming.pathname.startsWith(WORKSPACE_PROXY_PATH + '/')) return null
   const path = incoming.pathname.slice(WORKSPACE_PROXY_PATH.length) || '/'
-  if (!ROUTES.get(path)?.has(method.toUpperCase())) return null
-  const target = workspaceOrigin(workspaceUrl)
-  target.search = ''
-  switch (path) {
-    case '/health':
-      target.pathname = '/health'
-      break
-    case '/api/tools':
-      target.pathname = '/api/tools'
-      break
-    default:
-      return null
-  }
-  return target
+  return ROUTES.get(path)?.has(method.toUpperCase()) ? path : null
 }
 
 async function readBody(request: IncomingMessage): Promise<Buffer | undefined> {
@@ -103,20 +71,11 @@ async function readBody(request: IncomingMessage): Promise<Buffer | undefined> {
 export function createWorkspaceProxyHandler(
   config: Pick<FlovartPluginConfig, 'workspaceUrl' | 'workspaceToken'>,
   fetchImpl: typeof globalThis.fetch = globalThis.fetch,
+  targetOptions: WorkspaceTargetOptions = {},
 ): (request: IncomingMessage, response: ServerResponse) => Promise<void> {
   return async (request, response) => {
-    if (!config.workspaceToken) {
-      json(response, 503, { ok: false, error: { message: 'Workspace Operator 尚未由 Flovart Harness 启动器准备。' } })
-      return
-    }
-    let target: URL | null
-    try {
-      target = resolveWorkspaceProxyTarget(config.workspaceUrl, request.url || '/', request.method || 'GET')
-    } catch {
-      json(response, 503, { ok: false, error: { message: 'Workspace Operator 地址不可用。' } })
-      return
-    }
-    if (!target) {
+    const path = resolveWorkspaceProxyPath(request.url || '/', request.method || 'GET')
+    if (!path) {
       json(response, 404, { ok: false, error: { message: 'Workspace 路由不存在。' } })
       return
     }
@@ -124,19 +83,27 @@ export function createWorkspaceProxyHandler(
       json(response, 403, { ok: false, error: { message: 'Workspace 代理仅接受同源请求。' } })
       return
     }
+    // Resolved per request so a restarted Operator (new port or token) is followed.
+    const resolved = await resolveWorkspaceTarget(config, targetOptions)
+    if ('failure' in resolved) {
+      logWorkspaceTargetFailure(resolved.failure)
+      json(response, 503, { ok: false, error: { code: resolved.failure.code, message: resolved.failure.message } })
+      return
+    }
+    const { origin, token } = resolved.target
     try {
       const body = await readBody(request)
       const init: RequestInit = {
         method: request.method || 'GET',
         headers: {
           accept: 'application/json',
-          'x-flovart-agent-token': config.workspaceToken,
+          'x-flovart-agent-token': token,
           ...(request.headers['content-type'] ? { 'content-type': request.headers['content-type'] } : {}),
         },
         signal: AbortSignal.timeout(30_000),
       }
       if (body) init.body = body.toString('utf8')
-      const upstream = await fetchImpl(target, init)
+      const upstream = await fetchImpl(new URL(path, origin), init)
       const payload = Buffer.from(await upstream.arrayBuffer())
       response.writeHead(upstream.status, {
         'content-type': upstream.headers.get('content-type') || 'application/json; charset=utf-8',
@@ -148,7 +115,13 @@ export function createWorkspaceProxyHandler(
         json(response, 413, { ok: false, error: { message: '请求体超过 36 MB 限制。' } })
         return
       }
-      json(response, 502, { ok: false, error: { message: '无法连接本机 Workspace Operator。' } })
+      const code = connectionErrorCode(error)
+      console.warn('[flovart] Workspace 代理失败: ' + (code ?? 'UNKNOWN') + ' ' + origin.origin)
+      if (code === 'ECONNREFUSED') {
+        json(response, 503, { ok: false, error: { code: 'WORKSPACE_UNREACHABLE', message: '无法连接 Workspace Operator：' + origin.origin + ' 拒绝连接。' } })
+        return
+      }
+      json(response, 502, { ok: false, error: { code: 'WORKSPACE_UNREACHABLE', message: '无法连接本机 Workspace Operator：' + origin.origin + '。' } })
     }
   }
 }

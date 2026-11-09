@@ -191,6 +191,7 @@ const RUNNHUB_ROUTE_CATALOG: RouteCapabilitySchema[] = [
         aspectRatioField: 'ratio',
         aspectRatioValues: ['adaptive', '16:9', '9:16', '1:1', '4:3', '3:4'],
         durationType: 'string',
+        durationValues: ['4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'],
         durationDefault: '5',
         resolutionDefault: '720p',
         params: [
@@ -215,6 +216,7 @@ const RUNNHUB_ROUTE_CATALOG: RouteCapabilitySchema[] = [
         aspectRatioField: 'ratio',
         aspectRatioValues: ['adaptive', '16:9', '9:16', '1:1', '4:3', '3:4'],
         durationType: 'string',
+        durationValues: ['4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'],
         durationDefault: '5',
         resolutionDefault: '720p',
         params: [
@@ -239,6 +241,7 @@ const RUNNHUB_ROUTE_CATALOG: RouteCapabilitySchema[] = [
         aspectRatioField: 'ratio',
         aspectRatioValues: ['adaptive', '16:9', '9:16', '1:1', '4:3', '3:4'],
         durationType: 'string',
+        durationValues: ['4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'],
         durationDefault: '5',
         resolutionDefault: '720p',
         params: [
@@ -325,6 +328,7 @@ const RUNNHUB_ROUTE_CATALOG: RouteCapabilitySchema[] = [
         aspectRatioField: 'ratio',
         aspectRatioValues: ['adaptive', '16:9', '9:16', '1:1', '4:3', '3:4'],
         durationType: 'string',
+        durationValues: ['4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'],
         durationDefault: '5',
         resolutionDefault: '720p',
         params: [

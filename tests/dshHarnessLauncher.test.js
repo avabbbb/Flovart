@@ -30,7 +30,8 @@ describe('Flovart Harness launcher', () => {
     expect(assembly.entrypoints?.workflowView).toMatchObject({
       kind: 'contextual-conversation-view',
       autoWorkspace: true,
-      sidebarEntry: false,
+      sidebarEntry: true,
+      iframe: true,
     });
   });
 

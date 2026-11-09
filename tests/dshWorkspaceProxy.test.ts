@@ -3,7 +3,8 @@
 import http from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createWorkspaceProxyHandler, resolveWorkspaceProxyTarget } from '../dsh-plugin/src/workspaceProxy';
+import { createWorkspaceProxyHandler, resolveWorkspaceProxyPath } from '../dsh-plugin/src/workspaceProxy';
+import { loopbackOrigin } from '../dsh-plugin/src/workspaceTarget';
 
 const servers: http.Server[] = [];
 
@@ -59,18 +60,14 @@ describe('DeepSeek Harness Workspace proxy', () => {
   });
 
   it('rejects unrelated paths and non-loopback workspace targets', () => {
-    expect(resolveWorkspaceProxyTarget('http://127.0.0.1:17372', '/flovart-workspace/health', 'GET')?.href)
-      .toBe('http://127.0.0.1:17372/health');
-    expect(resolveWorkspaceProxyTarget('http://127.0.0.1:17372', '/flovart-workspace/api/tools', 'POST')?.pathname)
-      .toBe('/api/tools');
-    expect(resolveWorkspaceProxyTarget('http://127.0.0.1:17372', '/flovart-workspace/api/tools', 'GET')).toBeNull();
-    expect(resolveWorkspaceProxyTarget('http://127.0.0.1:17372', '/flovart-workspace/director/handoff', 'POST')).toBeNull();
-    expect(resolveWorkspaceProxyTarget('http://127.0.0.1:17372', '/flovart-workspace/agent/flovart/turn', 'POST')).toBeNull();
-    expect(() => resolveWorkspaceProxyTarget('https://example.com', '/flovart-workspace/health')).toThrow(/127\.0\.0\.1/);
-    expect(() => resolveWorkspaceProxyTarget('http://localhost:17372', '/flovart-workspace/health')).toThrow(/127\.0\.0\.1/);
-    expect(() => resolveWorkspaceProxyTarget('http://[::1]:17372', '/flovart-workspace/health')).toThrow(/127\.0\.0\.1/);
-    expect(() => resolveWorkspaceProxyTarget('http://127.0.0.1:17372/base', '/flovart-workspace/health')).toThrow(/127\.0\.0\.1/);
-    expect(() => resolveWorkspaceProxyTarget('http://127.0.0.1:0', '/flovart-workspace/health')).toThrow(/端口无效/);
-    expect(() => resolveWorkspaceProxyTarget('http://127.0.0.1:17372@127.0.0.2', '/flovart-workspace/health')).toThrow(/127\.0\.0\.1/);
+    expect(resolveWorkspaceProxyPath('/flovart-workspace/health', 'GET')).toBe('/health');
+    expect(resolveWorkspaceProxyPath('/flovart-workspace/api/tools', 'POST')).toBe('/api/tools');
+    expect(resolveWorkspaceProxyPath('/flovart-workspace/api/tools', 'GET')).toBeNull();
+    expect(resolveWorkspaceProxyPath('/flovart-workspace/director/handoff', 'POST')).toBeNull();
+    expect(resolveWorkspaceProxyPath('/flovart-workspace/agent/flovart/turn', 'POST')).toBeNull();
+    expect(resolveWorkspaceProxyPath('/other/health', 'GET')).toBeNull();
+    expect(loopbackOrigin("http://127.0.0.1:17372")?.hostname).toBe('127.0.0.1');
+    expect(loopbackOrigin("https://example.com")).toBeNull();
+    expect(loopbackOrigin("http://127.0.0.1:17372@127.0.0.2")).toBeNull();
   });
 });

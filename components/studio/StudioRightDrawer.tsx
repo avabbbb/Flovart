@@ -1,5 +1,6 @@
 import { History, MessageSquare, PanelRightClose, PanelRightOpen, SlidersHorizontal } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
+import { DrawerChromeContext } from './drawerChrome';
 
 export interface StudioDrawerTab {
   id: string;
@@ -25,6 +26,8 @@ export interface StudioRightDrawerProps {
    * flex row; the aside switches from `absolute` to `relative` positioning.
    */
   docked?: boolean;
+  // 这些标签页由子级顶栏渲染标签与收起按钮（DrawerChromeContext），抽屉不再单独占一行。
+  inlineChromeTabs?: string[];
   children: React.ReactNode;
 }
 
@@ -41,6 +44,7 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
   onTabChange,
   flush = false,
   docked = false,
+  inlineChromeTabs,
   children,
 }) => {
   const [resizing, setResizing] = useState(false);
@@ -71,6 +75,8 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
     };
   }, [maxWidth, minWidth, onWidthChange, resizing]);
 
+  const chromeInline = Boolean(inlineChromeTabs?.includes(activeTab));
+  const chrome = chromeInline ? { tabs, activeTab, onTabChange, onCollapse: () => onOpenChange(false) } : null;
   const safeWidth = Math.min(maxWidth, Math.max(minWidth, Number.isFinite(width) ? width : minWidth));
   const drawerStyle: React.CSSProperties = {
     ['--drawer-width' as string]: `${safeWidth}px`,
@@ -125,6 +131,7 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
             event.preventDefault();
           }}
         />
+        {!chromeInline && (
         <div className={flush ? 'compact-right-panel__quicktabs compact-right-panel__quicktabs--icons' : 'flex shrink-0 items-center gap-1.5 border-b px-2 py-2'} style={{ borderColor: 'var(--isl-border)' }}>
           <div className={`isl-tabbar isl-tabbar--ac min-w-0 ${flush ? 'compact-right-panel__quicktabs-icons' : 'flex-1'}`}>
             {tabs.map(tab => (
@@ -145,7 +152,8 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
             <PanelRightClose size={16} />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
+        )}
+        <div className="min-h-0 flex-1 overflow-hidden"><DrawerChromeContext.Provider value={chrome}>{children}</DrawerChromeContext.Provider></div>
       </aside>
     </>
   );

@@ -595,6 +595,15 @@ export function getSupportedRatios(model: string, key?: UserApiKey): VideoAspect
 export async function validateApiKey(provider: AIProvider, apiKey: string, baseUrl?: string, extraConfig?: CustomProviderExtraConfig): Promise<ApiKeyValidationResult> {
     const normalizedInputBaseUrl = baseUrl ? normalizeProviderBaseUrl(provider, baseUrl) : undefined;
 
+    // 自定义配置协议：请求由绑定的适配脚本描述，端点未必有 /models，不做在线探测。
+    const scriptExtra = extraConfig as { protocolPreset?: string; providerScriptId?: string; userScriptProviderId?: string } | undefined;
+    if (provider === 'custom' && (scriptExtra?.protocolPreset === 'user-script' || scriptExtra?.providerScriptId || scriptExtra?.userScriptProviderId)) {
+        if (!scriptExtra?.providerScriptId && !scriptExtra?.userScriptProviderId) {
+            return { ok: false, message: '请先在「自定义配置」里保存并绑定适配脚本' };
+        }
+        return { ok: true, message: '已绑定适配脚本', effectiveBaseUrl: normalizedInputBaseUrl };
+    }
+
     if (provider === 'custom' && extraConfig?.requestFormat === 'anthropic') {
         try {
             const url = normalizeProviderBaseUrl(provider, baseUrl || '').replace(/\/$/, '');

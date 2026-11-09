@@ -2816,16 +2816,12 @@ export function InfiniteWorkflow({
     ? Math.max(8, (promptWorkflowWidth - promptWidth) / 2)
     : Math.max(8, Math.min(overlayCenter - promptWidth / 2, promptWorkflowWidth - promptWidth - 8));
   const configLeft = Math.max(8, Math.min(overlayCenter - 210, workflowWidth - 428));
-  const promptTop = promptExpanded
-    ? Math.max(8, ((rootSize?.height || 700) - 60 - 520) / 2)
-    : overlayBounds ? (() => {
-      const rootHeight = rootSize?.height || 700;
-      const estimatedPromptHeight = 220;
-      const below = project.viewport.y + overlayBounds.bottom * project.viewport.k + 12;
-      const dockSafeTop = rootHeight - 60;
-      if (below + estimatedPromptHeight <= dockSafeTop) return below;
-      return Math.max(8, toolbarTop - estimatedPromptHeight - 8);
-    })() : 0;
+  const promptRootHeight = rootSize?.height || 700;
+  const promptBelowTop = overlayBounds ? project.viewport.y + overlayBounds.bottom * project.viewport.k + 12 : 0;
+  // 下方放不下时翻到节点工具条上方，并用 bottom 锚定：提示词框实际多高都只向上长，底部参数栏不会再钻到工具条下面。
+  const promptAbove = !promptExpanded && overlayBounds !== null && promptBelowTop + 220 > promptRootHeight - 60;
+  const promptTop = promptExpanded ? Math.max(8, (promptRootHeight - 60 - 520) / 2) : overlayBounds ? promptBelowTop : 0;
+  const promptBottom = promptRootHeight - toolbarTop + 8;
   const gridSize = (project.backgroundMode === 'dots' ? 20 : 24) * project.viewport.k;
 
   const batchGroups = useMemo(() => {
@@ -3100,6 +3096,7 @@ export function InfiniteWorkflow({
         onToolChange={setTool}
         onAddNode={addNode}
         onAddSharedMedia={media => { void addSharedMedia(media); }}
+        activeProjectId={project.id}
         onOpenAssets={onOpenAssets}
         onUndo={undo}
         onRedo={redo}
@@ -3438,7 +3435,7 @@ export function InfiniteWorkflow({
             }}
           />
         </div>
-        {selectedNodeData.length === 1 && ['image', 'video', 'text', 'operation'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: promptExpanded ? 90 : 69, left: promptLeft, top: promptTop }}>
+        {selectedNodeData.length === 1 && ['image', 'video', 'text', 'operation'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: promptExpanded ? 90 : 69, left: promptLeft, ...(promptAbove ? { bottom: promptBottom } : { top: promptTop }) }}>
       <WorkflowNodePromptBar width={promptWidth} expanded={promptExpanded} onToggleExpanded={() => { const id = selectedNodeData[0].id; setExpandedPromptNodeId(current => (current === id ? null : id)); }} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onPromptIntent={intent => { promptIntentRef.current = intent; }} onRun={() => { const intent = promptIntentRef.current?.targetNodeId === selectedNodeData[0].id ? promptIntentRef.current : undefined; promptIntentRef.current = null; onRunNode(selectedNodeData[0].id, intent || undefined); }} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} onReorderReference={nextIds => handleReorderReferences(selectedNodeData[0].id, nextIds)} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} onResolvePastedMentions={mentions => handleResolvePastedMentions(mentions, selectedNodeData[0].id)} onPasteUnresolvedMentions={labels => setNotice('未能唯一匹配引用：' + labels.map(label => '@' + label).join('、') + '，已保留为普通文字。')} />
         </div>}
       </>}

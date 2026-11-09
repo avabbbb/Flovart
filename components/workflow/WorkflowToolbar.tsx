@@ -1,10 +1,12 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { Bot, Camera, FileDown, FileText, Focus, Grid2X2, Hand, History, ImageDown, Keyboard, Library, Magnet, Map, MousePointer2, Plus, Redo2, RotateCcw, Send, SlidersHorizontal, Trash2, Type, Undo2, Video, Image, Music2, Workflow, Spline, ZoomIn, ZoomOut } from 'lucide-react';
+import { Bot, Camera, FileDown, FileText, Focus, Grid2X2, Hand, History, ImageDown, Keyboard, Magnet, Map, MousePointer2, Plus, Redo2, RotateCcw, Send, SlidersHorizontal, Trash2, Type, Undo2, Video, Image, Music2, Workflow, Spline, ZoomIn, ZoomOut } from 'lucide-react';
 import { Tooltip } from 'antd';
 import type React from 'react';
 import { useMemo, useRef, useState } from 'react';
 import { ResponsivePopover } from '../ResponsivePopover';
 import { useWorkflowSharedMedia, type WorkflowSharedMedia } from './WorkflowConfigPanel';
+import { StudioMediaBrowser } from '../studio/StudioMediaBrowser';
+import { useWorkflowStore } from './store';
 import type { WorkflowNodeType } from './types';
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
 
@@ -29,11 +31,11 @@ const TOOLBAR_COPY = {
     showEdges: 'Show connections', hideEdges: 'Hide connections', snap: 'Snap to grid', zoomReset: 'Reset zoom',
     zoomIn: 'Zoom in', zoomOut: 'Zoom out', fit: 'Fit view', resetZoom: 'Reset zoom to 100%',
     workflowToolbar: 'Workflow toolbar', addNode: 'Add node', tools: 'Tools', toolbox: 'Canvas tools',
-    sharedMedia: 'Shared media', undo: 'Undo', redo: 'Redo', history: 'History', historyActions: 'History actions',
+    generationHistory: 'Generation history', undo: 'Undo', redo: 'Redo', history: 'History', historyActions: 'History actions',
     shortcuts: 'Keyboard shortcuts', shortcutsTitle: 'Canvas shortcuts', addNodes: 'Add nodes', pan: 'Pan canvas', duplicate: 'Duplicate',
     delete: 'Delete node', arrange: 'Arrange canvas', selectTool: 'Switch to pan tool', panTool: 'Switch to select tool',
-    agentOpen: 'Open Agent', agentClose: 'Close Agent', searchMedia: 'Search shared media', all: 'All', image: 'Image', video: 'Video',
-    noMatches: 'No matching media.', emptyLibrary: 'The media library and generation history are empty.', wheelPan: 'Wheel: pan', wheelZoom: 'Wheel: zoom',
+    agentOpen: 'Open Agent', agentClose: 'Close Agent',
+    wheelPan: 'Wheel: pan', wheelZoom: 'Wheel: zoom',
     addOption: (type: WorkflowNodeType) => ({ image: 'Image', video: 'Video', text: 'Text', script: 'Script', audio: 'Audio', config: 'Generation settings' }[type] || type),
     zoomPercent: (value: number) => `${value}%`,
     revision: (value: number) => `rev ${value}`, revisionHint: 'Draft revision. Every saved change by you or an Agent advances it.',
@@ -50,11 +52,11 @@ const TOOLBAR_COPY = {
     showEdges: '显示连线', hideEdges: '隐藏连线', snap: '对齐磁吸', zoomReset: '重置缩放',
     zoomIn: '放大', zoomOut: '缩小', fit: '适应视图', resetZoom: '重置缩放',
     workflowToolbar: '工作流工具栏', addNode: '添加节点', tools: '工具箱', toolbox: '画布工具箱',
-    sharedMedia: '共享素材', undo: '撤销', redo: '重做', history: '历史', historyActions: '历史操作',
+    generationHistory: '历史生成', undo: '撤销', redo: '重做', history: '历史', historyActions: '历史操作',
     shortcuts: '快捷键', shortcutsTitle: '画布快捷键', addNodes: '添加节点', pan: '平移画布', duplicate: '创建副本',
     delete: '删除节点', arrange: '整理画布', selectTool: '切换为平移工具', panTool: '切换为选择工具',
-    agentOpen: '打开 Agent', agentClose: '收起 Agent', searchMedia: '搜索共享素材', all: '全部', image: '图片', video: '视频',
-    noMatches: '没有匹配的素材。', emptyLibrary: '素材库和生成历史为空。', wheelPan: '滚轮：平移', wheelZoom: '滚轮：缩放',
+    agentOpen: '打开 Agent', agentClose: '收起 Agent',
+    wheelPan: '滚轮：平移', wheelZoom: '滚轮：缩放',
     addOption: (type: WorkflowNodeType) => ({ image: '图片', video: '视频', text: '文本', script: '脚本', audio: '音频', config: '配置' }[type] || type),
     zoomPercent: (value: number) => `${value}%`,
     revision: (value: number) => `rev ${value}`, revisionHint: '草稿修订号。你或 Agent 每次保存修改都会推进它。',
@@ -75,6 +77,7 @@ export function WorkflowToolbar({
   onToolChange,
   onAddNode,
   onAddSharedMedia,
+  activeProjectId,
   onOpenAssets,
   onUndo,
   onRedo,
@@ -114,6 +117,8 @@ export function WorkflowToolbar({
   onToolChange: (tool: WorkflowTool) => void;
   onAddNode: (type: WorkflowNodeType) => void;
   onAddSharedMedia: (media: WorkflowSharedMedia) => void;
+  // 历史生成弹层的画布筛选默认跟随当前画布。
+  activeProjectId?: string;
   onOpenAssets?: () => void;
   onUndo: () => void;
   onRedo: () => void;
@@ -156,8 +161,8 @@ export function WorkflowToolbar({
   const sharedMedia = useWorkflowSharedMedia();
   const language = useWorkspaceStore(state => state.language);
   const copy = TOOLBAR_COPY[language];
-  const [libraryQuery, setLibraryQuery] = useState('');
-  const [libraryType, setLibraryType] = useState<'all' | 'image' | 'video'>('all');
+  const workflowProjects = useWorkflowStore(state => state.projects);
+  const historyProjects = useMemo(() => workflowProjects.map(project => ({ id: project.id, title: project.title })), [workflowProjects]);
   const [openPopover, setOpenPopover] = useState<ToolbarPopover | null>(null);
   const [snapshotName, setSnapshotName] = useState('');
   const snapshotTime = (iso: string) => {
@@ -180,10 +185,6 @@ export function WorkflowToolbar({
     setOpenPopover(null);
     if (restoreFocus) requestAnimationFrame(() => popoverTriggerRef.current?.focus());
   };
-  const visibleMedia = useMemo(() => sharedMedia.filter(media => {
-    if (libraryType !== 'all' && media.type !== libraryType) return false;
-    return !libraryQuery.trim() || media.name.toLowerCase().includes(libraryQuery.trim().toLowerCase());
-  }), [libraryQuery, libraryType, sharedMedia]);
   const btn = (active = false) => `isl-icon-btn workflow-toolbar__button${active ? ' isl-icon-btn--active' : ''}`;
   const activePopover = openPopover === 'add' ? (
     <ResponsivePopover anchorRef={popoverAnchorRef} preferredSide="up" width={174} role="menu" ariaLabel={copy.addNodes} className="workflow-toolbar__add-menu-content" onRequestClose={() => setOpenPopover(null)}>
@@ -247,10 +248,8 @@ export function WorkflowToolbar({
       <strong>{copy.shortcutsTitle}</strong><span><kbd>Double click</kbd> {copy.addNodes.toLowerCase()}</span><span><kbd>Space</kbd> {copy.pan.toLowerCase()}</span><span><kbd>Ctrl D</kbd> {copy.duplicate}</span><span><kbd>Ctrl Z</kbd> {copy.undo}</span><span><kbd>Delete</kbd> {copy.delete}</span><span><kbd>Alt Shift F</kbd> {copy.arrange}</span>
     </ResponsivePopover>
   ) : openPopover === 'library' ? (
-    <ResponsivePopover anchorRef={popoverAnchorRef} preferredSide="up" width={280} role="dialog" ariaLabel={copy.sharedMedia} className="workflow-toolbar__library" dataTestId="workflow-toolbar-library" onRequestClose={() => setOpenPopover(null)}>
-      <input value={libraryQuery} placeholder={copy.searchMedia} aria-label={copy.searchMedia} onChange={event => setLibraryQuery(event.target.value)} />
-      <div className="workflow-toolbar__library-filters">{(['all', 'image', 'video'] as const).map(type => <button type="button" key={type} className={libraryType === type ? 'is-active' : ''} onClick={() => setLibraryType(type)}>{copy[type]}</button>)}</div>
-      <div className="workflow-toolbar__library-grid">{visibleMedia.length ? visibleMedia.map(media => <button type="button" key={media.id} title={media.name} onClick={() => { onAddSharedMedia(media); closePopover(true); }}>{media.type === 'video' ? <video src={media.href} muted preload="metadata" /> : <img src={media.href} alt="" />}<span>{media.name}</span></button>) : <p>{sharedMedia.length ? copy.noMatches : copy.emptyLibrary}</p>}</div>
+    <ResponsivePopover anchorRef={popoverAnchorRef} preferredSide="up" width={360} role="dialog" ariaLabel={copy.generationHistory} className="workflow-toolbar__history-browser" dataTestId="workflow-toolbar-history" onRequestClose={() => setOpenPopover(null)}>
+      <StudioMediaBrowser mode="history" items={sharedMedia} language={language} projects={historyProjects} activeProjectId={activeProjectId} onInsert={media => { onAddSharedMedia(media); closePopover(true); }} />
     </ResponsivePopover>
   ) : null;
   return (
@@ -283,7 +282,7 @@ export function WorkflowToolbar({
       <div className="workflow-toolbar__popover-wrap">
         <Tip title={copy.tools}><button type="button" className={btn(toolsOpen)} aria-label={copy.tools} aria-expanded={toolsOpen} onClick={event => togglePopover('tools', event.currentTarget)}><SlidersHorizontal size={18} /></button></Tip>
       </div>
-      <Tip title={copy.sharedMedia}><button type="button" className={btn(libraryOpen)} aria-label={copy.sharedMedia} aria-expanded={libraryOpen} onClick={event => togglePopover('library', event.currentTarget)}><Library size={18} /></button></Tip>
+      <Tip title={copy.generationHistory}><button type="button" className={btn(libraryOpen)} aria-label={copy.generationHistory} aria-expanded={libraryOpen} onClick={event => togglePopover('library', event.currentTarget)}><History size={18} /></button></Tip>
       <Tip title={copy.undo}><button type="button" className={`${btn()} workflow-toolbar__history-direct`} aria-label={copy.undo} disabled={!canUndo} onClick={onUndo}><Undo2 size={17} /></button></Tip>
       <Tip title={copy.redo}><button type="button" className={`${btn()} workflow-toolbar__history-direct`} aria-label={copy.redo} disabled={!canRedo} onClick={onRedo}><Redo2 size={17} /></button></Tip>
       <div className="workflow-toolbar__zoom-wrap">
