@@ -87,7 +87,7 @@ const EXTENSION_KINDS: Record<string, { kind: LocalFolderMediaKind; mimeType: st
 /** 扫描边界：只列媒体文件，限制深度与数量，避免一次扫描产出几百个节点级条目。 */
 export const LOCAL_FOLDER_SCAN_LIMITS = { maxDepth: 3, maxEntries: 600 } as const;
 
-type DirectoryHandleLike = {
+export type DirectoryHandleLike = {
   kind: 'directory';
   name: string;
   entries?: () => AsyncIterableIterator<[string, DirectoryHandleLike | FileHandleLike]>;
@@ -97,7 +97,7 @@ type DirectoryHandleLike = {
   queryPermission?: (descriptor: { mode: 'read' | 'readwrite' }) => Promise<PermissionState>;
   requestPermission?: (descriptor: { mode: 'read' | 'readwrite' }) => Promise<PermissionState>;
 };
-type FileHandleLike = { kind: 'file'; name: string; getFile: () => Promise<File> };
+export type FileHandleLike = { kind: 'file'; name: string; getFile: () => Promise<File> };
 
 type PickerWindow = Window & {
   showDirectoryPicker?: (options?: { mode?: 'read' | 'readwrite'; id?: string }) => Promise<DirectoryHandleLike>;

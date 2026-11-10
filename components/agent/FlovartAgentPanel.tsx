@@ -39,6 +39,7 @@ import { useMineSkillsStore } from './mineSkills';
 import { AgentReferenceChip } from './AgentReferenceChip';
 import { AgentTodoCard } from './AgentTodoCard';
 import { copyToClipboard, transcriptMarkdown } from './agentTranscript';
+import { resolveSearchCredential } from '../../services/agentWebSearch';
 import { AGENT_TODO_TOOL_NAME, latestTodoFromMessages, todoFromToolResult, type AgentTodoItem } from './agentTodo';
 import { AgentHeaderLeadingContext } from './agentHeaderSlot';
 import { DrawerChromeCollapse, DrawerChromeTabs } from '../studio/drawerChrome';
@@ -132,9 +133,13 @@ export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, a
 const userApiKeysRef = useRef(userApiKeys);
   userApiKeysRef.current = userApiKeys;
   // 内核只在 route 变化时重建：无 Key 打开面板后再导入 Key/切模型，必须重新解析 route，否则一直停在 credential 阻塞。
+  const searchCredential = useMemo(() => resolveSearchCredential(userApiKeys), [userApiKeys]);
   const browserRouteSignature = useMemo(() => {
     const route = resolveBrowserAgentTextRoute(userApiKeys);
-    return route ? [route.provider, route.baseUrl, route.model, route.apiKey, route.streamUsage ?? ''].join('\u0000') : '';
+    const search = resolveSearchCredential(userApiKeys);
+    // 搜索凭证也决定工具集：换 Key 时必须重建内核，否则 flovart_web_search 不会出现。
+    const searchSignature = search ? search.baseUrl + '\u0000' + search.key : '';
+    return route ? [route.provider, route.baseUrl, route.model, route.apiKey, route.streamUsage ?? '', searchSignature].join('\u0000') : '';
   }, [userApiKeys]);
   const workspaceBridge = useRef<WorkflowAgentBridge | undefined>(undefined);
   const abort = useRef<AbortController | undefined>(undefined);
@@ -387,7 +392,7 @@ const userApiKeysRef = useRef(userApiKeys);
       const kernel = new BrowserAgentKernel({
         projectId: project.id,
         route,
-        tools: createBrowserAgentTools({ projectId: project.id, confirm, activeChangeSetId: '', getNodes: () => projectRef.current.nodes }),
+        tools: createBrowserAgentTools({ projectId: project.id, confirm, activeChangeSetId: '', getNodes: () => projectRef.current.nodes, webSearch: searchCredential ?? undefined }),
         confirm,
         systemPrompt: BROWSER_DEFAULT_SYSTEM_PROMPT + receiptContext,
       });
@@ -600,8 +605,15 @@ const userApiKeysRef = useRef(userApiKeys);
   const branchFromMessage = async (message: WorkflowAgentDisplayMessage) => {
     const kernel = kernelRef.current;
     if (!kernel || sending) return;
+    // 点击的消息可能只存在于 UI（流式临时 id），也可能已被压缩；从它开始向前找第一个仍存在的分支点。
+    const index = transcriptMessages.indexOf(message);
+    const candidates = transcriptMessages
+      .slice(0, index < 0 ? transcriptMessages.length : index + 1)
+      .map(item => item.id)
+      .filter(id => id && !id.startsWith('stream-') && !id.startsWith('tool-'))
+      .reverse();
     try {
-      await kernel.branchSession(activeSessionId, message.id);
+      await kernel.branchSession(activeSessionId, candidates.length ? candidates : [message.id]);
       await refreshSessions();
       flashCopied(language === 'zho' ? '已创建分支' : 'Branch created');
     } catch (error) {

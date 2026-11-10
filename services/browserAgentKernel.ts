@@ -24,6 +24,8 @@ import { createTodoTool, TODO_TOOL_NAME } from '../agent/todo.js';
 import type { ImageContent } from '@earendil-works/pi-ai';
 import type { WorkflowNode } from '../components/workflow/types';
 import { loadAgentNodeMedia, type AgentVideoFrame } from './agentMediaView';
+import { formatSearchSources, searchAgentWeb, WEB_SEARCH_TOOL_NAME, type AgentSearchCredential, type SearchRecency } from './agentWebSearch';
+import { formatGrepMatches, grepLocalFolders, LOCAL_GREP_TOOL_NAME } from './agentLocalGrep';
 import type { UserApiKey } from '../types';
 import { displayError } from './displayError';
 
@@ -465,6 +467,8 @@ export interface BrowserAgentToolDependencies {
   activeChangeSetId: string;
   /** 读取当前画布节点；提供时注册 flovart_workflow_media_view，让 Agent 看图片/视频的真实画面 */
   getNodes?: () => readonly WorkflowNode[];
+  /** DeepSeek 搜索凭证；提供时注册 flovart_web_search */
+  webSearch?: AgentSearchCredential;
 }
 
 export function createBrowserAgentTools(dependencies: BrowserAgentToolDependencies): AgentTool[] {
@@ -515,7 +519,61 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
       },
     };
   });
-  return dependencies.getNodes ? [...commandTools, createMediaViewTool(dependencies.getNodes)] : commandTools;
+  const extraTools: AgentTool[] = [];
+  if (dependencies.webSearch) extraTools.push(createWebSearchTool(dependencies.webSearch));
+  extraTools.push(createLocalGrepTool());
+  if (dependencies.getNodes) extraTools.push(createMediaViewTool(dependencies.getNodes));
+  return [...commandTools, ...extraTools];
+}
+
+function createWebSearchTool(credential: AgentSearchCredential): AgentTool {
+  const recency = Type.Union([Type.Literal('day'), Type.Literal('week'), Type.Literal('month'), Type.Literal('year')]);
+  return {
+    name: WEB_SEARCH_TOOL_NAME,
+    label: 'web.search',
+    description: '联网搜索（DeepSeek Search）。返回标题、URL、日期与摘要。query 支持 site:、-site:、引号短语、after:/before:；recency 可选 day/week/month/year；limit 1-50，默认 10。用于查资料、竞品、风格与事实核对。',
+    parameters: Type.Object({
+      query: Type.String({ description: '搜索词，最长 128 字符' }),
+      recency: Type.Optional(recency),
+      limit: Type.Optional(Type.Number({ description: '结果条数 1-50' })),
+    }),
+    execute: async (_toolCallId, params, signal) => {
+      const input = params as { query: string; recency?: SearchRecency; limit?: number };
+      const result = await searchAgentWeb({ credential, query: input.query, recency: input.recency, limit: input.limit, signal });
+      return {
+        content: [{ type: 'text', text: formatSearchSources(result.sources) }],
+        details: { provider: result.provider, sources: result.sources },
+      };
+    },
+  };
+}
+
+function createLocalGrepTool(): AgentTool {
+  return {
+    name: LOCAL_GREP_TOOL_NAME,
+    label: 'files.grep',
+    description: '本地文件搜索（grep）：在用户连接过的本地文件夹里逐行匹配文本文件，返回 [文件夹/路径] 与 *行号|内容。pattern 是正则（非法时按字面量）；path 可限定子目录；case=false 忽略大小写；limit 默认 200。只搜文本文件，单文件上限 512KB，30s 超时。',
+    parameters: Type.Object({
+      pattern: Type.String({ description: '正则或字面量搜索词' }),
+      path: Type.Optional(Type.String({ description: '文件夹内的子目录，例如 references/shots' })),
+      case: Type.Optional(Type.Boolean({ description: '是否区分大小写，默认 true' })),
+      limit: Type.Optional(Type.Number({ description: '最多返回多少条匹配，默认 200' })),
+    }),
+    execute: async (_toolCallId, params, signal) => {
+      const input = params as { pattern: string; path?: string; case?: boolean; limit?: number };
+      const result = await grepLocalFolders({
+        pattern: input.pattern,
+        path: input.path,
+        caseSensitive: input.case,
+        limit: input.limit,
+        signal,
+      });
+      return {
+        content: [{ type: 'text', text: formatGrepMatches(result) }],
+        details: { matchCount: result.matches.length, scannedFiles: result.scannedFiles, truncated: result.truncated, skippedFolders: result.skippedFolders },
+      };
+    },
+  };
 }
 
 export const MEDIA_VIEW_TOOL_NAME = 'flovart_workflow_media_view';
@@ -562,6 +620,8 @@ const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，Flovart 生成式 
 - flovart_workflow_apply：结构化修改画布。operations 只允许 add_node、create_connected_node、update_node、delete_nodes、delete_connections、connect_nodes、move_nodes、reorder_nodes、group_nodes、ungroup_nodes、set_batch_primary。
 - flovart_workflow_node_run：运行生成节点（nodeId 或 nodeIds 批量，一次确认费用）。
 - flovart_workflow_media_view：查看图片/视频节点的真实画面（nodeIds；视频可用 frames: first/middle/last 或 times: [秒数] 指定任意时间点）。inspect 里的 [media] 只是脱敏占位；需要判断构图、风格或检查生成结果时调用它。用户 @引用的图片/视频会自动附带画面。用户粘贴的截图、拖入的视频会作为本轮图片内容直接附上。
+- flovart_web_search：联网搜索（DeepSeek）。需要外部资料、竞品信息、风格参考或事实核对时调用；结果给出来源 URL，引用时要带上。
+- flovart_grep：在用户连接过的本地文件夹里搜文本文件（正则）。用户说“我本地的素材/文档里有…”时先用它；只能搜已授权文件夹，读不到任意路径。
 - flovart_todo：多步制作的任务清单。
 command.list/schema 属于 CLI discovery/debug，不是你的工具；不得访问 Shell、任意文件或 Provider Secret。
 
@@ -608,8 +668,22 @@ const PRODUCTION_SKILL_BINDING_ENTRY = 'flovart.production-skill-binding';
 
 /** 分支切片：保留到指定 entry（含）为止；找不到返回 null。 */
 export function entriesUpTo<T extends { id: string }>(entries: readonly T[], entryId: string): T[] | null {
-  const index = entries.findIndex(entry => entry.id === entryId);
+  const index = branchEntryIndex(entries, [entryId]);
   return index < 0 ? null : entries.slice(0, index + 1);
+}
+
+/** 分支点定位：先按 entry id，再按消息 id；candidates 从最想用的开始。 */
+export function branchEntryIndex(
+  entries: readonly { id: string; message?: unknown }[],
+  candidates: readonly string[],
+): number {
+  for (const candidate of candidates) {
+    const direct = entries.findIndex(entry => entry.id === candidate);
+    if (direct >= 0) return direct;
+    const byMessage = entries.findIndex(entry => (entry.message as { id?: string } | undefined)?.id === candidate);
+    if (byMessage >= 0) return byMessage;
+  }
+  return -1;
 }
 
 function snapshotMessage(entry: { type: string; id: string; message?: AgentMessage; customType?: string }): {
@@ -799,19 +873,40 @@ export class BrowserAgentKernel {
   }
 
   /** 从某条消息处分出新会话：复制到该消息为止的全部内容，原会话保持不变。 */
-  async branchSession(fromSessionId: string, uptoEntryId: string): Promise<unknown> {
+  async branchSession(fromSessionId: string, upto: string | readonly string[]): Promise<unknown> {
     if (!this.repo) this.repo = new BrowserSessionRepo(this.projectId);
-    const source = await this.repo.open({ id: fromSessionId });
-    const entries = await source.getBranch();
-    const kept = entriesUpTo(entries, uptoEntryId);
-    if (!kept || !kept.length) throw new Error('分支点不存在：' + uptoEntryId);
+    const candidates = (typeof upto === 'string' ? [upto] : [...upto]).filter(Boolean);
+    // 优先用内存里的当前会话：历史会话可能还没落盘，或消息已被压缩成摘要。
+    const liveMetadata = this.session ? await this.session.getMetadata() : null;
+    const live = liveMetadata?.id === fromSessionId ? this.session! : null;
+    const sessions: Session[] = live ? [live] : [];
+    if (!live) {
+      try {
+        sessions.push(await this.repo.open({ id: fromSessionId }));
+      } catch {
+        // 面板的 activeSessionId 可能滞后或为空；下面用当前活动会话兜底。
+      }
+      if (this.session) sessions.push(this.session);
+    }
+    if (!sessions.length) throw new Error('会话不存在：' + fromSessionId);
+    let kept: Awaited<ReturnType<typeof this.session.getBranch>> | null = null;
+    for (const source of sessions) {
+      const entries = await source.getBranch();
+      const index = branchEntryIndex(entries, candidates);
+      if (index >= 0) {
+        kept = entries.slice(0, index + 1);
+        break;
+      }
+    }
+    if (!kept) throw new Error('分支点不存在：' + (candidates[0] || ''));
+    const branchPointId = kept[kept.length - 1].id;
     this.agent?.abort();
     this.unsubscribe?.();
     this.unsubscribe = null;
     this.boundProductionSkill = null;
     this.productionSkillBindingError = null;
     const branch = await this.repo.create({
-      metadata: { projectId: this.projectId, role: 'branch', branchedFrom: fromSessionId, branchPointId: uptoEntryId },
+      metadata: { projectId: this.projectId, role: 'branch', branchedFrom: fromSessionId, branchPointId },
     });
     for (const entry of kept) {
       if (entry.type === 'message' && 'message' in entry && entry.message) await branch.appendMessage(entry.message);

@@ -31,7 +31,7 @@ describe('Flovart Agent panel explicit state', () => {
         })
         : json({ ok: true })
     )));
-    const writeText = vi.fn(async () => undefined);
+    const writeText = vi.fn(async (_text: string) => undefined);
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} />);
 
