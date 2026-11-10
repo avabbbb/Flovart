@@ -13,7 +13,7 @@ import localforage from 'localforage';
 import { Type } from 'typebox';
 import { resolveAgentTextRoutes } from './agentTextRoutes';
 import { createBrowserWorkflowContract } from './browserWorkflowContract';
-import { withWorkflowHumanApproval } from './workflowDispatcher';
+import { withWorkflowHumanApproval, workflowCommandNeedsConfirmation } from './workflowDispatcher';
 import { getBundledProductionSkill, type ProductionSkillAttachment } from './productionSkillCatalog';
 import { workflowConfirmRequest } from './workflowAgentBridge';
 import type { AgentConfirmRequest } from './agentSpendMandate';
@@ -26,6 +26,7 @@ import type { WorkflowNode } from '../components/workflow/types';
 import { loadAgentNodeMedia, type AgentVideoFrame } from './agentMediaView';
 import { formatSearchSources, searchAgentWeb, WEB_SEARCH_TOOL_NAME, type AgentSearchCredential, type SearchRecency } from './agentWebSearch';
 import { formatGrepMatches, grepLocalFolders, LOCAL_GREP_TOOL_NAME } from './agentLocalGrep';
+import { decideToolCall, toolRiskFor, type ApprovalPolicy, type SandboxPolicy } from './agentToolPolicy';
 import type { UserApiKey } from '../types';
 import { displayError } from './displayError';
 
@@ -469,10 +470,24 @@ export interface BrowserAgentToolDependencies {
   getNodes?: () => readonly WorkflowNode[];
   /** DeepSeek 搜索凭证；提供时注册 flovart_web_search */
   webSearch?: AgentSearchCredential;
+  /** 当前工具策略；提供时每次调用前按沙箱/审批判定 allow / ask / deny */
+  getPolicy?: () => { sandbox: SandboxPolicy; approval: ApprovalPolicy };
 }
 
 export function createBrowserAgentTools(dependencies: BrowserAgentToolDependencies): AgentTool[] {
   const workflowContract = createBrowserWorkflowContract();
+  // 调用前先过策略层：deny 直接拒绝；ask 时先问用户，命令面自己会问的（删除、付费）不重复弹窗。
+  const guard = async (command: string, params: Record<string, unknown>) => {
+    const policy = dependencies.getPolicy?.();
+    if (!policy) return;
+    const risk = toolRiskFor(command, params);
+    const verdict = decideToolCall({ ...policy, risk });
+    if (verdict.decision === 'deny') throw new Error(verdict.reason);
+    if (verdict.decision === 'allow') return;
+    if (workflowCommandNeedsConfirmation(command, params)) return;
+    const approved = await dependencies.confirm(verdict.summary);
+    if (!approved) throw new Error('用户拒绝了该操作');
+  };
   const commandTools: AgentTool[] = AGENT_BROWSER_COMMANDS.map(command => {
     const definition = COMMAND_REGISTRY[command] || { args: {}, summary: command };
     const args = (definition.args || {}) as Record<string, string>;
@@ -503,6 +518,7 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
           source: 'agent',
           idempotencyKey: dependencies.activeChangeSetId,
         } as const;
+        await guard(command, params as Record<string, unknown>);
         let result = await workflowContract.dispatch(envelope);
         if (result.confirmation?.required) {
           const approved = await dependencies.confirm(result.confirmation.summary, workflowConfirmRequest(envelope));
@@ -520,13 +536,13 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
     };
   });
   const extraTools: AgentTool[] = [];
-  if (dependencies.webSearch) extraTools.push(createWebSearchTool(dependencies.webSearch));
-  extraTools.push(createLocalGrepTool());
+  if (dependencies.webSearch) extraTools.push(createWebSearchTool(dependencies.webSearch, guard));
+  extraTools.push(createLocalGrepTool(guard));
   if (dependencies.getNodes) extraTools.push(createMediaViewTool(dependencies.getNodes));
   return [...commandTools, ...extraTools];
 }
 
-function createWebSearchTool(credential: AgentSearchCredential): AgentTool {
+function createWebSearchTool(credential: AgentSearchCredential, guard: (command: string, params: Record<string, unknown>) => Promise<void>): AgentTool {
   const recency = Type.Union([Type.Literal('day'), Type.Literal('week'), Type.Literal('month'), Type.Literal('year')]);
   return {
     name: WEB_SEARCH_TOOL_NAME,
@@ -539,6 +555,7 @@ function createWebSearchTool(credential: AgentSearchCredential): AgentTool {
     }),
     execute: async (_toolCallId, params, signal) => {
       const input = params as { query: string; recency?: SearchRecency; limit?: number };
+      await guard(WEB_SEARCH_TOOL_NAME, input as unknown as Record<string, unknown>);
       const result = await searchAgentWeb({ credential, query: input.query, recency: input.recency, limit: input.limit, signal });
       return {
         content: [{ type: 'text', text: formatSearchSources(result.sources) }],
@@ -548,7 +565,7 @@ function createWebSearchTool(credential: AgentSearchCredential): AgentTool {
   };
 }
 
-function createLocalGrepTool(): AgentTool {
+function createLocalGrepTool(guard: (command: string, params: Record<string, unknown>) => Promise<void>): AgentTool {
   return {
     name: LOCAL_GREP_TOOL_NAME,
     label: 'files.grep',
@@ -561,6 +578,7 @@ function createLocalGrepTool(): AgentTool {
     }),
     execute: async (_toolCallId, params, signal) => {
       const input = params as { pattern: string; path?: string; case?: boolean; limit?: number };
+      await guard(LOCAL_GREP_TOOL_NAME, input as unknown as Record<string, unknown>);
       const result = await grepLocalFolders({
         pattern: input.pattern,
         path: input.path,

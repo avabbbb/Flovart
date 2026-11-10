@@ -40,6 +40,7 @@ import { AgentReferenceChip } from './AgentReferenceChip';
 import { AgentTodoCard } from './AgentTodoCard';
 import { copyToClipboard, transcriptMarkdown } from './agentTranscript';
 import { resolveSearchCredential } from '../../services/agentWebSearch';
+import { policyForMode } from '../../services/agentToolPolicy';
 import { AGENT_TODO_TOOL_NAME, latestTodoFromMessages, todoFromToolResult, type AgentTodoItem } from './agentTodo';
 import { AgentHeaderLeadingContext } from './agentHeaderSlot';
 import { DrawerChromeCollapse, DrawerChromeTabs } from '../studio/drawerChrome';
@@ -392,7 +393,7 @@ const userApiKeysRef = useRef(userApiKeys);
       const kernel = new BrowserAgentKernel({
         projectId: project.id,
         route,
-        tools: createBrowserAgentTools({ projectId: project.id, confirm, activeChangeSetId: '', getNodes: () => projectRef.current.nodes, webSearch: searchCredential ?? undefined }),
+        tools: createBrowserAgentTools({ projectId: project.id, confirm, activeChangeSetId: '', getNodes: () => projectRef.current.nodes, webSearch: searchCredential ?? undefined, getPolicy: () => policyForMode(modeRef.current) }),
         confirm,
         systemPrompt: BROWSER_DEFAULT_SYSTEM_PROMPT + receiptContext,
       });

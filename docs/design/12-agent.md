@@ -36,6 +36,7 @@ Transport 只做参数解码、权限上下文与结果编码；不做 MCP → C
 
 - 修改绑定明确 project / revision；重试使用稳定幂等 ID；未知提交先查询。
 - Agent 工具权限 ≠ Provider 费用授权；已确认范围内不重复询问，范围变化重新确认。
+- 工具调用先过策略层：沙箱 `read-only` / `workspace-write` / `danger-full-access` 决定能不能写，审批 `never` / `on-request` / `untrusted` 决定要不要问；删除与付费执行始终确认，策略层不重复弹命令面已经发起的确认。手动模式 = `untrusted`，自动模式 = `on-request`。
 - Skill、日志、连接状态、项目数据不携带 Provider 原始 Key。
 - 外部 Agent 不直接写 React store、localStorage schema 或 Runtime 私有数据库。
 - 一个 Agent 连接失败不阻塞其他 transport。

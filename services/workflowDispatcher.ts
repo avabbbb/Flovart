@@ -329,6 +329,11 @@ function requiresWorkflowConfirmation(envelope: WorkflowCommandEnvelope) {
   return getWorkflowOperationCapabilityByNodeTool(tool)?.confirmation !== 'none';
 }
 
+/** 工具策略层用：这条命令是否已经由命令面自己发起确认（避免重复弹窗）。 */
+export function workflowCommandNeedsConfirmation(command: string, args: Record<string, unknown>): boolean {
+  return requiresWorkflowConfirmation({ id: 'policy-probe', command, args, source: 'agent' } as WorkflowCommandEnvelope);
+}
+
 /** workflow.node.run 的目标节点：nodeId 单跑，或 nodeIds 一次确认后批量并行。 */
 function workflowRunNodeIds(args: Record<string, unknown>): string[] {
   if (args.nodeIds === undefined) return [requiredString(args.nodeId || args.id, 'nodeId')];
