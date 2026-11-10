@@ -818,6 +818,14 @@
       "watchers": 0,
       "releases": 18,
       "downloads": 112
+    },
+    {
+      "date": "2026-11-10",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 21,
+      "downloads": 113
     }
   ],
   "releaseAssets": [
@@ -829,15 +837,15 @@
     },
     {
       "release": "v0.1.0",
-      "name": "flovart-agent-toolkit-win32-x64.tar.gz",
-      "downloads": 4,
-      "updatedAt": "2026-10-16T06:50:45Z"
+      "name": "Flovart_0.1.0_aarch64.dmg",
+      "downloads": 5,
+      "updatedAt": "2026-10-16T06:47:32Z"
     },
     {
       "release": "v0.1.0",
-      "name": "Flovart_0.1.0_aarch64.dmg",
+      "name": "flovart-agent-toolkit-win32-x64.tar.gz",
       "downloads": 4,
-      "updatedAt": "2026-10-16T06:47:32Z"
+      "updatedAt": "2026-10-16T06:50:45Z"
     },
     {
       "release": "v0.1.0",
@@ -964,6 +972,60 @@
       "name": "SHA256SUMS-x86_64-unknown-linux-gnu.txt",
       "downloads": 2,
       "updatedAt": "2026-10-16T06:47:58Z"
+    },
+    {
+      "release": "nightly-186-f2c0348",
+      "name": "Flovart_0.3.0_aarch64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-11-09T16:10:40Z"
+    },
+    {
+      "release": "nightly-186-f2c0348",
+      "name": "Flovart_0.3.0_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-11-09T16:08:34Z"
+    },
+    {
+      "release": "nightly-186-f2c0348",
+      "name": "Flovart_0.3.0_x64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-11-09T16:18:44Z"
+    },
+    {
+      "release": "nightly-186-f2c0348",
+      "name": "Flovart_aarch64.app.tar.gz",
+      "downloads": 0,
+      "updatedAt": "2026-11-09T16:10:43Z"
+    },
+    {
+      "release": "nightly-186-f2c0348",
+      "name": "Flovart_x64.app.tar.gz",
+      "downloads": 0,
+      "updatedAt": "2026-11-09T16:18:52Z"
+    },
+    {
+      "release": "nightly-185-c91b757",
+      "name": "Flovart_0.3.0_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-11-09T15:22:40Z"
+    },
+    {
+      "release": "nightly-185-c91b757",
+      "name": "Flovart_0.3.0_x64.dmg",
+      "downloads": 0,
+      "updatedAt": "2026-11-09T15:38:51Z"
+    },
+    {
+      "release": "nightly-185-c91b757",
+      "name": "Flovart_x64.app.tar.gz",
+      "downloads": 0,
+      "updatedAt": "2026-11-09T15:38:55Z"
+    },
+    {
+      "release": "nightly-184-e2d9a6c",
+      "name": "Flovart_0.3.0_x64-setup.exe",
+      "downloads": 0,
+      "updatedAt": "2026-11-09T15:12:42Z"
     },
     {
       "release": "nightly-154-af9a7f2",
@@ -1470,5 +1532,5 @@
       "updatedAt": "2026-10-16T03:30:20Z"
     }
   ],
-  "updatedAt": "2026-11-09T06:48:07.215Z"
+  "updatedAt": "2026-11-10T07:27:36.344Z"
 }
