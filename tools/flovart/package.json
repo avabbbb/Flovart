@@ -23,6 +23,7 @@
     "local-agent.js",
     "local-status.js",
     "operation-gateway.js",
+    "workflow-operation-schema.js",
     "mcp-server.js",
     "public-status.js",
     "ensure.js",

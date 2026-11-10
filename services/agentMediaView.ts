@@ -20,10 +20,12 @@ export interface AgentMediaView {
 
 export async function loadAgentNodeMedia(
   nodes: readonly WorkflowNode[],
-  options: { frames?: readonly AgentVideoFrame[]; maxImages?: number } = {},
+  options: { frames?: readonly AgentVideoFrame[]; times?: readonly number[]; maxImages?: number } = {},
 ): Promise<AgentMediaView> {
   const maxImages = options.maxImages ?? AGENT_MEDIA_MAX_IMAGES;
   const frames = options.frames?.length ? options.frames : AGENT_VIDEO_FRAMES;
+  // 调用方给了秒数就按秒切帧（任意时间点），否则仍按首/中/尾。
+  const times = (options.times || []).filter(time => Number.isFinite(time) && time >= 0);
   const images: ImageContent[] = [];
   const notes: string[] = [];
   for (const node of nodes) {
@@ -43,6 +45,17 @@ export async function loadAgentNodeMedia(
         notes.push(node.id + '：图片「' + node.title + '」');
         continue;
       }
+      if (times.length) {
+        const taken: string[] = [];
+        for (const time of times) {
+          if (images.length >= maxImages) break;
+          const extracted = await extractVideoFrame(blob, 'current', time);
+          images.push(await toImageContent(extracted.blob));
+          taken.push(time + 's');
+        }
+        notes.push(node.id + '：视频「' + node.title + '」帧 ' + taken.join('/'));
+        continue;
+      }
       const taken: string[] = [];
       for (const frame of frames) {
         if (images.length >= maxImages) break;
@@ -58,7 +71,7 @@ export async function loadAgentNodeMedia(
   return { images, notes };
 }
 
-async function toImageContent(blob: Blob): Promise<ImageContent> {
+export async function toImageContent(blob: Blob): Promise<ImageContent> {
   const bitmap = await createImageBitmap(blob);
   try {
     // 长边超过 AGENT_MEDIA_MAX_EDGE 时等比缩小，不放大。

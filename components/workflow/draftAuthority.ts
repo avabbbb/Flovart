@@ -73,6 +73,17 @@ function versionConnection(before: WorkflowConnection | undefined, after: Workfl
   return { ...after, objectVersion: Math.max(after.objectVersion || 0, (before.objectVersion || 1) + 1) };
 }
 
+/** expectedRevision 之后被改动过的节点/连线 id（用于冲突说明与按节点重放判断）。 */
+function objectsChangedSince(project: WorkflowProject, revision: number): Set<string> {
+  const changed = new Set<string>();
+  for (const changeSet of project.draftChangeSets || []) {
+    if (changeSet.resultDraftVersion <= revision) continue;
+    changeSet.nodeChanges.forEach(change => changed.add(change.id));
+    changeSet.connectionChanges.forEach(change => changed.add(change.id));
+  }
+  return changed;
+}
+
 function changes<T extends { id: string }>(before: T[], after: T[]) {
   const beforeById = new Map(before.map(item => [item.id, item]));
   const afterById = new Map(after.map(item => [item.id, item]));
@@ -217,6 +228,7 @@ export type WorkflowMutationResult = {
     actualRevision?: number;
     objectId?: string;
     currentVersion?: number;
+    changedObjectIds?: string[];
   };
 };
 
@@ -262,15 +274,30 @@ export function applyWorkflowMutation(project: WorkflowProject, envelope: Workfl
   }
   const currentRevision = project.draftVersion || 1;
   if (envelope.expectedRevision !== currentRevision) {
-    return {
-      ok: false,
-      error: {
-        code: 'REVISION_CONFLICT',
-        message: `Workflow 草稿版本已变化：期望 ${envelope.expectedRevision}，当前 ${currentRevision}。`,
-        expectedRevision: envelope.expectedRevision,
-        actualRevision: currentRevision,
-      },
-    };
+    // 只改未被动过的节点时允许重放（按节点做乐观锁）：界面每一下微调都会加版本，
+    // 一律按整体版本拒绝会让 Agent 永远写不进去。
+    const changed = objectsChangedSince(project, envelope.expectedRevision);
+    const targets = envelope.ops.filter(op => op.type === 'update_node').map(op => op.id);
+    const onlyNodeUpdates = targets.length === envelope.ops.length;
+    const touched = targets.filter(id => changed.has(id));
+    if (!onlyNodeUpdates || touched.length > 0) {
+      const changedLabel = [...changed].slice(0, 8).map(id => {
+        const node = project.nodes.find(item => item.id === id);
+        return node ? `节点「${node.title}」(${id})` : id;
+      });
+      return {
+        ok: false,
+        error: {
+          code: 'REVISION_CONFLICT',
+          message: `Workflow 草稿版本已变化：期望 ${envelope.expectedRevision}，当前 ${currentRevision}。`
+            + (changedLabel.length ? `期间改动：${changedLabel.join('、')}${changed.size > changedLabel.length ? ` 等 ${changed.size} 处` : ''}。` : '')
+            + (onlyNodeUpdates ? (touched.length ? `要改的 ${touched.join('、')} 已被改动，请重新读取后再写。` : '') : '本次不是只改已有节点，请重新读取后再写。'),
+          expectedRevision: envelope.expectedRevision,
+          actualRevision: currentRevision,
+          changedObjectIds: [...changed],
+        },
+      };
+    }
   }
   const applied = applyWorkflowDraftChangeSet(project, {
     id: envelope.mutationId,

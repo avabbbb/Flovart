@@ -123,7 +123,11 @@ export function updateWorkflowOperationRecipe(
   const recipe = operation.recipe;
   const promptDocument = patch.prompt === undefined && patch.richTextDocument === undefined
     ? recipe.promptDocument
-    : { text: patch.prompt ?? recipe.promptDocument.text, richTextDocument: patch.richTextDocument ?? recipe.promptDocument.richTextDocument };
+    : {
+      text: patch.prompt ?? recipe.promptDocument.text,
+      // 只给新 prompt 时不沿用旧富文本，避免编辑器继续显示旧内容。
+      richTextDocument: patch.richTextDocument ?? (patch.prompt === undefined ? recipe.promptDocument.richTextDocument : undefined),
+    };
   const parameters = patch.parameters ? parseWorkflowOperationParameters(operation.capabilityId, patch.parameters) : recipe.parameters;
   const inputBindings = patch.inputBindings ? [...patch.inputBindings].sort((left, right) => left.order - right.order) : recipe.inputBindings;
   validateWorkflowOperationInputBindings(operation.capabilityId, inputBindings);

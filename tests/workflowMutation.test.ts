@@ -101,6 +101,47 @@ describe('WorkflowMutationEnvelope', () => {
     expect(project.nodes).toEqual([]);
   });
 
+  it('rebases an update_node write from a stale revision when its node is untouched', () => {
+    const project = createWorkflowProject('按节点重放');
+    project.nodes = [
+      createWorkflowNode('a', 'text', { x: 0, y: 0 }, { content: 'a' }),
+      createWorkflowNode('b', 'text', { x: 200, y: 0 }, { content: 'b' }),
+    ];
+    const first = applyWorkflowMutation(project, {
+      projectId: project.id, expectedRevision: 1, mutationId: 'ui-1', source: 'ui', intent: '改 b',
+      ops: [{ type: 'update_node', id: 'b', patch: { title: 'B' } }],
+    });
+    expect(first.ok).toBe(true);
+    if (first.ok === false) throw new Error(first.error.message);
+
+    // Agent 拿的是 revision 1，界面已经把版本推到 2；目标节点 a 没被动过，允许写入。
+    const stale = applyWorkflowMutation(first.project, {
+      projectId: project.id, expectedRevision: 1, mutationId: 'agent-1', source: 'agent', intent: '改 a',
+      ops: [{ type: 'update_node', id: 'a', patch: { title: 'A' } }],
+    });
+    expect(stale.ok).toBe(true);
+    if (stale.ok === false) throw new Error(stale.error.message);
+    expect(stale.project.nodes.find(node => node.id === 'a')?.title).toBe('A');
+    expect(stale.project.nodes.find(node => node.id === 'b')?.title).toBe('B');
+  });
+
+  it('names the objects that changed when a stale write targets an edited node', () => {
+    const project = createWorkflowProject('冲突说明');
+    project.nodes = [createWorkflowNode('b', 'text', { x: 0, y: 0 }, { content: 'b' })];
+    const first = applyWorkflowMutation(project, {
+      projectId: project.id, expectedRevision: 1, mutationId: 'ui-1', source: 'ui', intent: '改 b',
+      ops: [{ type: 'update_node', id: 'b', patch: { title: '已改标题' } }],
+    });
+    expect(first.ok).toBe(true);
+    if (first.ok === false) throw new Error(first.error.message);
+
+    const stale = applyWorkflowMutation(first.project, {
+      projectId: project.id, expectedRevision: 1, mutationId: 'agent-1', source: 'agent', intent: '再改 b',
+      ops: [{ type: 'update_node', id: 'b', patch: { title: '覆盖' } }],
+    });
+    expect(stale).toMatchObject({ ok: false, error: { code: 'REVISION_CONFLICT', changedObjectIds: ['b'], message: expect.stringContaining('已改标题') } });
+  });
+
   it('keeps view operations out of document revision, receipts, and undo history', () => {
     const project = createWorkflowProject('视图状态');
     project.nodes = [createWorkflowNode('node-1', 'text', { x: 0, y: 0 })];

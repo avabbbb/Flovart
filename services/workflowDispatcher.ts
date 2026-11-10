@@ -1,3 +1,4 @@
+import { WORKFLOW_NODE_PATCH_FIELDS, WORKFLOW_OPERATION_FIELDS } from '../tools/flovart/workflow-operation-schema.js';
 import { nanoid } from 'nanoid';
 import { WORKFLOW_MUTATION_COMMANDS, workflowCommandSummary } from '../components/workflow/agentOps';
 import { createWorkflowNode } from '../components/workflow/constants';
@@ -47,7 +48,7 @@ export interface WorkflowCommandResult {
   commandId: string;
   result?: unknown;
   confirmation?: { required: boolean; summary: string; code?: 'CONFIRMATION_REQUIRED' };
-  error?: { code: string; message: string; expectedRevision?: number; actualRevision?: number };
+  error?: { code: string; message: string; expectedRevision?: number; actualRevision?: number; changedObjectIds?: string[] };
 }
 
 export interface WorkflowDispatcherDependencies {
@@ -103,11 +104,43 @@ const redactProject = (project: WorkflowProject) => ({
   nodes: project.nodes.map(redactNode),
 });
 
+const INSPECT_CHANGE_SET_SUMMARY = 5;
+const INSPECT_RECEIPT_SUMMARY = 3;
+
+// inspect 默认只给最近的变更摘要：完整 ChangeSet / Receipt 的 before/after 会把模型上下文塞满。
+const inspectProject = (project: WorkflowProject) => {
+  const { draftChangeSets = [], workflowMutationReceipts = [], draftRedoStack: _redoStack, ...rest } = redactProject(project);
+  return {
+    ...rest,
+    draftChangeSets: draftChangeSets.slice(-INSPECT_CHANGE_SET_SUMMARY).map(item => ({
+      id: item.id,
+      at: item.at,
+      actor: item.actor,
+      intent: item.intent,
+      status: item.status,
+      baseDraftVersion: item.baseDraftVersion,
+      resultDraftVersion: item.resultDraftVersion,
+      nodeIds: item.nodeChanges.map(change => change.id),
+      connectionIds: item.connectionChanges.map(change => change.id),
+    })),
+    draftChangeSetsTotal: draftChangeSets.length,
+    workflowMutationReceipts: workflowMutationReceipts.slice(-INSPECT_RECEIPT_SUMMARY).map(item => ({
+      mutationId: item.mutationId,
+      previousRevision: item.previousRevision,
+      revision: item.revision,
+      replayed: item.replayed,
+      changeSetId: item.changeSetId,
+      createdAt: item.createdAt,
+    })),
+    workflowMutationReceiptsTotal: workflowMutationReceipts.length,
+  };
+};
+
 const error = (
   commandId: string,
   code: string,
   message: string,
-  details: Pick<NonNullable<WorkflowCommandResult['error']>, 'expectedRevision' | 'actualRevision'> = {},
+  details: Pick<NonNullable<WorkflowCommandResult['error']>, 'expectedRevision' | 'actualRevision' | 'changedObjectIds'> = {},
 ): WorkflowCommandResult => ({ ok: false, commandId, error: { code, message, ...details } });
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const requiredString = (value: unknown, label: string) => {
@@ -220,7 +253,15 @@ export function documentOperationsArg(value: unknown): WorkflowDocumentOperation
   if (!Array.isArray(value) || value.length === 0) throw new Error('operations 必须是非空数组');
   return value.map((operation, index) => {
     if (!isRecord(operation) || typeof operation.type !== 'string' || !DOCUMENT_OPERATION_TYPES.has(operation.type as WorkflowDocumentOperation['type'])) {
-      throw new Error('operations[' + index + '] 不是受支持的 Document Operation');
+      throw new Error('operations[' + index + '] 不是受支持的 Document Operation；可用 type：' + [...DOCUMENT_OPERATION_TYPES].join('、'));
+    }
+    // 未知字段直接报错并列出可用字段，避免 changes/fields 之类的猜测写法被静默丢弃后误报「无修改」。
+    const allowed = (WORKFLOW_OPERATION_FIELDS as Record<string, readonly string[]>)[operation.type];
+    if (allowed) {
+      const unknownFields = Object.keys(operation).filter(key => !allowed.includes(key));
+      if (unknownFields.length) {
+        throw new Error('operations[' + index + '] ' + operation.type + ' 不支持字段 ' + unknownFields.join('、') + '；可用字段：' + allowed.join('、'));
+      }
     }
     if (operation.type !== 'update_node') return operation as unknown as WorkflowDocumentOperation;
     // Agent 常把节点 id 写成 nodeId：归一化为 id；缺失时显式报错，不再落成静默空操作。
@@ -229,6 +270,18 @@ export function documentOperationsArg(value: unknown): WorkflowDocumentOperation
       : typeof nodeId === 'string' && nodeId.trim() ? nodeId
       : '';
     if (!id) throw new Error('operations[' + index + '] update_node 缺少节点 id');
+    if (rest.patch !== undefined) {
+      if (!isRecord(rest.patch)) throw new Error('operations[' + index + '] update_node.patch 必须是对象');
+      const patchFields: readonly string[] = WORKFLOW_NODE_PATCH_FIELDS;
+      const unknownPatch = Object.keys(rest.patch).filter(key => !patchFields.includes(key));
+      if (unknownPatch.length) {
+        throw new Error('operations[' + index + '] update_node.patch 不支持字段 ' + unknownPatch.join('、') + '；可用字段：' + patchFields.join('、') + '（提示词、配置写在 patch.metadata 里）');
+      }
+    }
+    if (rest.metadata !== undefined && !isRecord(rest.metadata)) throw new Error('operations[' + index + '] update_node.metadata 必须是对象');
+    if (!isRecord(rest.patch) && !isRecord(rest.metadata)) {
+      throw new Error('operations[' + index + '] update_node 需要 patch 或 metadata，例如 {"type":"update_node","id":"' + id + '","patch":{"title":"新标题"}}');
+    }
     return { ...rest, id } as unknown as WorkflowDocumentOperation;
   });
 }
@@ -340,7 +393,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
       } else if (command === 'workflow.inspect') {
         if (!project) return error(envelope.id, 'NOT_FOUND', '当前没有可用的 Workflow 项目。');
         // 制作圣经：结构化的锚点 / 镜头表 / 一致性问题，让 Agent 不必自己从节点里拼项目状态。
-        result = { ok: true, commandId: envelope.id, result: { ...redactProject(project), productionBible: buildProductionBible(project) } };
+        result = { ok: true, commandId: envelope.id, result: { ...inspectProject(project), productionBible: buildProductionBible(project) } };
       } else if (command === 'workflow.selection.get') {
         if (!project) return error(envelope.id, 'NOT_FOUND', '当前没有可用的 Workflow 项目。');
         const selectedNodeIds = project.selectedNodeIds.filter(nodeId => project.nodes.some(node => node.id === nodeId));
@@ -521,6 +574,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         if (applied.ok === false) return error(envelope.id, applied.error.code, applied.error.message, {
           expectedRevision: applied.error.expectedRevision,
           actualRevision: applied.error.actualRevision,
+          changedObjectIds: applied.error.changedObjectIds,
         });
         const affectedNodeIds = applied.changeSet.nodeChanges.map(change => change.id);
         const affectedConnectionIds = applied.changeSet.connectionChanges.map(change => change.id);

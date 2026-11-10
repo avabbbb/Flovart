@@ -8,6 +8,7 @@ import * as z from 'zod/v4';
 import { AGENT_OPERATION_DEFINITIONS, AGENT_PUBLIC_COMMANDS } from './agent-surface.js';
 import { COMMAND_REGISTRY } from './core.js';
 import { createOperationGateway, MCP_TOOL_NAMES } from './operation-gateway.js';
+import { WORKFLOW_APPLY_GUIDE } from './workflow-operation-schema.js';
 
 const CONTEXT_FIELDS = new Set(['agentIdentity', 'hostSessionId', 'idempotencyKey']);
 
@@ -32,6 +33,7 @@ export function mcpInputShape(command) {
   const shape = Object.fromEntries(
     Object.entries(definition.args || {}).map(([name, descriptor]) => [name, descriptorSchema(descriptor)]),
   );
+  if (command === 'workflow.apply' && shape.operations) shape.operations = shape.operations.describe(WORKFLOW_APPLY_GUIDE);
   // Keep this optional at the Zod seam so the canonical gateway can return
   // the same structured INVALID_ARGUMENT error as the CLI/SDK projections.
   if (AGENT_OPERATION_DEFINITIONS[command]?.mutation) shape.idempotencyKey = z.string().min(1).optional();
@@ -110,7 +112,7 @@ export function createMcpServer(options = {}) {
     if (!name) throw new Error(`Missing MCP tool name for ${command}`);
     const definition = COMMAND_REGISTRY[command];
     server.registerTool(name, {
-      description: definition.summary,
+      description: command === 'workflow.apply' ? definition.summary + ' ' + WORKFLOW_APPLY_GUIDE : definition.summary,
       inputSchema: mcpInputShape(command),
     }, async input => {
       const values = input || {};

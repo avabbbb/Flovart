@@ -259,7 +259,16 @@ function normalizeDocumentNode(node: WorkflowNode): WorkflowNode {
         reject(opIndex, op, '节点不存在：' + op.id);
         return;
       }
-      const metadataPatch = { ...(op.patch?.metadata || {}), ...(op.metadata || {}) };
+      const rawMetadataPatch: Record<string, unknown> = { ...(op.patch?.metadata || {}), ...(op.metadata || {}) };
+      const isPlainRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+      const currentConfig = (current.metadata as unknown as Record<string, unknown>).config;
+      // metadata 按顶层键合并；config 再合并一层（只改 durationSec 不会丢 modelId）；
+      // 只写 prompt 不带 richTextDocument 时清掉旧富文本，编辑器显示与执行都以新 prompt 为准。
+      const metadataPatch = {
+        ...rawMetadataPatch,
+        ...(isPlainRecord(rawMetadataPatch.config) && isPlainRecord(currentConfig) ? { config: { ...currentConfig, ...rawMetadataPatch.config } } : {}),
+        ...('prompt' in rawMetadataPatch && !('richTextDocument' in rawMetadataPatch) ? { richTextDocument: undefined } : {}),
+      } as unknown as typeof current.metadata;
       const base = { ...current, ...op.patch, metadata: current.metadata };
       const updated = op.replaceMetadata
         ? { ...base, metadata: op.patch?.metadata || op.metadata || {} }

@@ -36,6 +36,24 @@ describe('workflow dispatcher', () => {
     expect(JSON.stringify(result.result)).not.toContain('private-key');
   });
 
+  it('inspects recent change summaries instead of full before/after histories', async () => {
+    const { dispatch, dependencies } = setup();
+    const project = dependencies.getState().projects[0];
+    await dispatch({
+      id: 'apply-for-inspect', command: 'workflow.apply', source: 'cli',
+      args: {
+        projectId: project.id, expectedRevision: project.draftVersion, mutationId: 'inspect-mutation',
+        operations: [{ type: 'update_node', id: 'image-1', patch: { title: '新标题' } }],
+      },
+    });
+
+    const inspected = await dispatch({ id: 'read-summary', command: 'workflow.inspect', args: {}, source: 'agent' });
+    expect(inspected.ok).toBe(true);
+    const body = JSON.stringify(inspected.result);
+    expect(body).not.toContain('"before"');
+    expect(inspected.result).toMatchObject({ draftChangeSetsTotal: 1, workflowMutationReceiptsTotal: 1 });
+  });
+
   it('reads the current selection without changing document revision or exposing media', async () => {
     const { dispatch, dependencies } = setup();
     const project = dependencies.getState().projects[0];

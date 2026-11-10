@@ -1,5 +1,6 @@
 import { AtSign, Box, Check, ChevronDown, Hand, Image as ImageIcon, KeyRound, LayoutGrid, Plus, RotateCw, Send, Square, Trash2, Video, X } from 'lucide-react';
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { AGENT_ATTACHMENT_MAX, composerAttachmentsToImages, createComposerAttachment, mergeComposerAttachments, releaseComposerAttachment, type AgentComposerAttachment } from '../../services/agentComposerAttachments';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
 import { isTauri } from '@tauri-apps/api/core';
 import {
@@ -189,6 +190,12 @@ const userApiKeysRef = useRef(userApiKeys);
   const modelPickerOpen = openLayer === 'modelPicker';
   const skillOpen = openLayer === 'skill';
   const [references, setReferences] = useState<AgentReference[]>([]);
+  // 对话框本地附件（粘贴截图 / 拖入视频）：只在当轮对话里作为图片内容发送，不写画布。
+  const [attachments, setAttachments] = useState<AgentComposerAttachment[]>([]);
+  const attachmentsRef = useRef<AgentComposerAttachment[]>([]);
+  attachmentsRef.current = attachments;
+  const [attachDragActive, setAttachDragActive] = useState(false);
+  const attachDragDepth = useRef(0);
   const [mentionQuery, setMentionQuery] = useState('');
   const [creationMode, setCreationMode] = useState<AgentCreationMode>('all');
   const [preferredModel, setPreferredModel] = useState<AgentModelSelection | null>(null);
@@ -615,9 +622,33 @@ const userApiKeysRef = useRef(userApiKeys);
     }
   };
 
+  const addAttachmentFiles = (files: FileList | File[] | null | undefined) => {
+    if (!files) return;
+    const incoming = Array.from(files).map(file => createComposerAttachment(file)).filter((item): item is AgentComposerAttachment => Boolean(item));
+    if (!incoming.length) return;
+    const { kept, rejected } = mergeComposerAttachments(attachmentsRef.current, incoming, AGENT_ATTACHMENT_MAX);
+    rejected.forEach(releaseComposerAttachment);
+    attachmentsRef.current = kept;
+    setAttachments(kept);
+    focusComposer();
+  };
+
+  const removeAttachment = (attachment: AgentComposerAttachment) => {
+    releaseComposerAttachment(attachment);
+    const next = attachmentsRef.current.filter(item => item !== attachment);
+    attachmentsRef.current = next;
+    setAttachments(next);
+  };
+
+  // 卸载时释放剩余附件的 object URL，避免内存泄漏。
+  useEffect(() => () => {
+    attachmentsRef.current.forEach(releaseComposerAttachment);
+    attachmentsRef.current = [];
+  }, []);
+
   const send = async () => {
     const text = prompt.trim();
-    if ((!text && references.length === 0) || turnRef.current.phase !== 'idle') return;
+    if ((!text && references.length === 0 && attachments.length === 0) || turnRef.current.phase !== 'idle') return;
     // 连接中不发送（按钮本就禁用）；不再在发送时强行把连接状态改成 ready。
     if (status === 'connecting') return;
     if (!client.current && !kernelRef.current) {
@@ -630,16 +661,27 @@ const userApiKeysRef = useRef(userApiKeys);
       return;
     }
     const referenceContext = references.length ? `引用上下文：\n${references.map(reference => `- @${reference.label}（${reference.type === 'node' ? `工作流节点 nodeId=${reference.id}` : `我的素材 assetId=${reference.id}`}）`).join('\n')}` : '';
-    const requestText = applyAgentTurnPreamble([text, referenceContext].filter(Boolean).join('\n\n'), {
+    const turnAttachments = attachmentsRef.current;
+    const attachmentContext = turnAttachments.length
+      ? `本轮附带的本地媒体（画面已作为图片内容一并发给你）：\n${turnAttachments.map(item => `- ${item.kind === 'image' ? '图片' : '视频'}「${item.name}」`).join('\n')}`
+      : '';
+    const requestText = applyAgentTurnPreamble([text, referenceContext, attachmentContext].filter(Boolean).join('\n\n'), {
       creationMode,
       preferredModel: preferredModel ? { capability: preferredModel.capability, name: preferredModel.name } : null,
     });
-    const displayText = [text, references.length ? `引用：${references.map(reference => `@${reference.label}`).join('、')}` : ''].filter(Boolean).join('\n\n');
+    const displayText = [
+      text,
+      references.length ? `引用：${references.map(reference => `@${reference.label}`).join('、')}` : '',
+      turnAttachments.length ? `附件：${turnAttachments.map(item => item.name).join('、')}` : '',
+    ].filter(Boolean).join('\n\n');
     const assistantId = `stream-${crypto.randomUUID()}`;
     stickToBottom.current = true;
     setMessages(items => [...items, { id: crypto.randomUUID(), role: 'user', text: displayText }]);
     setPrompt('');
     setReferences([]);
+    turnAttachments.forEach(releaseComposerAttachment);
+    attachmentsRef.current = [];
+    setAttachments([]);
     dispatchLayer({ type: 'close', layer: 'mention' });
     const { turnId } = dispatchTurn({ type: 'send' });
     setSetupBlocker(null);
@@ -656,14 +698,24 @@ const userApiKeysRef = useRef(userApiKeys);
           const node = project.nodes.find(item => item.id === reference.id);
           return node ? [node] : [];
         });
-        const media = referencedNodes.length > 0 ? await loadAgentNodeMedia(referencedNodes) : { images: [], notes: [] };
-        const kernelText = media.notes.length > 0 ? requestText + '\n\n已附带引用画面：\n' + media.notes.join('\n') : requestText;
+        const nodeMedia = referencedNodes.length > 0 ? await loadAgentNodeMedia(referencedNodes) : { images: [], notes: [] };
+        const attachmentMedia = turnAttachments.length ? await composerAttachmentsToImages(turnAttachments) : { images: [], notes: [] };
+        // 本地附件优先占位，避免被 6 张上限挤掉；节点画面随后补位。
+        const media = {
+          images: [...attachmentMedia.images, ...nodeMedia.images].slice(0, 6),
+          notes: [...attachmentMedia.notes, ...nodeMedia.notes],
+        };
+        const kernelText = media.notes.length > 0 ? requestText + '\n\n已附带画面：\n' + media.notes.join('\n') : requestText;
         await kernelRef.current.send(kernelText, media.images, skillAttachment);
         const snapshot = await kernelRef.current.snapshot();
         if (snapshot.messages.some(message => message.error)) failed = true;
         handleEvent({ type: 'snapshot', snapshot: snapshot as FlovartAgentSnapshot }, assistantId);
       } else {
-        await client.current!.turn(project.id, requestText, event => {
+        // 托管 Agent 的 /turn 只收文本，无法随消息带图片；明确告知而不是假装看过画面。
+        const managedText = turnAttachments.length
+          ? requestText + '\n\n注意：本轮附带的本地媒体（' + turnAttachments.map(item => item.name).join('、') + '）无法通过当前托管通道传给 Agent，请先让用户上传到画布或改用内置 Agent。'
+          : requestText;
+        await client.current!.turn(project.id, managedText, event => {
           if (event.type === 'error' || (event.type === 'snapshot' && event.snapshot.messages.some(message => message.error))) failed = true;
           handleEvent(event, assistantId);
         }, controller.signal, skillAttachment);
@@ -863,7 +915,35 @@ const userApiKeysRef = useRef(userApiKeys);
             <button type={'button'} disabled={confirmation.blocked} onClick={() => settleConfirmation(confirmation, true)}>{confirmation.offerMandate ? '仅批准本次' : t('agentPanel.allow')}</button>
           </div>
         </div>}
-        <div ref={composer} className="workflow-agent__composer">
+        <div
+          ref={composer}
+          className="workflow-agent__composer"
+          data-testid="agent-composer"
+          onDragEnter={event => {
+            if (!Array.from(event.dataTransfer.items).some(item => item.kind === 'file' && (item.type.startsWith('image/') || item.type.startsWith('video/')))) return;
+            event.preventDefault();
+            attachDragDepth.current += 1;
+            setAttachDragActive(true);
+          }}
+          onDragOver={event => {
+            if (!Array.from(event.dataTransfer.items).some(item => item.kind === 'file' && (item.type.startsWith('image/') || item.type.startsWith('video/')))) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'copy';
+          }}
+          onDragLeave={event => {
+            if (!Array.from(event.dataTransfer.items).some(item => item.kind === 'file' && (item.type.startsWith('image/') || item.type.startsWith('video/')))) return;
+            event.preventDefault();
+            attachDragDepth.current = Math.max(0, attachDragDepth.current - 1);
+            if (attachDragDepth.current === 0) setAttachDragActive(false);
+          }}
+          onDrop={event => {
+            event.preventDefault();
+            attachDragDepth.current = 0;
+            setAttachDragActive(false);
+            addAttachmentFiles(event.dataTransfer.files);
+          }}
+        >
+          {attachDragActive && <div className="agent-composer__drop" aria-hidden="true"><span>{language === 'zho' ? '松手加入本轮对话' : 'Release to attach'}</span></div>}
           <ProductionSkillDeck
             attachment={skillAttachment}
             onChange={value => {
@@ -900,6 +980,14 @@ const userApiKeysRef = useRef(userApiKeys);
             onReplace={() => startReplace(reference)}
             onRemove={() => setReferences(current => current.filter(item => item !== reference))}
           />)}</div>}
+          {attachments.length > 0 && <div className="workflow-agent__attachments" aria-label={language === 'zho' ? '本轮附件' : 'Attachments'}>
+            {attachments.map(item => <div key={item.id} title={`${item.name} · ${item.kind === 'image' ? '图片' : '视频'}`}>
+              {item.kind === 'image'
+                ? <img src={item.previewUrl} alt={item.name} />
+                : <video src={item.previewUrl} muted playsInline preload="metadata" />}
+              <button type="button" aria-label={`${language === 'zho' ? '移除附件' : 'Remove attachment'} ${item.name}`} onClick={() => removeAttachment(item)}><X size={10} /></button>
+            </div>)}
+          </div>}
           <textarea
             ref={textarea}
             value={prompt}
@@ -916,6 +1004,13 @@ const userApiKeysRef = useRef(userApiKeys);
             }}
             placeholder={needsConfiguration ? t('agentPanel.composerNeedConfig') : status === 'ready' ? t('agentPanel.composerPlaceholder') : t('agentPanel.composerOffline')}
             aria-label={t('agentPanel.composerAria')}
+            onPaste={event => {
+              const files = Array.from(event.clipboardData?.files || []);
+              if (!files.length) return;
+              // 有文件时阻止默认，避免把图片当成 HTML 文本塞进输入框；纯文本粘贴不受影响。
+              event.preventDefault();
+              addAttachmentFiles(files);
+            }}
             disabled={status === 'connecting'}
           />
           <div className="agent-composer__controls">
@@ -940,7 +1035,7 @@ const userApiKeysRef = useRef(userApiKeys);
             </div>
             {sending
               ? <button type="button" className="agent-composer__send" aria-label="停止" onClick={stop}><Square size={13} /></button>
-              : <button type="button" className="agent-composer__send" aria-label="发送" onClick={() => void send()} disabled={status !== 'ready' || (!prompt.trim() && references.length === 0)}><Send size={16} /></button>}
+              : <button type="button" className="agent-composer__send" aria-label="发送" onClick={() => void send()} disabled={status !== 'ready' || (!prompt.trim() && references.length === 0 && attachments.length === 0)}><Send size={16} /></button>}
           </div>
         </div>
       </section>

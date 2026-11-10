@@ -19,6 +19,7 @@ import { workflowConfirmRequest } from './workflowAgentBridge';
 import type { AgentConfirmRequest } from './agentSpendMandate';
 import { COMMAND_ALIASES, COMMAND_REGISTRY } from '../tools/flovart/core.js';
 import { AGENT_BROWSER_COMMANDS } from '../tools/flovart/agent-surface.js';
+import { WORKFLOW_APPLY_GUIDE, WORKFLOW_OPERATIONS_SCHEMA } from '../tools/flovart/workflow-operation-schema.js';
 import { createTodoTool, TODO_TOOL_NAME } from '../agent/todo.js';
 import type { ImageContent } from '@earendil-works/pi-ai';
 import type { WorkflowNode } from '../components/workflow/types';
@@ -471,13 +472,20 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
   const commandTools: AgentTool[] = AGENT_BROWSER_COMMANDS.map(command => {
     const definition = COMMAND_REGISTRY[command] || { args: {}, summary: command };
     const args = (definition.args || {}) as Record<string, string>;
-    const parameters = Type.Object(
-      Object.fromEntries(Object.entries(args).map(([name, descriptor]) => [name, descriptorSchema(descriptor)])),
+    // workflow.apply 的 operations 用完整的按 type 区分的 schema，模型不必猜写法。
+    const argumentSchema = (name: string, descriptor: string) => (
+      command === 'workflow.apply' && name === 'operations'
+        ? Type.Unsafe<unknown[]>({ ...WORKFLOW_OPERATIONS_SCHEMA })
+        : descriptorSchema(descriptor)
     );
+    const parameters = Type.Object(
+      Object.fromEntries(Object.entries(args).map(([name, descriptor]) => [name, argumentSchema(name, descriptor)])),
+    );
+    const summary = String(definition.summary || command);
     return {
       name: browserToolName(command),
       label: command,
-      description: String(definition.summary || command),
+      description: command === 'workflow.apply' ? summary + ' ' + WORKFLOW_APPLY_GUIDE : summary,
       parameters,
       execute: async (_toolCallId, params, _signal) => {
         const envelope = {
@@ -517,13 +525,14 @@ function createMediaViewTool(getNodes: () => readonly WorkflowNode[]): AgentTool
   return {
     name: MEDIA_VIEW_TOOL_NAME,
     label: 'workflow.media.view',
-    description: '查看图片/视频节点的真实画面：图片缩到长边 ≤1024px，视频默认抽首/中/尾 3 帧（frames 可选 first/middle/last），单次最多 6 张。',
+    description: '查看图片/视频节点的真实画面：图片缩到长边 ≤1024px；视频默认抽首/中/尾 3 帧（frames 可选 first/middle/last），也可以用 times 指定任意秒数（如 [4.2, 13]）；单次最多 6 张。',
     parameters: Type.Object({
       nodeIds: Type.Array(Type.String()),
       frames: Type.Optional(Type.Array(frame)),
+      times: Type.Optional(Type.Array(Type.Number(), { description: '视频抽帧的秒数列表，例如 [0, 6.5, 13]；给了 times 就忽略 frames。' })),
     }),
     execute: async (_toolCallId, params) => {
-      const { nodeIds, frames } = params as { nodeIds: string[]; frames?: AgentVideoFrame[] };
+      const { nodeIds, frames, times } = params as { nodeIds: string[]; frames?: AgentVideoFrame[]; times?: number[] };
       const nodes = getNodes();
       const found: WorkflowNode[] = [];
       const missing: string[] = [];
@@ -532,7 +541,7 @@ function createMediaViewTool(getNodes: () => readonly WorkflowNode[]): AgentTool
         if (node) found.push(node);
         else missing.push(id + '：节点不存在');
       }
-      const view = await loadAgentNodeMedia(found, { frames });
+      const view = await loadAgentNodeMedia(found, { frames, times });
       const notes = [...view.notes, ...missing];
       const content: Array<{ type: 'text'; text: string } | ImageContent> = [{ type: 'text', text: notes.join('\n') || '没有可查看的画面' }, ...view.images];
       return { content, details: { nodeIds, imageCount: view.images.length } };
@@ -552,7 +561,7 @@ const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，Flovart 生成式 
 - flovart_workflow_selection_get：读取用户当前选中的节点。
 - flovart_workflow_apply：结构化修改画布。operations 只允许 add_node、create_connected_node、update_node、delete_nodes、delete_connections、connect_nodes、move_nodes、reorder_nodes、group_nodes、ungroup_nodes、set_batch_primary。
 - flovart_workflow_node_run：运行生成节点（nodeId 或 nodeIds 批量，一次确认费用）。
-- flovart_workflow_media_view：查看图片/视频节点的真实画面（nodeIds；视频可选 frames: first/middle/last）。inspect 里的 [media] 只是脱敏占位；需要判断构图、风格或检查生成结果时调用它。用户 @引用的图片/视频会自动附带画面。
+- flovart_workflow_media_view：查看图片/视频节点的真实画面（nodeIds；视频可用 frames: first/middle/last 或 times: [秒数] 指定任意时间点）。inspect 里的 [media] 只是脱敏占位；需要判断构图、风格或检查生成结果时调用它。用户 @引用的图片/视频会自动附带画面。用户粘贴的截图、拖入的视频会作为本轮图片内容直接附上。
 - flovart_todo：多步制作的任务清单。
 command.list/schema 属于 CLI discovery/debug，不是你的工具；不得访问 Shell、任意文件或 Provider Secret。
 
