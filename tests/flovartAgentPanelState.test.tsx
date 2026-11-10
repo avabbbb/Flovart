@@ -18,6 +18,33 @@ describe('Flovart Agent panel explicit state', () => {
     vi.mocked(getManagedAgentConnection).mockResolvedValue({ state: 'ready', url: '', token: 'desktop-token', managed: true });
   });
 
+  it('copies the whole conversation as markdown from the header', async () => {
+    const project = { ...createWorkflowProject('复制对话'), id: 'project-copy' };
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => (
+      String(input).includes('/agent/flovart/session')
+        ? json({
+          sessionId: 'session-copy', projectId: project.id, running: false,
+          messages: [
+            { id: 'm1', role: 'user', text: '把时长改成 15 秒' },
+            { id: 'm2', role: 'assistant', text: '已改好。' },
+          ],
+        })
+        : json({ ok: true })
+    )));
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} />);
+
+    await screen.findByText('已改好。');
+    fireEvent.click(screen.getByRole('button', { name: '复制整个对话' }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    const copied = String(writeText.mock.calls[0][0]);
+    expect(copied).toContain('## 你\n把时长改成 15 秒');
+    expect(copied).toContain('## Agent\n已改好。');
+    expect(await screen.findByRole('status')).toHaveTextContent('已复制对话');
+  });
+
   it('returns the composer to idle after Stop even when the turn never settles', async () => {
     const project = { ...createWorkflowProject('停止项目'), id: 'project-stop' };
     const cancel = vi.fn();

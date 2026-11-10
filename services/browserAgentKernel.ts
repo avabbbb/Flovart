@@ -606,6 +606,12 @@ Web 模式下 Production Runtime 不可用，production 相关命令会失败并
 
 const PRODUCTION_SKILL_BINDING_ENTRY = 'flovart.production-skill-binding';
 
+/** 分支切片：保留到指定 entry（含）为止；找不到返回 null。 */
+export function entriesUpTo<T extends { id: string }>(entries: readonly T[], entryId: string): T[] | null {
+  const index = entries.findIndex(entry => entry.id === entryId);
+  return index < 0 ? null : entries.slice(0, index + 1);
+}
+
 function snapshotMessage(entry: { type: string; id: string; message?: AgentMessage; customType?: string }): {
   id: string;
   role: string;
@@ -787,6 +793,39 @@ export class BrowserAgentKernel {
     this.boundProductionSkill = null;
     this.productionSkillBindingError = null;
     this.session = await this.repo!.create({ metadata: { projectId: this.projectId, role: 'main' } });
+    await this.buildAgent();
+    this.emit({ type: 'session_switched' });
+    return this.snapshot();
+  }
+
+  /** 从某条消息处分出新会话：复制到该消息为止的全部内容，原会话保持不变。 */
+  async branchSession(fromSessionId: string, uptoEntryId: string): Promise<unknown> {
+    if (!this.repo) this.repo = new BrowserSessionRepo(this.projectId);
+    const source = await this.repo.open({ id: fromSessionId });
+    const entries = await source.getBranch();
+    const kept = entriesUpTo(entries, uptoEntryId);
+    if (!kept || !kept.length) throw new Error('分支点不存在：' + uptoEntryId);
+    this.agent?.abort();
+    this.unsubscribe?.();
+    this.unsubscribe = null;
+    this.boundProductionSkill = null;
+    this.productionSkillBindingError = null;
+    const branch = await this.repo.create({
+      metadata: { projectId: this.projectId, role: 'branch', branchedFrom: fromSessionId, branchPointId: uptoEntryId },
+    });
+    for (const entry of kept) {
+      if (entry.type === 'message' && 'message' in entry && entry.message) await branch.appendMessage(entry.message);
+      else if (entry.type === 'custom' && entry.customType === PRODUCTION_SKILL_BINDING_ENTRY && entry.data) {
+        await branch.appendCustomEntry(entry.customType, entry.data);
+      }
+    }
+    const persistedBinding = [...kept].reverse().find(entry => (
+      entry.type === 'custom' && entry.customType === PRODUCTION_SKILL_BINDING_ENTRY
+    )) as { data?: ProductionSkillAttachment } | undefined;
+    if (persistedBinding?.data?.id && persistedBinding.data.version && persistedBinding.data.contentHash) {
+      this.boundProductionSkill = persistedBinding.data;
+    }
+    this.session = branch;
     await this.buildAgent();
     this.emit({ type: 'session_switched' });
     return this.snapshot();

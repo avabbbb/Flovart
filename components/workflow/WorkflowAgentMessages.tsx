@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleAlert, LoaderCircle, Wrench, XCircle } from 'lucide-react';
+import { CheckCircle2, CircleAlert, Copy, GitBranch, LoaderCircle, Wrench, XCircle } from 'lucide-react';
 import { AgentMarkdown } from './AgentMarkdown';
 
 export interface WorkflowAgentDisplayAttachment {
@@ -18,7 +18,16 @@ export interface WorkflowAgentDisplayMessage {
   createdAt?: string;
 }
 
-export function WorkflowAgentMessages({ messages, running, language = 'zho' }: { messages: WorkflowAgentDisplayMessage[]; running?: boolean; language?: 'en' | 'zho' }) {
+export function WorkflowAgentMessages({ messages, running, language = 'zho', onCopyMessage, onBranchMessage, branchDisabled }: {
+  messages: WorkflowAgentDisplayMessage[];
+  running?: boolean;
+  language?: 'en' | 'zho';
+  /** 复制单条消息（Markdown 文本） */
+  onCopyMessage?: (message: WorkflowAgentDisplayMessage) => void;
+  /** 从这条助手消息处分出新会话 */
+  onBranchMessage?: (message: WorkflowAgentDisplayMessage) => void;
+  branchDisabled?: boolean;
+}) {
   const en = language === 'en';
   if (messages.length === 0 && !running) return <div className="workflow-agent__empty">{en ? 'Describe what you want the Agent to do with this Workflow.' : '描述你希望 Agent 对当前 Workflow 做什么。'}</div>;
   return (
@@ -30,6 +39,12 @@ export function WorkflowAgentMessages({ messages, running, language = 'zho' }: {
             <span>{message.role === 'user' ? (en ? 'You' : '你') : message.role === 'assistant' ? 'Agent' : message.role === 'error' ? (en ? 'Error' : '错误') : (en ? 'System' : '系统')}</span>
             {message.role === 'assistant' ? <AgentMarkdown text={message.text} language={language} /> : <p>{message.text}</p>}
             {message.attachments?.length ? <div className="workflow-agent__message-attachments">{message.attachments.map(item => <img key={item.id} src={item.previewUrl} alt={item.name} title={item.name} />)}</div> : null}
+            {(onCopyMessage || (onBranchMessage && message.role === 'assistant')) && (
+              <div className="workflow-agent__message-actions">
+                {onCopyMessage && <button type="button" onClick={() => onCopyMessage(message)} aria-label={`${en ? 'Copy message' : '复制这条消息'}`} title={en ? 'Copy message' : '复制这条消息'}><Copy size={11} />{en ? 'Copy' : '复制'}</button>}
+                {onBranchMessage && message.role === 'assistant' && <button type="button" disabled={branchDisabled} onClick={() => onBranchMessage(message)} aria-label={en ? 'Branch from here' : '从这里分支'} title={en ? 'Branch from here' : '从这里新建一个分支会话'}><GitBranch size={11} />{en ? 'Branch' : '分支'}</button>}
+              </div>
+            )}
           </div>
         ))}
       {running && <div className="workflow-agent__working"><LoaderCircle size={14} className="workflow-spin" />{en ? 'Agent is working…' : 'Agent 正在处理...'}</div>}

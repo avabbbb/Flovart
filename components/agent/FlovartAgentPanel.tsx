@@ -1,4 +1,4 @@
-import { AtSign, Box, Check, ChevronDown, Hand, Image as ImageIcon, KeyRound, LayoutGrid, Plus, RotateCw, Send, Square, Trash2, Video, X } from 'lucide-react';
+import { AtSign, Box, Check, ChevronDown, Copy, GitBranch, Hand, Image as ImageIcon, KeyRound, LayoutGrid, Plus, RotateCw, Send, Square, Trash2, Video, X } from 'lucide-react';
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { AGENT_ATTACHMENT_MAX, composerAttachmentsToImages, createComposerAttachment, mergeComposerAttachments, releaseComposerAttachment, type AgentComposerAttachment } from '../../services/agentComposerAttachments';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
@@ -38,6 +38,7 @@ import { useAgentGroupInboxStore, type AgentGroupPayload } from '../../stores/us
 import { useMineSkillsStore } from './mineSkills';
 import { AgentReferenceChip } from './AgentReferenceChip';
 import { AgentTodoCard } from './AgentTodoCard';
+import { copyToClipboard, transcriptMarkdown } from './agentTranscript';
 import { AGENT_TODO_TOOL_NAME, latestTodoFromMessages, todoFromToolResult, type AgentTodoItem } from './agentTodo';
 import { AgentHeaderLeadingContext } from './agentHeaderSlot';
 import { DrawerChromeCollapse, DrawerChromeTabs } from '../studio/drawerChrome';
@@ -192,6 +193,9 @@ const userApiKeysRef = useRef(userApiKeys);
   const [references, setReferences] = useState<AgentReference[]>([]);
   // 对话框本地附件（粘贴截图 / 拖入视频）：只在当轮对话里作为图片内容发送，不写画布。
   const [attachments, setAttachments] = useState<AgentComposerAttachment[]>([]);
+  // 复制反馈：按钮短暂显示「已复制」。
+  const [copiedNotice, setCopiedNotice] = useState<string | null>(null);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attachmentsRef = useRef<AgentComposerAttachment[]>([]);
   attachmentsRef.current = attachments;
   const [attachDragActive, setAttachDragActive] = useState(false);
@@ -576,6 +580,37 @@ const userApiKeysRef = useRef(userApiKeys);
     }
   };
 
+  const flashCopied = (label: string) => {
+    setCopiedNotice(label);
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setCopiedNotice(null), 1600);
+  };
+
+  const copyConversation = async () => {
+    const text = transcriptMarkdown(transcriptMessages, { language, title: activeSessionTitle });
+    if (await copyToClipboard(text)) flashCopied(language === 'zho' ? '已复制对话' : 'Transcript copied');
+  };
+
+  const copyMessage = async (message: WorkflowAgentDisplayMessage) => {
+    const text = transcriptMarkdown([message], { language });
+    if (await copyToClipboard(text)) flashCopied(language === 'zho' ? '已复制' : 'Copied');
+  };
+
+  /** 从某条助手消息处分出新会话：复制到该消息为止，原会话不变。 */
+  const branchFromMessage = async (message: WorkflowAgentDisplayMessage) => {
+    const kernel = kernelRef.current;
+    if (!kernel || sending) return;
+    try {
+      await kernel.branchSession(activeSessionId, message.id);
+      await refreshSessions();
+      flashCopied(language === 'zho' ? '已创建分支' : 'Branch created');
+    } catch (error) {
+      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: errorMessage(error) }]);
+    }
+  };
+
+  useEffect(() => () => { if (copiedTimer.current) clearTimeout(copiedTimer.current); }, []);
+
   useEffect(() => { handleEventRef.current = handleEvent; });
 
   const handleEvent = (event: FlovartAgentTurnEvent, assistantId: string) => {    if (event.type === 'text-delta') {
@@ -836,6 +871,8 @@ const userApiKeysRef = useRef(userApiKeys);
   const headerLeading = useContext(AgentHeaderLeadingContext);
   const conversationEmpty = !messages.some(message => message.role === 'user' || message.role === 'assistant' || message.role === 'tool');
   const setupGate = Boolean(setupBlocker);
+  // 复制与渲染用同一份可见消息：设置引导卡里的重复错误不导出。
+  const transcriptMessages = setupGate ? messages.filter(message => message.id !== 'agent-text-config') : messages;
   return (
     <div ref={rootRef} className="workflow-agent is-embedded agent-conversation">
       <header className="workflow-agent__utility agent-conversation__header">
@@ -866,14 +903,30 @@ const userApiKeysRef = useRef(userApiKeys);
           </div>
         )}
         <DrawerChromeTabs />
+        {copiedNotice && <span className="agent-header-notice" role="status">{copiedNotice}</span>}
         <span className="agent-header-actions">
+          <button
+            type="button"
+            className="agent-new-chat-btn is-icon"
+            aria-label={language === 'zho' ? '复制整个对话' : 'Copy conversation'}
+            title={language === 'zho' ? '复制整个对话（Markdown）' : 'Copy conversation as Markdown'}
+            disabled={transcriptMessages.length === 0}
+            onClick={() => void copyConversation()}
+          ><Copy size={15} /></button>
           <button type="button" className="agent-new-chat-btn is-icon" aria-label={t('agentPanel.newChat')} title={t('agentPanel.newChat')} onClick={() => void handleNewConversation()}><Plus size={15} /></button>
           <DrawerChromeCollapse />
         </span>
       </header>
       <section className="workflow-agent__body">
         {/* When setup is the blocker, the setup card is the one thing to read: drop the duplicate red config error and the browse/skill decks under it. */}
-        <div ref={messagesRef} className="agent-conversation__messages"><WorkflowAgentMessages messages={setupGate ? messages.filter(message => message.id !== 'agent-text-config') : messages} running={sending} language={language} /></div>
+        <div ref={messagesRef} className="agent-conversation__messages"><WorkflowAgentMessages
+          messages={transcriptMessages}
+          running={sending}
+          language={language}
+          onCopyMessage={copyMessage}
+          onBranchMessage={kernelRef.current ? branchFromMessage : undefined}
+          branchDisabled={sending}
+        /></div>
         {todoItems.length > 0 && !setupGate && <div className='mx-3'><AgentTodoCard items={todoItems} language={language} /></div>}
         {setupBlocker && (
           <div role="alert" data-testid="agent-setup-card" className="mx-3 mb-2 rounded-xl border px-3 py-2.5" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}>
