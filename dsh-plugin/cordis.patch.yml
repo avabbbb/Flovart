@@ -40,8 +40,10 @@
         toolTimeoutMs: 30000
         # Flovart-side policy for these model tools: DSH's own sandbox/approval
         # govern DSH tools, not plugin tools that write the Browser Workflow.
-        # read-only denies every Workflow write; on-request asks for paid/delete,
-        # untrusted asks for every write. `ask` goes through the Harness approval
+        # read-only denies every Workflow write; on-request allows reversible
+        # writes; untrusted asks for every reversible write. Delete and paid runs
+        # are confirmed by the Flovart command surface, so the gate stays silent
+        # for them (no double prompt). `ask` goes through the Harness approval
         # seam and degrades to denial when no approval service is composed.
         sandbox: !!js process.env.FLOVART_SANDBOX ?? 'workspace-write'
         approval: !!js process.env.FLOVART_APPROVAL ?? 'on-request'
