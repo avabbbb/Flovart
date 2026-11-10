@@ -22,7 +22,8 @@ import {
 } from '../../services/productionSkillCatalog';
 import { createLocalSkillRegistry } from '../../services/localSkillRegistry';
 import { consumePendingProductionSkill } from '../../stores/useProductionSkillComposerStore';
-import { BROWSER_DEFAULT_SYSTEM_PROMPT, BrowserAgentKernel, createBrowserAgentTools, resolveBrowserAgentTextRoute } from '../../services/browserAgentKernel';
+import { BROWSER_DEFAULT_SYSTEM_PROMPT, resolveBrowserAgentTextRoute } from '../../services/browserAgentKernel';
+import { BrowserAgentRuntime } from '../../services/browserAgentRuntime';
 import { loadAgentNodeMedia } from '../../services/agentMediaView';
 import { formatReceiptContext } from '../../services/agentReceipts';
 import { useAgentReceiptStore } from '../../stores/useAgentReceiptStore';
@@ -129,7 +130,7 @@ function toolResultText(result: unknown, language: 'en' | 'zho') {
 
 export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, assetLibrary, onFocusNode, userApiKeys = [], onAddApiKey, onUpdateApiKey }: FlovartAgentPanelProps) {
   const client = useRef<ManagedFlovartAgentClient | undefined>(undefined);
-  const kernelRef = useRef<BrowserAgentKernel | undefined>(undefined);
+  const kernelRef = useRef<BrowserAgentRuntime | undefined>(undefined);
   const unsubscribeRef = useRef<(() => void) | undefined>(undefined);
 const userApiKeysRef = useRef(userApiKeys);
   userApiKeysRef.current = userApiKeys;
@@ -390,17 +391,18 @@ const userApiKeysRef = useRef(userApiKeys);
       const confirm = askConfirmation;
       // Shared project receipts are read-only reference text, never merged memory.
       const receiptContext = formatReceiptContext(useAgentReceiptStore.getState().byProject[project.id] || []);
-      const kernel = new BrowserAgentKernel({
+      const kernel = await BrowserAgentRuntime.connect({
         projectId: project.id,
         route,
-        tools: createBrowserAgentTools({ projectId: project.id, confirm, activeChangeSetId: '', getNodes: () => projectRef.current.nodes, webSearch: searchCredential ?? undefined, getPolicy: () => policyForMode(modeRef.current) }),
         confirm,
         systemPrompt: BROWSER_DEFAULT_SYSTEM_PROMPT + receiptContext,
+        getNodes: () => projectRef.current.nodes,
+        webSearch: searchCredential ?? undefined,
+        getPolicy: () => policyForMode(modeRef.current),
       });
-      await kernel.openSession();
       if (!active) { await kernel.close(); return; }
       kernelRef.current = kernel;
-      const snapshot = await kernel.snapshot();
+      const snapshot = await kernel.snapshot() as FlovartAgentSnapshot;
       const unsubscribe = kernel.subscribe(event => {
         if (!active) return;
         mapKernelEvent(event);
@@ -755,7 +757,7 @@ const userApiKeysRef = useRef(userApiKeys);
         };
         const kernelText = media.notes.length > 0 ? requestText + '\n\n已附带画面：\n' + media.notes.join('\n') : requestText;
         await kernelRef.current.send(kernelText, media.images, skillAttachment);
-        const snapshot = await kernelRef.current.snapshot();
+        const snapshot = await kernelRef.current.snapshot() as FlovartAgentSnapshot;
         if (snapshot.messages.some(message => message.error)) failed = true;
         handleEvent({ type: 'snapshot', snapshot: snapshot as FlovartAgentSnapshot }, assistantId);
       } else {

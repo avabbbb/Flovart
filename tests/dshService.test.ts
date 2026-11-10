@@ -22,6 +22,8 @@ describe('DeepSeek Harness Flovart service', () => {
         workspaceMode: 'browser',
         workspaceUrl: 'http://127.0.0.1:17372',
         workspaceToken: '',
+        sandbox: 'workspace-write',
+        approval: 'on-request',
       }, 'command.list');
 
       expect(outcome).toMatchObject({
@@ -38,6 +40,8 @@ describe('DeepSeek Harness Flovart service', () => {
         workspaceMode: 'browser',
         workspaceUrl: 'http://127.0.0.1:17372',
         workspaceToken: '',
+        sandbox: 'workspace-write',
+        approval: 'on-request',
       }, 'command.list');
       expect(failedProbe).toMatchObject({
         ok: false,
@@ -107,6 +111,8 @@ describe('DeepSeek Harness Flovart service', () => {
           workspaceMode: 'browser',
           workspaceUrl: 'http://127.0.0.1:17372',
           workspaceToken: '',
+          sandbox: 'workspace-write',
+          approval: 'on-request',
         });
         service.probe();
         ctx.effect(() => service.startHealthMonitor(20), 'test health monitor');

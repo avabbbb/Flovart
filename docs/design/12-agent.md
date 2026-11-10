@@ -32,6 +32,8 @@
 
 Transport 只做参数解码、权限上下文与结果编码；不做 MCP → CLI 子进程转发。
 
+内置 Assistant 的内核由 `BrowserAgentRuntime` 按项目持有（`services/browserAgentRuntime.ts`）；面板只是生命周期所有者与订阅者，不再直接构造内核。后续若让外部 Agent 通过命令面委派一轮内置对话，入口必须是这个运行时，而不是 React state。
+
 ## 4. 权威与安全
 
 - 修改绑定明确 project / revision；重试使用稳定幂等 ID；未知提交先查询。
