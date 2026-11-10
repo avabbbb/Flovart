@@ -16,6 +16,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { CommandMeta, FlovartService } from './service.ts'
 import { runCli } from './cli.ts'
+import { decideFlovartToolCall } from './policy.ts'
 // Type-only: erased at build; runtime access is dynamic (see ensureToolsApi).
 import type { defineTool as DefineTool } from '@deepseek-ai/dsh-tools'
 import type { ParameterPropertySpec, ParameterSchemaSpec } from '@deepseek-ai/dsh-tools'
@@ -149,6 +150,20 @@ export async function registerFlovartTools(ctx: Context, service: FlovartService
   if (defineTool === undefined) return () => {}
   const commands = service.state.commands ?? {}
   const disposers: Array<() => void> = []
+  // Flovart tools bypass DSH's own sandbox because they write the Browser Workflow
+  // through the CLI; gate them here with the same sandbox/approval policy.
+  if (typeof ctx.on === 'function') {
+    disposers.push(ctx.on('tools/pre-execute', async (exec, next) => {
+      const name = String(exec.name || '')
+      if (!name.startsWith('flovart_')) return next()
+      const decision = decideFlovartToolCall({
+        name,
+        args: (exec.arguments && typeof exec.arguments === 'object' ? exec.arguments : {}) as Record<string, unknown>,
+        policy: { sandbox: service.config.sandbox, approval: service.config.approval },
+      })
+      return decision.kind === 'allow' ? next() : decision
+    }))
+  }
   let derived = 0
   for (const command of STABLE_TOOL_COMMANDS) {
     const meta = commands[command]

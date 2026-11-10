@@ -15,6 +15,10 @@ export interface FlovartPluginConfig {
   toolTimeoutMs: number
   /** DSH always joins the visible Browser Workflow authority. */
   workspaceMode: 'browser'
+  /** Flovart-side sandbox for plugin tool calls: read-only denies every Workflow write. */
+  sandbox: 'read-only' | 'workspace-write'
+  /** Flovart-side approval: never allows, on-request asks for paid/delete, untrusted asks for every write. */
+  approval: 'never' | 'on-request' | 'untrusted'
 }
 
 export const DEFAULT_CONFIG: FlovartPluginConfig = {
@@ -23,8 +27,16 @@ export const DEFAULT_CONFIG: FlovartPluginConfig = {
   cli: 'flovart',
   toolTimeoutMs: 30000,
   workspaceMode: 'browser',
+  sandbox: 'workspace-write',
+  approval: 'on-request',
 }
 
 export function normalizeConfig(config: Partial<FlovartPluginConfig> | undefined): FlovartPluginConfig {
-  return { ...DEFAULT_CONFIG, ...config, workspaceMode: 'browser' }
+  return {
+    ...DEFAULT_CONFIG,
+    ...config,
+    workspaceMode: 'browser',
+    sandbox: config?.sandbox === 'read-only' ? 'read-only' : 'workspace-write',
+    approval: config?.approval === 'never' || config?.approval === 'untrusted' ? config.approval : 'on-request',
+  }
 }
