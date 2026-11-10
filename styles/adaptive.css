@@ -330,8 +330,8 @@ body,
 }
 
 .workflow-node-prompt {
+  /* 宽度由宿主的下发值决定，再用容器宽度兜底；不要再写 max-width:100%，那会按自身宽度再削 16px。 */
   width: min(var(--workflow-node-prompt-width, 880px), calc(100cqw - 16px));
-  max-width: calc(100% - 16px);
 }
 
 /* Settings and host cards adapt to the space their caller gives them. */
