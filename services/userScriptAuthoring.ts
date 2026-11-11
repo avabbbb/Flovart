@@ -78,6 +78,27 @@ export function getStoredUserScriptProvider(id?: string): UserScriptProviderDefi
   return id ? readStore()[id] : undefined;
 }
 
+/** 迁移用：导出全部已保存的 Provider 适配脚本（定义本身不含凭据）。 */
+export function listStoredUserScriptProviders(): UserScriptProviderDefinition[] {
+  return Object.values(readStore());
+}
+
+/** 迁移用：逐条校验并保存；单条损坏只跳过该条，不阻塞其余配置。 */
+export function importUserScriptProviders(definitions: readonly unknown[]): { imported: number; skipped: number } {
+  let imported = 0;
+  let skipped = 0;
+  for (const raw of definitions) {
+    try {
+      const definition = parseUserScriptDefinition(JSON.stringify(raw));
+      saveUserScriptProvider(definition);
+      imported += 1;
+    } catch {
+      skipped += 1;
+    }
+  }
+  return { imported, skipped };
+}
+
 /** 启动时把已保存的适配脚本注册回内存 registry；无效条目跳过，不阻塞启动。 */
 export function loadStoredUserScriptProviders(): number {
   let loaded = 0;

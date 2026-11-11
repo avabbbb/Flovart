@@ -20,6 +20,8 @@ import { getProductModel, getProductModels, suggestProductRouteMappings } from '
 import { getKeyModelIds } from '../utils/modelRefs';
 import { getFlovartRuntimeApi } from '../services/flovartRuntime';
 import { UserScriptAdapterSection } from './settings/UserScriptAdapterSection';
+import { buildConfigBundle, parseConfigBundle } from '../services/configMigration';
+import { importUserScriptProviders } from '../services/userScriptAuthoring';
 import { ExtensionPairingSection } from './settings/ExtensionPairingSection';
 import { WebDavSettingsTab } from './settings/WebDavSettingsTab';
 import { LocalStorageTab } from './settings/LocalStorageTab';
@@ -946,26 +948,17 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         });
     };
 
-    /** 导出所有 API Key 配置为 JSON */
-    const handleExportKeys = () => {
-        const exportData = userApiKeys.map(k => ({
-            provider: k.provider,
-            name: k.name,
-            baseUrl: k.baseUrl,
-            capabilities: k.capabilities,
-            customModels: k.customModels,
-            defaultModel: k.defaultModel,
-            models: k.models,
-            extraConfig: k.extraConfig,
-            routeMappings: k.routeMappings,
-            pricingRules: k.pricingRules,
-            budgetPolicy: k.budgetPolicy,
-            streamUsage: k.streamUsage,
-            key: '***', // 不导出明文 key
-        }));
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-        void saveBlob(blob, `flovart-api-configs-${new Date().toISOString().slice(0, 10)}.json`).catch(error => console.warn('[Settings] Export failed.', error));
+    /** 导出配置迁移包：默认不含 Key；迁移入口见「带 Key 导出（含脚本）」。 */
+    const exportConfigBundle = (includeSecrets: boolean) => {
+        if (includeSecrets && !confirm(t('settingsExtra.transfer.exportSecretsConfirm'))) return;
+        const bundle = buildConfigBundle(userApiKeys, includeSecrets);
+        const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+        const stem = includeSecrets ? 'flovart-config-full' : 'flovart-config';
+        void saveBlob(blob, `${stem}-${new Date().toISOString().slice(0, 10)}.json`).catch(error => console.warn('[Settings] Export failed.', error));
     };
+
+    const handleExportKeys = () => exportConfigBundle(false);
+    const handleExportKeysWithSecrets = () => exportConfigBundle(true);
 
     /** 从 .env/.txt 或剪贴板文本导入 Key：只在本页解析，走与手动添加相同的 onAddApiKey */
     const importKeyText = (text: string) => {
@@ -1009,89 +1002,78 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         importKeyText(text);
     };
 
+    /** 导入配置迁移包（新版含 Provider 脚本；旧版顶层数组仍兼容）。 */
+    const importConfigFile = async (file: File) => {
+        try {
+            const text = await file.text();
+            if (!/\.json$/i.test(file.name) && !text.trim().startsWith('[') && !text.trim().startsWith('{')) {
+                importKeyText(text);
+                return;
+            }
+            const bundle = parseConfigBundle(text);
+            // 先落脚本，Key 上的 providerScriptId 才有目标。
+            const scripts = importUserScriptProviders(bundle.providerScripts);
+            if (bundle.noSecrets) {
+                alert(t('settingsExtra.transfer.importNoSecrets', bundle.apiKeys.length, scripts.imported));
+                return;
+            }
+            const legalProviders = new Set(Object.keys(providerBaseUrl));
+            let importedCount = 0;
+            let skippedCount = 0;
+            for (const raw of bundle.apiKeys) {
+                if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) { skippedCount++; continue; }
+                const item = raw as Partial<UserApiKey>;
+                // 逐项结构校验：provider 合法、key 非空（排除导出占位 "***"），
+                // routeMappings / pricingRules 若存在必须是数组且每项字段齐全；不合法项跳过并计数
+                const routeMappingsOk = item.routeMappings == null
+                    || (Array.isArray(item.routeMappings) && item.routeMappings.every(
+                        (mapping: RouteMappingBinding) => mapping?.target?.kind && mapping.routeId,
+                    ));
+                const pricingRulesOk = item.pricingRules == null
+                    || (Array.isArray(item.pricingRules) && item.pricingRules.every(
+                        (rule: ApiPricingRule) => rule?.id,
+                    ));
+                const valid = typeof item.provider === 'string'
+                    && legalProviders.has(item.provider)
+                    && typeof item.key === 'string' && item.key.trim() !== '' && item.key !== '***'
+                    && routeMappingsOk
+                    && pricingRulesOk;
+                if (!valid) { skippedCount++; continue; }
+                onAddApiKey({
+                    provider: item.provider as UserApiKey['provider'],
+                    capabilities: item.capabilities || inferCapabilitiesByProvider(item.provider as UserApiKey['provider']),
+                    key: item.key!,
+                    baseUrl: item.baseUrl,
+                    name: item.name,
+                    status: 'unknown',
+                    isDefault: false,
+                    customModels: item.customModels,
+                    defaultModel: item.defaultModel,
+                    models: item.models,
+                    extraConfig: item.extraConfig,
+                    routeMappings: item.routeMappings,
+                    pricingRules: item.pricingRules,
+                    budgetPolicy: item.budgetPolicy,
+                    streamUsage: item.streamUsage === 'request' ? 'request' : undefined,
+                });
+                importedCount++;
+            }
+            alert(t('settingsExtra.transfer.importComplete', importedCount, skippedCount, scripts.imported));
+        } catch {
+            alert(t('settingsExtra.transfer.importFailed'));
+        }
+    };
+
     /** 导入 JSON 配置文件，或写有 Key 的 .env/.txt */
     const handleImportKeys = () => {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.json,.env,.txt,text/plain';
-        input.onchange = async (e) => {
+        input.onchange = (e) => {
             const file = (e.target as HTMLInputElement).files?.[0];
-            if (!file) return;
-            try {
-                const text = await file.text();
-                if (!/\.json$/i.test(file.name) && !text.trim().startsWith('[')) {
-                    importKeyText(text);
-                    return;
-                }
-                const parsed = JSON.parse(text);
-                if (!Array.isArray(parsed)) throw new Error(t('settingsExtra.transfer.invalidFormat'));
-                const legalProviders = new Set(Object.keys(providerBaseUrl));
-                let importedCount = 0;
-                let skippedCount = 0;
-                for (const item of parsed) {
-                    // 逐项结构校验：provider 合法、key 非空（排除导出占位 "***"），
-                    // routeMappings / pricingRules 若存在必须是数组且每项字段齐全；不合法项跳过并计数
-                    const routeMappingsOk = item.routeMappings == null
-                        || (Array.isArray(item.routeMappings) && item.routeMappings.every(
-                            (mapping: RouteMappingBinding) => mapping?.target?.kind && mapping.routeId,
-                        ));
-                    const pricingRulesOk = item.pricingRules == null
-                        || (Array.isArray(item.pricingRules) && item.pricingRules.every(
-                            (rule: ApiPricingRule) => rule?.id,
-                        ));
-                    const valid = item && typeof item === 'object'
-                        && legalProviders.has(item.provider)
-                        && typeof item.key === 'string' && item.key.trim() !== '' && item.key !== '***'
-                        && routeMappingsOk
-                        && pricingRulesOk;
-                    if (!valid) { skippedCount++; continue; }
-                    onAddApiKey({
-                        provider: item.provider,
-                        capabilities: item.capabilities || inferCapabilitiesByProvider(item.provider),
-                        key: item.key,
-                        baseUrl: item.baseUrl,
-                        name: item.name,
-                        status: 'unknown',
-                        isDefault: false,
-                        customModels: item.customModels,
-                        defaultModel: item.defaultModel,
-                        models: item.models,
-                        extraConfig: item.extraConfig,
-                        routeMappings: item.routeMappings,
-                        pricingRules: item.pricingRules,
-                        budgetPolicy: item.budgetPolicy,
-                        streamUsage: item.streamUsage === 'request' ? 'request' : undefined,
-                    });
-                    importedCount++;
-                }
-                alert(t('settingsExtra.transfer.importComplete', importedCount, skippedCount));
-            } catch {
-                alert(t('settingsExtra.transfer.importFailed'));
-            }
+            if (file) void importConfigFile(file);
         };
         input.click();
-    };
-
-    /** 带 Key 导出（含明文，用于设备迁移） */
-    const handleExportKeysWithSecrets = () => {
-        if (!confirm(t('settingsExtra.transfer.exportSecretsConfirm'))) return;
-        const exportData = userApiKeys.map(k => ({
-            provider: k.provider,
-            name: k.name,
-            key: k.key,
-            baseUrl: k.baseUrl,
-            capabilities: k.capabilities,
-            customModels: k.customModels,
-            defaultModel: k.defaultModel,
-            models: k.models,
-            extraConfig: k.extraConfig,
-            routeMappings: k.routeMappings,
-            pricingRules: k.pricingRules,
-            budgetPolicy: k.budgetPolicy,
-            streamUsage: k.streamUsage,
-        }));
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-        void saveBlob(blob, `flovart-api-configs-full-${new Date().toISOString().slice(0, 10)}.json`).catch(error => console.warn('[Settings] Export failed.', error));
     };
 
     /** 一键测试所有 Key */
@@ -1116,7 +1098,25 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     if (!isOpen) return null;
 
     return (
-        <div ref={settingsDialogRef} role="dialog" aria-modal="true" aria-labelledby="settings-title" data-testid="settings-dialog" className="theme-aware settings-overlay fixed inset-0 z-100 flex items-center justify-center bg-black/35 backdrop-blur-sm" onClick={onClose}>
+        <div
+            ref={settingsDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-title"
+            data-testid="settings-dialog"
+            className="theme-aware settings-overlay fixed inset-0 z-100 flex items-center justify-center bg-black/35 backdrop-blur-sm"
+            onClick={onClose}
+            onDragOver={event => {
+                if (Array.from(event.dataTransfer?.types || []).includes('Files')) event.preventDefault();
+            }}
+            onDrop={event => {
+                const file = event.dataTransfer?.files?.[0];
+                if (!file) return;
+                event.preventDefault();
+                event.stopPropagation();
+                void importConfigFile(file);
+            }}
+        >
             <div
                 className="isl-shell settings-dialog relative w-[94%] max-w-6xl"
                 onClick={(event) => event.stopPropagation()}
@@ -1125,6 +1125,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     <div>
                         <h3 id="settings-title" className="text-xl font-extrabold text-[var(--isl-ink)]">{t('settingsExtra.title')}</h3>
                         <p className="mt-1 text-sm text-[var(--isl-ink-soft)]">{t('settingsExtra.description')}</p>
+                        <p className="mt-1 text-xs text-[var(--isl-ink-ghost)]">{t('settingsExtra.transfer.migrationHint')}</p>
                     </div>
                     <div className="flex items-center gap-2">
                     <button
