@@ -69,6 +69,28 @@ describe('workflow node tools operation projection', () => {
     });
   });
 
+  it('extracts a frame at any second for the Agent and keeps it as an image node', async () => {
+    const video = createWorkflowNode('video', 'video', { x: 0, y: 0 }, { storageKey: 'video-key', mimeType: 'video/mp4', name: 'source.mp4' });
+    const state = harness([video]);
+    const executeVideoFrame = vi.fn().mockResolvedValue({ blob: new Blob(['frame'], { type: 'image/png' }) });
+    await runWorkflowNodeTool('project', 'video', 'video-extract-frame', { position: 'current', currentTimeSec: 10 }, { ...state.runtime, executeVideoFrame });
+    expect(executeVideoFrame).toHaveBeenCalledWith(expect.any(Blob), 'current', 10);
+    expect(state.current.nodes.find(node => node.type === 'image')).toMatchObject({ title: '当前帧' });
+  });
+
+  it('honours the requested audio track and supports stem split from the Agent path', async () => {
+    const video = createWorkflowNode('video', 'video', { x: 0, y: 0 }, { storageKey: 'video-key', mimeType: 'video/mp4', name: 'source.mp4' });
+    const state = harness([video]);
+    await runWorkflowNodeTool('project', 'video', 'video-av-split', { audio: 'vocals' }, {
+      ...state.runtime,
+      executeVideoAvSplit: vi.fn().mockResolvedValue({ videoBlob: new Blob(['v'], { type: 'video/mp4' }), audioBlob: new Blob(['a'], { type: 'audio/mpeg' }) }),
+      executeAudioStemSplit: vi.fn().mockResolvedValue({ vocalsBlob: new Blob(['vo'], { type: 'audio/mpeg' }), instrumentalBlob: new Blob(['ac'], { type: 'audio/mpeg' }) }),
+    });
+    expect(state.current.nodes.find(node => node.type === 'operation')?.metadata.operation).toMatchObject({
+      capabilityId: 'video.av-split@1', recipe: { parameters: { audio: 'vocals' } },
+    });
+  });
+
   it('routes Agent audio tools through the same Operation lifecycle', async () => {
     const audio = createWorkflowNode('audio', 'audio', { x: 0, y: 0 }, { storageKey: 'audio-key', mimeType: 'audio/mpeg', name: 'source.mp3' });
     const state = harness([audio]);

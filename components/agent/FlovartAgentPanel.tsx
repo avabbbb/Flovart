@@ -11,6 +11,7 @@ import {
 import { setAgentGateKeysProvider, WorkflowAgentBridge } from '../../services/workflowAgentBridge';
 import { WorkflowAgentMessages, type WorkflowAgentDisplayMessage } from '../workflow/WorkflowAgentMessages';
 import type { WorkflowProject } from '../workflow/types';
+import { useWorkflowStore } from '../workflow/store';
 import type { AgentPanelStatus } from './agentWorkspaceStore';
 import { consumeSpendMandate, createSpendMandate, defaultMandateTasks, describeMandateDenial, evaluateSpendMandate, planBlocked, spendDemand, type AgentConfirmRequest, type AgentSpendMandate } from '../../services/agentSpendMandate';
 import { ProductionSkillDeck } from './ProductionSkillDeck';
@@ -45,7 +46,9 @@ import { policyForMode } from '../../services/agentToolPolicy';
 import { AGENT_TODO_TOOL_NAME, latestTodoFromMessages, todoFromToolResult, type AgentTodoItem } from './agentTodo';
 import { AgentHeaderLeadingContext } from './agentHeaderSlot';
 import { DrawerChromeCollapse, DrawerChromeTabs } from '../studio/drawerChrome';
-import { GenerationPlanCard } from '../GenerationPlanCard';
+import { AgentConfirmCard } from './AgentConfirmCard';
+import { confirmGrantKey, confirmScopesFor, readAlwaysGrants, writeAlwaysGrants, type AgentConfirmScope } from './agentConfirmCopy';
+import { displayUserTurnText, agentToolLabel } from './agentTurnText';
 import { activityAfterConfirmation, agentLayerReducer, blockerAfterCredentialSignal, closedLayers, needsCredential, replacePendingConfirmation, useAgentTurn } from './agentPanelState';
 
 interface FlovartAgentPanelProps {
@@ -112,8 +115,8 @@ function displayMessages(snapshot: {
   return snapshot.messages.map(message => ({
     id: message.id,
     role: (message.error ? 'error' : message.role) as WorkflowAgentDisplayMessage['role'],
-    text: message.error ? agentMessageText(message.error, language) : message.text,
-    title: message.role === 'tool' ? message.toolName : undefined,
+    text: message.error ? agentMessageText(message.error, language) : message.role === 'user' ? displayUserTurnText(message.text) : message.text,
+    title: message.role === 'tool' ? agentToolLabel(message.toolName, language) : undefined,
     status: message.role === 'tool' ? message.isError ? 'error' : 'success' : undefined,
     createdAt: message.timestamp ? new Date(message.timestamp).toISOString() : undefined,
   }));
@@ -145,7 +148,7 @@ const userApiKeysRef = useRef(userApiKeys);
   }, [userApiKeys]);
   const workspaceBridge = useRef<WorkflowAgentBridge | undefined>(undefined);
   const abort = useRef<AbortController | undefined>(undefined);
-  type PendingConfirmation = { summary: string; resolve: (approved: boolean) => void; request?: AgentConfirmRequest; offerMandate?: boolean; blocked?: boolean };
+  type PendingConfirmation = { id?: string; summary: string; resolve: (approved: boolean) => void; request?: AgentConfirmRequest; offerMandate?: boolean; blocked?: boolean };
   const composer = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -158,6 +161,12 @@ const userApiKeysRef = useRef(userApiKeys);
   const confirmationRef = useRef<PendingConfirmation | undefined>(undefined);
   // 自动模式付费授权：第一次生成时确认上限，之后上限内的生成自动批准。
   const mandateRef = useRef<AgentSpendMandate | null>(null);
+  // 「本次对话」授权：同一类操作在当前会话里不再重复询问；切换会话或项目时清空。
+  const sessionGrantsRef = useRef(new Set<string>());
+  // 「始终允许」授权：只覆盖可逆操作，存本机，可在模式菜单里撤销。
+  const [alwaysGrants, setAlwaysGrants] = useState<string[]>(() => readAlwaysGrants());
+  const alwaysGrantsRef = useRef(alwaysGrants);
+  alwaysGrantsRef.current = alwaysGrants;
   // 内核工具（media_view）在会话期间读取最新画布节点。
   const projectRef = useRef(project);
   projectRef.current = project;
@@ -214,8 +223,9 @@ const userApiKeysRef = useRef(userApiKeys);
   const skillNav = useRef<((key: string) => boolean) | null>(null);
   const [groupBanner, setGroupBanner] = useState<(AgentGroupPayload & { saved?: boolean }) | null>(null);
   const presentConfirmation = (next: PendingConfirmation) => {
-    replacePendingConfirmation(confirmationRef, next); // a newer request supersedes; never leave the agent waiting
-    setConfirmation(next);
+    const pending = next.id ? next : { ...next, id: crypto.randomUUID() };
+    replacePendingConfirmation(confirmationRef, pending); // a newer request supersedes; never leave the agent waiting
+    setConfirmation(pending);
     dispatchTurn({ type: 'confirmRequested' });
     activity.current('waiting');
   };
@@ -227,6 +237,26 @@ const userApiKeysRef = useRef(userApiKeys);
     dispatchTurn({ type: 'confirmResolved' });
     if (nextActivity) activity.current(nextActivity);
   };
+  const decideConfirmation = (pending: PendingConfirmation, approved: boolean, scope: AgentConfirmScope) => {
+    if (approved && scope !== 'once') {
+      const request = pending.request;
+      if (pending.offerMandate && request?.kind === 'generation') {
+        // 本次对话的付费授权仍走任务上限：上限内自动批准，超出再问。
+        const granted = consumeSpendMandate(createSpendMandate({ maxTasks: Math.max(mandateTasks, spendDemand(request.gates).tasks) }), request);
+        mandateRef.current = granted;
+        setMandate(granted);
+      } else {
+        const key = confirmGrantKey(request);
+        if (key && scope === 'session') sessionGrantsRef.current.add(key);
+        if (key && scope === 'always') {
+          const next = [...new Set([...alwaysGrantsRef.current, key])];
+          writeAlwaysGrants(next);
+          setAlwaysGrants(next);
+        }
+      }
+    }
+    settleConfirmation(pending, approved);
+  };
   const askConfirmation = useRef((summary: string, request?: AgentConfirmRequest): Promise<boolean> => {
     // 停止中的轮次不再弹确认卡：直接拒绝，让内核尽快收尾。
     if (turnRef.current.phase === 'stopping') return Promise.resolve(false);
@@ -236,6 +266,12 @@ const userApiKeysRef = useRef(userApiKeys);
       mandateRef.current = next;
       setMandate(next);
       return Promise.resolve(true);
+    }
+    const grantKey = confirmGrantKey(request);
+    if (grantKey && !planBlocked(request)) {
+      const scopes = confirmScopesFor(request);
+      if ((scopes.includes('session') && sessionGrantsRef.current.has(grantKey))
+        || (scopes.includes('always') && alwaysGrantsRef.current.includes(grantKey))) return Promise.resolve(true);
     }
     return new Promise<boolean>(resolve => {
       const offerMandate = modeRef.current === 'auto' && request?.kind === 'generation' && (request.gates?.length ?? 0) > 0 && !planBlocked(request);
@@ -251,12 +287,15 @@ const userApiKeysRef = useRef(userApiKeys);
   const [replaceTarget, setReplaceTarget] = useState<AgentReference | null>(null);
   const [sessionList, setSessionList] = useState<Array<{ id: string; title: string; updatedAt: string }>>([]);
   const [activeSessionId, setActiveSessionId] = useState('');
+  useEffect(() => { sessionGrantsRef.current.clear(); }, [activeSessionId]);
   // Lane15 first-run UX: setupBlocker classifies a cold-open/send failure via
   // the executor taxonomy (runtimeHealth) instead of raw strings, so the panel
   // can render a real next step ('Add API key') instead of a jargon dead end.
   const [setupBlocker, setSetupBlocker] = useState<AgentSetupBlocker | null>(null);
   const needsConfiguration = needsCredential(setupBlocker);
   const language = useWorkspaceStore(s => s.language);
+  // 确认卡按节点标题描述操作：读画布的实时节点，Agent 刚建的节点也能叫出名字。
+  const liveNodes = useWorkflowStore(s => s.projects.find(item => item.id === project.id)?.nodes) || project.nodes;
   const languageRef = useRef(language);
   languageRef.current = language;
   const t = useCallback((key: string, ...args: number[]): string => {
@@ -373,6 +412,7 @@ const userApiKeysRef = useRef(userApiKeys);
     kernelRef.current = undefined;
     setConfirmation(undefined);
     mandateRef.current = null;
+    sessionGrantsRef.current.clear();
     setMandate(null);
     setStatus('connecting');
     setSetupBlocker(null);
@@ -433,7 +473,7 @@ const userApiKeysRef = useRef(userApiKeys);
             url: connection.url,
             token: connection.token,
             confirm: askConfirmation,
-            confirmWrite: summary => modeRef.current === 'auto' || new Promise<boolean>(resolve => presentConfirmation({ summary, resolve })),
+            confirmWrite: (summary, request) => modeRef.current === 'auto' || askConfirmation(summary, request),
             onStatus: nextStatus => {
               if (!active) return;
               setWorkspaceStatus(nextStatus === 'connected' ? 'ready' : nextStatus === 'error' ? 'error' : 'connecting');
@@ -646,7 +686,7 @@ const userApiKeysRef = useRef(userApiKeys);
       setMessages(items => [...items, {
         id: `tool-${event.id}`,
         role: 'tool',
-        title: event.name,
+        title: agentToolLabel(event.name, language === 'zho' ? 'zho' : 'en'),
         text: needsApproval ? translations[language].agentPanel.toolWaitingApproval : productionTool ? translations[language].agentPanel.toolPreparingPlan : translations[language].agentPanel.toolUpdatingDraft,
         detail: event.args,
         status: 'pending',
@@ -967,23 +1007,19 @@ const userApiKeysRef = useRef(userApiKeys);
             : <button type="button" onClick={() => void saveGroupAsSkill()}>{language === 'zho' ? '保存为 Skill' : 'Save as Skill'}</button>}
           <button type="button" aria-label={language === 'zho' ? '关闭' : 'Dismiss'} onClick={() => setGroupBanner(null)}><X size={12} /></button>
         </div>}
-        {confirmation && <div className="workflow-agent__confirm"><strong>{t('agentPanel.confirmTitle')}</strong><p>{confirmation.summary}</p>
-          {confirmation.request?.gates?.length ? <GenerationPlanCard plan={{ items: [...confirmation.request.gates], mandate: describeMandateDenial(mandate, confirmation.request) }} /> : null}
-          {confirmation.offerMandate && <div className="workflow-agent__mandate">
-            <label>批准后，本会话自动模式最多自动生成 <input type="number" min={1} value={mandateTasks} onChange={event => setMandateTasks(Math.max(1, Math.floor(Number(event.target.value) || 1)))} aria-label="自动生成任务上限" /> 个任务（含本批），超出会再次询问；删除、取消始终单独确认。</label>
-          </div>}
-          <div className="workflow-agent__confirm-actions">
-            <button type="button" onClick={() => settleConfirmation(confirmation, false)}>{t('agentPanel.deny')}</button>
-            {confirmation.offerMandate && confirmation.request && <button type="button" onClick={() => {
-              const request = confirmation.request!;
-              const granted = consumeSpendMandate(createSpendMandate({ maxTasks: Math.max(mandateTasks, spendDemand(request.gates).tasks) }), request);
-              mandateRef.current = granted;
-              setMandate(granted);
-              settleConfirmation(confirmation, true);
-            }}>批准并自动进行</button>}
-            <button type={'button'} disabled={confirmation.blocked} onClick={() => settleConfirmation(confirmation, true)}>{confirmation.offerMandate ? '仅批准本次' : t('agentPanel.allow')}</button>
-          </div>
-        </div>}
+        {confirmation && <AgentConfirmCard
+          key={confirmation.id}
+          summary={confirmation.summary}
+          request={confirmation.request}
+          offerMandate={confirmation.offerMandate}
+          blocked={confirmation.blocked}
+          nodes={liveNodes}
+          language={language === 'zho' ? 'zho' : 'en'}
+          planMandateNote={confirmation.request ? describeMandateDenial(mandate, confirmation.request) : undefined}
+          mandateTasks={mandateTasks}
+          onMandateTasksChange={setMandateTasks}
+          onDecide={(approved, scope) => decideConfirmation(confirmation, approved, scope)}
+        />}
         <div
           ref={composer}
           className="workflow-agent__composer"
@@ -1098,6 +1134,7 @@ const userApiKeysRef = useRef(userApiKeys);
                 {modeOpen && <div className="agent-mode-menu" role="menu" aria-label={t('agentPanel.generationMode')}>
                   <button type="button" role="menuitem" aria-pressed={mode === 'manual'} onClick={() => { modeRef.current = 'manual'; mandateRef.current = null; setMandate(null); setMode('manual'); dispatchLayer({ type: 'close', layer: 'mode' }); }}><Hand size={17} /><span><strong>{t('agentPanel.manualMode')}</strong><small>{t('agentPanel.manualModeHint')}</small></span>{mode === 'manual' && <Check size={15} />}</button>
                   <button type="button" role="menuitem" aria-pressed={mode === 'auto'} onClick={() => { modeRef.current = 'auto'; setMode('auto'); dispatchLayer({ type: 'close', layer: 'mode' }); }}><RotateCw size={17} /><span><strong>{t('agentPanel.autoMode')}</strong><small>{t('agentPanel.autoModeHint')}</small></span>{mode === 'auto' && <Check size={15} />}</button>
+                  {alwaysGrants.length > 0 && <button type="button" role="menuitem" onClick={() => { writeAlwaysGrants([]); setAlwaysGrants([]); dispatchLayer({ type: 'close', layer: 'mode' }); }}><X size={17} /><span><strong>{language === 'zho' ? '撤销「始终允许」' : 'Reset “Always allow”'}</strong><small>{language === 'zho' ? `已记住 ${alwaysGrants.length} 类操作，撤销后会重新询问` : `${alwaysGrants.length} remembered; Agent will ask again`}</small></span></button>}
                   <p style={{ margin: 0, padding: '6px 12px 8px', fontSize: 10, lineHeight: 1.6, color: 'var(--isl-ink-ghost)' }}>删除、付费生成、Production 批准/运行、任务取消始终单独确认。</p>
                 </div>}
               </div>

@@ -44,7 +44,7 @@ export interface WorkflowAgentBridgeOptions {
   onEvent?: (type: string, payload: any) => void;
   onStatus?: (status: 'connecting' | 'connected' | 'disconnected' | 'error') => void;
   confirm?: (summary: string, request?: AgentConfirmRequest) => boolean | Promise<boolean>;
-  confirmWrite?: (summary: string) => boolean | Promise<boolean>;
+  confirmWrite?: (summary: string, request?: AgentConfirmRequest) => boolean | Promise<boolean>;
   workflowContract?: BrowserWorkflowContract;
 }
 
@@ -91,11 +91,17 @@ export function workflowConfirmRequest(envelope: WorkflowCommandEnvelope): Agent
     return {
       kind: 'generation',
       command: envelope.command,
+      args: envelope.args,
       gates: nodes.length === nodeIds.length ? nodes.map(node => agentPlanGate(node, project)) : [],
     };
   }
-  if (envelope.command.endsWith('.delete')) return { kind: 'destructive', command: envelope.command };
-  return { kind: 'other', command: envelope.command };
+  if (envelope.command.endsWith('.delete')) return { kind: 'destructive', command: envelope.command, args: envelope.args };
+  const operations = envelope.args.operations || envelope.args.ops;
+  if (envelope.command === 'workflow.apply' && Array.isArray(operations)
+    && operations.some(op => (op as { type?: string } | null)?.type === 'delete_nodes')) {
+    return { kind: 'destructive', command: envelope.command, args: envelope.args };
+  }
+  return { kind: 'other', command: envelope.command, args: envelope.args };
 }
 
 /** 与画布入口同一份计划：门禁详情 + 提交前检查；操作节点（recipe）不预检，运行时仍兜底。 */
@@ -333,7 +339,7 @@ export class WorkflowAgentBridge {
         const highRisk = requiresHighRiskWorkflowConfirmation(envelope);
         const operatorDraftOnly = envelope.source === 'operator' && !highRisk;
         if (this.options.confirmWrite && !WORKFLOW_READ_COMMANDS.has(envelope.command) && !highRisk && !operatorDraftOnly
-          && !await this.options.confirmWrite(workflowCommandSummary(envelope.command, envelope.args))) {
+          && !await this.options.confirmWrite(workflowCommandSummary(envelope.command, envelope.args), { ...workflowConfirmRequest(envelope), risk: 'write' })) {
           result = { ok: false, commandId: envelope.id, error: { code: 'DENIED', message: '用户拒绝了 Workflow 变更。' } };
           await this.post('/workflow/result', { requestId, clientId: this.clientId, result });
           this.emit('tool_result', { requestId, command: envelope.command, result });

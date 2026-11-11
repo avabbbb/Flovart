@@ -28,6 +28,10 @@
 
 ## Unreleased
 
+- Agent 确认卡重做：一句人话说明动作与对象（节点 ID 换成节点标题，不再显示 `workflow.node.delete：…` 这类内部文本），费用明细收进「详情」；「允许」为唯一主按钮，授权范围用一个下拉选择「仅这次 / 本次对话 / 始终允许此类操作」。删除只能逐次确认，付费生成与付费工具最多到「本次对话」（生成仍受任务上限约束），「始终允许」只覆盖可逆操作，存本机并可在模式菜单撤销；Esc 拒绝；颜色变量带兜底，挂到任何容器都不会透明。
+- 内置 Agent 新增 `flovart_workflow_node_tool`：与节点工具条同一实现，可直接截取视频任意秒数的帧（position=current + currentTimeSec）、剪辑、音视频分离、拼接、裁剪、放大、去背景等；工具清单从 Operation 注册表生成，后续新增工具自动对 Agent 可用。`workflow.node.tool` 结果新增 `outputNodeIds`；补齐 Agent 路径上的 `audio-stem-split` 与音视频分离的 `audio` 参数。
+- Agent 对话：用户气泡不再显示发给模型的引用上下文（nodeId、附带画面说明），工具卡标题改为「读取画布」「查看画面」等人话。
+- Canvas 空状态：按钮不再换行溢出，「图片节点」为唯一主按钮，示例画布改为一行文字链接；去掉虚线框与彩色按钮；点阵淡化、间距 24px。
 - 逆向生产渲染：ProductionSpec V1 从 Reverse 项目派生镜头帧窗口与资产，Remotion Player 与 Node 渲染共用同一合成；`node scripts/render-production.mjs --spec spec.json --out out.mp4` 已冒烟输出 320×180 / 20 帧 / 2s H.264。
 - Agent 沙箱确认卡：画布外抽屉补齐 workflow 颜色变量作用域（此前背景透明、确认内容与消息和输入框互相透叠）；计划卡恢复网格布局，操作按钮可换行，长内容在卡片内滚动；确认卡改为输入框上方的独立占位，不再覆盖输入区。
 - Reverse 替换 Table：顶栏改为 Canvas | 逆向 | Agent；services/reverse/ 按 Hypit 架构分层自行实现（temporal / evidence / narrative / align / projection / caption / composition），不引入 Hypit 代码；旧数据里的 'table' 视图自动迁移为 'reverse'（workspace store v3）。

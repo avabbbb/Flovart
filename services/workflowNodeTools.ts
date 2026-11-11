@@ -20,6 +20,7 @@ import {
 } from './workflowVideoOperations';
 import {
   runWorkflowAudioSpeedOperation,
+  runWorkflowAudioStemSplitOperation,
   runWorkflowAudioTrimOperation,
   type WorkflowAudioOperationRuntime,
 } from './workflowAudioOperations';
@@ -92,8 +93,10 @@ export async function runWorkflowNodeTool(
       return runWorkflowVideoTrimOperation(projectId, nodeId, {
         startSec: finite(args.startSec, 0, 0, Number.MAX_SAFE_INTEGER), endSec: finite(args.endSec, 0, 0, Number.MAX_SAFE_INTEGER),
       }, runtime);
-    case 'video-av-split':
-      return runWorkflowVideoAvSplitOperation(projectId, nodeId, runtime);
+    case 'video-av-split': {
+      const audio = String(args.audio || 'full');
+      return runWorkflowVideoAvSplitOperation(projectId, nodeId, runtime, (['full', 'vocals', 'background'].includes(audio) ? audio : 'full') as 'full' | 'vocals' | 'background');
+    }
     case 'video-merge':
       return runWorkflowVideoMergeOperation(projectId, Array.isArray(args.sourceNodeIds) ? args.sourceNodeIds.map(String) : [], runtime);
     case 'video-extract-frame':
@@ -110,5 +113,7 @@ export async function runWorkflowNodeTool(
       }, runtime);
     case 'audio-speed':
       return runWorkflowAudioSpeedOperation(projectId, nodeId, finite(args.speed, 1, .25, 4), runtime);
+    case 'audio-stem-split':
+      return runWorkflowAudioStemSplitOperation(projectId, nodeId, runtime);
   }
 }
