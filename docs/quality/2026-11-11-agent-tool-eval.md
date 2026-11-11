@@ -77,6 +77,7 @@
 - `npx tsc --noEmit`：通过。
 - 定向回归：文本输入、模板、迁移、图片工具、视频工具栏、dispatcher、ops、资源契约共 128 项通过。
 - 全量回归：`npx vitest run` — 306 个测试文件、1871 项通过、1 项跳过。
+- 分组拖拽修复：`tests/workflowEditor.test.tsx` 48 项通过，新增“组内拖节点只移动该节点”回归。
 - 生产构建：`npm run build` 通过。
 - 浏览器实测：
   - 备注节点选中后不出现生成提示词栏；
@@ -84,7 +85,7 @@
   - 裁剪弹窗可拖拽、比例按钮与数值输入正常；
   - 视频剪辑/指定帧弹窗显示帧、时间码，拖动进度条画面同步变化；
   - 示例画布打开后备注与镜头独立。
-- 交付：提交 `a862f67`，已部署 Pages（`27cc53ce.flovart-b5a.pages.dev`）；DSH webui 重新构建并安装到本地 profile。
+- 交付：提交 `4ca53dd`，已部署 Pages（`1316af34.flovart-b5a.pages.dev`）；DSH webui 重新构建并安装到本地 profile。
 
 ## 未完成 / 下一轮
 
