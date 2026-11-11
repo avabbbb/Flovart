@@ -7,6 +7,7 @@ import { InfiniteWorkflow } from '../components/workflow/InfiniteWorkflow';
 import { WorkflowConfigPanel, WorkflowGenerationCapabilitiesProvider, type WorkflowSharedMedia } from '../components/workflow/WorkflowConfigPanel';
 import { WorkflowMiniMap } from '../components/workflow/WorkflowMiniMap';
 import { workflowMediaStorage } from '../components/workflow/storage';
+import { STUDIO_MEDIA_BATCH_DRAG_TYPE } from '../components/studio/StudioMediaBrowser';
 import type { WorkflowProject } from '../components/workflow/types';
 import { getGenerationCapability } from '../services/generationCapabilities';
 import { installWorkflowNodePlugin, uninstallWorkflowNodePlugin } from '../components/workflow/nodePluginSdk';
@@ -807,6 +808,38 @@ describe('InfiniteWorkflow surface interactions', () => {
     await waitFor(() => expect(editor().querySelectorAll('[data-workflow-node-id]')).toHaveLength(3));
     const dropped = editor().querySelector<HTMLElement>('.workflow-node--image.is-selected')!;
     expect(projectNode(projectState().selectedNodeIds[0]).position).toEqual({ x: 290, y: 232 });
+  });
+
+  it('imports every item from a multi-select shared-media drop', async () => {
+    render(<Harness />);
+    const before = projectState().nodes.map(node => node.id);
+    const items = ['a', 'b', 'c'].map(name => ({
+      id: 'asset:' + name,
+      source: 'asset' as const,
+      sourceId: name,
+      name,
+      href: 'https://example.com/' + name + '.png',
+      mimeType: 'image/png',
+      type: 'image' as const,
+      width: 320,
+      height: 180,
+    }));
+
+    fireEvent.drop(editor(), {
+      clientX: 500,
+      clientY: 350,
+      dataTransfer: {
+        files: [],
+        items: [],
+        getData: (type: string) => type === STUDIO_MEDIA_BATCH_DRAG_TYPE ? JSON.stringify(items) : '',
+      },
+    });
+
+    await waitFor(() => expect(editor().querySelectorAll('[data-workflow-node-id]')).toHaveLength(before.length + 3));
+    const added = projectState().nodes.filter(node => !before.includes(node.id));
+    expect(added.map(node => node.metadata.href)).toEqual(items.map(item => item.href));
+    expect(added[1].position.x - added[0].position.x).toBe(380);
+    expect(added[2].position.x - added[0].position.x).toBe(760);
   });
 
   it('discards an import that completes after switching projects', async () => {

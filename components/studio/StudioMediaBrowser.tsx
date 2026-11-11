@@ -7,6 +7,8 @@ import { displayError } from '../../services/displayError';
 import { openRemoteMediaUrl, saveBlob } from '../../services/desktopNetwork';
 
 export const STUDIO_MEDIA_DRAG_TYPE = 'application/x-flovart-studio-media';
+/** 多选拖拽：与单条拖拽并存，旧接收方仍能拿到第一条。 */
+export const STUDIO_MEDIA_BATCH_DRAG_TYPE = 'application/x-flovart-studio-media-batch';
 
 export interface StudioMediaItem {
   id: string;

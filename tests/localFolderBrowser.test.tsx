@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocalFolderBrowser } from '../components/workflow/LocalFolderBrowser';
+import { STUDIO_MEDIA_BATCH_DRAG_TYPE } from '../components/studio/StudioMediaBrowser';
 import { forgetLocalFolderSource, listLocalFolderSources, type LocalFolderEntry } from '../services/localFolderSource';
 import { fakeDirectoryHandle, fakeFileHandle } from './fixtures/fakeFolderHandle';
 
@@ -114,6 +115,25 @@ describe('LocalFolderBrowser', () => {
 
     fireEvent.click(screen.getByTestId('local-folder-select-all'));
     expect(screen.getByTestId('local-folder-card-场景/夜晚/c.png').getAttribute('aria-pressed')).toBe('true');
+    await settle();
+  });
+
+  it('batches every manually selected entry, not only select-all', async () => {
+    stubPicker(sampleRoot());
+    await renderPanel(vi.fn());
+    fireEvent.click(screen.getByTestId('local-folder-pick'));
+    fireEvent.click(await screen.findByTestId('local-folder-card-hero.png'));
+    fireEvent.click(screen.getByTestId('local-folder-card-take-01.mp4'));
+
+    const data = new Map<string, string>();
+    fireEvent.dragStart(screen.getByTestId('local-folder-card-take-01.mp4'), {
+      dataTransfer: { setData: (type: string, value: string) => data.set(type, value), effectAllowed: '' },
+    });
+    const batch = JSON.parse(data.get(STUDIO_MEDIA_BATCH_DRAG_TYPE) || '[]') as Array<{ href: string }>;
+    expect(batch.map(item => item.href)).toEqual([
+      expect.stringContaining('hero.png'),
+      expect.stringContaining('take-01.mp4'),
+    ]);
     await settle();
   });
 

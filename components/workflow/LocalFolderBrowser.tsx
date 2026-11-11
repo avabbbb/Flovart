@@ -1,7 +1,7 @@
 import { AlertTriangle, Check, ChevronDown, ChevronRight, FolderOpen, Loader2, Plug, RefreshCw, Search, Trash2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createWorkflowImageThumbnail, createWorkflowVideoPoster } from './media';
-import { STUDIO_MEDIA_DRAG_TYPE } from '../studio/StudioMediaBrowser';
+import { STUDIO_MEDIA_BATCH_DRAG_TYPE, STUDIO_MEDIA_DRAG_TYPE } from '../studio/StudioMediaBrowser';
 import {
   LocalFolderError,
   adoptLocalFolderHandle,
@@ -435,7 +435,7 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
     // payload; extra selected entries ride along in a parallel key.
     event.dataTransfer.setData(STUDIO_MEDIA_DRAG_TYPE, JSON.stringify(items[0]));
     if (items.length > 1) {
-      event.dataTransfer.setData('application/x-flovart-local-folder-batch', JSON.stringify(items));
+      event.dataTransfer.setData(STUDIO_MEDIA_BATCH_DRAG_TYPE, JSON.stringify(items));
     }
     event.dataTransfer.setData('text/plain', JSON.stringify(items[0]));
   };

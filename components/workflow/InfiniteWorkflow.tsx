@@ -12,7 +12,7 @@ import { Check, Download, History, Maximize2, Minimize2, Plus, Star, Undo2 } fro
 import { saveMediaUrl } from '../../services/desktopNetwork';
 import type { AssetLibrary, PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../types';
 import type { RouteFallbackResolution } from '../../services/routeMapping';
-import { STUDIO_MEDIA_DRAG_TYPE } from '../studio/StudioMediaBrowser';
+import { STUDIO_MEDIA_BATCH_DRAG_TYPE, STUDIO_MEDIA_DRAG_TYPE } from '../studio/StudioMediaBrowser';
 import { mediaKindOf } from '../studio/assetLibraryShared';
 import type { AssetSuggestion } from '../MentionList';
 import type { MentionData } from '../MediaMentionExtension';
@@ -160,14 +160,34 @@ function workflowDropFiles(dataTransfer: DataTransfer) {
     .filter((file): file is File => Boolean(file));
 }
 
+function isWorkflowSharedMedia(value: unknown): value is WorkflowSharedMedia {
+  if (typeof value !== 'object' || value === null) return false;
+  const media = value as Partial<WorkflowSharedMedia>;
+  // `local-folder:` hrefs can carry audio; the shared-media type field is only
+  // a hint — the non-http path resolves the real MIME from the File it loads.
+  return typeof media.id === 'string' && media.id.length > 0
+    && typeof media.href === 'string' && media.href.length > 0
+    && ['image', 'video', 'audio'].includes(String(media.type));
+}
+
+/** 多选拖拽：同一 DataTransfer 同时带单条（兼容旧路径）和整组。 */
+function workflowDropSharedMediaBatch(dataTransfer: DataTransfer): WorkflowSharedMedia[] {
+  try {
+    const raw = dataTransfer.getData(STUDIO_MEDIA_BATCH_DRAG_TYPE);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(isWorkflowSharedMedia) : [];
+  } catch {
+    return [];
+  }
+}
+
 function workflowDropSharedMedia(dataTransfer: DataTransfer): WorkflowSharedMedia | null {
   try {
     const raw = dataTransfer.getData(STUDIO_MEDIA_DRAG_TYPE);
     if (!raw) return null;
-    const media = JSON.parse(raw) as WorkflowSharedMedia;
-    // `local-folder:` hrefs can carry audio; the shared-media type field is only
-    // a hint — the non-http path resolves the real MIME from the File it loads.
-    return media?.id && media?.href && ['image', 'video', 'audio'].includes(media.type) ? media : null;
+    const parsed: unknown = JSON.parse(raw);
+    return isWorkflowSharedMedia(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -1798,11 +1818,25 @@ export function InfiniteWorkflow({
       if (dropTarget && (event.dataTransfer.files?.length || 0) <= 1) return;
     }
     event.stopPropagation();
-    const sharedMedia = workflowDropSharedMedia(event.dataTransfer);
+    const point = Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
+      ? screenToWorkflow(event.clientX, event.clientY)
+      : viewportCenter();
+    const batch = workflowDropSharedMediaBatch(event.dataTransfer);
+    if (batch.length > 1) {
+      // 多选拖入：逐条落节点；串行等待前一条持久化，避免并发写覆盖项目快照。
+      const expectedProjectId = projectRef.current.id;
+      void (async () => {
+        for (let index = 0; index < batch.length; index += 1) {
+          if (!mountedRef.current || projectRef.current.id !== expectedProjectId) return;
+          const column = index % 4;
+          const row = Math.floor(index / 4);
+          await addSharedMediaAt(batch[index], { x: point.x + column * 380, y: point.y + row * 300 });
+        }
+      })();
+      return;
+    }
+    const sharedMedia = batch[0] ?? workflowDropSharedMedia(event.dataTransfer);
     if (sharedMedia) {
-      const point = Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
-        ? screenToWorkflow(event.clientX, event.clientY)
-        : viewportCenter();
       void addSharedMediaAt(sharedMedia, point);
       return;
     }
@@ -1815,9 +1849,6 @@ export function InfiniteWorkflow({
       return;
     }
     const skipped = files.length - mediaFiles.length;
-    const point = Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
-      ? screenToWorkflow(event.clientX, event.clientY)
-      : viewportCenter();
     const expectedProjectId = projectRef.current.id;
     void (async () => {
       // Sequential on purpose: each addMediaAt persists its node before the next starts,
