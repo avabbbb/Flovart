@@ -536,18 +536,18 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
     };
   });
   const extraTools: AgentTool[] = [];
-  if (dependencies.webSearch) extraTools.push(createWebSearchTool(dependencies.webSearch, guard));
+  extraTools.push(createWebSearchTool(dependencies.webSearch, guard));
   extraTools.push(createLocalGrepTool(guard));
   if (dependencies.getNodes) extraTools.push(createMediaViewTool(dependencies.getNodes));
   return [...commandTools, ...extraTools];
 }
 
-function createWebSearchTool(credential: AgentSearchCredential, guard: (command: string, params: Record<string, unknown>) => Promise<void>): AgentTool {
+function createWebSearchTool(credential: AgentSearchCredential | undefined, guard: (command: string, params: Record<string, unknown>) => Promise<void>): AgentTool {
   const recency = Type.Union([Type.Literal('day'), Type.Literal('week'), Type.Literal('month'), Type.Literal('year')]);
   return {
     name: WEB_SEARCH_TOOL_NAME,
     label: 'web.search',
-    description: '联网搜索（DeepSeek Search）。返回标题、URL、日期与摘要。query 支持 site:、-site:、引号短语、after:/before:；recency 可选 day/week/month/year；limit 1-50，默认 10。用于查资料、竞品、风格与事实核对。',
+    description: '联网搜索（Parallel 公共 MCP，免 Key；失败自动回退 DeepSeek）。返回标题、URL、日期与摘要。query 支持 site:、-site:、引号短语、after:/before:；recency 可选 day/week/month/year；limit 1-40，默认 10。用于查资料、竞品、风格与事实核对。',
     parameters: Type.Object({
       query: Type.String({ description: '搜索词，最长 128 字符' }),
       recency: Type.Optional(recency),
@@ -556,7 +556,7 @@ function createWebSearchTool(credential: AgentSearchCredential, guard: (command:
     execute: async (_toolCallId, params, signal) => {
       const input = params as { query: string; recency?: SearchRecency; limit?: number };
       await guard(WEB_SEARCH_TOOL_NAME, input as unknown as Record<string, unknown>);
-      const result = await searchAgentWeb({ credential, query: input.query, recency: input.recency, limit: input.limit, signal });
+      const result = await searchAgentWeb({ query: input.query, recency: input.recency, limit: input.limit, signal, credential });
       return {
         content: [{ type: 'text', text: formatSearchSources(result.sources) }],
         details: { provider: result.provider, sources: result.sources },
@@ -638,7 +638,7 @@ const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，Flovart 生成式 
 - flovart_workflow_apply：结构化修改画布。operations 只允许 add_node、create_connected_node、update_node、delete_nodes、delete_connections、connect_nodes、move_nodes、reorder_nodes、group_nodes、ungroup_nodes、set_batch_primary。
 - flovart_workflow_node_run：运行生成节点（nodeId 或 nodeIds 批量，一次确认费用）。
 - flovart_workflow_media_view：查看图片/视频节点的真实画面（nodeIds；视频可用 frames: first/middle/last 或 times: [秒数] 指定任意时间点）。inspect 里的 [media] 只是脱敏占位；需要判断构图、风格或检查生成结果时调用它。用户 @引用的图片/视频会自动附带画面。用户粘贴的截图、拖入的视频会作为本轮图片内容直接附上。
-- flovart_web_search：联网搜索（DeepSeek）。需要外部资料、竞品信息、风格参考或事实核对时调用；结果给出来源 URL，引用时要带上。
+- flovart_web_search：联网搜索（Parallel 公共 MCP，免 Key，失败回退 DeepSeek）。需要外部资料、竞品信息、风格参考或事实核对时调用；结果给出来源 URL，引用时要带上。
 - flovart_grep：在用户连接过的本地文件夹里搜文本文件（正则）。用户说“我本地的素材/文档里有…”时先用它；只能搜已授权文件夹，读不到任意路径。
 - flovart_todo：多步制作的任务清单。
 command.list/schema 属于 CLI discovery/debug，不是你的工具；不得访问 Shell、任意文件或 Provider Secret。

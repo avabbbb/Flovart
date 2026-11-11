@@ -46,14 +46,22 @@ never skip ahead. Details are in `references/environment.md`.
 
 Use `ensure` to prepare, then these five operations for all normal work:
 `status`, `workflow.inspect`, `workflow.selection.get`, `workflow.apply`, and
-`workflow.node.run`.
+`workflow.node.run`. To hand one turn to the user's built-in Flovart Agent,
+delegate with `agent.turn`.
 
 ```bash
 flovart ensure --json
 flovart status --json
 flovart workflow.inspect --agent-identity codex --json
 flovart workflow.selection.get --agent-identity codex --json
+flovart agent.turn --prompt "给镜头 1 写一版提示词" --policy read-only --mutationId turn-1 --json
 ```
+
+- `agent.turn` runs exactly one turn of the built-in Agent and returns a
+  summary (text, tool names, `draftVersion`), not a transcript. It is read-only
+  unless you pass `--policy workspace-write`, which asks the user first. Pass a
+  stable `mutationId`: the same id replays the same result instead of running
+  twice, and a busy Agent returns `AGENT_BUSY`.
 
 - `--agent-identity` names your host (`codex`, `claude-code`, `opencode`,
   `workbuddy`). Pass the same value on `workflow.inspect` and on every write
