@@ -7,12 +7,14 @@
  * conversation.view / shell.overlay entries.
  */
 
-// Type-only: pulls the Context.tools augmentation and re-exports.
+// Type-only: pulls the Context.tools / Context.skills augmentations and re-exports.
 import type {} from '@deepseek-ai/dsh-tools'
+import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { Context } from '@deepseek-ai/cordis'
 import { FlovartService } from './service.ts'
 import { registerFlovartTools } from './tools.ts'
+import { createFlovartSkillProvider } from './skillProvider.ts'
 import { registerWorkspaceProxy } from './workspaceProxy.ts'
 import { registerWebui } from './webui.ts'
 import { dirname, resolve } from 'node:path'
@@ -22,7 +24,9 @@ import type { FlovartPluginConfig } from './config.ts'
 export const name = 'flovart'
 
 // lib/index.js ships next to the packaged webui/ directory.
-const WEBUI_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'webui')
+const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const WEBUI_ROOT = resolve(PACKAGE_ROOT, 'webui')
+const SKILL_ROOT = resolve(PACKAGE_ROOT, 'skill')
 
 /** Wait for the tool registry and web carrier before exposing either half. */
 export const inject = ['tools', 'webServer'] as const
@@ -35,4 +39,9 @@ export function apply(ctx: Context, config: Partial<FlovartPluginConfig> | undef
   registerWorkspaceProxy(ctx, service.config)
   registerWebui(ctx, service.config, WEBUI_ROOT)
   ctx.inject(['flovart'], toolCtx => registerFlovartTools(toolCtx, service))
+  // Optional: older compatibility sets have no skill registry; the plugin still boots.
+  ctx.inject(['skills'], skillCtx => skillCtx.effect(
+    () => skillCtx.skills.registerProvider(() => createFlovartSkillProvider(SKILL_ROOT)),
+    'flovart: bundled skill provider',
+  ))
 }

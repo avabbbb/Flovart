@@ -13,7 +13,8 @@
   "files": [
     "lib",
     "webui",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "skill"
   ],
   "license": "MIT",
   "engines": {
@@ -62,7 +63,7 @@
     "profile:uninstall": "node scripts/profile.mjs uninstall",
     "build:webui": "node scripts/build-webui.mjs",
     "prepack": "node scripts/build-webui.mjs && node scripts/build.mjs",
-    "test": "node --test test/tools.test.ts test/webui.test.ts test/workspaceTarget.test.ts test/policy.test.ts test/policyHook.test.ts"
+    "test": "node --test test/tools.test.ts test/skillProvider.test.ts test/webui.test.ts test/workspaceTarget.test.ts test/policy.test.ts test/policyHook.test.ts"
   },
   "dependencies": {
     "@deepseek-ai/dsh-util-values": "0.2.2-rc.1",

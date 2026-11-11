@@ -64,6 +64,7 @@ Browser Workflow，DSH view 会 fail closed，不创建隐藏副本。
 - 当前 view 只读显示可见 Browser Workflow；不会预造空项目、保存 Native Draft 或绑定第二份 Workflow。
 - 真实浏览器已完成 RC8 Profile 页面 smoke，无页面异常或控制台错误；完整 Production Brief 对话仍受本机 DeepSeek 登录态限制，未用付费凭据冒充通过。
 - DSH service 的 Workflow API 总是把 `workspaceMode` 固定为 `browser`；没有可见 Browser Workflow 时返回 `WORKSPACE_REQUIRED`/`WORKSPACE_UNAVAILABLE`，没有 silent fallback 或假执行。
+- 插件随包携带 canonical Skill（`skill/flovart`），通过 `ctx.skills.registerProvider` 注册进 DSH（rank 600；用户自己的 `~/.dsh/skills` 或项目内同名 skill 优先）。旧兼容集没有 skills 服务时自动跳过，不影响启动。
 - 插件工具另受一层 Flovart 策略约束（DSH 自家的 sandbox/approval 不管插件工具）：`FLOVART_SANDBOX=read-only|workspace-write`、`FLOVART_APPROVAL=never|on-request|untrusted`。`ask` 走 Harness approval seam，未组合 ApprovalService 时按拒绝处理；`workspace/app/workspace.node.run` 的删除与付费确认仍由 Flovart 命令面负责，不重复弹窗。
 - Workspace Operator 被精确终止后，Supervisor 已真实以相同 loopback 会话重新拉起；Cordis service 的临时 CLI lifecycle test 已证明依赖 disposer 会卸载，服务恢复后重新注入。
 - `profile:uninstall` 已真实验证只移除 `$DSH_HOME/profiles/flovart`，保留 DSH_HOME 其余内容、Workspace 数据和其他 Harness Profile。

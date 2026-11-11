@@ -12,7 +12,7 @@
  */
 
 import { build } from 'esbuild'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -88,3 +88,12 @@ if (!clientPlain.trimEnd().endsWith('return module.exports; } });')) {
   throw new Error('client.js missing the factory footer contract')
 }
 console.log('[dsh-plugin] client loader contract verified')
+
+// Ship the canonical Skill inside the package so DSH's / menu can load it
+// without cloning the repository.
+const skillSource = resolve(ROOT, '..', 'skills', 'flovart')
+const skillTarget = resolve(ROOT, 'skill')
+if (!existsSync(resolve(skillSource, 'SKILL.md'))) throw new Error('canonical skill is missing: skills/flovart/SKILL.md')
+rmSync(skillTarget, { recursive: true, force: true })
+cpSync(skillSource, resolve(skillTarget, 'flovart'), { recursive: true })
+console.log('[dsh-plugin] ok skill/flovart')
