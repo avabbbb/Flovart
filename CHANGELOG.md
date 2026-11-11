@@ -28,6 +28,7 @@
 
 ## Unreleased
 
+- DSH 桌面端连接：bootstrap 接受 `dsh-app://` 协议代理（转发时会去掉 Origin/Sec-Fetch-Site），Workspace Operator 允许 `dsh-app://app` 交换 session；新增 `npm run dsh:desktop` 启动器，先复用/拉起 Workspace Operator 再打开 DSH Desktop（`--ensure-only` 只拉起 Operator）。
 - 账号入口弹窗跟随应用深浅色主题（含 DSH 内嵌主题），文案改为账号生态探索中、多端同步后续更新，并加入 GitHub 点赞入口。
 - Agent 确认卡重做：一句人话说明动作与对象（节点 ID 换成节点标题，不再显示 `workflow.node.delete：…` 这类内部文本），费用明细收进「详情」；「允许」为唯一主按钮，授权范围用一个下拉选择「仅这次 / 本次对话 / 始终允许此类操作」。删除只能逐次确认，付费生成与付费工具最多到「本次对话」（生成仍受任务上限约束），「始终允许」只覆盖可逆操作，存本机并可在模式菜单撤销；Esc 拒绝；颜色变量带兜底，挂到任何容器都不会透明。
 - 内置 Agent 新增 `flovart_workflow_node_tool`：与节点工具条同一实现，可直接截取视频任意秒数的帧（position=current + currentTimeSec）、剪辑、音视频分离、拼接、裁剪、放大、去背景等；工具清单从 Operation 注册表生成，后续新增工具自动对 Agent 可用。`workflow.node.tool` 结果新增 `outputNodeIds`；补齐 Agent 路径上的 `audio-stem-split` 与音视频分离的 `audio` 参数。
