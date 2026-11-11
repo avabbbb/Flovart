@@ -25,6 +25,16 @@
 
 ## RC8 边界
 
+### DSH Desktop（`dsh-app://`）的 bootstrap
+
+DSH Desktop 的页面从 `dsh-app://app` 加载，它的协议代理在转发到本机 Host 时会删掉 `Origin` 与 `Sec-Fetch-Site`，并换成 Host cookie。因此：
+
+- bootstrap 路由不能强制要求 `Sec-Fetch-Site: same-origin`；它只做同源校验（跨站或伪造 Origin 仍然 403），否则桌面端永远拿到「bootstrap 仅接受同源页面请求」。
+- Workspace Operator 的 `/bootstrap/exchange` 需要接受 `Origin: dsh-app://app`（自定义 secure scheme，网页无法声明），否则签发成功后仍会在换 session token 时被拒。
+
+这两条都已在源码与测试中固定；桌面端的连接还要求 Workspace Operator 本身在运行（DSH Desktop 正常启动不会拉起它）。
+
+
 - 不占用根 `sidebar`、`conversation` 或 `conversation.session`；只注册 `conversation.view`、`sidebar.panellist`、`main`、`shell.overlay` 四个增量槽位。
 - 侧栏「Flovart」入口的主区域是同源 iframe（`/flovart-app/`）嵌入的可见画布；不复制第二套 Agent 会话，也不在 iframe 外重建聊天页。
 - 浏览器只访问 Harness 同源的 `/flovart-workspace`；Host 仅代理 `health` 与受限的 Workflow tools 路由。
