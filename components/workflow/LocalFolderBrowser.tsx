@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, FolderOpen, Loader2, Plug, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, ChevronRight, FolderOpen, Loader2, Plug, RefreshCw, Search, Trash2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createWorkflowImageThumbnail, createWorkflowVideoPoster } from './media';
 import { STUDIO_MEDIA_DRAG_TYPE } from '../studio/StudioMediaBrowser';
@@ -39,6 +39,34 @@ const KIND_LABEL: Record<KindFilter, { zho: string; en: string }> = {
   video: { zho: '视频', en: 'Videos' },
   audio: { zho: '音频', en: 'Audio' },
 };
+
+
+interface FolderNode {
+  name: string;
+  path: string;
+  folders: Map<string, FolderNode>;
+  entries: LocalFolderEntry[];
+}
+
+/** 把扫描结果的 relativePath 还原成嵌套目录；UI 不再把子目录拍平。 */
+function buildFolderTree(entries: LocalFolderEntry[]): FolderNode {
+  const root: FolderNode = { name: '', path: '', folders: new Map(), entries: [] };
+  for (const entry of entries) {
+    const segments = entry.relativePath.split('/').filter(Boolean);
+    segments.pop();
+    let node = root;
+    for (const segment of segments) {
+      let child = node.folders.get(segment);
+      if (!child) {
+        child = { name: segment, path: node.path ? node.path + '/' + segment : segment, folders: new Map(), entries: [] };
+        node.folders.set(segment, child);
+      }
+      node = child;
+    }
+    node.entries.push(entry);
+  }
+  return root;
+}
 
 function formatBytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return '';
@@ -139,6 +167,8 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
   const [kindFilter, setKindFilter] = useState<KindFilter>('all');
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+  const lastClickedIndex = useRef(-1);
   const [dropping, setDropping] = useState(false);
   const [inserting, setInserting] = useState(false);
 
@@ -267,15 +297,6 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
     setNotice(zho ? '拖入的内容里没有可用的文件夹。' : 'No usable folder was found in the drop.');
   }, [refreshSources, zho]);
 
-  const visibleEntries = useMemo(() => {
-    const keyword = query.trim().toLowerCase();
-    return entries.filter(entry => {
-      if (kindFilter !== 'all' && entry.kind !== kindFilter) return false;
-      if (keyword && !entry.relativePath.toLowerCase().includes(keyword)) return false;
-      return true;
-    });
-  }, [entries, kindFilter, query]);
-
   const activeSource = useMemo(() => sources.find(source => source.id === activeId) || null, [activeId, sources]);
 
   const counts = useMemo(() => entries.reduce((result, entry) => {
@@ -283,11 +304,64 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
     return result;
   }, {} as Partial<Record<LocalFolderMediaKind, number>>), [entries]);
 
-  const toggle = (relativePath: string) => {
+  const tree = useMemo(() => buildFolderTree(entries), [entries]);
+  const filtering = Boolean(query.trim()) || kindFilter !== 'all';
+  const matchesEntry = useCallback((entry: LocalFolderEntry) => {
+    const keyword = query.trim().toLowerCase();
+    if (kindFilter !== 'all' && entry.kind !== kindFilter) return false;
+    if (keyword && !entry.relativePath.toLowerCase().includes(keyword)) return false;
+    return true;
+  }, [kindFilter, query]);
+  // 渲染顺序即 Shift 连选的顺序；折叠的目录不参与可见范围（筛选时自动展开）。
+  const orderedEntries = useMemo(() => {
+    const result: LocalFolderEntry[] = [];
+    const walk = (node: FolderNode) => {
+      for (const entry of node.entries) if (matchesEntry(entry)) result.push(entry);
+      for (const child of node.folders.values()) {
+        if (!filtering && collapsedFolders.has(child.path)) continue;
+        walk(child);
+      }
+    };
+    walk(tree);
+    return result;
+  }, [collapsedFolders, filtering, matchesEntry, tree]);
+  const folderCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    const walk = (node: FolderNode): number => {
+      let count = node.entries.filter(matchesEntry).length;
+      for (const child of node.folders.values()) count += walk(child);
+      counts.set(node.path, count);
+      return count;
+    };
+    walk(tree);
+    return counts;
+  }, [matchesEntry, tree]);
+
+  const toggle = (event: React.MouseEvent, entry: LocalFolderEntry) => {
+    const index = orderedEntries.findIndex(item => item.relativePath === entry.relativePath);
+    // 捕获在 setSelected 之前：React 可能延迟执行 updater，届时 ref 已被下一行改写。
+    const previousIndex = lastClickedIndex.current;
+    const range = event.shiftKey && previousIndex >= 0 && index >= 0;
     setSelected(current => {
       const next = new Set(current);
-      if (next.has(relativePath)) next.delete(relativePath);
-      else next.add(relativePath);
+      if (range) {
+        const start = Math.min(previousIndex, index);
+        const end = Math.max(previousIndex, index);
+        for (let position = start; position <= end; position += 1) next.add(orderedEntries[position].relativePath);
+        return next;
+      }
+      if (next.has(entry.relativePath)) next.delete(entry.relativePath);
+      else next.add(entry.relativePath);
+      return next;
+    });
+    lastClickedIndex.current = index;
+  };
+  const selectAllVisible = () => setSelected(new Set(orderedEntries.map(entry => entry.relativePath)));
+  const toggleFolder = (path: string) => {
+    setCollapsedFolders(current => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
       return next;
     });
   };
@@ -355,6 +429,60 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
       event.dataTransfer.setData('application/x-flovart-local-folder-batch', JSON.stringify(items));
     }
     event.dataTransfer.setData('text/plain', JSON.stringify(items[0]));
+  };
+
+  const renderCard = (entry: LocalFolderEntry) => {
+    const active = selected.has(entry.relativePath);
+    return (
+      <button
+        key={entry.relativePath}
+        type="button"
+        title={`${entry.relativePath} · ${formatBytes(entry.bytes)}`}
+        className={`local-folder-card${active ? ' is-selected' : ''}`}
+        onClick={event => toggle(event, entry)}
+        onDoubleClick={() => void insertOne(entry)}
+        onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void insertOne(entry); } }}
+        draggable
+        onDragStart={event => startEntryDrag(event, entry)}
+        aria-pressed={active}
+        data-testid={`local-folder-card-${entry.relativePath}`}
+      >
+        <LocalFolderThumb entry={entry} />
+        {active && <span className="local-folder-card__check"><Check size={11} /></span>}
+        <span className="local-folder-card__name">{entry.name}</span>
+      </button>
+    );
+  };
+
+  const renderFolder = (node: FolderNode) => {
+    const folderEntries = node.entries.filter(matchesEntry);
+    const children = [...node.folders.values()]
+      .filter(child => (folderCounts.get(child.path) || 0) > 0)
+      .sort((left, right) => left.name.localeCompare(right.name));
+    return (
+      <>
+        {folderEntries.length > 0 && <div className="local-folder-group__items">{folderEntries.map(renderCard)}</div>}
+        {children.map(child => {
+          const collapsed = !filtering && collapsedFolders.has(child.path);
+          return (
+            <div key={child.path} className="local-folder-group" data-testid={`local-folder-group-${child.path}`}>
+              <button
+                type="button"
+                className="local-folder-group__head"
+                aria-expanded={!collapsed}
+                onClick={() => toggleFolder(child.path)}
+              >
+                {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                <FolderOpen size={12} />
+                <span className="local-folder-group__name">{child.name}</span>
+                <span className="local-folder-group__count">{folderCounts.get(child.path) || 0}</span>
+              </button>
+              {!collapsed && <div className="local-folder-group__children">{renderFolder(child)}</div>}
+            </div>
+          );
+        })}
+      </>
+    );
   };
 
   if (!supported) {
@@ -472,29 +600,8 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
             data-testid="local-folder-grid"
             onClick={event => { if (event.target === event.currentTarget) setSelected(new Set()); }}
           >
-            {visibleEntries.map(entry => {
-              const active = selected.has(entry.relativePath);
-              return (
-                <button
-                  key={entry.relativePath}
-                  type="button"
-                  title={`${entry.relativePath} · ${formatBytes(entry.bytes)}`}
-                  className={`local-folder-card${active ? ' is-selected' : ''}`}
-                  onClick={() => toggle(entry.relativePath)}
-                  onDoubleClick={() => void insertOne(entry)}
-                  onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void insertOne(entry); } }}
-                  draggable
-                  onDragStart={event => startEntryDrag(event, entry)}
-                  aria-pressed={active}
-                  data-testid={`local-folder-card-${entry.relativePath}`}
-                >
-                  <LocalFolderThumb entry={entry} />
-                  {active && <span className="local-folder-card__check"><Check size={11} /></span>}
-                  <span className="local-folder-card__name">{entry.name}</span>
-                </button>
-              );
-            })}
-            {!scanning && !visibleEntries.length && (
+            {renderFolder(tree)}
+            {!scanning && !orderedEntries.length && (
               <p className="local-folder-hint">{zho ? '这个范围内没有匹配的图片、视频或音频。' : 'No matching image, video or audio in this folder.'}</p>
             )}
             {scanning && <p className="local-folder-hint">{zho ? '正在扫描…' : 'Scanning…'}</p>}
@@ -502,6 +609,9 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
 
           <div className="local-folder-footer">
             <span>{zho ? `已选 ${selected.size} / ${entries.length}` : `${selected.size} / ${entries.length} selected`}</span>
+            <button type="button" className="local-folder-btn" onClick={selectAllVisible} disabled={!orderedEntries.length} data-testid="local-folder-select-all">
+              {zho ? '全选可见' : 'Select visible'}
+            </button>
             <button type="button" className="local-folder-btn is-primary" onClick={() => void insertSelected()} disabled={inserting || !selected.size} data-testid="local-folder-insert">
               {inserting ? <Loader2 size={13} className="animate-spin" /> : null}
               <span>{zho ? '放入画布' : 'Add to canvas'}</span>

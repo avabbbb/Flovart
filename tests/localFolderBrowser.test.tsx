@@ -88,6 +88,35 @@ describe('LocalFolderBrowser', () => {
     expect(inserted[0].kind).toBe('image');
   });
 
+  it('preserves nested folders and supports shift-range selection', async () => {
+    stubPicker(fakeDirectoryHandle('嵌套素材', [
+      ['cover.png', fakeFileHandle({ name: 'cover.png', type: 'image/png' })],
+      ['场景', fakeDirectoryHandle('场景', [
+        ['a.png', fakeFileHandle({ name: 'a.png', type: 'image/png' })],
+        ['b.png', fakeFileHandle({ name: 'b.png', type: 'image/png' })],
+        ['夜晚', fakeDirectoryHandle('夜晚', [
+          ['c.png', fakeFileHandle({ name: 'c.png', type: 'image/png' })],
+        ])],
+      ])],
+    ]));
+    const onInsert = vi.fn();
+    await renderPanel(onInsert);
+
+    fireEvent.click(screen.getByTestId('local-folder-pick'));
+    expect(await screen.findByTestId('local-folder-group-场景')).toBeInTheDocument();
+    expect(screen.getByTestId('local-folder-group-场景/夜晚')).toBeInTheDocument();
+    expect(screen.getByTestId('local-folder-card-场景/夜晚/c.png')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('local-folder-card-cover.png'));
+    fireEvent.click(screen.getByTestId('local-folder-card-场景/b.png'), { shiftKey: true });
+    expect(Object.fromEntries(['cover.png', '场景/a.png', '场景/b.png'].map(path => [path, screen.getByTestId('local-folder-card-' + path).getAttribute('aria-pressed')]))).toEqual({ 'cover.png': 'true', '场景/a.png': 'true', '场景/b.png': 'true' });
+    expect(screen.getByTestId('local-folder-card-场景/夜晚/c.png').getAttribute('aria-pressed')).toBe('false');
+
+    fireEvent.click(screen.getByTestId('local-folder-select-all'));
+    expect(screen.getByTestId('local-folder-card-场景/夜晚/c.png').getAttribute('aria-pressed')).toBe('true');
+    await settle();
+  });
+
   it('asks for a fresh grant instead of pretending the folder is readable', async () => {
     stubPicker(fakeDirectoryHandle('受限素材', [
       ['hero.png', fakeFileHandle({ name: 'hero.png', type: 'image/png' })],
