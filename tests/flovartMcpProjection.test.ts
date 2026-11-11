@@ -38,6 +38,7 @@ describe('Flovart MCP projection', () => {
 
     expect(result.tools.map(tool => tool.name)).toEqual([
       'flovart_status',
+      'flovart_agent_turn',
       'flovart_workflow_inspect',
       'flovart_workflow_selection',
       'flovart_workflow_apply',

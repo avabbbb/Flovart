@@ -15,6 +15,7 @@
 ## 2. 稳定操作面
 
 - 日常：`status`、`workflow.inspect`、`workflow.selection.get`、`workflow.apply`、`workflow.node.run`。
+- 委派：`agent.turn` —— 外部 Agent 让内置 Assistant 跑一轮，默认只读、只回摘要（文本 + 工具清单 + draftVersion），同一 mutationId 幂等、一次只跑一轮。
 - 连接准备与诊断：`ensure`、`doctor`。
 - 生成与素材（宿主路径）：任务提交、`task.get`、`artifact.locate` 等，只有实现、schema、验证齐备后才写进 Skill。
 - 命令注册表 `tools/flovart/registry.js` 是唯一来源；文档里出现的命令必须在注册表中（`npm run docs:check` 校验）。

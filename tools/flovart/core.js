@@ -5,6 +5,7 @@ export const COMMAND_REGISTRY = CANONICAL_COMMAND_REGISTRY;
 export const COMMANDS = Object.keys(COMMAND_REGISTRY);
 
 export const COMMAND_ALIASES = {
+  flovart_agent_turn: 'agent.turn',
   flovart_workflow_project_list: 'workflow.project.list',
   flovart_workflow_project_create: 'workflow.project.create',
   flovart_workflow_project_use: 'workflow.project.use',

@@ -5,6 +5,7 @@ import { useWorkflowStore } from '../components/workflow/store';
 import type { WorkflowNode, WorkflowProject } from '../components/workflow/types';
 import { getFlovartRuntimeApi, type RuntimeCommandEnvelope } from './flovartRuntime';
 import { createBrowserWorkflowContract, type BrowserWorkflowContract } from './browserWorkflowContract';
+import { AgentRuntimeError, getBrowserAgentRuntime } from './browserAgentRuntime';
 import { redactWorkflowAgentValue, withWorkflowHumanApproval, type WorkflowCommandEnvelope, type WorkflowCommandResult } from './workflowDispatcher';
 import { workflowCommandSummary } from '../components/workflow/agentOps';
 import { getWorkflowOperationCapabilityByNodeTool } from '../components/workflow/operationRegistry';
@@ -306,6 +307,8 @@ export class WorkflowAgentBridge {
       const leaseFailure = validateBrowserWorkspaceLease(envelope, this.clientId);
       if (leaseFailure) {
         result = leaseFailure;
+      } else if (envelope.command === 'agent.turn') {
+        result = await this.runDelegatedAgentTurn(envelope);
       } else if (RUNTIME_COMMANDS.has(envelope.command)) {
         if (requiresRuntimeAgentConfirmation(envelope.command) && !await this.confirm(runtimeAgentConfirmationSummary(envelope))) {
           result = { ok: false, error: { code: 'DENIED', message: '用户拒绝了 Production Runtime 命令。' } };
@@ -372,6 +375,34 @@ export class WorkflowAgentBridge {
       const message = displayError(cause, 'Agent 命令执行失败。');
       try { await this.post('/workflow/result', { requestId, clientId: this.clientId, error: message }); } catch { /* SSE reconnect will surface the transport error. */ }
       this.emit('tool_result', { requestId, command: envelope.command, error: message });
+    }
+  }
+
+  /** 外部 Agent 委派一轮内置对话：默认只读，写委派先问用户，结果只回摘要。 */
+  private async runDelegatedAgentTurn(envelope: WorkflowCommandEnvelope): Promise<WorkflowCommandResult> {
+    const args = envelope.args || {};
+    const projectId = String(args.projectId || useWorkflowStore.getState().activeProjectId || '');
+    const runtime = getBrowserAgentRuntime(projectId);
+    if (!runtime) {
+      return { ok: false, commandId: envelope.id, error: { code: 'AGENT_RUNTIME_UNAVAILABLE', message: '内置 Agent 尚未打开或没有可用的文本线路。' } };
+    }
+    const policy = args.policy === 'workspace-write' ? 'workspace-write' as const : 'read-only' as const;
+    if (policy === 'workspace-write') {
+      const approved = await this.confirm(`外部 Agent 请求让内置 Agent 修改画布：${String(args.prompt || '').slice(0, 160)}`);
+      if (!approved) return { ok: false, commandId: envelope.id, error: { code: 'DENIED', message: '用户拒绝了委派回合。' } };
+    }
+    try {
+      const turn = await runtime.runDelegatedTurn({
+        prompt: String(args.prompt || ''),
+        sessionId: typeof args.sessionId === 'string' && args.sessionId ? args.sessionId : undefined,
+        policy,
+        mutationId: String(args.mutationId || envelope.idempotencyKey || envelope.id),
+        caller: envelope.caller?.agentIdentity,
+      });
+      return { ok: true, commandId: envelope.id, result: turn };
+    } catch (cause) {
+      const code = cause instanceof AgentRuntimeError ? cause.code : 'AGENT_TURN_FAILED';
+      return { ok: false, commandId: envelope.id, error: { code, message: displayError(cause, '委派回合失败。') } };
     }
   }
 

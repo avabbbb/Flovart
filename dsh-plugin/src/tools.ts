@@ -29,6 +29,7 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
  */
 export const STABLE_TOOL_COMMANDS = [
   'status',
+  'agent.turn',
   'workflow.inspect',
   'workflow.selection.get',
   'workflow.apply',
@@ -172,7 +173,7 @@ export async function registerFlovartTools(ctx: Context, service: FlovartService
       derived += 1
     }
   }
-  console.log(`[flovart] 模型工具已注册：stable ${derived}/5（CLI ${service.config.cli}）`)
+  console.log(`[flovart] 模型工具已注册：stable ${derived}/${STABLE_TOOL_COMMANDS.length}（CLI ${service.config.cli}）`)
   return () => {
     for (const dispose of disposers.splice(0).reverse()) dispose()
   }

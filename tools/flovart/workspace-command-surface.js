@@ -26,6 +26,8 @@ export const WORKSPACE_WRITE_COMMAND_NAMES = Object.freeze([
 export const WORKSPACE_EXECUTION_COMMAND_NAMES = Object.freeze([
   'workflow.node.run',
   'workflow.node.stop',
+  // 委派回合：可读可写（默认只读），按执行类命令计。
+  'agent.turn',
 ]);
 
 export const WORKSPACE_COMMAND_NAMES = Object.freeze([

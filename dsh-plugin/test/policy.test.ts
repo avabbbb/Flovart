@@ -6,6 +6,8 @@ import { normalizeConfig } from '../src/config.ts'
 test('classifies Flovart tools and escalates apply-with-delete to delete', () => {
   assert.equal(flovartToolRisk('flovart_inspect', {}), 'read')
   assert.equal(flovartToolRisk('flovart_run', {}), 'run')
+  assert.equal(flovartToolRisk('flovart_agent_turn', {}), 'read')
+  assert.equal(flovartToolRisk('flovart_agent_turn', { policy: 'workspace-write' }), 'write')
   assert.equal(flovartToolRisk('flovart_apply', { operations: [{ type: 'update_node', id: 'n', patch: { title: 'x' } }] }), 'write')
   assert.equal(flovartToolRisk('flovart_apply', { operations: [{ type: 'delete_nodes', ids: ['n'] }] }), 'delete')
   assert.equal(flovartToolRisk('other_tool', {}), null)

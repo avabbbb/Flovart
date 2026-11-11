@@ -399,6 +399,7 @@ const userApiKeysRef = useRef(userApiKeys);
         getNodes: () => projectRef.current.nodes,
         webSearch: searchCredential ?? undefined,
         getPolicy: () => policyForMode(modeRef.current),
+        getDraftVersion: () => projectRef.current.draftVersion,
       });
       if (!active) { await kernel.close(); return; }
       kernelRef.current = kernel;

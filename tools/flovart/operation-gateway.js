@@ -6,6 +6,7 @@ export const CANONICAL_AGENT_OPERATIONS = Object.freeze([...AGENT_PUBLIC_COMMAND
 
 export const MCP_TOOL_NAMES = Object.freeze({
   status: 'flovart_status',
+  'agent.turn': 'flovart_agent_turn',
   'workflow.inspect': 'flovart_workflow_inspect',
   'workflow.selection.get': 'flovart_workflow_selection',
   'workflow.apply': 'flovart_workflow_apply',

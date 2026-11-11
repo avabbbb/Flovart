@@ -9,6 +9,7 @@ describe('Flovart Agent tool surface', () => {
 
     expect(commands).toEqual([
       'status',
+      'agent.turn',
       'workflow.inspect',
       'workflow.selection.get',
       'workflow.apply',

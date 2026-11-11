@@ -6,6 +6,7 @@ describe('DSH Flovart projection', () => {
   it('keeps the model-facing tool surface aligned with the five stable commands', () => {
     expect(STABLE_TOOL_COMMANDS).toEqual([
       'status',
+      'agent.turn',
       'workflow.inspect',
       'workflow.selection.get',
       'workflow.apply',

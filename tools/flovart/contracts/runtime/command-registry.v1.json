@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "6759d6d8f01ebfe7f1c177ba1b316da73d74d299bad25a142de3e77748ca3304",
+  "registryHash": "fa9f3c13f4f29c0d0a51176c6d0574b1b772d63c5176ba89ce09c6a3899b96c9",
   "commands": [
     {
       "name": "runtime.status",
@@ -348,6 +348,18 @@
       "summary": "Delete one visible local Workflow project.",
       "args": {
         "projectId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "agent.turn",
+      "summary": "Delegate one turn to the user's built-in Flovart Agent; returns a summary, the tools it used, and the draft version.",
+      "args": {
+        "projectId": "string?",
+        "sessionId": "string?",
+        "prompt": "string",
+        "policy": "read-only|workspace-write",
+        "mutationId": "string"
       },
       "availability": "available"
     },

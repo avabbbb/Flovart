@@ -37,6 +37,10 @@ export function flovartToolRisk(name: string, args: Record<string, unknown>): Fl
     })) return 'delete'
     return 'write'
   }
+  if (name === 'flovart_agent_turn') {
+    // 委派回合默认只读；显式 workspace-write 才是可写委派，按 write 走审批。
+    return args.policy === 'workspace-write' ? 'write' : 'read'
+  }
   if (name === 'flovart_inspect' || name === 'flovart_selection' || name === 'flovart_status') return 'read'
   return name.startsWith('flovart_') ? 'write' : null
 }
