@@ -96,6 +96,8 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@remotion/bundler": "^4.0.542",
+    "@remotion/renderer": "^4.0.542",
     "@tailwindcss/vite": "^4.2.2",
     "@tauri-apps/cli": "~2.12.0",
     "@testing-library/jest-dom": "^6.9.1",

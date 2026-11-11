@@ -28,6 +28,7 @@
 
 ## Unreleased
 
+- 逆向生产渲染：ProductionSpec V1 从 Reverse 项目派生镜头帧窗口与资产，Remotion Player 与 Node 渲染共用同一合成；`node scripts/render-production.mjs --spec spec.json --out out.mp4` 已冒烟输出 320×180 / 20 帧 / 2s H.264。
 - Agent 沙箱确认卡：画布外抽屉补齐 workflow 颜色变量作用域（此前背景透明、确认内容与消息和输入框互相透叠）；计划卡恢复网格布局，操作按钮可换行，长内容在卡片内滚动。
 - Reverse 替换 Table：顶栏改为 Canvas | 逆向 | Agent；services/reverse/ 按 Hypit 架构分层自行实现（temporal / evidence / narrative / align / projection / caption / composition），不引入 Hypit 代码；旧数据里的 'table' 视图自动迁移为 'reverse'（workspace store v3）。
 - Canvas 子画布：新增 subgraph 节点与可选 parentId（Workflow 持久化 v2）；逆向一键「转为画布 / 同步到画布」，一次 workflow.apply，同步保留画布上调整过的位置、尺寸与已选版本；支持折叠、整体拖动（含多选）、整体删除，双击回到对应逆向工程。
