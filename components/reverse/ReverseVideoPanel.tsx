@@ -4,6 +4,7 @@ import type { ReferenceReading } from '../../services/reverse/video';
 import { parseTranscriptJson } from '../../services/reverse/evidence';
 import { planTarget, segmentsFromNarrative } from '../../services/reverse/target';
 import { findReverseSubgraphFrame, sendReverseAsSubgraph } from '../../services/reverse/workflowBridge';
+import { ProductionPreview } from './ProductionPreview';
 import { useWorkflowStore } from '../../components/workflow/store';
 import type {
   ReverseCue,
@@ -54,6 +55,7 @@ const TEXT = {
     optional: '可选', variants: '替换与变体', sumRefs: (n: number) => n + ' 个参考',
     sumShots: (n: number, dur: string) => n + ' 个镜头 · ' + dur,
     sumVariants: (s: number, a: number, v: number) => s + ' 个槽位 · ' + a + ' 条轴 · ' + v + ' 组',
+    preview: '成片预览', previewHint: '按镜头顺序播放；未生成的镜头显示为占位，不做假画面。',
     sumCanvas: '已转为子画布',
   },
   en: {
@@ -80,6 +82,7 @@ const TEXT = {
     optional: 'Optional', variants: 'Slots & variants', sumRefs: (n: number) => n + (n === 1 ? ' reference' : ' references'),
     sumShots: (n: number, dur: string) => n + ' shots · ' + dur,
     sumVariants: (s: number, a: number, v: number) => s + ' slots · ' + a + ' axes · ' + v + ' combos',
+    preview: 'Preview', previewHint: 'Plays shots in order; pending shots stay placeholders instead of faking footage.',
     sumCanvas: 'Converted to a subgraph',
   },
 };
@@ -539,6 +542,9 @@ export function ReverseVideoPanel({ project, language, workflowProjectId, onUpda
               })}
             </div>
             <textarea className={inputClass + ' mt-3'} style={inputStyle} rows={3} placeholder={t.notes} value={analysis?.notes ?? ''} onChange={(e) => updateAnalysis({ notes: e.target.value })} data-testid='reverse-analysis-notes' />
+            <SubHead>{t.preview}</SubHead>
+            <ProductionPreview project={project} language={language} />
+            <p className='mt-1 text-[11px]' style={ghost}>{t.previewHint}</p>
           </>
         )}
       </Step>

@@ -1,0 +1,103 @@
+// ProductionSpec V1：Reverse 项目的「生产快照 + 执行契约」。
+// 只做派生，不持久化第二份工程：每次从 Reverse 项目 + 已完成产物现算，
+// 消费方（Remotion Adapter、渲染 Worker、外部 Agent）都读这一个结构。
+import type { ReverseVideoProject } from './types';
+import { msToFrame } from './temporal';
+
+export const PRODUCTION_SPEC_SCHEMA_VERSION = 1 as const;
+
+export type ProductionAssetSource = 'recorded' | 'generated' | 'imported';
+
+export interface ProductionShotV1 {
+  shotId: string;
+  /** 1 起，决定拼接顺序。 */
+  index: number;
+  startFrame: number;
+  durationFrames: number;
+  sourceType: ProductionAssetSource;
+  /** 已完成产物的 artifactId 或 path；缺失表示还没素材。 */
+  assetRef?: string;
+  /** 已有可定位产物时默认锁定，局部重渲染只动未锁定的镜头。 */
+  locked: boolean;
+}
+
+export interface ProductionSpecV1 {
+  schemaVersion: typeof PRODUCTION_SPEC_SCHEMA_VERSION;
+  projectId: string;
+  /** 生成时的 Workflow 修订；0 表示调用方未提供。 */
+  sourceRevision: number;
+  output: { width: number; height: number; fps: number; durationFrames: number };
+  shots: ProductionShotV1[];
+  renderer: 'remotion';
+}
+
+export interface BuildProductionSpecOptions {
+  fps?: number;
+  width?: number;
+  height?: number;
+  sourceRevision?: number;
+}
+
+export function buildProductionSpecV1(
+  project: Pick<ReverseVideoProject, 'id' | 'analysis' | 'outputs'>,
+  options: BuildProductionSpecOptions = {},
+): ProductionSpecV1 {
+  const fps = options.fps ?? 30;
+  const width = options.width ?? 1920;
+  const height = options.height ?? 1080;
+  const shots = [...(project.analysis?.shots ?? [])].sort((left, right) => left.index - right.index);
+  const rate = { num: fps, den: 1 };
+  const assetFor = (shotId: string) => project.outputs
+    .filter((output) => output.ownerKind === 'shot' && output.ownerId === shotId && output.status === 'completed')
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+
+  return {
+    schemaVersion: PRODUCTION_SPEC_SCHEMA_VERSION,
+    projectId: project.id,
+    sourceRevision: options.sourceRevision ?? 0,
+    output: {
+      width,
+      height,
+      fps,
+      durationFrames: Math.max(1, msToFrame(rate, project.analysis?.durationMs ?? 0, 'ceil')),
+    },
+    shots: shots.map((shot) => {
+      const asset = assetFor(shot.id);
+      const assetRef = asset?.artifactId ?? asset?.path;
+      return {
+        shotId: shot.id,
+        index: shot.index,
+        startFrame: msToFrame(rate, shot.startMs, 'round'),
+        durationFrames: Math.max(1, msToFrame(rate, shot.endMs - shot.startMs, 'round')),
+        sourceType: assetRef
+          ? asset?.origin === 'external-file' ? 'imported' : 'recorded'
+          : 'generated',
+        ...(assetRef ? { assetRef } : {}),
+        locked: Boolean(assetRef),
+      };
+    }),
+    renderer: 'remotion',
+  };
+}
+
+/** 结构校验；返回空数组表示可用。渲染前必须调用，避免半成品 spec 进入 Worker。 */
+export function validateProductionSpec(spec: ProductionSpecV1): string[] {
+  const errors: string[] = [];
+  if (spec.schemaVersion !== PRODUCTION_SPEC_SCHEMA_VERSION) errors.push('schemaVersion 必须是 1');
+  if (!spec.projectId) errors.push('projectId 不能为空');
+  if (spec.renderer !== 'remotion') errors.push('renderer 只支持 remotion');
+  for (const key of ['width', 'height', 'fps', 'durationFrames'] as const) {
+    if (!Number.isFinite(spec.output?.[key]) || spec.output[key] <= 0) errors.push(`output.${key} 必须是正数`);
+  }
+  if (!Array.isArray(spec.shots) || spec.shots.length === 0) errors.push('shots 不能为空');
+  let previousEnd = -1;
+  for (const shot of spec.shots ?? []) {
+    if (!shot.shotId) errors.push('shotId 不能为空');
+    if (!Number.isInteger(shot.startFrame) || shot.startFrame < 0) errors.push(`${shot.shotId}: startFrame 必须是非负整数`);
+    if (!Number.isInteger(shot.durationFrames) || shot.durationFrames <= 0) errors.push(`${shot.shotId}: durationFrames 必须是正整数`);
+    if (shot.startFrame < previousEnd) errors.push(`${shot.shotId}: 镜头重叠或顺序错误`);
+    if (!['recorded', 'generated', 'imported'].includes(shot.sourceType)) errors.push(`${shot.shotId}: sourceType 无效`);
+    previousEnd = shot.startFrame + shot.durationFrames;
+  }
+  return errors;
+}
