@@ -9,6 +9,7 @@ import {
   localFolderHref,
   localFolderMediaKind,
   parseLocalFolderHref,
+  pickLocalFolder,
   readLocalFolderFile,
   readLocalFolderThumbnail,
   requestLocalFolderPermission,
@@ -127,6 +128,21 @@ describe('local folder reference source', () => {
       expect(seen).toEqual([source.id]);
       unsubscribe();
       expect(await requestLocalFolderPermission(source.id)).toBe(true);
+      expect(seen).toEqual([source.id]);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it('notifies canvas media subscribers when the same folder is re-picked', async () => {
+    const handle = sampleFolder('prompt');
+    const source = await adopt(handle);
+    const seen: string[] = [];
+    const unsubscribe = subscribeLocalFolderPermission(folderId => seen.push(folderId));
+    try {
+      vi.stubGlobal('showDirectoryPicker', vi.fn(async () => handle));
+      const picked = await pickLocalFolder();
+      expect(picked.id).toBe(source.id);
       expect(seen).toEqual([source.id]);
     } finally {
       unsubscribe();

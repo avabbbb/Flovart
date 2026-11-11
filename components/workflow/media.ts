@@ -589,6 +589,20 @@ export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string, 
     url: immediateUrl,
     error: null,
   });
+  // 浏览器站点设置里重新授权不会经过应用内入口；从设置切回页面时补一次重读，
+  // 否则节点会一直停在错误态，直到用户整页刷新。只在错误态挂监听，避免每次
+  // 聚焦都重新读取已成功的本地原件。
+  useEffect(() => {
+    if (!localFolderId || !state.error) return;
+    const retry = () => setFolderRevision(revision => revision + 1);
+    const onVisible = () => { if (document.visibilityState === 'visible') retry(); };
+    window.addEventListener('focus', retry);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', retry);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [localFolderId, state.error]);
 
   useEffect(() => {
     let active = true;

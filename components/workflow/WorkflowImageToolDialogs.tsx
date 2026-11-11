@@ -1,8 +1,9 @@
 import { VECTORIZE_PRESET_LABELS, type VectorizePreset } from '../../services/vectorizeImage';
 import { clampMoveOffset, tracePolygon, type NormalizedPoint } from '../../services/moveObjectCanvas';
 import { computeOutpaintLayout, type OutpaintDirection } from '../../services/outpaintCanvas';
-import { Button, Input, Modal, Segmented, Slider, ColorPicker } from 'antd';
+import { Button, ConfigProvider, Input, Modal, Segmented, Slider, ColorPicker, theme as antdTheme } from 'antd';
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useResolvedTheme } from '../../hooks/useResolvedTheme';
 import { ImageFilterPanel, buildCssFilter } from '../ImageFilterPanel';
 import type { ImageFilters } from '../../types';
 import type { WorkflowCropRect } from './media';
@@ -31,7 +32,7 @@ export type WorkflowImageToolConfirmation =
   | { kind: 'storyboard'; cols: number; showIndex: boolean }
   | { kind: 'layer'; prompt: string; style: WorkflowLayerStyle; count: number; maskDataUrl?: string };
 
-export function WorkflowImageToolDialogs({ tool, node, mediaUrl, busy, error, onClose, onPreview, onConfirm, layerPoints }: {
+function WorkflowImageToolDialogsBody({ tool, node, mediaUrl, busy, error, onClose, onPreview, onConfirm, layerPoints }: {
   tool: WorkflowImageToolState | null;
   node: WorkflowNode | null;
   mediaUrl: string;
@@ -60,6 +61,29 @@ export function WorkflowImageToolDialogs({ tool, node, mediaUrl, busy, error, on
   if (tool.kind === 'storyboard') return <StoryboardDialog {...common} onConfirm={(cols, showIndex) => onConfirm({ kind: 'storyboard', cols, showIndex })} />;
   if (tool.kind === 'layer') return <WorkflowLayerDialog {...common} initialPoints={layerPoints} onConfirm={(prompt, style, count, maskDataUrl) => onConfirm({ kind: 'layer', prompt, style, count, maskDataUrl })} />;
   return null;
+}
+
+/** 图片工具弹窗共用应用主题；否则 antd 默认亮色会在深色画布上突兀发白。 */
+export function WorkflowImageToolDialogs(props: {
+  tool: WorkflowImageToolState | null;
+  node: WorkflowNode | null;
+  mediaUrl: string;
+  busy: boolean;
+  error: string | null;
+  onClose: () => void;
+  onPreview?: (filters: Partial<ImageFilters>) => void;
+  onConfirm: (payload: WorkflowImageToolConfirmation) => void;
+  layerPoints?: readonly LassoPoint[];
+}) {
+  const dark = useResolvedTheme() === 'dark';
+  return (
+    <ConfigProvider theme={{
+      algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+      token: { colorPrimary: '#19c8b9', fontFamily: 'inherit' },
+    }}>
+      <WorkflowImageToolDialogsBody {...props} />
+    </ConfigProvider>
+  );
 }
 
 type CommonProps = { open: boolean; mediaUrl: string; busy: boolean; error: string | null; onClose: () => void };

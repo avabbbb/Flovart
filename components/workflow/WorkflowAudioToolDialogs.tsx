@@ -1,5 +1,6 @@
-import { Button, Modal, Slider } from 'antd';
+import { Button, ConfigProvider, Modal, Slider, theme as antdTheme } from 'antd';
 import { useEffect, useState } from 'react';
+import { useResolvedTheme } from '../../hooks/useResolvedTheme';
 import { isFFmpegSupported } from '../../services/ffmpegClient';
 import type { WorkflowNode } from './types';
 
@@ -10,7 +11,7 @@ export type WorkflowAudioToolConfirmation =
   | { kind: 'speed'; speed: number }
   | { kind: 'stem-split' };
 
-export function WorkflowAudioToolDialogs({ tool, node, mediaUrl, busy, error, onClose, onConfirm }: {
+function WorkflowAudioToolDialogsBody({ tool, node, mediaUrl, busy, error, onClose, onConfirm }: {
   tool: WorkflowAudioToolState | null;
   node: WorkflowNode | null;
   mediaUrl: string;
@@ -25,6 +26,26 @@ export function WorkflowAudioToolDialogs({ tool, node, mediaUrl, busy, error, on
   if (tool.kind === 'speed') return <AudioSpeedDialog {...common} onConfirm={(speed) => onConfirm({ kind: 'speed', speed })} />;
   if (tool.kind === 'stem-split') return <StemSplitDialog {...common} onConfirm={() => onConfirm({ kind: 'stem-split' })} />;
   return null;
+}
+
+export function WorkflowAudioToolDialogs(props: {
+  tool: WorkflowAudioToolState | null;
+  node: WorkflowNode | null;
+  mediaUrl: string;
+  busy: boolean;
+  error: string | null;
+  onClose: () => void;
+  onConfirm: (payload: WorkflowAudioToolConfirmation) => void;
+}) {
+  const dark = useResolvedTheme() === 'dark';
+  return (
+    <ConfigProvider theme={{
+      algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+      token: { colorPrimary: '#19c8b9', fontFamily: 'inherit' },
+    }}>
+      <WorkflowAudioToolDialogsBody {...props} />
+    </ConfigProvider>
+  );
 }
 
 type CommonProps = { open: boolean; mediaUrl: string; busy: boolean; error: string | null; onClose: () => void };

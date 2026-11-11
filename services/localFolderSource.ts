@@ -229,7 +229,10 @@ export async function pickLocalFolder(): Promise<LocalFolderSource> {
   const handle = await showDirectoryPicker({ mode: 'read', id: 'flovart-local-folder' });
   const existing = await listLocalFolderSources();
   const match = existing.find(source => source.name === handle.name);
-  return saveSource(handle, match?.id);
+  const source = await saveSource(handle, match?.id);
+  // 重新选择同一目录同样是“授权恢复”：旧节点按 folderId 订阅，必须收到通知才会重读原件。
+  notifyLocalFolderPermission(source.id);
+  return source;
 }
 
 /** 拖入的目录句柄同样可以成为素材源；没有句柄时不做“复制一份”的静默降级。 */
@@ -240,7 +243,9 @@ export async function adoptLocalFolderHandle(handle: unknown): Promise<LocalFold
   }
   const existing = await listLocalFolderSources();
   const match = existing.find(source => source.name === candidate.name);
-  return saveSource(candidate, match?.id);
+  const source = await saveSource(candidate, match?.id);
+  notifyLocalFolderPermission(source.id);
+  return source;
 }
 
 export async function getLocalFolderPermission(folderId: string): Promise<LocalFolderPermission> {

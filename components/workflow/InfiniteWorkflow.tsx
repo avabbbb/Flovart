@@ -3362,12 +3362,15 @@ export function InfiniteWorkflow({
             onReversePrompt={onReversePrompt ? (id, mediaUrl) => {
               const node = projectRef.current.nodes.find(item => item.id === id);
               if (!node || node.isLocked) return;
+              setNotice('正在反推 Prompt…');
               void onReversePrompt(mediaUrl, node.metadata.mimeType || 'image/png', node.metadata.naturalWidth, node.metadata.naturalHeight)
                 .then(prompt => {
-                  if (!prompt || projectRef.current.nodes.find(item => item.id === id)?.isLocked) return;
+                  if (!prompt) { setNotice('反推没有返回可用 Prompt，请检查视觉模型配置'); return; }
+                  if (projectRef.current.nodes.find(item => item.id === id)?.isLocked) return;
                   // update_node 是浅合并：只传 prompt，避免 await 期间过期的 node.metadata 整体覆盖最新状态。
                   applyOps([{ type: 'update_node', id, metadata: { prompt } }]);
                   setPromptFocusSignal(value => value + 1);
+                  setNotice('反推完成，Prompt 已写入节点');
                 })
                 .catch(error => setNotice(displayError(error, '反推 Prompt 失败')));
             } : undefined}

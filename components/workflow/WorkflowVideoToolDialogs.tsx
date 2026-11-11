@@ -1,5 +1,7 @@
-import { Button, InputNumber, Modal, Slider } from 'antd';
+import { Button, ConfigProvider, InputNumber, Modal, Slider, theme as antdTheme } from 'antd';
 import { useEffect, useRef, useState } from 'react';
+import { useResolvedTheme } from '../../hooks/useResolvedTheme';
+import type { WorkflowNode } from './types';
 import { getVideoDuration } from '../../services/videoTools';
 import { isFFmpegSupported } from '../../services/ffmpegClient';
 
@@ -12,9 +14,9 @@ export type WorkflowVideoToolConfirmation =
   | { kind: 'merge'; nodeIds: string[] }
   | { kind: 'extract-frame'; position: 'first' | 'current' | 'last'; currentTimeSec?: number };
 
-export function WorkflowVideoToolDialogs({ tool, node, mediaUrl, busy, error, onClose, onConfirm }: {
+function WorkflowVideoToolDialogsBody({ tool, node, mediaUrl, busy, error, onClose, onConfirm }: {
   tool: WorkflowVideoToolState | null;
-  node: import('./types').WorkflowNode | null;
+  node: WorkflowNode | null;
   mediaUrl: string;
   busy: boolean;
   error: string | null;
@@ -28,6 +30,26 @@ export function WorkflowVideoToolDialogs({ tool, node, mediaUrl, busy, error, on
   if (tool.kind === 'merge') return <SimpleVideoDialog {...common} title="视频拼接" description="将选中的多个视频片段按顺序拼接为一个视频。仅支持相同分辨率和帧率的片段。" action="拼接视频" onConfirm={() => onConfirm({ kind: 'merge', nodeIds: tool.nodeIds || [] })} />;
   if (tool.kind === 'extract-frame') return <ExtractFrameDialog {...common} onConfirm={(currentTimeSec) => onConfirm({ kind: 'extract-frame', position: 'current', currentTimeSec })} />;
   return null;
+}
+
+export function WorkflowVideoToolDialogs(props: {
+  tool: WorkflowVideoToolState | null;
+  node: WorkflowNode | null;
+  mediaUrl: string;
+  busy: boolean;
+  error: string | null;
+  onClose: () => void;
+  onConfirm: (payload: WorkflowVideoToolConfirmation) => void;
+}) {
+  const dark = useResolvedTheme() === 'dark';
+  return (
+    <ConfigProvider theme={{
+      algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+      token: { colorPrimary: '#19c8b9', fontFamily: 'inherit' },
+    }}>
+      <WorkflowVideoToolDialogsBody {...props} />
+    </ConfigProvider>
+  );
 }
 
 type CommonProps = { open: boolean; mediaUrl: string; busy: boolean; error: string | null; onClose: () => void };
