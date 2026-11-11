@@ -25,8 +25,8 @@
 
 ## RC8 边界
 
-- 不占用根 `sidebar`、`conversation` 或 `conversation.session`。
-- 不注册额外侧栏入口，不使用 iframe，也不把用户带进第二套 Agent/聊天页面。
+- 不占用根 `sidebar`、`conversation` 或 `conversation.session`；只注册 `conversation.view`、`sidebar.panellist`、`main`、`shell.overlay` 四个增量槽位。
+- 侧栏「Flovart」入口的主区域是同源 iframe（`/flovart-app/`）嵌入的可见画布；不复制第二套 Agent 会话，也不在 iframe 外重建聊天页。
 - 浏览器只访问 Harness 同源的 `/flovart-workspace`；Host 仅代理 `health` 与受限的 Workflow tools 路由。
 - Workspace Token 只存在于启动器环境和 Harness Host，不序列化到浏览器，不进入节点、Draft、回执或 Provider 参数。
 - Provider、付费 Production Gate、Task/Event 与 Artifact 权威边界保持不变。
