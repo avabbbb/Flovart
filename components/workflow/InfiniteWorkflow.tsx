@@ -2639,6 +2639,12 @@ export function InfiniteWorkflow({
     setSelectedConnectionId(null);
     const modifier = event.shiftKey || event.ctrlKey || event.metaKey;
     let ids = selectedIdsRef.current;
+    // 组框整组选中是为了组级操作；此时直接拖组内某个节点，应该是“拖这个节点”，
+    // 不能让整组跟着移动。要移动整组，拖组框空白处或左上角标签。
+    if (!modifier && ids.length > 1 && node.batchId
+      && ids.every(id => projectRef.current.nodes.find(item => item.id === id)?.batchId === node.batchId)) {
+      ids = [node.id];
+    }
     if (modifier) ids = ids.includes(node.id) ? ids.filter(id => id !== node.id) : [...ids, node.id];
     else if (!ids.includes(node.id)) ids = [node.id];
     if (activeMedia && (ids.length !== 1 || ids[0] !== activeMedia.nodeId)) setActiveMedia(null);

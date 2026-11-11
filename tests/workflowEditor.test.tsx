@@ -333,6 +333,20 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(editor().querySelectorAll('video')).toHaveLength(0);
   });
 
+  it('drags a node inside a selected group without moving the group', () => {
+    const initial = connectionProject();
+    initial.nodes = initial.nodes.map(item => ({ ...item, batchId: 'group-1', batchGroupSource: 'manual' as const }));
+    initial.selectedNodeIds = ['source', 'target'];
+    render(<Harness initial={initial} />);
+
+    fireEvent.pointerDown(node('source'), { button: 0, clientX: 120, clientY: 120 });
+    fireEvent.pointerMove(window, { clientX: 220, clientY: 180 });
+    fireEvent.pointerUp(window, { clientX: 220, clientY: 180 });
+
+    expect(projectNode('source').position).toEqual({ x: 200, y: 160 });
+    expect(projectNode('target').position).toEqual({ x: 520, y: 120 });
+  });
+
   it('records a multi-move node drag as one undoable history entry', async () => {
     render(<Harness />);
 
