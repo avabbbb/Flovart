@@ -8,6 +8,7 @@ import { motion } from 'motion/react';
 import { getWorkflowOperationCapability } from './operationRegistry';
 import { buildCssFilter } from '../ImageFilterPanel';
 import { useWorkflowMediaUrl } from './media';
+import { parseLocalFolderHref, requestLocalFolderPermission } from '../../services/localFolderSource';
 import { getWorkflowNodePlugin, type WorkflowNodePluginContext, type WorkflowNodePluginDefinition } from './nodePluginSdk';
 import type { WorkflowNode as WorkflowNodeData } from './types';
 import { listWorkflowOperationVersions } from './operations';
@@ -349,6 +350,20 @@ export function WorkflowNode({
   };
   const accept = isMedia ? `${node.type}/*` : undefined;
   const mediaError = isMedia ? (media.error || node.metadata.error) : null;
+  const regrantFolderId = isMedia && media.errorCode === 'PERMISSION' && node.metadata.href
+    ? parseLocalFolderHref(node.metadata.href)?.folderId
+    : undefined;
+  const regrantAction = regrantFolderId ? (
+    <button
+      type="button"
+      className="workflow-node__regrant"
+      data-workflow-overlay
+      onPointerDown={event => event.stopPropagation()}
+      onClick={event => { event.stopPropagation(); void requestLocalFolderPermission(regrantFolderId); }}
+    >
+      {language === 'en' ? 'Reconnect folder' : '重新连接文件夹'}
+    </button>
+  ) : null;
   const mediaDimensions = isMedia && node.metadata.naturalWidth && node.metadata.naturalHeight
     ? `${node.metadata.naturalWidth} × ${node.metadata.naturalHeight}`
     : '';
@@ -523,7 +538,7 @@ export function WorkflowNode({
         {isMedia && (media.url || hasMediaReference) && <div className="workflow-node__drag-handle" data-workflow-drag-handle />}
         {node.type === 'image' && (media.url
           ? <><img src={media.url} alt={node.title} draggable={false} data-workflow-media-preview style={{ filter: buildCssFilter(node.metadata.filters) }} />{lassoActive && onLassoDone ? <WorkflowNodeLasso width={node.metadata.naturalWidth} height={node.metadata.naturalHeight} language={language} onDone={onLassoDone} /> : mediaActions}</>
-          : <div className="workflow-node__empty"><ImageIcon size={26} /><span>{mediaError || (language === 'en' ? 'Image node' : '图片节点')}</span>{mediaActions}</div>)}
+          : <div className="workflow-node__empty"><ImageIcon size={26} /><span>{mediaError || (language === 'en' ? 'Image node' : '图片节点')}</span>{regrantAction}{mediaActions}</div>)}
         {node.type === 'video' && (hasMediaReference
           ? previewPlaceholder
             ? <>{previewPlaceholder}{mediaActions}</>
@@ -590,16 +605,16 @@ export function WorkflowNode({
                 </div>
                 {mediaActions}
               </>
-              : <div className="workflow-node__empty"><Video size={26} /><span>{videoDecodeError || mediaError || '正在加载视频'}</span>{mediaActions}</div>
+              : <div className="workflow-node__empty"><Video size={26} /><span>{videoDecodeError || mediaError || '正在加载视频'}</span>{regrantAction}{mediaActions}</div>
             : <>{posterMedia.url
               ? <img src={posterMedia.url} alt={`${node.title}${language === 'en' ? ' video poster' : ' 视频封面'}`} draggable={false} loading="lazy" data-workflow-media-preview />
               : <div className="workflow-node__empty workflow-video-placeholder" role="img" aria-label={`${node.title}${language === 'en' ? ' video preview' : ' 视频预览'}`} data-testid="workflow-video-placeholder" data-workflow-media-preview><Video size={26} /><span>{(language === 'en' ? 'Video preview' : '视频预览')}</span></div>}
               {onActivateMedia && <button type="button" className="workflow-node__video-activate" aria-label={(language === 'en' ? 'Load video player' : '加载视频播放器')} title={(language === 'en' ? 'Load video player' : '加载视频播放器')} data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={onActivateMedia}><Play size={18} fill="currentColor" /></button>}
               {mediaActions}</>
-          : <div className="workflow-node__empty"><Video size={26} /><span>{mediaError || (language === 'en' ? 'Video node' : '视频节点')}</span>{mediaActions}</div>)}
+          : <div className="workflow-node__empty"><Video size={26} /><span>{mediaError || (language === 'en' ? 'Video node' : '视频节点')}</span>{regrantAction}{mediaActions}</div>)}
         {node.type === 'audio' && (media.url
           ? <><audio src={media.url} controls preload="metadata" style={{ width: '100%' }} />{mediaActions}</>
-          : <div className="workflow-node__empty"><Music2 size={26} /><span>{mediaError || (language === 'en' ? 'Audio node' : '音频节点')}</span>{mediaActions}</div>)}
+          : <div className="workflow-node__empty"><Music2 size={26} /><span>{mediaError || (language === 'en' ? 'Audio node' : '音频节点')}</span>{regrantAction}{mediaActions}</div>)}
         {node.type === 'text' && <TextNodeBody value={node.metadata.content || ''} onChange={onChangeText} />}
         {node.type === 'script' && <ScriptNodeCard node={node} />}
         {node.type === 'operation' && <OperationNodeCard node={node} onRun={onRun} onStop={onStop} onSelectTake={onSelectTake} language={language} layerPreview={layerPreview} />}

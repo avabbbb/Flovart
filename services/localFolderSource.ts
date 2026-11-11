@@ -263,9 +263,26 @@ export async function getLocalFolderPermission(folderId: string): Promise<LocalF
 
 type LocalFolderPermissionListener = (folderId: string) => void;
 const permissionListeners = new Set<LocalFolderPermissionListener>();
+const PERMISSION_CHANNEL = 'flovart.local-folder.permission';
+let permissionChannel: BroadcastChannel | null | undefined;
+
+function ensurePermissionChannel(): BroadcastChannel | null {
+  if (permissionChannel !== undefined) return permissionChannel;
+  permissionChannel = typeof BroadcastChannel === 'function' ? new BroadcastChannel(PERMISSION_CHANNEL) : null;
+  permissionChannel?.addEventListener('message', event => {
+    const folderId = (event as MessageEvent<{ folderId?: unknown }>).data?.folderId;
+    if (typeof folderId === 'string') {
+      for (const listener of [...permissionListeners]) {
+        try { listener(folderId); } catch { /* isolate subscribers */ }
+      }
+    }
+  });
+  return permissionChannel;
+}
 
 /** 授权恢复后通知画布上的 local-folder 媒体重新读取。 */
 export function subscribeLocalFolderPermission(listener: LocalFolderPermissionListener): () => void {
+  ensurePermissionChannel();
   permissionListeners.add(listener);
   return () => { permissionListeners.delete(listener); };
 }
@@ -274,6 +291,8 @@ function notifyLocalFolderPermission(folderId: string): void {
   for (const listener of [...permissionListeners]) {
     try { listener(folderId); } catch { /* 单个订阅者失败不影响其他节点 */ }
   }
+  // 读取权限按站点生效；其他标签页也要刷新，否则同一个文件夹会出现两种状态。
+  try { ensurePermissionChannel()?.postMessage({ folderId }); } catch { /* cross-tab is best-effort */ }
 }
 
 /** 必须在用户手势中调用；刷新后重新获得同一目录的读取权限。 */

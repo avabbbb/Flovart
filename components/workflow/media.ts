@@ -584,7 +584,7 @@ export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string, 
       if (id === localFolderId) setFolderRevision(revision => revision + 1);
     });
   }, [localFolderId]);
-  const [state, setState] = useState<{ key: string; url: string | null; error: string | null }>({
+  const [state, setState] = useState<{ key: string; url: string | null; error: string | null; errorCode?: LocalFolderError['code'] }>({
     key: mediaKey,
     url: immediateUrl,
     error: null,
@@ -621,7 +621,7 @@ export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string, 
       if (!active) return;
       // 本地文件夹直读的失败原因（权限失效 / 原文件被移动）要原样呈现，方便用户重新定位。
       if (error instanceof LocalFolderError) {
-        setState({ key: mediaKey, url: null, error: error.message });
+        setState({ key: mediaKey, url: null, error: error.message, errorCode: error.code });
         return;
       }
       const missing = error instanceof Error && error.message.includes('不存在');
@@ -633,5 +633,5 @@ export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string, 
     };
   }, [artifactKey, artifactRef?.mimeType, fallbackHref, folderRevision, mediaKey, nativeRemote, storageKey]);
 
-  return state.key === mediaKey ? state : { url: immediateUrl, error: null };
+  return state.key === mediaKey ? state : { url: immediateUrl, error: null, errorCode: undefined };
 }
