@@ -97,8 +97,21 @@ function isTrustedWebOrigin(origin) {
   return [...DEFAULT_TRUSTED_WEB_HOSTS, ...extra].includes(url.hostname.toLowerCase());
 }
 
+// DSH Desktop serves its app from the dsh-app:// custom scheme. The embedded
+// Flovart page exchanges there, and no website can claim that scheme, so it is
+// an app origin rather than a web origin. Local CLI/processes can already send
+// loopback origins; this adds no browser-reachable path.
+function isDshDesktopOrigin(origin) {
+  try {
+    const url = new URL(origin);
+    return url.protocol === 'dsh-app:' && url.hostname === 'app';
+  } catch {
+    return false;
+  }
+}
+
 function isBootstrapOrigin(origin) {
-  return isLoopbackOrigin(origin) || isTrustedWebOrigin(origin);
+  return isLoopbackOrigin(origin) || isTrustedWebOrigin(origin) || isDshDesktopOrigin(origin);
 }
 
 const MAX_AUTHORIZED_ORIGINS = 8;

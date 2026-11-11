@@ -229,8 +229,13 @@ export function createWebuiHandler(options: WebuiHandlerOptions): (request: Inco
       return
     }
     if (target.kind === 'bootstrap') {
-      // Fetch metadata is mandatory here: only the same-origin page may mint.
-      if (request.headers['sec-fetch-site'] !== 'same-origin' || !sameOriginRequest(request)) {
+      // The DSH Desktop app forwards same-app requests through its dsh-app://
+      // proxy, which strips Origin/Sec-Fetch-Site and substitutes the host
+      // cookie. A browser cross-site fetch still carries Sec-Fetch-Site:
+      // cross-site and/or a mismatched Origin, so the same-origin gate still
+      // blocks web CSRF; requiring fetch metadata here would only break the
+      // desktop host. Explicit cross-site or spoofed-Origin requests stay 403.
+      if (!sameOriginRequest(request)) {
         sendJson(response, 403, { ok: false, error: { message: 'bootstrap 仅接受同源页面请求。' } }, head)
         return
       }

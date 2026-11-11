@@ -167,14 +167,17 @@ test('bootstrap issues a one-time token server-side and never returns the persis
     assert.equal(operator.seen[0]?.origin, undefined)
     assert.equal(operator.seen[0]?.method, 'POST')
 
-    const noMetadata = await call(port, '/flovart-app/api/bootstrap')
-    assert.equal(noMetadata.status, 403)
+    // DSH Desktop's dsh-app:// proxy forwards requests without Origin or
+    // Sec-Fetch-Site; it must be able to mint. Cross-site and spoofed Origin
+    // are still rejected below.
+    const desktopForwarded = await call(port, '/flovart-app/api/bootstrap')
+    assert.equal(desktopForwarded.status, 200)
     const crossSite = await call(port, '/flovart-app/api/bootstrap', 'GET', { 'sec-fetch-site': 'cross-site', origin: 'http' + '://evil.example' })
     assert.equal(crossSite.status, 403)
     const spoofed = await call(port, '/flovart-app/api/bootstrap', 'GET', { 'sec-fetch-site': 'same-origin', origin: 'http' + '://evil.example' })
     assert.equal(spoofed.status, 403)
     assert.equal((await call(port, '/flovart-app/api/bootstrap', 'POST', sameOrigin(port))).status, 405)
-    assert.equal(operator.seen.length, 1)
+    assert.equal(operator.seen.length, 2)
   } finally {
     await close(server)
     await close(operator.server)
