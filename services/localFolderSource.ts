@@ -136,6 +136,41 @@ export function parseLocalFolderHref(href: string): { folderId: string; relative
   return relativePath ? { folderId, relativePath } : null;
 }
 
+/**
+ * 授权变化通知：重新授权、重新选择或拖入同一文件夹后，引用该文件夹的画布节点
+ * 需要立即重新读取原文件，而不是等到节点因别的原因重新挂载。读取权限按站点
+ * 生效，所以同一站点的其他标签页也会收到通知。
+ */
+type LocalFolderAccessListener = (folderId: string) => void;
+const accessListeners = new Set<LocalFolderAccessListener>();
+const ACCESS_CHANNEL = 'flovart.local-folder.access';
+let accessChannel: BroadcastChannel | null | undefined;
+
+function channel(): BroadcastChannel | null {
+  if (accessChannel !== undefined) return accessChannel;
+  accessChannel = typeof BroadcastChannel === 'function' ? new BroadcastChannel(ACCESS_CHANNEL) : null;
+  accessChannel?.addEventListener('message', event => {
+    const folderId = (event as MessageEvent<{ folderId?: unknown }>).data?.folderId;
+    if (typeof folderId === 'string') accessListeners.forEach(listener => listener(folderId));
+  });
+  return accessChannel;
+}
+
+export function subscribeLocalFolderAccess(listener: LocalFolderAccessListener): () => void {
+  channel();
+  accessListeners.add(listener);
+  return () => { accessListeners.delete(listener); };
+}
+
+function notifyLocalFolderAccess(folderId: string): void {
+  accessListeners.forEach(listener => listener(folderId));
+  try {
+    channel()?.postMessage({ folderId });
+  } catch {
+    // 跨标签同步是锦上添花，失败不影响当前标签页。
+  }
+}
+
 /** 句柄落盘失败时的会话内兜底；刷新后由用户重新选择，不静默降级成复制副本。 */
 const sessionHandles = new Map<string, DirectoryHandleLike>();
 
@@ -175,6 +210,7 @@ async function saveSource(handle: DirectoryHandleLike, id = nanoid()): Promise<L
     persisted,
   };
   await sourcesStorage.setItem(`${SOURCE_KEY_PREFIX}${source.id}`, source);
+  notifyLocalFolderAccess(source.id);
   return source;
 }
 
@@ -260,9 +296,14 @@ export async function getLocalFolderPermission(folderId: string): Promise<LocalF
 export async function requestLocalFolderPermission(folderId: string): Promise<boolean> {
   const handle = await loadLocalFolderHandle(folderId);
   if (!handle) return false;
-  if (typeof handle.requestPermission !== 'function') return true;
+  if (typeof handle.requestPermission !== 'function') {
+    notifyLocalFolderAccess(folderId);
+    return true;
+  }
   try {
-    return await handle.requestPermission({ mode: 'read' }) === 'granted';
+    const granted = await handle.requestPermission({ mode: 'read' }) === 'granted';
+    if (granted) notifyLocalFolderAccess(folderId);
+    return granted;
   } catch {
     return false;
   }

@@ -1,12 +1,12 @@
 import { nanoid } from 'nanoid';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { fromIdbRef, getImage, isDataUrl, isIdbRef } from '../../utils/imageDB';
 import { fromIdbVideoRef, getVideoBlob, isIdbVideoRef } from '../../utils/mediaDB';
 import { readColdMedia } from '../../utils/mediaIndexedDB';
 import { getAssetById } from '../../utils/assetStorage';
 import { loadRuntimeArtifactBlob } from '../../services/runtimeArtifacts';
 import { loadBrowserImportArtifactBlob, parseBrowserImportHref } from '../../services/browserImportArtifacts';
-import { LocalFolderError, parseLocalFolderHref, readLocalFolderFile } from '../../services/localFolderSource';
+import { getLocalFolderPermission, LocalFolderError, parseLocalFolderHref, readLocalFolderFile, subscribeLocalFolderAccess } from '../../services/localFolderSource';
 import { fetchRemoteMediaBlob, shouldUseDesktopNativeFetch } from '../../services/desktopNetwork';
 import { transcodeVideoToH264 } from '../../services/videoTools';
 import { workflowMediaStorage } from './storage';
@@ -574,11 +574,34 @@ export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string, 
   const mediaKey = storageKey || artifactKey || fallbackHref || '';
   const nativeRemote = shouldUseDesktopNativeFetch(fallbackHref);
   const immediateUrl = storageKey || nativeRemote ? null : (fallbackHref && !isFetchableMediaHref(fallbackHref) ? null : fallbackHref || null);
-  const [state, setState] = useState<{ key: string; url: string | null; error: string | null }>({
+  const [state, setState] = useState<{ key: string; url: string | null; error: string | null; errorCode?: LocalFolderError['code'] }>({
     key: mediaKey,
     url: immediateUrl,
     error: null,
   });
+  // 本地文件夹引用：授权恢复后按同一 key 重新读取，不必等节点重新挂载。
+  const localFolderId = !storageKey && !artifactKey && fallbackHref ? parseLocalFolderHref(fallbackHref)?.folderId ?? null : null;
+  const [accessRevision, setAccessRevision] = useState(0);
+  const failedRef = useRef(false);
+  failedRef.current = state.key === mediaKey && Boolean(state.error);
+
+  useEffect(() => {
+    if (!localFolderId) return () => undefined;
+    const retry = () => { if (failedRef.current) setAccessRevision(value => value + 1); };
+    const unsubscribe = subscribeLocalFolderAccess(folderId => { if (folderId === localFolderId) retry(); });
+    // 用户也可能在浏览器的站点设置里恢复权限：回到页面时复查一次。
+    const recheck = () => {
+      if (!failedRef.current || document.visibilityState === 'hidden') return;
+      void getLocalFolderPermission(localFolderId).then(permission => { if (permission === 'granted') retry(); });
+    };
+    window.addEventListener('focus', recheck);
+    document.addEventListener('visibilitychange', recheck);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('focus', recheck);
+      document.removeEventListener('visibilitychange', recheck);
+    };
+  }, [localFolderId]);
 
   useEffect(() => {
     let active = true;
@@ -597,7 +620,7 @@ export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string, 
       if (!active) return;
       // 本地文件夹直读的失败原因（权限失效 / 原文件被移动）要原样呈现，方便用户重新定位。
       if (error instanceof LocalFolderError) {
-        setState({ key: mediaKey, url: null, error: error.message });
+        setState({ key: mediaKey, url: null, error: error.message, errorCode: error.code });
         return;
       }
       const missing = error instanceof Error && error.message.includes('不存在');
@@ -607,7 +630,7 @@ export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string, 
       active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [artifactKey, artifactRef?.mimeType, fallbackHref, mediaKey, nativeRemote, storageKey]);
+  }, [accessRevision, artifactKey, artifactRef?.mimeType, fallbackHref, mediaKey, nativeRemote, storageKey]);
 
-  return state.key === mediaKey ? state : { url: immediateUrl, error: null };
+  return state.key === mediaKey ? state : { url: immediateUrl, error: null, errorCode: undefined };
 }

@@ -160,3 +160,16 @@ describe('local folder reference source', () => {
     expect(peak).toBeGreaterThan(1);
   });
 });
+
+describe('local folder access change', () => {
+  it('notifies subscribers when access is granted again', async () => {
+    const { subscribeLocalFolderAccess } = await import('../services/localFolderSource');
+    const source = await adoptLocalFolderHandle(sampleFolder('prompt'));
+    createdFolders.push(source.id);
+    const seen: string[] = [];
+    const unsubscribe = subscribeLocalFolderAccess(folderId => seen.push(folderId));
+    expect(await requestLocalFolderPermission(source.id)).toBe(true);
+    unsubscribe();
+    expect(seen).toEqual([source.id]);
+  });
+});

@@ -239,3 +239,29 @@ describe('workflow media', () => {
     expect(await workflowMediaStorage.get('current-key-poster')).not.toBeNull();
   });
 });
+
+describe('local folder media after re-grant', () => {
+  it('reloads a node that failed on permission once access returns', async () => {
+    const source = await import('../services/localFolderSource');
+    const { fakeDirectoryHandle, fakeFileHandle } = await import('./fixtures/fakeFolderHandle');
+    let allowed = false;
+    const file = fakeFileHandle({ name: 'hero.png', type: 'image/png', size: 8 });
+    const folder = fakeDirectoryHandle('素材', [['hero.png', file]], 'prompt');
+    const realGet = folder.getFileHandle;
+    folder.getFileHandle = async name => {
+      if (!allowed) throw new DOMException('denied', 'NotAllowedError');
+      return realGet(name);
+    };
+    const realRequest = folder.requestPermission;
+    folder.requestPermission = async () => { allowed = true; return realRequest(); };
+    const created = await source.adoptLocalFolderHandle(folder);
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:hero', revokeObjectURL: () => undefined }));
+    const href = source.localFolderHref(created.id, 'hero.png');
+    const { result } = renderHook(() => useWorkflowMediaUrl(undefined, href));
+    await waitFor(() => expect(result.current.errorCode).toBe('PERMISSION'));
+    await act(async () => { await source.requestLocalFolderPermission(created.id); });
+    await waitFor(() => expect(result.current.url).toBe('blob:hero'));
+    expect(result.current.error).toBeNull();
+    await source.forgetLocalFolderSource(created.id);
+  });
+});
