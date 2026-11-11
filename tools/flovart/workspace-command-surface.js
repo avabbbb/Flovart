@@ -21,6 +21,7 @@ export const WORKSPACE_WRITE_COMMAND_NAMES = Object.freeze([
   'workflow.disconnect',
   'workflow.select',
   'workflow.viewport.set',
+  'workflow.focus.nodes',
 ]);
 
 export const WORKSPACE_EXECUTION_COMMAND_NAMES = Object.freeze([

@@ -1,8 +1,8 @@
 import { VECTORIZE_PRESET_LABELS, type VectorizePreset } from '../../services/vectorizeImage';
 import { clampMoveOffset, tracePolygon, type NormalizedPoint } from '../../services/moveObjectCanvas';
 import { computeOutpaintLayout, type OutpaintDirection } from '../../services/outpaintCanvas';
-import { Button, ConfigProvider, Input, Modal, Segmented, Slider, ColorPicker, theme as antdTheme } from 'antd';
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { Button, ConfigProvider, Input, InputNumber, Modal, Segmented, Slider, ColorPicker, theme as antdTheme } from 'antd';
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useResolvedTheme } from '../../hooks/useResolvedTheme';
 import { ImageFilterPanel, buildCssFilter } from '../ImageFilterPanel';
 import type { ImageFilters } from '../../types';
@@ -95,22 +95,159 @@ function DialogError({ error }: { error: string | null }) {
 
 function CropDialog(props: CommonProps & { onConfirm: (crop: WorkflowCropRect) => void }) {
   const [crop, setCrop] = useState<WorkflowCropRect>({ x: .1, y: .1, width: .8, height: .8 });
-  const update = (key: keyof WorkflowCropRect, value: number) => setCrop(current => {
-    const next = { ...current, [key]: value / 100 };
-    next.width = Math.min(next.width, 1 - next.x);
-    next.height = Math.min(next.height, 1 - next.y);
-    return next;
-  });
-  return <Modal {...modalProps(props)} title="裁剪图片">
+  const [natural, setNatural] = useState({ width: 0, height: 0 });
+  const [ratio, setRatio] = useState<'free' | 'source' | '1:1' | '4:3' | '3:4' | '16:9' | '9:16'>('free');
+  const stageRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{
+    mode: 'move' | 'resize';
+    handle: string;
+    startX: number;
+    startY: number;
+    crop: WorkflowCropRect;
+  } | null>(null);
+  const ratioValue = ratio === 'free'
+    ? null
+    : ratio === 'source'
+      ? (natural.width && natural.height ? natural.width / natural.height : null)
+      : { '1:1': 1, '4:3': 4 / 3, '3:4': 3 / 4, '16:9': 16 / 9, '9:16': 9 / 16 }[ratio];
+  const ratioRef = useRef(ratioValue);
+  const naturalRef = useRef(natural);
+  ratioRef.current = ratioValue;
+  naturalRef.current = natural;
+  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+  const resizeWithRatio = (rect: WorkflowCropRect, handle: string): WorkflowCropRect => {
+    const targetRatio = ratioRef.current;
+    const dimensions = naturalRef.current;
+    if (!targetRatio || !dimensions.width || !dimensions.height) return rect;
+    const right = rect.x + rect.width;
+    const bottom = rect.y + rect.height;
+    let width = rect.width;
+    let height = rect.height;
+    const pixelWidth = width * dimensions.width;
+    const pixelHeight = height * dimensions.height;
+    if (pixelWidth / pixelHeight > targetRatio) {
+      width = height * targetRatio * dimensions.height / dimensions.width;
+    } else {
+      height = width * dimensions.width / (targetRatio * dimensions.height);
+    }
+    width = clamp(width, .02, 1);
+    height = clamp(height, .02, 1);
+    let x = handle.includes('w') ? right - width : rect.x;
+    let y = handle.includes('n') ? bottom - height : rect.y;
+    x = clamp(x, 0, 1 - width);
+    y = clamp(y, 0, 1 - height);
+    return { x, y, width, height };
+  };
+  const endDrag = () => { dragRef.current = null; };
+  const handlePointerMove = useCallback((event: PointerEvent) => {
+    const drag = dragRef.current;
+    const stage = stageRef.current;
+    if (!drag || !stage) return;
+    const rect = stage.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const dx = (event.clientX - drag.startX) / rect.width;
+    const dy = (event.clientY - drag.startY) / rect.height;
+    const start = drag.crop;
+    let next = { ...start };
+    if (drag.mode === 'move') {
+      next.x = clamp(start.x + dx, 0, 1 - start.width);
+      next.y = clamp(start.y + dy, 0, 1 - start.height);
+    } else {
+      let left = start.x;
+      let top = start.y;
+      let right = start.x + start.width;
+      let bottom = start.y + start.height;
+      if (drag.handle.includes('w')) left = clamp(start.x + dx, 0, right - .02);
+      if (drag.handle.includes('e')) right = clamp(right + dx, left + .02, 1);
+      if (drag.handle.includes('n')) top = clamp(start.y + dy, 0, bottom - .02);
+      if (drag.handle.includes('s')) bottom = clamp(bottom + dy, top + .02, 1);
+      next = { x: left, y: top, width: right - left, height: bottom - top };
+      next = resizeWithRatio(next, drag.handle);
+    }
+    setCrop(next);
+  }, []);
+  const handlePointerUp = useCallback(() => {
+    endDrag();
+    window.removeEventListener('pointermove', handlePointerMove);
+    window.removeEventListener('pointerup', handlePointerUp);
+  }, [handlePointerMove]);
+  const startDrag = (event: ReactPointerEvent, mode: 'move' | 'resize', handle = '') => {
+    event.preventDefault();
+    event.stopPropagation();
+    dragRef.current = { mode, handle, startX: event.clientX, startY: event.clientY, crop: { ...crop } };
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+  };
+  useEffect(() => () => {
+    window.removeEventListener('pointermove', handlePointerMove);
+    window.removeEventListener('pointerup', handlePointerUp);
+  }, [handlePointerMove, handlePointerUp]);
+  const applyRatio = (nextRatio: typeof ratio) => {
+    setRatio(nextRatio);
+    if (nextRatio === 'free') return;
+    const target = nextRatio === 'source'
+      ? (natural.width && natural.height ? natural.width / natural.height : null)
+      : { '1:1': 1, '4:3': 4 / 3, '3:4': 3 / 4, '16:9': 16 / 9, '9:16': 9 / 16 }[nextRatio];
+    if (!target || !natural.width || !natural.height) return;
+    const maxWidth = .9;
+    const maxHeight = .9;
+    let width = maxWidth;
+    let height = width * natural.width / (target * natural.height);
+    if (height > maxHeight) {
+      height = maxHeight;
+      width = height * target * natural.height / natural.width;
+    }
+    setCrop({ x: (1 - width) / 2, y: (1 - height) / 2, width, height });
+  };
+  const updateNumber = (key: keyof WorkflowCropRect, value: number | null) => {
+    if (value === null) return;
+    const percent = clamp(value, 0, 100) / 100;
+    setCrop(current => {
+      const next = { ...current, [key]: key === 'x' || key === 'y' ? percent : Math.max(.02, percent) };
+      next.width = Math.min(next.width, 1 - next.x);
+      next.height = Math.min(next.height, 1 - next.y);
+      return next;
+    });
+  };
+  const handles = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+  return <Modal {...modalProps(props, 900)} title="裁剪图片">
     <div className="workflow-image-tool__grid" data-workflow-overlay>
-      <div className="workflow-image-tool__preview">
-        <img src={props.mediaUrl} alt="裁剪预览" draggable={false} />
-        <div className="workflow-image-tool__crop" style={{ left: `${crop.x * 100}%`, top: `${crop.y * 100}%`, width: `${crop.width * 100}%`, height: `${crop.height * 100}%` }} />
+      <div className="workflow-crop-stage" ref={stageRef}>
+        <img src={props.mediaUrl} alt="裁剪预览" draggable={false} onLoad={event => setNatural({ width: event.currentTarget.naturalWidth || 1, height: event.currentTarget.naturalHeight || 1 })} />
+        <div
+          className="workflow-crop-selection"
+          role="group"
+          aria-label="裁剪选区"
+          style={{ left: `${crop.x * 100}%`, top: `${crop.y * 100}%`, width: `${crop.width * 100}%`, height: `${crop.height * 100}%` }}
+          onPointerDown={event => startDrag(event, 'move')}
+        >
+          <span className="workflow-crop-thirds workflow-crop-thirds--v1" /><span className="workflow-crop-thirds workflow-crop-thirds--v2" />
+          <span className="workflow-crop-thirds workflow-crop-thirds--h1" /><span className="workflow-crop-thirds workflow-crop-thirds--h2" />
+          {handles.map(handle => <span
+            key={handle}
+            className={`workflow-crop-handle workflow-crop-handle--${handle}`}
+            onPointerDown={event => startDrag(event, 'resize', handle)}
+          />)}
+        </div>
       </div>
       <div className="workflow-image-tool__controls">
-        {([['x', '左边界'], ['y', '上边界'], ['width', '宽度'], ['height', '高度']] as const).map(([key, label]) => <label key={key}>{label}<Slider min={key === 'width' || key === 'height' ? 5 : 0} max={100} value={Math.round(crop[key] * 100)} onChange={value => update(key, value)} /></label>)}
+        <label>比例
+          <div className="workflow-crop-ratios" role="group" aria-label="裁剪比例">
+            {([['free', '自由'], ['source', '原图'], ['1:1', '1:1'], ['4:3', '4:3'], ['3:4', '3:4'], ['16:9', '16:9'], ['9:16', '9:16']] as const).map(([id, label]) => (
+              <button key={id} type="button" className={ratio === id ? 'is-active' : ''} onClick={() => applyRatio(id)}>{label}</button>
+            ))}
+          </div>
+        </label>
+        <div className="workflow-crop-numbers">
+          {([['x', '左'], ['y', '上'], ['width', '宽'], ['height', '高']] as const).map(([key, label]) => (
+            <label key={key}>{label}<InputNumber min={0} max={key === 'width' || key === 'height' ? 100 : 99} value={Math.round(crop[key] * 100)} onChange={value => updateNumber(key, value)} suffix="%" /></label>
+          ))}
+        </div>
+        <div className="workflow-crop-actions">
+          <Button onClick={() => { setCrop({ x: .1, y: .1, width: .8, height: .8 }); setRatio('free'); }}>重置</Button>
+          <Button type="primary" loading={props.busy} onClick={() => props.onConfirm(crop)}>应用裁剪</Button>
+        </div>
         <DialogError error={props.error} />
-        <Button type="primary" loading={props.busy} onClick={() => props.onConfirm(crop)}>应用裁剪</Button>
       </div>
     </div>
   </Modal>;

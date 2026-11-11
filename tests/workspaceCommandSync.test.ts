@@ -100,7 +100,7 @@ describe('workspace command synchronization', () => {
     const call = (command: string, args: Record<string, unknown>, idempotencyKey: string) =>
       session.callCommand(command, args, 'cli', idempotencyKey);
 
-    await call('workflow.node.create', { id: 'script-1', type: 'text', title: '旁白脚本', x: 80, y: 120 }, 'create-script-1');
+    await call('workflow.node.create', { id: 'script-1', type: 'image', title: '参考图', x: 80, y: 120 }, 'create-script-1');
     await call('workflow.node.create-connected', { id: 'shot-1', type: 'image', title: '镜头 1', fromNodeId: 'script-1' }, 'create-shot-1');
     await call('workflow.node.update', { nodeId: 'shot-1', patch: { title: '镜头 1 · 细修版' } }, 'update-shot-1');
     await call('workflow.node.move', { nodeId: 'shot-1', x: 520, y: 180 }, 'move-shot-1');

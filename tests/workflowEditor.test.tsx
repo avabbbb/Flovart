@@ -29,6 +29,15 @@ const makeProject = (): WorkflowProject => ({
   updatedAt: '2026-06-18T00:00:00.000Z',
 });
 
+/** Notes are isolated, so connection tests need two media nodes. */
+const connectionProject = (): WorkflowProject => ({
+  ...makeProject(),
+  nodes: [
+    createWorkflowNode('source', 'image', { x: 100, y: 100 }, { href: 'data:image/png;base64,AA==', mimeType: 'image/png' }),
+    createWorkflowNode('target', 'image', { x: 520, y: 120 }, { href: 'data:image/png;base64,BB==', mimeType: 'image/png' }),
+  ],
+});
+
 function Harness({ initial = makeProject(), sharedMedia = [] }: { initial?: WorkflowProject; sharedMedia?: WorkflowSharedMedia[] }) {
   const [project, setProject] = useState(initial);
   return (
@@ -559,7 +568,7 @@ describe('InfiniteWorkflow surface interactions', () => {
   });
 
   it('restores focus to the surface or source handle after closing the create menu', () => {
-    render(<Harness />);
+    render(<Harness initial={connectionProject()} />);
     expect(editor()).toHaveAttribute('tabindex', '-1');
 
     fireEvent.doubleClick(editor(), { clientX: 900, clientY: 600 });
@@ -568,7 +577,7 @@ describe('InfiniteWorkflow surface interactions', () => {
 
     fireEvent.pointerDown(sourceHandle(), { button: 0, pointerId: 21, clientX: 440, clientY: 210 });
     fireEvent.pointerUp(window, { pointerId: 21, clientX: 450, clientY: 520 });
-    fireEvent.click(screen.getByRole('menuitem', { name: /文本生成/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /图片/ }));
     expect(sourceHandle()).toHaveFocus();
 
     fireEvent.pointerDown(sourceHandle(), { button: 0, pointerId: 22, clientX: 440, clientY: 210 });
@@ -603,7 +612,7 @@ describe('InfiniteWorkflow surface interactions', () => {
   });
 
   it('connects to a legal existing node instead of opening the create menu', () => {
-    render(<Harness />);
+    render(<Harness initial={connectionProject()} />);
 
     fireEvent.pointerDown(sourceHandle(), { button: 0, clientX: 440, clientY: 210 });
     fireEvent.pointerMove(window, { clientX: 540, clientY: 180 });
@@ -614,13 +623,13 @@ describe('InfiniteWorkflow surface interactions', () => {
   });
 
   it('makes the wide connection hit path keyboard selectable', () => {
-    const initial = makeProject();
+    const initial = connectionProject();
     initial.connections = [{ id: 'connection-1', fromNodeId: 'source', toNodeId: 'target' }];
     render(<Harness initial={initial} />);
     const path = editor().querySelector<SVGPathElement>('[data-workflow-connection-id="connection-1"]')!;
 
     expect(path).toHaveAttribute('tabindex', '0');
-    expect(path).toHaveAccessibleName('选择连接：文本 到 图片');
+    expect(path).toHaveAccessibleName('选择连接：图片 到 图片');
     expect(screen.getByRole('group', { name: '工作流连接' })).not.toHaveAttribute('aria-hidden');
     fireEvent.keyDown(path, { key: ' ' });
     expect(editor().querySelector('.workflow-connection.is-selected')).toBeInTheDocument();
@@ -631,11 +640,11 @@ describe('InfiniteWorkflow surface interactions', () => {
   });
 
   it('creates and connects a selected menu node atomically', () => {
-    render(<Harness />);
+    render(<Harness initial={connectionProject()} />);
 
     fireEvent.pointerDown(sourceHandle(), { button: 0, clientX: 440, clientY: 210 });
     fireEvent.pointerUp(window, { clientX: 450, clientY: 520 });
-    fireEvent.click(screen.getByRole('menuitem', { name: /文本生成/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /图片/ }));
 
     expect(editor().querySelectorAll('[data-workflow-node-id]')).toHaveLength(3);
     expect(editor().querySelectorAll('[data-workflow-connection-id]')).toHaveLength(1);

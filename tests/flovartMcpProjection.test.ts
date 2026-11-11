@@ -41,6 +41,7 @@ describe('Flovart MCP projection', () => {
       'flovart_agent_turn',
       'flovart_workflow_inspect',
       'flovart_workflow_selection',
+      'flovart_workflow_focus',
       'flovart_workflow_apply',
       'flovart_workflow_run',
     ]);

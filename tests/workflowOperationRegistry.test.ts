@@ -64,7 +64,7 @@ describe('workflow operation capability registry', () => {
 
   it('derives input roles and rejects recipes outside the registered contract', () => {
     expect(getWorkflowOperationInputRoleForNodeType('image.generate@1', 'image')).toBe('reference_image');
-    expect(getWorkflowOperationInputRoleForNodeType('image.generate@1', 'text')).toBe('prompt_context');
+    expect(getWorkflowOperationInputRoleForNodeType('image.generate@1', 'text')).toBeNull();
     expect(getWorkflowOperationInputRoleForNodeType('image.generate@1', 'video')).toBeNull();
     expect(getWorkflowOperationInputRoleForNodeType('image.crop@1', 'image')).toBe('source_image');
     expect(getWorkflowOperationInputRoleForNodeType('video.merge@1', 'video')).toBe('source_video');

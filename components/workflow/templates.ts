@@ -93,7 +93,7 @@ export function buildWorkflowTemplate(id: WorkflowTemplateId, prompt: string, la
     const result = place('image', reference, zh ? '改图结果' : 'Edited image', { prompt: text, config: { mode: 'image', preserveReferenceAspectRatio: true } });
     nodes = [reference, result];
   } else if (template.id === 'storyboard-video') {
-    const story = place('text', null, zh ? '故事' : 'Story', { content: text });
+    const story = place('text', null, zh ? '故事备注' : 'Story note', { content: text });
     const keyframe = place('image', story, zh ? '关键帧' : 'Keyframe', { prompt: text, config: { mode: 'image', aspectRatio: '16:9' } });
     const video = place('video', keyframe, zh ? '视频' : 'Video', { prompt: text, config: { mode: 'video', aspectRatio: '16:9', durationSec: 5 } });
     nodes = [story, keyframe, video];
@@ -103,11 +103,10 @@ export function buildWorkflowTemplate(id: WorkflowTemplateId, prompt: string, la
     const showcase = place('video', scene, zh ? '展示视频' : 'Showcase video', { prompt: zh ? '产品展示镜头，缓慢环绕，' + text : 'Slow orbit product showcase. ' + text, config: { mode: 'video', durationSec: 5 } });
     nodes = [product, scene, showcase];
   } else {
-    const promptNode = place('text', null, zh ? '提示词' : 'Prompt', { content: text });
-    const image = place('image', promptNode, zh ? '图片' : 'Image', { prompt: text, config: { mode: 'image', aspectRatio: '1:1' } });
-    nodes = [promptNode, image];
+    const image = place('image', null, zh ? '图片' : 'Image', { prompt: text, config: { mode: 'image', aspectRatio: '1:1' } });
+    nodes = [image];
   }
-  return { templateId: template.id, title, nodes, connections: chain(nodes) };
+  return { templateId: template.id, title, nodes, connections: template.id === 'storyboard-video' ? chain(nodes.slice(1)) : chain(nodes) };
 }
 
 // 示例画布：明确标注为示例，浏览和编辑不需要 Key；运行时仍走计划卡与配置引导。
@@ -126,7 +125,7 @@ export function buildSampleCanvasSeed(language: string): Omit<WorkflowTemplateSe
     const shot = place('video', shots.at(-1) || script, (zh ? '示例 · 镜头 ' : 'Sample · Shot ') + (index + 1), { prompt, config: { mode: 'video', aspectRatio: '16:9', durationSec: 5 } });
     shots.push(shot);
   });
-  const connections: WorkflowConnection[] = shots.map(shot => ({ id: nanoid(), fromNodeId: script.id, toNodeId: shot.id, kind: 'data' as const, order: 0 }));
+  const connections: WorkflowConnection[] = [];
   return { title: zh ? '示例 · 三镜头产品短片' : 'Sample · Three-shot product clip', nodes: [script, ...shots], connections };
 }
 

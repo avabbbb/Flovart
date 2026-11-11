@@ -2,7 +2,7 @@ import type { BuiltinWorkflowNodeType, CameraMovement, StylePreset, WorkflowNode
 
 export const WORKFLOW_NODE_SPECS: Record<BuiltinWorkflowNodeType, { title: string; width: number; height: number; metadata: WorkflowNodeMetadata }> = {
   image: { title: '图片', width: 340, height: 240, metadata: { status: 'idle' } },
-  text: { title: '文本', width: 340, height: 220, metadata: { content: '', status: 'idle' } },
+  text: { title: '备注', width: 340, height: 220, metadata: { content: '', status: 'idle' } },
   video: { title: '视频', width: 420, height: 236, metadata: { status: 'idle' } },
   audio: { title: '音频', width: 340, height: 120, metadata: { status: 'idle' } },
   config: {
@@ -37,7 +37,7 @@ export const WORKFLOW_NODE_SPECS: Record<BuiltinWorkflowNodeType, { title: strin
   },
 };
 
-const WORKFLOW_NODE_TITLES_EN: Record<string, string> = { '图片': 'Image', '文本': 'Text', '视频': 'Video', '音频': 'Audio', '配置': 'Config', '脚本': 'Script', '子画布': 'Subgraph' };
+const WORKFLOW_NODE_TITLES_EN: Record<string, string> = { '图片': 'Image', '备注': 'Note', '文本': 'Note', '视频': 'Video', '音频': 'Audio', '配置': 'Config', '脚本': 'Script', '子画布': 'Subgraph' };
 
 /** 默认标题（类型名，或「类型名 + 序号」）在英文模式下显示为英文；用户自定义的标题原样返回。 */
 export function localizeWorkflowNodeTitle(title: string, language?: string): string {

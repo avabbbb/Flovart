@@ -3,7 +3,7 @@ import { cancelWorkflowGeneration, runWorkflowGeneration, type WorkflowGeneratio
 import { getProductModel } from '../services/productModelCatalog';
 import type { ProductModelMode, UserApiKey } from '../types';
 import type { WorkflowProject } from '../components/workflow/types';
-import { createWorkflowOperationInputBinding, createWorkflowOperationNode, ensureWorkflowImageGenerateOperation, workflowOperationInputConnections } from '../components/workflow/operations';
+import { createWorkflowOperationNode, ensureWorkflowImageGenerateOperation, workflowOperationInputConnections } from '../components/workflow/operations';
 
 vi.mock('../utils/assetStorage', () => ({
   getAssetById: vi.fn(async (assetId: string) => assetId === 'asset-1'
@@ -59,7 +59,6 @@ const project = (): WorkflowProject => ({
     { id: 'config-1', type: 'config', title: '生成配置', position: { x: 420, y: 80 }, width: 360, height: 260, metadata: { prompt: '电影光线', config: { mode: 'image', modelId: 'flovart:gpt-image-2' } } },
   ],
   connections: [
-    { id: 'a', fromNodeId: 'text-1', toNodeId: 'config-1' },
     { id: 'b', fromNodeId: 'image-1', toNodeId: 'config-1' },
   ],
   selectedNodeIds: [],
@@ -77,7 +76,7 @@ describe('workflow generation', () => {
     const operation = await createWorkflowOperationNode({
       id: 'operation-1', capabilityId: 'image.generate@1', position: { x: 420, y: 80 }, prompt: '电影光线',
       productModelId: 'flovart:gpt-image-2', parameters: { submode: 'text-to-image', count: 1 },
-      inputBindings: [createWorkflowOperationInputBinding('prompt-binding', 'text-1', 'prompt_context', 0)],
+      inputBindings: [],
       now: '2026-08-05T00:00:00.000Z',
     });
     source.nodes = [source.nodes[0], operation];
@@ -518,14 +517,14 @@ describe('workflow generation', () => {
     });
 
     expect(executeMedia).toHaveBeenCalledWith(expect.objectContaining({
-      prompt: expect.stringContaining('银色机器人'),
+      prompt: expect.stringContaining('电影光线'),
       references: [expect.objectContaining({ type: 'image', elementId: 'image-1' })],
     }));
     expect(result.nodes).toHaveLength(3);
     const initiator = result.nodes.find(node => node.id === 'config-1');
     expect(initiator?.type).toBe('image');
     expect(initiator?.metadata).toMatchObject({ status: 'success', storageKey: 'result-key' });
-    expect(result.connections).toHaveLength(2);
+    expect(result.connections).toHaveLength(1);
     expect(result.nodes[2].metadata.status).toBe('success');
     expect(updates.some(update => update.nodes[2].metadata.progress === 42)).toBe(true);
     expect(saveHistory).toHaveBeenCalledTimes(1);
@@ -615,7 +614,7 @@ describe('workflow generation', () => {
     const successUpdates = updates.filter(update => update.nodes.find(node => node.id === 'config-1')?.metadata.status === 'success');
     expect(successUpdates).toHaveLength(1);
     expect(successUpdates[0].nodes).toHaveLength(3);
-    expect(successUpdates[0].connections).toHaveLength(2);
+    expect(successUpdates[0].connections).toHaveLength(1);
     expect(successUpdates[0].nodes[2].metadata).toMatchObject({ progress: 100, generationRequestId: undefined });
     expect(successUpdates[0].nodes[2].type).toBe('image');
     expect(events.indexOf('success')).toBeLessThan(events.indexOf('history'));

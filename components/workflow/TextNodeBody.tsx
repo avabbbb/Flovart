@@ -58,7 +58,7 @@ export function TextNodeBody({ value, onChange }: { value: string; onChange: (va
       <textarea
         ref={textareaRef}
         value={value}
-        placeholder="输入文本或提示词，支持 # 标题、- 列表、**加粗**"
+        placeholder="写脚本、备注或说明；这里的文字不会自动进入生成提示词"
         onPointerDown={event => event.stopPropagation()}
         onChange={event => onChange(event.target.value)}
         onBlur={() => setEditing(false)}

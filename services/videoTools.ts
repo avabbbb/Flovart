@@ -13,6 +13,18 @@ export interface VideoTrimResult {
   durationSec: number;
 }
 
+export interface VideoTrimOptions {
+  /** 默认重编码，保证切点落在目标帧；stream copy 只能切关键帧。 */
+  accurate?: boolean;
+}
+
+export interface VideoMetadata {
+  duration: number;
+  fps: number;
+  /** HTMLVideoElement 不暴露帧率；用 requestVideoFrameCallback 估算，失败时回退 30。 */
+  fpsEstimated: boolean;
+}
+
 export interface VideoAvSplitResult {
   videoBlob: Blob;
   audioBlob: Blob;
@@ -73,21 +85,35 @@ function guessFormat(filename: string): string {
   return 'mp4';
 }
 
-export async function trimVideo(blob: Blob, startSec: number, endSec: number, originalName = 'video.mp4'): Promise<VideoTrimResult> {
-  return enqueueFFmpegTask(() => trimVideoOnFFmpeg(blob, startSec, endSec, originalName));
+export async function trimVideo(blob: Blob, startSec: number, endSec: number, originalName = 'video.mp4', options: VideoTrimOptions = {}): Promise<VideoTrimResult> {
+  return enqueueFFmpegTask(() => trimVideoOnFFmpeg(blob, startSec, endSec, originalName, options));
 }
 
-async function trimVideoOnFFmpeg(blob: Blob, startSec: number, endSec: number, originalName: string): Promise<VideoTrimResult> {
+async function trimVideoOnFFmpeg(blob: Blob, startSec: number, endSec: number, originalName: string, options: VideoTrimOptions): Promise<VideoTrimResult> {
   const ffmpeg = await getFFmpeg();
   const format = guessFormat(originalName);
   const prefix = uniqueFFmpegPrefix('trim');
   const inputName = `${prefix}input.${format}`;
   const outputName = `${prefix}output.${format}`;
+  const accurate = options.accurate !== false;
 
   try {
     await ffmpeg.writeFile(inputName, await fetchFile(blob));
-    // stream copy — 无需重编码，极快
-    const code = await ffmpeg.exec([
+    const code = await ffmpeg.exec(accurate ? [
+      // -ss 放在 -i 前先快速定位，再重编码到准确的帧；stream copy 只能切关键帧，会让
+      // 时间码和实际画面错位，用户拖动到具体帧后无法得到该帧。
+      '-ss', String(startSec),
+      '-i', inputName,
+      '-t', String(Math.max(0.001, endSec - startSec)),
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-crf', '20',
+      '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac',
+      '-b:a', '160k',
+      '-movflags', '+faststart',
+      outputName,
+    ] : [
       '-i', inputName,
       '-ss', String(startSec),
       '-to', String(endSec),
@@ -101,6 +127,72 @@ async function trimVideoOnFFmpeg(blob: Blob, startSec: number, endSec: number, o
   } finally {
     await deleteFFmpegFiles(ffmpeg, [inputName, outputName]);
   }
+}
+
+/**
+ * 读取时长并估算帧率。HTMLVideoElement 没有 fps 字段；播放一小段并测量相邻
+ * requestVideoFrameCallback 的 mediaTime 间隔。失败或浏览器不支持时回退 30fps。
+ */
+export async function probeVideoMetadata(url: string): Promise<VideoMetadata> {
+  const { promise, resolve } = Promise.withResolvers<VideoMetadata>();
+  let settled = false;
+  const video = document.createElement('video');
+  video.preload = 'auto';
+  video.muted = true;
+  video.playsInline = true;
+  video.src = url;
+  const done = (duration: number, fps: number, fpsEstimated: boolean) => {
+    if (settled) return;
+    settled = true;
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    resolve({ duration: Number.isFinite(duration) ? duration : 0, fps, fpsEstimated });
+  };
+  const fallback = () => {
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    done(duration, 30, true);
+  };
+  const timer = window.setTimeout(fallback, 1400);
+  video.onerror = () => { window.clearTimeout(timer); fallback(); };
+  video.onloadedmetadata = () => {
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    const callback = (video as HTMLVideoElement & {
+      requestVideoFrameCallback?: (callback: (now: number, metadata: { mediaTime: number }) => void) => number;
+    }).requestVideoFrameCallback;
+    if (!callback || typeof callback !== 'function') {
+      window.clearTimeout(timer);
+      done(duration, 30, true);
+      return;
+    }
+    let last = -1;
+    const deltas: number[] = [];
+    const finish = () => {
+      window.clearTimeout(timer);
+      if (deltas.length) {
+        const sorted = [...deltas].sort((left, right) => left - right);
+        const median = sorted[Math.floor(sorted.length / 2)] || 0;
+        const raw = median > 0 ? 1 / median : 30;
+        const common = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60];
+        const matched = common.find(value => Math.abs(value - raw) < 0.75) || Math.round(raw);
+        done(duration, Math.max(1, Math.min(120, matched || 30)), false);
+      } else {
+        done(duration, 30, true);
+      }
+    };
+    const collect = (_now: number, metadata: { mediaTime: number }) => {
+      if (last >= 0) deltas.push(metadata.mediaTime - last);
+      last = metadata.mediaTime;
+      if (deltas.length >= 8) { finish(); return; }
+      callback.call(video, collect);
+    };
+    callback.call(video, collect);
+    void video.play().catch(() => {
+      window.clearTimeout(timer);
+      done(duration, 30, true);
+    });
+  };
+  return promise;
 }
 
 export interface VideoScaleResult {

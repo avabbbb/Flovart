@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "fa9f3c13f4f29c0d0a51176c6d0574b1b772d63c5176ba89ce09c6a3899b96c9",
+  "registryHash": "95ccf0baad2aa4f305627405b4b5330a8bd80c1261ce87cd067a47384b1fdce3",
   "commands": [
     {
       "name": "runtime.status",
@@ -365,9 +365,11 @@
     },
     {
       "name": "workflow.inspect",
-      "summary": "Inspect the visible Workflow graph with media and secrets redacted.",
+      "summary": "Inspect the visible Workflow graph with media and secrets redacted. Use summary=true for a light graph or nodeId for one node.",
       "args": {
-        "projectId": "string?"
+        "projectId": "string?",
+        "summary": "boolean?",
+        "nodeId": "string?"
       },
       "availability": "available"
     },
@@ -388,7 +390,8 @@
         "mutationId": "string",
         "clientId": "string?",
         "intent": "string?",
-        "operations": "array"
+        "operations": "array",
+        "dryRun": "boolean?"
       },
       "availability": "available"
     },
@@ -513,6 +516,18 @@
         "x": "number",
         "y": "number",
         "k": "number"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.focus.nodes",
+      "summary": "Center and fit one or more visible Workflow nodes in the viewport.",
+      "args": {
+        "projectId": "string?",
+        "nodeIds": "string[]",
+        "width": "number?",
+        "height": "number?",
+        "padding": "number?"
       },
       "availability": "available"
     },

@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import { WORKFLOW_MUTATION_COMMANDS, workflowCommandSummary } from '../components/workflow/agentOps';
 import { createWorkflowNode } from '../components/workflow/constants';
 import { applyWorkflowMutation, applyWorkflowViewOperations } from '../components/workflow/draftAuthority';
+import { applyWorkflowOps } from '../components/workflow/ops';
 import { appendWorkflowDraftLog, createWorkflowDraftLogEntry } from '../components/workflow/draftLog';
 import { isWorkflowNodeTool } from '../components/workflow/nodeToolCatalog';
 import { getWorkflowOperationCapabilityByNodeTool, parseWorkflowOperationNodeToolArguments } from '../components/workflow/operationRegistry';
@@ -133,6 +134,53 @@ const inspectProject = (project: WorkflowProject) => {
       createdAt: item.createdAt,
     })),
     workflowMutationReceiptsTotal: workflowMutationReceipts.length,
+  };
+};
+
+/** 轻量图：只给 id/type/title/位置/尺寸，避免 Agent 每次拉全量 metadata。 */
+const inspectSummary = (project: WorkflowProject) => ({
+  projectId: project.id,
+  title: project.title,
+  draftVersion: project.draftVersion || 1,
+  selectedNodeIds: project.selectedNodeIds,
+  viewport: project.viewport,
+  nodes: project.nodes.map(node => ({
+    id: node.id,
+    type: node.type,
+    title: node.title,
+    position: node.position,
+    width: node.width,
+    height: node.height,
+    visible: node.isVisible !== false,
+    locked: node.isLocked === true,
+    status: node.metadata.status || 'idle',
+  })),
+  connectionCount: project.connections.length,
+  connections: project.connections.map(connection => ({
+    id: connection.id,
+    fromNodeId: connection.fromNodeId,
+    toNodeId: connection.toNodeId,
+    kind: connection.kind,
+    role: connection.role,
+    order: connection.order,
+  })),
+});
+
+/** 单节点详查：含直接入/出边与邻居 id，足够 Agent 做局部修改而不用整图 inspect。 */
+const inspectNode = (project: WorkflowProject, nodeId: string) => {
+  const node = project.nodes.find(item => item.id === nodeId);
+  if (!node) return null;
+  const inbound = project.connections.filter(connection => connection.toNodeId === nodeId);
+  const outbound = project.connections.filter(connection => connection.fromNodeId === nodeId);
+  return {
+    projectId: project.id,
+    title: project.title,
+    draftVersion: project.draftVersion || 1,
+    node: redactNode(node),
+    inbound,
+    outbound,
+    upstreamNodeIds: [...new Set(inbound.map(connection => connection.fromNodeId))],
+    downstreamNodeIds: [...new Set(outbound.map(connection => connection.toNodeId))],
   };
 };
 
@@ -397,8 +445,18 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         result = { ok: true, commandId: envelope.id, result: { projectId } };
       } else if (command === 'workflow.inspect') {
         if (!project) return error(envelope.id, 'NOT_FOUND', '当前没有可用的 Workflow 项目。');
-        // 制作圣经：结构化的锚点 / 镜头表 / 一致性问题，让 Agent 不必自己从节点里拼项目状态。
-        result = { ok: true, commandId: envelope.id, result: { ...inspectProject(project), productionBible: buildProductionBible(project) } };
+        const summary = args.summary === true || args.view === 'summary' || args.mode === 'summary';
+        const nodeId = typeof args.nodeId === 'string' ? args.nodeId.trim() : '';
+        if (nodeId) {
+          const scoped = inspectNode(project, nodeId);
+          if (!scoped) return error(envelope.id, 'NOT_FOUND', `节点不存在：${nodeId}`);
+          result = { ok: true, commandId: envelope.id, result: scoped };
+        } else if (summary) {
+          result = { ok: true, commandId: envelope.id, result: inspectSummary(project) };
+        } else {
+          // 制作圣经：结构化的锚点 / 镜头表 / 一致性问题，让 Agent 不必自己从节点里拼项目状态。
+          result = { ok: true, commandId: envelope.id, result: { ...inspectProject(project), productionBible: buildProductionBible(project) } };
+        }
       } else if (command === 'workflow.selection.get') {
         if (!project) return error(envelope.id, 'NOT_FOUND', '当前没有可用的 Workflow 项目。');
         const selectedNodeIds = project.selectedNodeIds.filter(nodeId => project.nodes.some(node => node.id === nodeId));
@@ -557,10 +615,69 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
           result = { ok: true, commandId: envelope.id, result: { projectId: project.id, draftVersion: project.draftVersion || 1 } };
           cache(cacheKey, result);
           return result;
+        } else if (command === 'workflow.focus.nodes') {
+          const rawIds = Array.isArray(args.nodeIds) ? args.nodeIds : args.nodeId !== undefined ? [args.nodeId] : [];
+          const nodeIds = [...new Set(rawIds.map(value => requiredString(value, 'nodeId')))];
+          if (!nodeIds.length) throw new Error('nodeIds 不能为空');
+          const missing = nodeIds.find(nodeId => !project.nodes.some(node => node.id === nodeId));
+          if (missing) return error(envelope.id, 'NOT_FOUND', `节点不存在：${missing}`);
+          const targets = project.nodes.filter(node => nodeIds.includes(node.id));
+          const minX = Math.min(...targets.map(node => node.position.x));
+          const minY = Math.min(...targets.map(node => node.position.y));
+          const maxX = Math.max(...targets.map(node => node.position.x + node.width));
+          const maxY = Math.max(...targets.map(node => node.position.y + node.height));
+          const width = Math.max(240, finiteNumber(args.width, 'width', 1200));
+          const height = Math.max(240, finiteNumber(args.height, 'height', 800));
+          const padding = Math.max(0, finiteNumber(args.padding, 'padding', 80));
+          const scale = Math.min(1, (width - padding * 2) / Math.max(1, maxX - minX), (height - padding * 2) / Math.max(1, maxY - minY));
+          const k = Math.min(1, Math.max(.1, scale));
+          const viewport = {
+            x: width / 2 - ((minX + maxX) / 2) * k,
+            y: height / 2 - ((minY + maxY) / 2) * k,
+            k,
+          };
+          dependencies.updateProject(project.id, { viewport });
+          result = { ok: true, commandId: envelope.id, result: { projectId: project.id, draftVersion: project.draftVersion || 1, nodeIds, viewport } };
+          cache(cacheKey, result);
+          return result;
         } else {
           return error(envelope.id, 'UNKNOWN_COMMAND', `未知 Workflow 命令：${command}`);
         }
         operations = tagWorkflowNodeOrigin(operations || [operation!], envelope.source);
+        if (command === 'workflow.apply' && (args.dryRun === true || args['dry-run'] === true)) {
+          const preview = applyWorkflowOps({
+            projectId: project.id,
+            title: project.title,
+            nodes: project.nodes,
+            connections: project.connections,
+            selectedNodeIds: project.selectedNodeIds,
+            viewport: project.viewport,
+          }, operations);
+          if (preview.rejections.length) {
+            return error(envelope.id, 'BAD_REQUEST', '预演失败：' + preview.rejections.map(item => item.reason).join('；'));
+          }
+          const beforeNodeIds = new Set(project.nodes.map(node => node.id));
+          const afterNodeIds = new Set(preview.snapshot.nodes.map(node => node.id));
+          const beforeConnectionIds = new Set(project.connections.map(connection => connection.id));
+          const afterConnectionIds = new Set(preview.snapshot.connections.map(connection => connection.id));
+          result = {
+            ok: true,
+            commandId: envelope.id,
+            result: {
+              dryRun: true,
+              applied: false,
+              draftVersion: project.draftVersion || 1,
+              operationCount: operations.length,
+              summary: workflowCommandSummary(command, args),
+              nodeIds: [...afterNodeIds].filter(id => !beforeNodeIds.has(id)),
+              removedNodeIds: [...beforeNodeIds].filter(id => !afterNodeIds.has(id)),
+              connectionIds: [...afterConnectionIds].filter(id => !beforeConnectionIds.has(id)),
+              removedConnectionIds: [...beforeConnectionIds].filter(id => !afterConnectionIds.has(id)),
+            },
+          };
+          cache(cacheKey, result);
+          return result;
+        }
         const expectedObjectVersions = Object.fromEntries(Object.entries(recordArg(args.expectedObjectVersions, 'expectedObjectVersions')).map(([id, value]) => [id, positiveNumber(value, `expectedObjectVersions.${id}`)]));
         const intent = typeof args.intent === 'string' && args.intent.trim()
           ? args.intent.trim()

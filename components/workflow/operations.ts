@@ -400,19 +400,18 @@ export async function ensureWorkflowImageGenerateOperation(input: {
     .map(connection => base.nodes.find(node => node.id === connection.fromNodeId))
     .filter((node): node is WorkflowNode => Boolean(node));
   const orderIndex = new Map(upstream.map((node, index) => [node.id, index]));
-  // 有媒体时文本上游一并纳入 bindings（reference_image 与 prompt_context 混合），
-  // 否则文本不进 prompt，且其旧连线会在 operation 下一次同步连线时被静默删除。
+  // 备注不参与生成：Operation 只绑定有媒体的图片输入；旧文本连线在迁移中清理。
   const candidates = sourceHasMedia
-    ? [{ ...source, id: hiddenInputId! } as WorkflowNode, ...upstream.filter(node => node.type === 'text')]
+    ? [{ ...source, id: hiddenInputId! } as WorkflowNode]
     : upstream;
-  if (sourceHasMedia && hiddenInputId) orderIndex.set(hiddenInputId, -1); // 参考图排在文本上游之前
+  if (sourceHasMedia && hiddenInputId) orderIndex.set(hiddenInputId, -1);
   const bindings = candidates
-    .filter(node => node.type === 'image' || node.type === 'text')
+    .filter(node => node.type === 'image')
     .sort((left, right) => (orderIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (orderIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER))
     .map((node, index) => createWorkflowOperationInputBinding(
       input.createId(),
       node.id,
-      node.type === 'text' ? 'prompt_context' : 'reference_image',
+      'reference_image',
       index,
     ));
   const hasImageInput = bindings.some(binding => binding.role === 'reference_image');

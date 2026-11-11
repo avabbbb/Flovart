@@ -13,6 +13,7 @@ describe('Flovart Agent tool surface', () => {
       'workflow.inspect',
       'workflow.selection.get',
       'workflow.apply',
+      'workflow.focus.nodes',
       'workflow.node.run',
     ]);
     expect(commands).not.toContain('command.list');

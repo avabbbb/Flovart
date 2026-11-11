@@ -3,7 +3,8 @@ import { WORKFLOW_SNAPSHOT_LIMIT } from './snapshots';
 import type { WorkflowConnection, WorkflowNamedSnapshot, WorkflowNode, WorkflowProject, WorkflowViewport } from './types';
 
 // v2：新增 subgraph 节点与可选 parentId；旧数据无需补字段，只清理非法 / 悬空的 parentId。
-export const WORKFLOW_PERSISTENCE_VERSION = 2;
+// v3：文本节点改为独立「备注」，不再作为生成 prompt 上下文；旧连线迁移为可合并目标。
+export const WORKFLOW_PERSISTENCE_VERSION = 3;
 export const WORKFLOW_BACKUP_KEY = 'flovart:workflow:projects:backup';
 
 export interface PersistedWorkflowStateLike {
@@ -74,18 +75,78 @@ function snapshotsOf(value: unknown): WorkflowNamedSnapshot[] {
       const connections = (Array.isArray(item.connections) ? item.connections : [])
         .map((connection, index) => connectionOf(connection, index, nodeIds))
         .filter((connection): connection is WorkflowConnection => Boolean(connection));
+      const migrated = migrateNoteSemantics(nodes, connections);
       return [{
         id: item.id,
         name: typeof item.name === 'string' && item.name.trim() ? item.name : '未命名快照',
         createdAt: typeof item.createdAt === 'string' ? item.createdAt : new Date(0).toISOString(),
-        nodes,
-        connections,
+        nodes: migrated.nodes,
+        connections: migrated.connections,
         ...(isRecord(item.viewport) ? { viewport: viewportOf(item.viewport) } : {}),
       }];
     } catch {
       return [];
     }
   }).slice(-WORKFLOW_SNAPSHOT_LIMIT);
+}
+
+function migrateNoteSemantics(
+  nodes: WorkflowNode[],
+  connections: WorkflowConnection[],
+): { nodes: WorkflowNode[]; connections: WorkflowConnection[] } {
+  const typeById = new Map(nodes.map(node => [node.id, node.type]));
+  const targetsByNote = new Map<string, string[]>();
+  const addTarget = (noteId: string, targetId: string) => {
+    if (typeById.get(noteId) !== 'text' || noteId === targetId) return;
+    const targets = targetsByNote.get(noteId) || [];
+    if (!targets.includes(targetId)) targets.push(targetId);
+    targetsByNote.set(noteId, targets);
+  };
+  // Operation 旧的 prompt_context binding 也属于同一套隐式提示词语义。
+  const migratedNodes = nodes.map(node => {
+    if (node.type !== 'operation' || !node.metadata.operation) return node;
+    const record = node.metadata.operation;
+    const bindings = record.recipe.inputBindings || [];
+    const textBindings = bindings.filter(binding => binding.role === 'prompt_context');
+    if (!textBindings.length) return node;
+    textBindings.forEach(binding => addTarget(binding.sourceNodeId, node.id));
+    return {
+      ...node,
+      metadata: {
+        ...node.metadata,
+        operation: {
+          ...record,
+          recipe: {
+            ...record.recipe,
+            inputBindings: bindings.filter(binding => binding.role !== 'prompt_context'),
+          },
+        },
+      },
+    };
+  });
+  // 备注是叶子：移除所有进入/离开备注的连线，但记录旧下游目标供一次性合并。
+  const migratedConnections = connections.filter(connection => {
+    if (typeById.get(connection.fromNodeId) === 'text') {
+      addTarget(connection.fromNodeId, connection.toNodeId);
+      return false;
+    }
+    return typeById.get(connection.toNodeId) !== 'text';
+  });
+  return {
+    nodes: migratedNodes.map(node => {
+      if (node.type !== 'text') return node;
+      const targets = targetsByNote.get(node.id);
+      if (!targets?.length) return node;
+      return {
+        ...node,
+        metadata: {
+          ...node.metadata,
+          noteMergeTargetIds: [...new Set([...(node.metadata.noteMergeTargetIds || []), ...targets])],
+        },
+      };
+    }),
+    connections: migratedConnections,
+  };
 }
 
 export function migrateWorkflowProject(value: unknown, now = new Date().toISOString()): WorkflowProject {
@@ -103,12 +164,13 @@ export function migrateWorkflowProject(value: unknown, now = new Date().toISOStr
     .filter((id): id is string => typeof id === 'string' && nodeIds.has(id));
   const draftVersion = positive(value.draftVersion, positive(value.revision, 1));
   const backgroundMode = value.backgroundMode === 'lines' || value.backgroundMode === 'none' ? value.backgroundMode : 'dots';
+  const noteMigration = migrateNoteSemantics(nodes, connections);
   return {
     ...value,
     id: value.id,
     title: value.title,
-    nodes,
-    connections,
+    nodes: noteMigration.nodes,
+    connections: noteMigration.connections,
     selectedNodeIds,
     viewport: viewportOf(value.viewport),
     backgroundMode,

@@ -27,6 +27,10 @@ export interface WorkflowToolbarAction {
   active?: boolean;
   danger?: boolean;
   disabled?: boolean;
+  /** Disabled reason shown as the native tooltip; prevents silent dead buttons. */
+  hint?: string;
+  /** Optional section inside the overflow menu: local edit, provider AI, or output. */
+  group?: 'local' | 'ai' | 'output';
 }
 
 export function WorkflowToolbarActions({ actions, showLabels = false }: { actions: Array<WorkflowToolbarAction | null | false | undefined>; showLabels?: boolean }) {
@@ -34,7 +38,7 @@ export function WorkflowToolbarActions({ actions, showLabels = false }: { action
   return <>{actions.filter((action): action is WorkflowToolbarAction => Boolean(action)).map(action => action.href ? (
     <a key={action.key} className={`isl-icon-btn ${sizeClass}`} aria-label={action.label} title={action.label} href={action.href} download={action.download}>{action.icon}{showLabels && <span>{action.label}</span>}</a>
   ) : (
-    <button key={action.key} type="button" disabled={action.disabled} className={`isl-icon-btn ${sizeClass} disabled:opacity-40 ${action.active ? 'isl-icon-btn--active' : ''}`} aria-label={action.label} title={action.label} style={action.danger ? { color: 'var(--isl-coral-deep)' } : undefined} onClick={action.onClick}>{action.icon}{showLabels && <span>{action.label}</span>}</button>
+    <button key={action.key} type="button" disabled={action.disabled} className={`isl-icon-btn ${sizeClass} disabled:opacity-40 ${action.active ? 'isl-icon-btn--active' : ''}`} aria-label={action.label} title={action.hint || action.label} style={action.danger ? { color: 'var(--isl-coral-deep)' } : undefined} onClick={action.onClick}>{action.icon}{showLabels && <span>{action.label}</span>}</button>
   ))}</>;
 }
 
@@ -55,11 +59,22 @@ export function WorkflowToolbarMenu({ label, icon, actions, variant = 'icon', di
       <button type="button" disabled={disabled} className={['isl-icon-btn h-9 disabled:opacity-40', variant === 'labelled' ? 'workflow-toolbar-labelled w-auto gap-1.5 px-2.5' : variant === 'icon-chevron' ? 'w-auto gap-0.5 px-2' : 'w-9', open ? 'isl-icon-btn--active' : ''].join(' ')} aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>{icon}{variant === 'labelled' && <span>{label}</span>}{variant !== 'icon' && <ChevronDown size={12} aria-hidden />}</button>
       {open && (
         <div role="menu" className="workflow-toolbar-menu__list">
-          {actions.map(action => action.href ? (
-            <a key={action.key} role="menuitem" href={action.href} download={action.download} onClick={() => setOpen(false)}>{action.icon}<span>{action.label}</span></a>
-          ) : (
-            <button key={action.key} type="button" role="menuitem" aria-label={action.label} disabled={action.disabled} data-active={action.active ? 'true' : undefined} style={action.danger ? { color: 'var(--isl-coral-deep)' } : undefined} onClick={() => { setOpen(false); action.onClick?.(); }}>{action.icon}<span>{action.label}</span></button>
-          ))}
+          {(() => {
+            const labels: Record<NonNullable<WorkflowToolbarAction['group']>, string> = { local: '编辑', ai: 'AI 工具', output: '输出' };
+            let lastGroup: WorkflowToolbarAction['group'];
+            return actions.map(action => {
+              const heading = action.group && action.group !== lastGroup
+                ? <div key={`group-${action.group}`} role="presentation" className="workflow-toolbar-menu__group">{labels[action.group]}</div>
+                : null;
+              lastGroup = action.group;
+              const item = action.href ? (
+                <a key={action.key} role="menuitem" href={action.href} download={action.download} onClick={() => setOpen(false)}>{action.icon}<span>{action.label}</span></a>
+              ) : (
+                <button key={action.key} type="button" role="menuitem" aria-label={action.label} disabled={action.disabled} title={action.hint || action.label} data-active={action.active ? 'true' : undefined} style={action.danger ? { color: 'var(--isl-coral-deep)' } : undefined} onClick={() => { setOpen(false); action.onClick?.(); }}>{action.icon}<span>{action.label}</span></button>
+              );
+              return heading ? <React.Fragment key={action.key}>{heading}{item}</React.Fragment> : item;
+            });
+          })()}
         </div>
       )}
     </div>

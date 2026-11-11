@@ -157,8 +157,9 @@ export function validateWorkflowConnection(
   if (!toNode) return { ok: false, reason: '目标节点不存在' };
   if (fromNodeId === toNodeId) return { ok: false, reason: '不能连接节点自身' };
   if (fromNode.type === 'config' && toNode.type === 'config') return { ok: false, reason: '生成配置节点之间不能连接' };
-  if (fromNode.type === 'script' && toNode.type !== 'image' && toNode.type !== 'video' && toNode.type !== 'text') return { ok: false, reason: '脚本节点只能连向图片、视频或文本节点' };
-  if (toNode.type === 'script' && fromNode.type !== 'image' && fromNode.type !== 'video' && fromNode.type !== 'text') return { ok: false, reason: '脚本节点只能接收图片、视频或文本输入' };
+  if (fromNode.type === 'text' || toNode.type === 'text') return { ok: false, reason: '备注是独立便签，不参与生成；请把内容写入目标节点的提示词' };
+  if (fromNode.type === 'script' && toNode.type !== 'image' && toNode.type !== 'video') return { ok: false, reason: '脚本节点只能连向图片或视频节点' };
+  if (toNode.type === 'script' && fromNode.type !== 'image' && fromNode.type !== 'video') return { ok: false, reason: '脚本节点只能接收图片或视频输入' };
   if (snapshot.connections.some(connection => connection.fromNodeId === fromNodeId && connection.toNodeId === toNodeId)) {
     return { ok: false, reason: '节点之间已存在连接' };
   }

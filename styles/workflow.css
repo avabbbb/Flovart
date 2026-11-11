@@ -112,6 +112,45 @@
 .workflow-image-tool__preview,.workflow-image-tool__mask { position:relative;display:grid;place-items:center;min-height:360px;overflow:hidden;border:1px solid var(--wf-border);border-radius:10px;background:#101318; }
 .workflow-image-tool__preview img,.workflow-image-tool__mask img { display:block;max-width:100%;max-height:520px;object-fit:contain; }
 .workflow-image-tool__crop { position:absolute;border:2px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,.55);pointer-events:none; }
+.workflow-crop-stage { position:relative; display:inline-block; max-width:100%; justify-self:center; align-self:center; }
+.workflow-crop-stage img { display:block; max-width:100%; max-height:520px; user-select:none; }
+.workflow-crop-selection { position:absolute; box-sizing:border-box; border:1px solid rgba(255,255,255,.95); box-shadow:0 0 0 9999px rgba(0,0,0,.55); cursor:move; touch-action:none; }
+.workflow-crop-thirds { position:absolute; pointer-events:none; background:rgba(255,255,255,.42); }
+.workflow-crop-thirds--v1,.workflow-crop-thirds--v2 { top:0; bottom:0; width:1px; }
+.workflow-crop-thirds--v1 { left:33.333%; }
+.workflow-crop-thirds--v2 { left:66.666%; }
+.workflow-crop-thirds--h1,.workflow-crop-thirds--h2 { left:0; right:0; height:1px; }
+.workflow-crop-thirds--h1 { top:33.333%; }
+.workflow-crop-thirds--h2 { top:66.666%; }
+.workflow-crop-handle { position:absolute; width:11px; height:11px; border:1px solid rgba(0,0,0,.55); border-radius:2px; background:#fff; }
+.workflow-crop-handle--nw { left:0; top:0; transform:translate(-50%,-50%); cursor:nwse-resize; }
+.workflow-crop-handle--n { left:50%; top:0; transform:translate(-50%,-50%); cursor:ns-resize; }
+.workflow-crop-handle--ne { right:0; top:0; transform:translate(50%,-50%); cursor:nesw-resize; }
+.workflow-crop-handle--e { right:0; top:50%; transform:translate(50%,-50%); cursor:ew-resize; }
+.workflow-crop-handle--se { right:0; bottom:0; transform:translate(50%,50%); cursor:nwse-resize; }
+.workflow-crop-handle--s { left:50%; bottom:0; transform:translate(-50%,50%); cursor:ns-resize; }
+.workflow-crop-handle--sw { left:0; bottom:0; transform:translate(-50%,50%); cursor:nesw-resize; }
+.workflow-crop-handle--w { left:0; top:50%; transform:translate(-50%,-50%); cursor:ew-resize; }
+.workflow-crop-ratios { display:flex; flex-wrap:wrap; gap:6px; }
+.workflow-crop-ratios button { padding:5px 9px; border:1px solid var(--wf-border); border-radius:6px; color:var(--wf-text); background:transparent; font-size:12px; cursor:pointer; }
+.workflow-crop-ratios button:hover { border-color:var(--wf-accent); }
+.workflow-crop-ratios button.is-active { color:#08110f; border-color:var(--wf-accent); background:var(--wf-accent); }
+.workflow-crop-numbers { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.workflow-crop-numbers label { display:grid; gap:5px; color:var(--wf-muted); font-size:12px; }
+.workflow-crop-actions { display:flex; gap:8px; justify-content:flex-end; }
+.workflow-video-tool { display:flex; flex-direction:column; gap:12px; }
+.workflow-video-preview { position:relative; display:grid; place-items:center; min-height:240px; overflow:hidden; border:1px solid var(--wf-border); border-radius:12px; background:radial-gradient(120% 90% at 30% 0%,color-mix(in srgb,var(--wf-accent) 8%,transparent),transparent 60%),#0d1014; }
+.workflow-video-preview video { display:block; max-width:100%; max-height:380px; }
+.workflow-video-play { position:absolute; left:12px; bottom:12px; padding:5px 10px; border:1px solid color-mix(in srgb,var(--wf-border) 70%,transparent); border-radius:7px; color:var(--wf-text); background:color-mix(in srgb,var(--wf-panel) 78%,transparent); backdrop-filter:blur(10px); font-size:12px; cursor:pointer; }
+.workflow-video-timecode { position:absolute; right:12px; bottom:12px; padding:4px 8px; border-radius:6px; color:var(--wf-text); background:color-mix(in srgb,var(--wf-panel) 78%,transparent); backdrop-filter:blur(10px); font-size:12px; font-variant-numeric:tabular-nums; }
+.workflow-video-timeline { display:flex; flex-direction:column; gap:4px; padding:12px 14px; border:1px solid var(--wf-border); border-radius:12px; background:color-mix(in srgb,var(--wf-panel) 92%,transparent); }
+.workflow-video-timeline__header { display:flex; justify-content:space-between; gap:12px; color:var(--wf-muted); font-size:12px; }
+.workflow-video-controls { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.workflow-video-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+.workflow-video-fields label { display:grid; gap:5px; color:var(--wf-muted); font-size:12px; }
+.workflow-video-fields input { box-sizing:border-box; width:100%; padding:6px 8px; border:1px solid var(--wf-border); border-radius:7px; color:var(--wf-text); background:color-mix(in srgb,var(--wf-strong) 82%,transparent); font:inherit; }
+.workflow-video-actions { display:flex; justify-content:flex-end; }
+.workflow-toolbar-menu__group { padding:7px 10px 3px; color:var(--isl-ink-soft,var(--wf-muted)); font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; }
 .workflow-image-tool__controls { display:flex;flex-direction:column;gap:16px;min-width:0; }
 .workflow-image-tool__controls label { display:flex;flex-direction:column;gap:7px;color:var(--wf-text);font-size:13px;font-weight:600; }
 .workflow-image-tool__error { padding:8px 10px;border-radius:7px;color:#ef4444;background:rgba(239,68,68,.1);font-size:12px; }
@@ -721,8 +760,11 @@ textarea.agent-ask__control { resize: vertical; min-height: 56px; }
 @media (max-width: 640px) { .workflow-quick-toggles { display: none; } }
 
 /* LibTV 式分组框 */
-.workflow-group-frame { position: absolute; z-index: 0; border: 1px solid hsl(var(--group-hue) 45% 45% / .45); border-radius: 14px; background: hsl(var(--group-hue) 40% 40% / .1); pointer-events: none; }
-.workflow-group-frame__label { position: absolute; left: 10px; top: 6px; display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 7px; color: #fff; background: hsl(var(--group-hue) 45% 34% / .92); font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: auto; cursor: grab; user-select: none; }
+.workflow-group-frame { position: absolute; z-index: 0; border: 1px solid rgba(148, 152, 160, .32); border-radius: 14px; background: rgba(128, 132, 140, .09); pointer-events: auto; cursor: grab; backdrop-filter: blur(2px); }
+.workflow-group-frame:hover { background: rgba(128, 132, 140, .14); border-color: rgba(170, 174, 182, .42); }
+.workflow-group-frame:active { cursor: grabbing; }
+.workflow-group-frame__label { position: absolute; left: 10px; top: 6px; display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border: 1px solid rgba(170, 174, 182, .24); border-radius: 7px; color: var(--wf-text); background: rgba(118, 122, 130, .28); backdrop-filter: blur(10px); font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: auto; cursor: grab; user-select: none; }
+.workflow-group-frame__label:hover { background: rgba(138, 142, 150, .38); }
 .workflow-group-frame__label:active { cursor: grabbing; }
 
 /* 子画布框（逆向工程 → Canvas） */

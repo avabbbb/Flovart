@@ -30,8 +30,8 @@ const RUNTIME_COMMANDS = new Set([
   'task.get', 'task.cancel', 'workflow.projection.get',
 ]);
 const RUNTIME_CONFIRM_COMMANDS = new Set(['production.approve', 'production.run', 'task.cancel']);
-const READ_COMMANDS = new Set(['runtime.status', 'status', 'provider.status', 'asset.list', 'workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'command.list', 'command.schema']);
-const WORKFLOW_READ_COMMANDS = new Set(['workflow.project.list', 'workflow.inspect', 'workflow.selection.get']);
+const READ_COMMANDS = new Set(['runtime.status', 'status', 'provider.status', 'asset.list', 'workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.focus.nodes', 'command.list', 'command.schema']);
+const WORKFLOW_READ_COMMANDS = new Set(['workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.focus.nodes']);
 const REQUEST_TIMEOUT_MS = 45_000;
 
 export function redactWorkflowAgentSnapshot<T>(snapshot: T): T {

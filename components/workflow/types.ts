@@ -262,6 +262,10 @@ export interface SeedanceReferences {
 export interface WorkflowNodeMetadata {
   content?: string;
   prompt?: string;
+  /** 旧文本提示词节点迁移后保留的下游目标；仅用于一次性“并入下游提示词”。 */
+  noteMergeTargetIds?: string[];
+  /** 由备注“生成资产”派生的图片节点回指源备注，便于重新生成时错位。 */
+  assetSourceNoteId?: string;
   richTextDocument?: WorkflowRichPromptDocument;
   /** 节点来源类型。'assetLibrary' = 素材库引用节点；'localFolder' = 本地文件夹直读引用，保存原文件而非副本。 */
   sourceType?: 'assetLibrary' | 'localFolder';

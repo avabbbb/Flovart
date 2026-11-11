@@ -24,6 +24,7 @@ export const COMMAND_ALIASES = {
   flovart_workflow_disconnect: 'workflow.disconnect',
   flovart_workflow_select: 'workflow.select',
   flovart_workflow_viewport_set: 'workflow.viewport.set',
+  flovart_workflow_focus_nodes: 'workflow.focus.nodes',
   flovart_workflow_node_run: 'workflow.node.run',
   flovart_workflow_node_stop: 'workflow.node.stop',
   gen: 'generate.image',

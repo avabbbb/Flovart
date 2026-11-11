@@ -1,8 +1,8 @@
 import { Button, ConfigProvider, InputNumber, Modal, Slider, theme as antdTheme } from 'antd';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useResolvedTheme } from '../../hooks/useResolvedTheme';
 import type { WorkflowNode } from './types';
-import { getVideoDuration } from '../../services/videoTools';
+import { probeVideoMetadata } from '../../services/videoTools';
 import { isFFmpegSupported } from '../../services/ffmpegClient';
 
 export type WorkflowVideoToolKind = 'trim' | 'av-split' | 'merge' | 'extract-frame';
@@ -59,53 +59,178 @@ function DialogError({ error }: { error: string | null }) {
   return error ? <div role="alert" className="workflow-image-tool__error">{error}</div> : null;
 }
 
+function timecode(frame: number, fps: number): string {
+  const safeFps = Math.max(1, Math.round(fps));
+  const totalSeconds = Math.max(0, Math.floor(frame / safeFps));
+  const frames = Math.max(0, Math.round(frame)) % safeFps;
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return [hours, minutes, seconds].map(value => String(value).padStart(2, '0')).join(':') + ':' + String(frames).padStart(2, '0');
+}
+
+/** 以帧为主轴：拖动进度条时主动 seek 视频元素，画面必须跟着走，而不是只改数字。 */
+function useVideoTimeline(mediaUrl: string) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [duration, setDuration] = useState(0);
+  const [fps, setFpsState] = useState(30);
+  const [fpsEstimated, setFpsEstimated] = useState(true);
+  const [frame, setFrame] = useState(0);
+  const [ready, setReady] = useState(false);
+  const [metaFailed, setMetaFailed] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const totalFrames = Math.max(0, Math.round(duration * fps));
+  const seek = useCallback((nextFrame: number) => {
+    const clamped = Math.max(0, Math.min(totalFrames, Math.round(nextFrame)));
+    const video = videoRef.current;
+    if (video) {
+      video.pause();
+      const nextTime = clamped / Math.max(fps, .001);
+      if (Math.abs(video.currentTime - nextTime) > 0.001) video.currentTime = nextTime;
+    }
+    setFrame(clamped);
+  }, [fps, totalFrames]);
+  const togglePlay = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) void video.play().catch(() => undefined);
+    else video.pause();
+  }, []);
+  const setFps = useCallback((nextFps: number) => {
+    const safe = Math.max(1, Math.min(120, Number.isFinite(nextFps) ? nextFps : 30));
+    const currentSeconds = frame / Math.max(fps, .001);
+    setFpsState(safe);
+    const nextFrame = Math.round(currentSeconds * safe);
+    setFrame(nextFrame);
+    const video = videoRef.current;
+    if (video) video.currentTime = nextFrame / safe;
+  }, [fps, frame]);
+  useEffect(() => {
+    let cancelled = false;
+    setReady(false);
+    setMetaFailed(false);
+    setDuration(0);
+    setFrame(0);
+    void probeVideoMetadata(mediaUrl).then(meta => {
+      if (cancelled) return;
+      setDuration(meta.duration);
+      setFpsState(meta.fps);
+      setFpsEstimated(meta.fpsEstimated);
+      setReady(meta.duration > 0);
+      setMetaFailed(meta.duration <= 0);
+    }).catch(() => {
+      if (!cancelled) { setMetaFailed(true); setReady(false); }
+    });
+    return () => { cancelled = true; };
+  }, [mediaUrl]);
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const sync = () => { if (!video.paused) setFrame(Math.min(totalFrames, Math.round(video.currentTime * fps))); };
+    const onPlay = () => setPlaying(true);
+    const onPause = () => {
+      setPlaying(false);
+      setFrame(Math.min(totalFrames, Math.round(video.currentTime * fps)));
+    };
+    video.addEventListener('timeupdate', sync);
+    video.addEventListener('play', onPlay);
+    video.addEventListener('pause', onPause);
+    return () => {
+      video.removeEventListener('timeupdate', sync);
+      video.removeEventListener('play', onPlay);
+      video.removeEventListener('pause', onPause);
+    };
+  }, [fps, totalFrames]);
+  return { videoRef, duration, fps, fpsEstimated, frame, totalFrames, ready, metaFailed, playing, seek, togglePlay, setFps };
+}
+
 function FFmpegStatus() {
   if (!isFFmpegSupported()) return <p className="workflow-image-tool__error">当前浏览器不支持 WebAssembly，无法使用视频工具。</p>;
   return null;
 }
 
 function TrimDialog(props: CommonProps & { onConfirm: (startSec: number, endSec: number) => void }) {
-  const [duration, setDuration] = useState(0);
-  const [metaFailed, setMetaFailed] = useState(false);
-  const [start, setStart] = useState(0);
-  const [end, setEnd] = useState(0);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-
+  const timeline = useVideoTimeline(props.mediaUrl);
+  const { videoRef, duration, fps, fpsEstimated, frame, totalFrames, ready, metaFailed, playing, seek, togglePlay, setFps } = timeline;
+  const [startFrame, setStartFrame] = useState(0);
+  const [endFrame, setEndFrame] = useState(0);
+  const [fallbackStart, setFallbackStart] = useState(0);
+  const [fallbackEnd, setFallbackEnd] = useState(0);
+  const initializedFor = useRef('');
   useEffect(() => {
-    let cancelled = false;
-    void getVideoDuration(new Blob([''])).catch(() => {});
-    setMetaFailed(false);
-    const video = document.createElement('video');
-    video.preload = 'metadata';
-    video.onloadedmetadata = () => {
-      if (cancelled) return;
-      const d = Number.isFinite(video.duration) ? video.duration : 0;
-      if (d <= 0) { setMetaFailed(true); return; }
-      setDuration(d);
-      setEnd(d);
-    };
-    // 元数据读不到时不能让 duration 停在 0 导致按钮永久禁用：改为手动输入秒数。
-    video.onerror = () => { if (!cancelled) setMetaFailed(true); };
-    video.src = props.mediaUrl;
-    return () => { cancelled = true; video.onloadedmetadata = null; video.onerror = null; };
-  }, [props.mediaUrl]);
-
-  return <Modal {...modalProps(props, 720)} title="视频剪辑">
-    <div className="workflow-image-tool__simple" data-workflow-overlay>
-      <div className="workflow-image-tool__preview"><video ref={videoRef} src={props.mediaUrl} controls style={{ maxWidth: '100%', maxHeight: 320 }} /></div>
-      <div className="workflow-image-tool__controls">
-        <FFmpegStatus />
-        {metaFailed ? <>
-          <p className="workflow-image-tool__hint">无法读取视频时长，请手动输入开始和结束秒数。</p>
-          <label>开始时间（秒）<InputNumber min={0} step={0.1} value={start} onChange={v => setStart(typeof v === 'number' ? v : 0)} /></label>
-          <label>结束时间（秒）<InputNumber min={0} step={0.1} value={end} onChange={v => setEnd(typeof v === 'number' ? v : 0)} /></label>
-        </> : <>
-          <label>开始时间<Slider min={0} max={Math.floor(duration)} value={start} onChange={v => { setStart(v); if (v >= end) setEnd(Math.min(v + 1, duration)); }} /></label>
-          <label>结束时间<Slider min={0} max={Math.floor(duration)} value={end} onChange={setEnd} /></label>
-        </>}
-        <p className="workflow-image-tool__hint">裁取 {start.toFixed(1)}s – {end.toFixed(1)}s（时长 {(end - start).toFixed(1)}s），使用 stream copy 无需重编码。</p>
-        <DialogError error={props.error} />
-        <Button type="primary" loading={props.busy} disabled={start >= end || !isFFmpegSupported()} onClick={() => props.onConfirm(start, end)}>裁取片段</Button>
+    if (!ready || !totalFrames || initializedFor.current === props.mediaUrl) return;
+    initializedFor.current = props.mediaUrl;
+    setStartFrame(0);
+    setEndFrame(totalFrames);
+    seek(0);
+  }, [ready, totalFrames, props.mediaUrl, seek]);
+  const changeFps = (next: number | null) => {
+    if (next === null) return;
+    const previous = fps;
+    const ratio = next / Math.max(previous, .001);
+    setStartFrame(Math.max(0, Math.round(startFrame * ratio)));
+    setEndFrame(Math.max(1, Math.round(endFrame * ratio)));
+    setFps(next);
+  };
+  const fallback = metaFailed;
+  return <Modal {...modalProps(props, 860)} title="视频剪辑">
+    <div className="workflow-video-tool" data-workflow-overlay>
+      <div className="workflow-video-preview" onClick={togglePlay}>
+        <video ref={videoRef} src={props.mediaUrl} preload="auto" playsInline onClick={event => { event.stopPropagation(); togglePlay(); }} />
+        <button type="button" className="workflow-video-play" onClick={event => { event.stopPropagation(); togglePlay(); }}>{playing ? '暂停' : '播放'}</button>
+        <span className="workflow-video-timecode">{timecode(frame, fps)} / {timecode(totalFrames, fps)}</span>
+      </div>
+      <FFmpegStatus />
+      {fallback ? <>
+        <p className="workflow-image-tool__hint">无法读取视频时长，请手动输入开始和结束秒数。</p>
+        <div className="workflow-video-fields">
+          <label>开始时间（秒）<InputNumber min={0} step={0.1} value={fallbackStart} onChange={value => setFallbackStart(typeof value === 'number' ? value : 0)} /></label>
+          <label>结束时间（秒）<InputNumber min={0} step={0.1} value={fallbackEnd} onChange={value => setFallbackEnd(typeof value === 'number' ? value : 0)} /></label>
+        </div>
+      </> : <>
+        <div className="workflow-video-timeline">
+          <div className="workflow-video-timeline__header"><span>入点 / 出点</span><span>{duration.toFixed(2)}s · {fpsEstimated ? '估算' : ''} {fps.toFixed(2)} fps</span></div>
+          <Slider
+            range
+            min={0}
+            max={Math.max(1, totalFrames)}
+            value={[Math.min(startFrame, endFrame), Math.max(startFrame, endFrame)]}
+            disabled={!ready}
+            tooltip={{ formatter: value => timecode(Number(value), fps) }}
+            onChange={value => {
+              const [start, end] = Array.isArray(value) ? value : [value, value];
+              setStartFrame(Math.min(start, Math.max(0, end - 1)));
+              setEndFrame(Math.max(end, start + 1));
+            }}
+          />
+          <Slider
+            min={0}
+            max={Math.max(1, totalFrames)}
+            value={frame}
+            disabled={!ready}
+            tooltip={{ formatter: value => timecode(Number(value), fps) }}
+            onChange={value => seek(Number(value))}
+          />
+          <div className="workflow-video-controls">
+            <Button size="small" onClick={() => seek(frame - 1)} disabled={!ready}>−1 帧</Button>
+            <Button size="small" onClick={() => seek(frame - Math.round(fps))} disabled={!ready}>−1 秒</Button>
+            <Button size="small" onClick={togglePlay} disabled={!ready}>{playing ? '暂停' : '播放'}</Button>
+            <Button size="small" onClick={() => seek(frame + Math.round(fps))} disabled={!ready}>+1 秒</Button>
+            <Button size="small" onClick={() => seek(frame + 1)} disabled={!ready}>+1 帧</Button>
+            <Button size="small" onClick={() => setStartFrame(Math.max(0, Math.min(frame, endFrame - 1)))} disabled={!ready}>设为入点</Button>
+            <Button size="small" onClick={() => setEndFrame(Math.max(frame, startFrame + 1))} disabled={!ready}>设为出点</Button>
+          </div>
+        </div>
+        <div className="workflow-video-fields">
+          <label>入点帧<input type="number" min={0} max={Math.max(0, totalFrames - 1)} value={startFrame} disabled={!ready} onChange={event => setStartFrame(Math.max(0, Math.min(Number(event.target.value) || 0, endFrame - 1)))} /></label>
+          <label>出点帧<input type="number" min={1} max={totalFrames} value={endFrame} disabled={!ready} onChange={event => setEndFrame(Math.max(startFrame + 1, Math.min(Number(event.target.value) || 0, totalFrames)))} /></label>
+          <label>帧率<input type="number" min={1} max={120} step={0.01} value={Number(fps.toFixed(2))} disabled={!ready} onChange={event => changeFps(Number(event.target.value))} /></label>
+        </div>
+      </>}
+      <p className="workflow-image-tool__hint">按帧重编码导出，切点落在目标帧；比无损 stream copy 慢，但不会出现关键帧错位。</p>
+      <DialogError error={props.error} />
+      <div className="workflow-video-actions">
+        <Button type="primary" loading={props.busy} disabled={fallback ? fallbackStart >= fallbackEnd || !isFFmpegSupported() : startFrame >= endFrame || !ready || !isFFmpegSupported()} onClick={() => props.onConfirm(fallback ? fallbackStart : startFrame / fps, fallback ? fallbackEnd : endFrame / fps)}>裁取片段</Button>
       </div>
     </div>
   </Modal>;
@@ -113,59 +238,66 @@ function TrimDialog(props: CommonProps & { onConfirm: (startSec: number, endSec:
 
 function SimpleVideoDialog(props: CommonProps & { title: string; description: string; action: string; onConfirm: () => void }) {
   return <Modal {...modalProps(props)} title={props.title}>
-    <div className="workflow-image-tool__simple" data-workflow-overlay>
-      <div className="workflow-image-tool__preview"><video src={props.mediaUrl} controls style={{ maxWidth: '100%', maxHeight: 240 }} /></div>
+    <div className="workflow-video-tool" data-workflow-overlay>
+      <div className="workflow-video-preview"><video src={props.mediaUrl} controls playsInline /></div>
       <FFmpegStatus />
-      <p>{props.description}</p>
+      <p className="workflow-image-tool__hint">{props.description}</p>
       <DialogError error={props.error} />
-      <Button type="primary" loading={props.busy} disabled={!isFFmpegSupported()} onClick={props.onConfirm}>{props.action}</Button>
+      <div className="workflow-video-actions">
+        <Button type="primary" loading={props.busy} disabled={!isFFmpegSupported()} onClick={props.onConfirm}>{props.action}</Button>
+      </div>
     </div>
   </Modal>;
 }
 
 function ExtractFrameDialog(props: CommonProps & { onConfirm: (currentTimeSec: number) => void }) {
-  const [duration, setDuration] = useState(0);
-  const [timeSec, setTimeSec] = useState(0);
-  const [loaded, setLoaded] = useState(false);
-  const [metaFailed, setMetaFailed] = useState(false);
-
+  const timeline = useVideoTimeline(props.mediaUrl);
+  const { videoRef, fps, fpsEstimated, frame, totalFrames, ready, metaFailed, playing, seek, togglePlay, setFps } = timeline;
+  const [fallbackSec, setFallbackSec] = useState(0);
+  const initializedFor = useRef('');
   useEffect(() => {
-    let cancelled = false;
-    setLoaded(false);
-    setMetaFailed(false);
-    const fail = () => {
-      if (cancelled) return;
-      setMetaFailed(true);
-      setLoaded(true);
-    };
-    const video = document.createElement('video');
-    video.preload = 'metadata';
-    video.onloadedmetadata = () => {
-      if (cancelled) return;
-      const d = Number.isFinite(video.duration) ? video.duration : 0;
-      if (d <= 0) { fail(); return; }
-      setDuration(d);
-      setTimeSec(d > 1 ? Math.floor(d / 2) : 0);
-      setLoaded(true);
-    };
-    video.onerror = fail;
-    video.src = props.mediaUrl;
-    return () => { cancelled = true; video.onloadedmetadata = null; video.onerror = null; };
-  }, [props.mediaUrl]);
-
-  return <Modal {...modalProps(props, 720)} title="提取指定帧">
-    <div className="workflow-image-tool__simple" data-workflow-overlay>
-      <div className="workflow-image-tool__preview"><video src={props.mediaUrl} controls style={{ maxWidth: '100%', maxHeight: 320 }} /></div>
+    if (!ready || !totalFrames || initializedFor.current === props.mediaUrl) return;
+    initializedFor.current = props.mediaUrl;
+    seek(Math.floor(totalFrames / 2));
+  }, [ready, totalFrames, props.mediaUrl, seek]);
+  return <Modal {...modalProps(props, 860)} title="提取指定帧">
+    <div className="workflow-video-tool" data-workflow-overlay>
+      <div className="workflow-video-preview" onClick={togglePlay}>
+        <video ref={videoRef} src={props.mediaUrl} preload="auto" playsInline onClick={event => { event.stopPropagation(); togglePlay(); }} />
+        <button type="button" className="workflow-video-play" onClick={event => { event.stopPropagation(); togglePlay(); }}>{playing ? '暂停' : '播放'}</button>
+        <span className="workflow-video-timecode">第 {frame} 帧 · {timecode(frame, fps)}</span>
+      </div>
       <FFmpegStatus />
-      <div className="workflow-image-tool__controls">
-        {metaFailed
-          ? <label>无法读取视频时长，请手动输入时间点（秒）<InputNumber min={0} step={0.1} value={timeSec} onChange={v => setTimeSec(typeof v === 'number' ? v : 0)} /></label>
-          : <label>选择时间点{loaded ? '（' + timeSec.toFixed(1) + 's / ' + duration.toFixed(1) + 's）' : '（读取时长中…）'}
-            <Slider min={0} max={Math.max(0, Math.floor(duration))} value={Math.min(timeSec, Math.max(0, Math.floor(duration)))} onChange={v => setTimeSec(v)} disabled={!loaded} />
-          </label>}
-        <p className="workflow-image-tool__hint">拖动滑块选择要提取的时间点，也可以先在预览播放器暂停到目标画面再看滑块位置。</p>
-        <DialogError error={props.error} />
-        <Button type="primary" loading={props.busy} disabled={!isFFmpegSupported() || !loaded} onClick={() => props.onConfirm(timeSec)}>提取此帧</Button>
+      {metaFailed ? <div className="workflow-video-fields">
+        <label>无法读取时长，手动输入时间点（秒）<InputNumber min={0} step={0.1} value={fallbackSec} onChange={value => setFallbackSec(typeof value === 'number' ? value : 0)} /></label>
+      </div> : <>
+        <div className="workflow-video-timeline">
+          <div className="workflow-video-timeline__header"><span>拖动到目标帧，画面会同步跳转</span><span>{fpsEstimated ? '估算' : ''} {fps.toFixed(2)} fps</span></div>
+          <Slider
+            min={0}
+            max={Math.max(1, totalFrames)}
+            value={frame}
+            disabled={!ready}
+            tooltip={{ formatter: value => timecode(Number(value), fps) }}
+            onChange={value => seek(Number(value))}
+          />
+          <div className="workflow-video-controls">
+            <Button size="small" onClick={() => seek(frame - 1)} disabled={!ready}>−1 帧</Button>
+            <Button size="small" onClick={() => seek(frame - Math.round(fps))} disabled={!ready}>−1 秒</Button>
+            <Button size="small" onClick={togglePlay} disabled={!ready}>{playing ? '暂停' : '播放'}</Button>
+            <Button size="small" onClick={() => seek(frame + Math.round(fps))} disabled={!ready}>+1 秒</Button>
+            <Button size="small" onClick={() => seek(frame + 1)} disabled={!ready}>+1 帧</Button>
+          </div>
+        </div>
+        <div className="workflow-video-fields">
+          <label>目标帧<input type="number" min={0} max={Math.max(0, totalFrames)} value={frame} disabled={!ready} onChange={event => seek(Number(event.target.value) || 0)} /></label>
+          <label>帧率<input type="number" min={1} max={120} step={0.01} value={Number(fps.toFixed(2))} disabled={!ready} onChange={event => { const next = Number(event.target.value); if (Number.isFinite(next)) setFps(next); }} /></label>
+          <label>时间码<span className="workflow-video-timecode">{timecode(frame, fps)}</span></label>
+        </div>
+      </>}
+      <DialogError error={props.error} />
+      <div className="workflow-video-actions">
+        <Button type="primary" loading={props.busy} disabled={!isFFmpegSupported() || (metaFailed ? fallbackSec < 0 : !ready)} onClick={() => props.onConfirm(metaFailed ? fallbackSec : frame / fps)}>提取此帧</Button>
       </div>
     </div>
   </Modal>;

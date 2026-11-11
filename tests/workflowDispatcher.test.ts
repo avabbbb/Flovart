@@ -142,6 +142,53 @@ describe('workflow dispatcher', () => {
     expect(project.draftChangeSets).toEqual([]);
   });
 
+  it('inspects a light graph or one node without leaking media', async () => {
+    const { dispatch } = setup();
+    const summary = await dispatch({ id: 'summary', command: 'workflow.inspect', args: { summary: true }, source: 'agent' });
+    expect(summary.ok).toBe(true);
+    expect(summary.result).toMatchObject({
+      nodes: [expect.objectContaining({ id: 'image-1', type: 'image', title: '图片' })],
+      connectionCount: 0,
+    });
+    expect(JSON.stringify(summary.result)).not.toContain('base64,SECRET');
+
+    const node = await dispatch({ id: 'node', command: 'workflow.inspect', args: { nodeId: 'image-1' }, source: 'agent' });
+    expect(node.result).toMatchObject({
+      node: expect.objectContaining({ id: 'image-1' }),
+      inbound: [],
+      outbound: [],
+    });
+    expect(JSON.stringify(node.result)).not.toContain('base64,SECRET');
+    expect(JSON.stringify(node.result)).not.toContain('private-key');
+  });
+
+  it('dry-runs workflow.apply without mutating the project', async () => {
+    const { dispatch, dependencies } = setup();
+    const project = dependencies.getState().projects[0];
+    const result = await dispatch({
+      id: 'dry-run', command: 'workflow.apply', source: 'agent',
+      args: {
+        projectId: project.id, expectedRevision: 1, mutationId: 'dry-run-1', dryRun: true,
+        operations: [{ type: 'add_node', node: createWorkflowNode('preview-1', 'image', { x: 0, y: 320 }) }],
+      },
+    });
+    expect(result.ok).toBe(true);
+    expect(result.result).toMatchObject({ dryRun: true, applied: false, nodeIds: ['preview-1'], draftVersion: 1 });
+    expect(dependencies.getState().projects[0].nodes).toHaveLength(1);
+    expect(dependencies.getState().projects[0].draftVersion).toBe(1);
+    expect(dependencies.getState().projects[0].draftChangeSets).toEqual([]);
+  });
+
+  it('focuses nodes without changing the document revision', async () => {
+    const { dispatch, dependencies } = setup();
+    const result = await dispatch({ id: 'focus', command: 'workflow.focus.nodes', args: { nodeIds: ['image-1'], width: 1000, height: 700 }, source: 'agent' });
+    expect(result.ok).toBe(true);
+    const project = dependencies.getState().projects[0];
+    expect(project.viewport.k).toBeGreaterThan(0);
+    expect(project.draftVersion).toBe(1);
+    expect(project.draftChangeSets).toEqual([]);
+  });
+
   it('publishes workflow.apply as one atomic revisioned batch', async () => {
     const { dispatch, dependencies } = setup();
     const project = dependencies.getState().projects[0];
@@ -154,9 +201,8 @@ describe('workflow dispatcher', () => {
         expectedRevision: 1,
         mutationId: 'apply-batch-1',
         operations: [
-          { type: 'add_node', node: createWorkflowNode('script-1', 'text', { x: 0, y: 320 }) },
           { type: 'add_node', node: createWorkflowNode('shot-1', 'image', { x: 420, y: 320 }) },
-          { type: 'connect_nodes', id: 'edge-1', fromNodeId: 'script-1', toNodeId: 'shot-1' },
+          { type: 'connect_nodes', id: 'edge-1', fromNodeId: 'image-1', toNodeId: 'shot-1' },
         ],
       },
     });
@@ -275,7 +321,7 @@ describe('workflow dispatcher', () => {
     const { dispatch, dependencies } = setup();
     const audio = await dispatch({ id: 'audio', command: 'workflow.node.create', args: { type: 'audio', confirmed: true }, source: 'agent' });
     expect(audio.ok).toBe(true);
-    const connected = await dispatch({ id: 'connected', command: 'workflow.node.create-connected', args: { type: 'text', fromNodeId: 'image-1', confirmed: true }, source: 'operator' });
+    const connected = await dispatch({ id: 'connected', command: 'workflow.node.create-connected', args: { type: 'image', fromNodeId: 'image-1', confirmed: true }, source: 'operator' });
     expect(connected.ok).toBe(true);
     expect(dependencies.getState().projects[0].connections).toHaveLength(1);
   });

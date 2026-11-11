@@ -32,7 +32,7 @@ describe('workflow node resource contract', () => {
 
     expect(getWorkflowNodeDefinition(node.type).output(node)).toEqual([{
       resourceId: 'text-a:output:0',
-      title: '文本',
+      title: '备注',
       kind: 'text',
       locator: { kind: 'inline-text', text: '镜头缓慢推进' },
     }]);

@@ -25,6 +25,7 @@ type WorkflowState = {
 const MCP_NAMES: Record<string, string> = {
   'workflow.inspect': 'flovart_workflow_inspect',
   'workflow.selection.get': 'flovart_workflow_selection',
+  'workflow.focus.nodes': 'flovart_workflow_focus',
   'workflow.apply': 'flovart_workflow_apply',
   'workflow.node.run': 'flovart_workflow_run',
 };

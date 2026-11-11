@@ -186,7 +186,6 @@ export const WORKFLOW_OPERATION_CAPABILITIES: Readonly<Record<WorkflowOperationC
     mediaType: 'image',
     inputRoles: [
       { role: 'reference_image', nodeTypes: ['image'], min: 0 },
-      { role: 'prompt_context', nodeTypes: ['text'], min: 0 },
     ],
     outputRoles: [{ role: 'result_image', nodeType: 'image', min: 1, max: 4 }],
     executor: 'provider-generation', confirmation: 'paid-operation-subgraph', workflow: true, table: false,

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { Bot, Camera, FileDown, FileText, Focus, Grid2X2, Hand, History, ImageDown, Keyboard, Magnet, Map, MousePointer2, Plus, Redo2, RotateCcw, Send, SlidersHorizontal, Trash2, Type, Undo2, Video, Image, Music2, Workflow, Spline, ZoomIn, ZoomOut } from 'lucide-react';
+import { Bot, Camera, FileDown, FileText, Focus, Grid2X2, Hand, History, ImageDown, Keyboard, Magnet, Map, MousePointer2, Plus, Redo2, RotateCcw, Send, SlidersHorizontal, StickyNote, Trash2, Undo2, Video, Image, Music2, Workflow, Spline, ZoomIn, ZoomOut } from 'lucide-react';
 import { Tooltip } from 'antd';
 import type React from 'react';
 import { useMemo, useRef, useState } from 'react';
@@ -17,10 +17,10 @@ const Tip: React.FC<{ title: string; children: React.ReactNode }> = ({ title, ch
   <Tooltip placement="top" title={title} mouseEnterDelay={0.4} mouseLeaveDelay={0}>{children}</Tooltip>
 );
 
-const ADD_OPTIONS: Array<{ type: WorkflowNodeType; icon: typeof Type }> = [
+const ADD_OPTIONS: Array<{ type: WorkflowNodeType; icon: typeof StickyNote }> = [
   { type: 'image', icon: Image },
   { type: 'video', icon: Video },
-  { type: 'text', icon: Type },
+  { type: 'text', icon: StickyNote },
   { type: 'script', icon: FileText },
   { type: 'audio', icon: Music2 },
 ];
@@ -36,7 +36,7 @@ const TOOLBAR_COPY = {
     delete: 'Delete node', arrange: 'Arrange canvas', selectTool: 'Switch to pan tool', panTool: 'Switch to select tool',
     agentOpen: 'Open Agent', agentClose: 'Close Agent',
     wheelPan: 'Wheel: pan', wheelZoom: 'Wheel: zoom',
-    addOption: (type: WorkflowNodeType) => ({ image: 'Image', video: 'Video', text: 'Text', script: 'Script', audio: 'Audio', config: 'Generation settings' }[type] || type),
+    addOption: (type: WorkflowNodeType) => ({ image: 'Image', video: 'Video', text: 'Note', script: 'Script', audio: 'Audio', config: 'Generation settings' }[type] || type),
     zoomPercent: (value: number) => `${value}%`,
     revision: (value: number) => `rev ${value}`, revisionHint: 'Draft revision. Every saved change by you or an Agent advances it.',
     rerunStale: (count: number) => `Rerun ${count} stale`, rerunStaleHint: 'Runs only out-of-date nodes, upstream first. Up-to-date results are reused.',
@@ -57,7 +57,7 @@ const TOOLBAR_COPY = {
     delete: '删除节点', arrange: '整理画布', selectTool: '切换为平移工具', panTool: '切换为选择工具',
     agentOpen: '打开 Agent', agentClose: '收起 Agent',
     wheelPan: '滚轮：平移', wheelZoom: '滚轮：缩放',
-    addOption: (type: WorkflowNodeType) => ({ image: '图片', video: '视频', text: '文本', script: '脚本', audio: '音频', config: '配置' }[type] || type),
+    addOption: (type: WorkflowNodeType) => ({ image: '图片', video: '视频', text: '备注', script: '脚本', audio: '音频', config: '配置' }[type] || type),
     zoomPercent: (value: number) => `${value}%`,
     revision: (value: number) => `rev ${value}`, revisionHint: '草稿修订号。你或 Agent 每次保存修改都会推进它。',
     rerunStale: (count: number) => `重跑 ${count} 个过期节点`, rerunStaleHint: '只运行过期的节点，上游先跑；未过期的结果直接复用。',

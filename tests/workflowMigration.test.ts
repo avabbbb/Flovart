@@ -96,6 +96,32 @@ describe('workflow persistence migrations', () => {
     });
   });
 
+  it('migrates legacy prompt text nodes into isolated notes with merge targets', async () => {
+    const project = {
+      ...legacyProject,
+      id: 'legacy-note',
+      nodes: [
+        { ...legacyProject.nodes[0], id: 'note-a', type: 'text', title: '旧提示词', metadata: { content: '镜头缓慢推进' } },
+        { ...legacyProject.nodes[0], id: 'video-a', type: 'video', title: '视频', metadata: { prompt: '已有提示词' } },
+        { ...legacyProject.nodes[0], id: 'op-a', type: 'operation', title: '处理', metadata: {
+          operation: { capabilityId: 'image.generate@1', recipe: { inputBindings: [{ id: 'b1', sourceNodeId: 'note-a', role: 'prompt_context', order: 0 }] }, takes: [] },
+        } },
+      ],
+      connections: [
+        { id: 'note-video', fromNodeId: 'note-a', toNodeId: 'video-a', kind: 'data' },
+        { id: 'note-op', fromNodeId: 'note-a', toNodeId: 'op-a', kind: 'data' },
+      ],
+    };
+    const result = await migrateWorkflowPersistedState({ projects: [project], activeProjectId: project.id }, 2);
+    const migrated = result.projects[0];
+    expect(migrated.connections).toEqual([]);
+    expect(migrated.nodes.find(node => node.id === 'note-a')).toMatchObject({
+      metadata: { content: '镜头缓慢推进', noteMergeTargetIds: expect.arrayContaining(['video-a', 'op-a']) },
+    });
+    const operationNode = migrated.nodes.find(node => node.id === 'op-a');
+    expect(operationNode?.metadata.operation?.recipe.inputBindings).toEqual([]);
+  });
+
   it('rehydrates a legacy storage envelope through the store migration and writes the current version', async () => {
     await workflowStorage.set(WORKFLOW_STORE_KEY, { state: { projects: [legacyProject], activeProjectId: legacyProject.id }, version: 0 });
     await useWorkflowStore.persist.rehydrate();

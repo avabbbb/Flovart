@@ -73,6 +73,38 @@ function requireProject(runtime: WorkflowOperationRuntime, projectId: string): W
   return project;
 }
 
+const OPERATION_SIZE = { width: 240, height: 156 };
+const PLACEMENT_GAP = 24;
+
+function overlaps(
+  left: { x: number; y: number; width: number; height: number },
+  right: { x: number; y: number; width: number; height: number },
+  padding = 0,
+): boolean {
+  return left.x < right.x + right.width + padding
+    && left.x + left.width + padding > right.x
+    && left.y < right.y + right.height + padding
+    && left.y + left.height + padding > right.y;
+}
+
+/** 在锚点右侧找一个不与现有节点相交的位置；固定偏移只作为首选，冲突时向下外扩。 */
+function findFreePosition(
+  nodes: WorkflowNode[],
+  desired: { x: number; y: number },
+  size: { width: number; height: number },
+  padding = PLACEMENT_GAP,
+): { x: number; y: number } {
+  const occupied = nodes.filter(node => node.isVisible !== false);
+  let position = { ...desired };
+  for (let attempt = 0; attempt < 64; attempt += 1) {
+    const candidate = { ...position, ...size };
+    if (!occupied.some(node => overlaps(candidate, { x: node.position.x, y: node.position.y, width: node.width, height: node.height }, padding))) return position;
+    position = { x: position.x, y: position.y + size.height + padding };
+    if (attempt % 6 === 5) position = { x: position.x + size.width + padding, y: desired.y };
+  }
+  return position;
+}
+
 export function requireWorkflowMediaNode(
   runtime: WorkflowOperationRuntime,
   projectId: string,
@@ -167,10 +199,12 @@ export async function startWorkflowOperation(input: {
   validateSourceNodes(input.capabilityId, bindings, sourceNodes);
   const anchor = availableNodes.find(node => node.id === input.anchorNodeId) || sourceNodes.at(-1);
   if (!anchor) throw new Error('Operation 缺少布局锚点');
+  const desiredPosition = { x: anchor.position.x + anchor.width + 64, y: anchor.position.y + Math.max(0, (anchor.height - OPERATION_SIZE.height) / 2) };
+  const position = findFreePosition(availableNodes, desiredPosition, OPERATION_SIZE);
   const operation = await createWorkflowOperationNode({
     id: createId(),
     capabilityId: input.capabilityId,
-    position: { x: anchor.position.x + anchor.width + 64, y: anchor.position.y + Math.max(0, (anchor.height - 156) / 2) },
+    position,
     prompt: input.prompt || '',
     richTextDocument: input.richTextDocument,
     parameters: input.parameters,
@@ -257,14 +291,16 @@ export async function commitWorkflowOperation(
   }
 
   let outputY = latestOperation.position.y;
+  const placedOutputs: WorkflowNode[] = [];
   const outputNodes = normalized.map((output, index) => {
     const record = records[index];
     const size = fitWorkflowMediaSize(output.nodeType, record.naturalWidth, record.naturalHeight);
     const gridPositioned = Number.isInteger(output.column) || Number.isInteger(output.row);
-    const position = {
+    const desired = {
       x: latestOperation.position.x + latestOperation.width + 64 + (output.column || 0) * (size.width + 12) + (output.offsetX || 0),
       y: (gridPositioned ? latestOperation.position.y + (output.row || 0) * (size.height + 12) : outputY) + (output.offsetY || 0),
     };
+    const position = findFreePosition([...latest.nodes, ...placedOutputs], desired, size, 12);
     const node = {
       ...createWorkflowNode(started.createId(), output.nodeType, position, {
         ...record,
@@ -279,6 +315,7 @@ export async function commitWorkflowOperation(
       ...size,
       title: output.title,
     };
+    placedOutputs.push(node);
     if (!gridPositioned) outputY += size.height + 24;
     return node;
   });

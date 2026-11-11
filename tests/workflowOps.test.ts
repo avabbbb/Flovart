@@ -13,7 +13,7 @@ const snapshot = (): WorkflowSnapshot => ({
   projectId: 'project-1',
   title: 'Workflow',
   nodes: [
-    { id: 'a', type: 'text', title: 'A', position: { x: 0, y: 0 }, width: 320, height: 200, metadata: { content: 'A' } },
+    { id: 'a', type: 'image', title: 'A', position: { x: 0, y: 0 }, width: 320, height: 200, metadata: { href: 'https://example.com/a.png' } },
     { id: 'b', type: 'config', title: 'B', position: { x: 420, y: 0 }, width: 340, height: 240, metadata: {} },
     { id: 'c', type: 'image', title: 'C', position: { x: 840, y: 0 }, width: 340, height: 240, metadata: {} },
   ],
@@ -72,6 +72,11 @@ describe('applyWorkflowOps', () => {
     expect(validateWorkflowConnection(connected, 'a', 'b')).toEqual({ ok: false, reason: '节点之间已存在连接' });
     expect(validateWorkflowConnection(connected, 'c', 'a')).toEqual({ ok: false, reason: '连接会形成循环' });
     expect(validateWorkflowConnection(withSecondConfig, 'b', 'config-2')).toEqual({ ok: false, reason: '生成配置节点之间不能连接' });
+    const note = createWorkflowNode('note', 'text', { x: 0, y: 400 }, { content: '备注' });
+    expect(validateWorkflowConnection({ ...snapshot(), nodes: [...snapshot().nodes, note] }, 'note', 'b')).toEqual({
+      ok: false,
+      reason: '备注是独立便签，不参与生成；请把内容写入目标节点的提示词',
+    });
   });
 
   it('creates, connects, and selects a node atomically', () => {

@@ -11,7 +11,6 @@ import { createPromptIntent, type PromptIntent, type PromptIntentAction } from '
 import {
   filterWorkflowInputIds,
   getOrderedImageReferences,
-  getWorkflowInputNodes,
   resolveWorkflowMentionIds,
   toImageReferenceChips,
   toWorkflowMentionItems,
@@ -123,11 +122,12 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   });
   const mentionItems = toWorkflowMentionItems([
     ...getOrderedImageReferences(node, nodes, connections),
-    ...getWorkflowInputNodes(node, nodes, connections).filter(item => item.type === 'text'),
   ]);
   const keepConnectedMentions = (plainText: string, ids: string[]) => {
     const resolved = filterWorkflowInputIds(resolveWorkflowMentionIds(plainText, ids, mentionItems), node.id, connections);
-    const operationInputIds = node.metadata.operation?.recipe.inputBindings.map(binding => binding.sourceNodeId) || [];
+    const operationInputIds = node.metadata.operation?.recipe.inputBindings
+      .filter(binding => binding.role !== 'prompt_context')
+      .map(binding => binding.sourceNodeId) || [];
     return [...new Set([...operationInputIds, ...resolved])];
   };
   const allowedReferenceTypes = operationCapability

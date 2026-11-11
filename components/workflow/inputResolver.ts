@@ -423,7 +423,8 @@ export function resolveWorkflowResourceReferences(targetNode: WorkflowNode, node
     .flatMap(connection => {
       const sourceNode = nodesById.get(connection.fromNodeId);
       return sourceNode ? resolveNodeResources(sourceNode, connection).map(resource => resource.reference) : [];
-    });
+    })
+    .filter(reference => reference.kind !== 'text');
 }
 
 /**
@@ -444,7 +445,9 @@ export function resolveWorkflowInputs(
     .flatMap(connection => {
       const sourceNode = nodesById.get(connection.fromNodeId);
       return sourceNode ? resolveNodeResources(sourceNode, connection) : [];
-    });
+    })
+    // 备注节点是独立便签：历史连线即使还在，也不得再进入生成/Operation 输入。
+    .filter(resource => resource.kind !== 'text');
   const diagnostics: InputDiagnostic[] = [];
   graphResources.filter(isMediaResource).forEach(resource => {
     if (!resource.available) diagnostic(diagnostics, {

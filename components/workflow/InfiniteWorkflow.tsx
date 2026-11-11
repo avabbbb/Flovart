@@ -861,6 +861,17 @@ export function InfiniteWorkflow({
     storyboard: ids => { setStoryboardNodeIds(ids); openImageTool('storyboard', ids[0]); },
   }), [imageControls, openImageTool]);
 
+  const toolHints = useMemo(() => {
+    const keys = userApiKeys || [];
+    const usable = keys.filter(key => key.status !== 'error');
+    const hasVisionRoute = usable.some(key => key.capabilities?.includes('text'));
+    const hasImageToolEndpoint = usable.some(key => key.capabilities?.includes('image') && Boolean(key.baseUrl));
+    return {
+      ...(hasVisionRoute ? {} : { 'reverse-prompt': '需要配置支持图片理解的文本模型' }),
+      ...(hasImageToolEndpoint ? {} : { split: '需要配置支持 /split-layers 语义分层的图像工具端点' }),
+    } satisfies Partial<Record<'reverse-prompt' | 'split', string>>;
+  }, [userApiKeys]);
+
   const openVideoTool = useCallback((kind: WorkflowVideoToolState['kind'], nodeId: string, nodeIds?: string[]) => {
     if (videoControls.isLocked()) {
       setNotice('请先完成或关闭当前视频工具');
@@ -2408,7 +2419,7 @@ export function InfiniteWorkflow({
     const center = viewportCenter();
     const script = createWorkflowNode(nanoid(), 'text', { x: center.x - 640, y: center.y - 120 }, {
       content: zh
-        ? '【示例】三镜头产品短片。浏览、编辑、连线都不需要 Key；点镜头上的运行前，需先在设置中配置自己的 AI 服务。'
+        ? '【示例】三镜头产品短片。浏览、编辑、连线都不需要 Key；运行镜头前需先在设置中配置自己的 AI 服务。'
         : '[Sample] A three-shot product clip. Browsing, editing and connecting need no key; running a shot needs your own AI service in Settings.',
     });
     script.title = zh ? '示例 · 脚本' : 'Sample · Script';
@@ -2423,7 +2434,6 @@ export function InfiniteWorkflow({
     const ops: WorkflowDocumentOperation[] = [
       { type: 'add_node', node: script },
       ...shots.map(node => ({ type: 'add_node' as const, node })),
-      ...shots.map(node => ({ type: 'connect_nodes' as const, fromNodeId: script.id, toNodeId: node.id })),
     ];
     if (applyOps(ops)) {
       setNotice(zh ? '已打开示例画布：浏览和编辑不需要 Key，运行生成前需要先配置 AI 服务。' : 'Sample canvas opened. Browsing and editing need no key; running needs an AI service.');
@@ -2915,7 +2925,7 @@ export function InfiniteWorkflow({
   const { pendingInsert: wfPendingInsert, consumeInsert: wfConsumeInsert } = usePromptHistoryStore();
   useEffect(() => {
     if (!wfPendingInsert) return;
-    const target = selectedNodeData.length === 1 && ['image', 'video', 'text'].includes(selectedNodeData[0].type) ? selectedNodeData[0] : null;
+    const target = selectedNodeData.length === 1 && ['image', 'video', 'operation'].includes(selectedNodeData[0].type) ? selectedNodeData[0] : null;
     if (target) {
       applyOps([{ type: 'update_node', id: target.id, metadata: { prompt: wfPendingInsert.text, richTextDocument: undefined } }]);
       setPromptFocusSignal(value => value + 1);
@@ -3103,8 +3113,8 @@ export function InfiniteWorkflow({
         </div>
       )}
       <div ref={worldRef} className="workflow-world" style={{ transform: `translate(${project.viewport.x}px, ${project.viewport.y}px) scale(${project.viewport.k})` }}>
-        {groupFrames.map(({ batchId, group, manual, hue, box }) => (
-          <div key={`group-frame-${batchId}`} className="workflow-group-frame" data-workflow-group-frame={batchId} data-source={manual ? 'manual' : 'auto'} style={{ left: box.left, top: box.top, width: box.width, height: box.height, ['--group-hue' as string]: hue }}>
+        {groupFrames.map(({ batchId, group, manual, box }) => (
+          <div key={`group-frame-${batchId}`} className="workflow-group-frame" data-workflow-group-frame={batchId} data-source={manual ? 'manual' : 'auto'} onPointerDown={event => { if (event.target === event.currentTarget) startBatchDrag(event, batchId, group); }} style={{ left: box.left, top: box.top, width: box.width, height: box.height }}>
             <div className="workflow-group-frame__label" data-workflow-overlay onPointerDown={event => startBatchDrag(event, batchId, group)} title={language === 'zho' ? '拖动以移动整组' : 'Drag to move the group'}>
               {language === 'zho' ? `分组 ${group.length} 个节点` : `Group · ${group.length} nodes`}
             </div>
@@ -3345,19 +3355,38 @@ export function InfiniteWorkflow({
               const source = projectRef.current.nodes.find(item => item.id === id);
               if (!source || source.isLocked || !canGenerateTextAssets(source)) return;
               const spec = textAssetSpec(kind);
-              // 同一文本已派生的节点向下错开，避免叠在一起。
-              const derived = projectRef.current.connections.filter(connection => connection.fromNodeId === id).length;
+              // 备注不参与连线生成：派生节点把备注原文写进自己的 prompt，之后各自独立可改。
+              const derived = projectRef.current.nodes.filter(item => item.metadata.assetSourceNoteId === id).length;
               const node = {
                 ...createWorkflowNode(nanoid(), 'image', { x: source.position.x + source.width + 96, y: source.position.y + derived * 280 }, {
-                  prompt: buildTextAssetPrompt(kind),
+                  prompt: buildTextAssetPrompt(kind, source.metadata.content || ''),
                   status: 'idle',
                   config: { mode: 'image', aspectRatio: spec.aspectRatio },
+                  origin: 'user' as const,
+                  assetSourceNoteId: id,
                 }),
                 title: spec.title,
               };
-              if (!applyOps([{ type: 'create_connected_node', fromNodeId: id, node }])) return;
-              setNotice(`已创建「${spec.title}」节点并连好文本：选好模型后在节点上运行`);
+              if (!applyOps([{ type: 'add_node', node }])) return;
+              setNotice(`已创建「${spec.title}」节点：备注内容已写入提示词，选好模型后在节点上运行`);
             }}
+            onMergeNotePrompt={id => {
+              const note = projectRef.current.nodes.find(item => item.id === id);
+              if (!note || note.type !== 'text' || note.isLocked) return;
+              const content = note.metadata.content?.trim();
+              if (!content) { setNotice('备注为空，没有可并入的内容'); return; }
+              const updates = (note.metadata.noteMergeTargetIds || []).flatMap(targetId => {
+                const target = projectRef.current.nodes.find(item => item.id === targetId);
+                if (!target || target.isLocked) return [];
+                const existing = target.metadata.prompt?.trim() || '';
+                if (existing.includes(content)) return [];
+                return [{ type: 'update_node' as const, id: targetId, metadata: { prompt: existing ? `${existing}\n\n${content}` : content } }];
+              });
+              if (!updates.length) { setNotice('目标节点不存在、已锁定，或提示词已包含该备注'); return; }
+              applyOps([...updates, { type: 'update_node', id, metadata: { noteMergeTargetIds: [] } }]);
+              setNotice(`已把备注并入 ${updates.length} 个节点的提示词`);
+            }}
+            toolHints={toolHints}
             onExecuteGroup={ids => topoSort(projectRef.current.nodes, projectRef.current.connections, ids).forEach(id => enqueueRunNode(id))}
             onReversePrompt={onReversePrompt ? (id, mediaUrl) => {
               const node = projectRef.current.nodes.find(item => item.id === id);
@@ -3398,7 +3427,7 @@ export function InfiniteWorkflow({
             }}
           />
         </div>
-        {selectedNodeData.length === 1 && ['image', 'video', 'text', 'operation'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: promptExpanded ? 90 : 69, left: promptLeft, ...(promptAbove ? { bottom: promptBottom } : { top: promptTop }) }}>
+        {selectedNodeData.length === 1 && ['image', 'video', 'operation'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: promptExpanded ? 90 : 69, left: promptLeft, ...(promptAbove ? { bottom: promptBottom } : { top: promptTop }) }}>
       <WorkflowNodePromptBar width={promptWidth} expanded={promptExpanded} onToggleExpanded={() => { const id = selectedNodeData[0].id; setExpandedPromptNodeId(current => (current === id ? null : id)); }} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onPromptIntent={intent => { promptIntentRef.current = intent; }} onRun={() => { const intent = promptIntentRef.current?.targetNodeId === selectedNodeData[0].id ? promptIntentRef.current : undefined; promptIntentRef.current = null; onRunNode(selectedNodeData[0].id, intent || undefined); }} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} onReorderReference={nextIds => handleReorderReferences(selectedNodeData[0].id, nextIds)} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} onResolvePastedMentions={mentions => handleResolvePastedMentions(mentions, selectedNodeData[0].id)} onPasteUnresolvedMentions={labels => setNotice('未能唯一匹配引用：' + labels.map(label => '@' + label).join('、') + '，已保留为普通文字。')} />
         </div>}
       </>}

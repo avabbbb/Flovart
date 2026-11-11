@@ -32,8 +32,8 @@ describe('workflow input resolver', () => {
         source: 'edge',
       }),
     })]);
-    expect(resolved.texts.map(resource => resource.text)).toEqual(['让角色回头']);
-    expect(resolveWorkflowResourceReferences(target, [image, text, target], connections).map(reference => reference.sourceId)).toEqual(['image-a', 'text-b']);
+    expect(resolved.texts).toEqual([]);
+    expect(resolveWorkflowResourceReferences(target, [image, text, target], connections).map(reference => reference.sourceId)).toEqual(['image-a']);
   });
 
   it('keeps an empty connected media node visible to validation instead of dropping the dependency', () => {

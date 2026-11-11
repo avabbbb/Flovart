@@ -82,7 +82,7 @@ export function toolRiskFor(command: string, args: Record<string, unknown> = {})
   if (command === 'flovart_workflow_media_view') return 'read';
   if (command === 'workflow.node.run') return 'run';
   // 停止/选中/视口不是文档变更，也不该在手动模式里被拦。
-  if (command === 'workflow.node.stop' || command === 'workflow.select' || command === 'workflow.viewport.set') return 'read';
+  if (command === 'workflow.node.stop' || command === 'workflow.select' || command === 'workflow.viewport.set' || command === 'workflow.focus.nodes') return 'read';
   if (command === 'workflow.node.delete' || command === 'workflow.project.delete') return 'delete';
   if (command === 'workflow.apply') {
     const raw = args.operations || args.ops;

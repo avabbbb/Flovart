@@ -16,7 +16,7 @@ const envelope = (projectId: string): WorkflowMutationEnvelope => ({
   source: 'cli',
   intent: '创建并连接节点',
   ops: [
-    { type: 'add_node', node: createWorkflowNode('source-1', 'text', { x: 0, y: 0 }, { content: '脚本' }) },
+    { type: 'add_node', node: createWorkflowNode('source-1', 'image', { x: 0, y: 0 }, { href: 'data:image/png;base64,AA==', mimeType: 'image/png' }) },
     { type: 'add_node', node: createWorkflowNode('shot-1', 'image', { x: 420, y: 0 }) },
     { type: 'connect_nodes', id: 'edge-1', fromNodeId: 'source-1', toNodeId: 'shot-1' },
   ],

@@ -75,8 +75,7 @@ describe('demo start paths', () => {
     expect(script.title).toBe('示例 · 脚本');
     expect(shots.map(node => node.title)).toEqual(['示例 · 镜头 1', '示例 · 镜头 2', '示例 · 镜头 3']);
     expect(shots.every(node => typeof node.metadata.prompt === 'string' && node.metadata.prompt.length > 0)).toBe(true);
-    expect(connections).toHaveLength(3);
-    expect(connections.every(connection => connection.fromNodeId === script.id)).toBe(true);
+    expect(connections).toHaveLength(0);
     expect(screen.getByRole('status')).toHaveTextContent('浏览和编辑不需要 Key');
   });
 

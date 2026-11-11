@@ -1,4 +1,4 @@
-import { FileText, Image, Music2, Type, Video, X } from 'lucide-react';
+import { FileText, Image, Music2, StickyNote, Video, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
@@ -11,10 +11,10 @@ export interface WorkflowCreateMenuState {
   targetId?: string;
 }
 
-const OPTIONS: Array<{ type: WorkflowNodeType; title: string; titleEn: string; description: string; descriptionEn: string; icon: typeof Type }> = [
+const OPTIONS: Array<{ type: WorkflowNodeType; title: string; titleEn: string; description: string; descriptionEn: string; icon: typeof StickyNote }> = [
   { type: 'image', title: '图片生成', titleEn: 'Image', description: '创建图片生成节点', descriptionEn: 'Create an image generation node', icon: Image },
   { type: 'video', title: '视频生成', titleEn: 'Video', description: '创建视频生成节点', descriptionEn: 'Create a video generation node', icon: Video },
-  { type: 'text', title: '文本生成', titleEn: 'Text', description: '脚本、文案和提示词', descriptionEn: 'Scripts, copy and prompts', icon: Type },
+  { type: 'text', title: '备注', titleEn: 'Note', description: '脚本、备注和说明，不参与生成', descriptionEn: 'Scripts, notes and briefs; never sent to generation', icon: StickyNote },
   { type: 'script', title: '脚本节点', titleEn: 'Script', description: '剧本拆解、分镜编排和批量生成', descriptionEn: 'Break down scripts, plan shots, batch generate', icon: FileText },
   { type: 'audio', title: '音频参考', titleEn: 'Audio reference', description: '添加音频参考输入', descriptionEn: 'Add an audio reference input', icon: Music2 },
 ];

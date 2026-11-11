@@ -394,9 +394,9 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     const movement = mode === 'video' && config.cameraMovement ? CAMERA_MOVEMENTS.find(m => m.id === config.cameraMovement) : undefined;
     const movementKeyword = movement?.promptKeyword || (mode === 'video' ? config.customMovement : '');
     const promptPrefix = [stylePreset?.promptPrefix, cameraPrefix, movementKeyword].filter(Boolean).join(', ');
-    const prompt = [promptPrefix, resolvedInputs.prompt, ...resolvedInputs.texts.map(resource => resource.text), ...mediaLabels]
+    const prompt = [promptPrefix, resolvedInputs.prompt, ...mediaLabels]
       .map(value => value?.trim()).filter(Boolean).join('\n\n');
-    if (!prompt) throw new Error('请填写提示词，或连接一个包含文本的上游节点。');
+    if (!prompt) throw new Error('请填写提示词。');
 
     usePromptHistoryStore.getState().record({
         prompt,

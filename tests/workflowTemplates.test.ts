@@ -9,14 +9,16 @@ describe('workflow templates', () => {
     expect(matchWorkflowTemplate('一只猫')).toBe('text-to-image');
   });
 
-  it('builds a connected chain for every template', () => {
+  it('builds valid graphs without duplicating prompts into note nodes', () => {
     for (const template of WORKFLOW_TEMPLATES) {
       const seed = buildWorkflowTemplate(template.id, '', 'zho');
       const ids = new Set(seed.nodes.map(node => node.id));
       expect(seed.templateId).toBe(template.id);
       expect(seed.title.length).toBeGreaterThan(0);
-      expect(seed.nodes.length).toBeGreaterThan(1);
-      expect(seed.connections).toHaveLength(seed.nodes.length - 1);
+      expect(seed.nodes.length).toBeGreaterThan(0);
+      const noteIds = new Set(seed.nodes.filter(node => node.type === 'text').map(node => node.id));
+      expect(seed.connections).toHaveLength(template.id === 'storyboard-video' ? 1 : template.id === 'text-to-image' ? 0 : seed.nodes.length - 1);
+      expect(seed.connections.some(connection => noteIds.has(connection.fromNodeId) || noteIds.has(connection.toNodeId))).toBe(false);
       for (const connection of seed.connections) {
         expect(ids.has(connection.fromNodeId)).toBe(true);
         expect(ids.has(connection.toNodeId)).toBe(true);

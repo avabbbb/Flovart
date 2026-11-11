@@ -294,6 +294,22 @@ function dispatchShadowWorkflow(envelope, state) {
     project.selectedNodeIds = ids.filter(id => project.nodes.some(node => node.id === id));
   } else if (command === 'workflow.viewport.set') {
     project.viewport = { x: Number(args.x || 0), y: Number(args.y || 0), k: Number(args.k || args.zoom || 1) };
+  } else if (command === 'workflow.focus.nodes') {
+    const rawIds = Array.isArray(args.nodeIds) ? args.nodeIds : [args.nodeId].filter(Boolean);
+    const nodeIds = [...new Set(rawIds.map(String))];
+    if (!nodeIds.length) return fail('BAD_REQUEST', 'nodeIds is required.');
+    const targets = project.nodes.filter(node => nodeIds.includes(node.id));
+    if (targets.length !== nodeIds.length) return fail('NOT_FOUND', 'Workflow node not found.');
+    const minX = Math.min(...targets.map(node => node.position.x));
+    const minY = Math.min(...targets.map(node => node.position.y));
+    const maxX = Math.max(...targets.map(node => node.position.x + (node.width || 320)));
+    const maxY = Math.max(...targets.map(node => node.position.y + (node.height || 200)));
+    const width = Math.max(240, Number(args.width || 1200));
+    const height = Math.max(240, Number(args.height || 800));
+    const padding = Math.max(0, Number(args.padding ?? 80));
+    const scale = Math.min(1, (width - padding * 2) / Math.max(1, maxX - minX), (height - padding * 2) / Math.max(1, maxY - minY));
+    const k = Math.min(1, Math.max(.1, scale));
+    project.viewport = { x: width / 2 - ((minX + maxX) / 2) * k, y: height / 2 - ((minY + maxY) / 2) * k, k };
   } else {
     return fail('UNKNOWN_COMMAND', `Unknown Workflow command (${command})`);
   }

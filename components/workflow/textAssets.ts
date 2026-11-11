@@ -10,17 +10,19 @@ export const WORKFLOW_TEXT_ASSET_KINDS: ReadonlyArray<{ id: WorkflowTextAssetKin
 ];
 
 const INSTRUCTIONS: Record<WorkflowTextAssetKind, string> = {
-  character: '根据连入的文本中的角色设定生成角色设定图：单一角色，全身正面站姿，干净浅色背景，服装、发型与配饰细节清晰。',
-  scene: '根据连入的文本中的场景描述生成场景概念图：不出现人物，交代空间结构、光线与氛围。',
-  prop: '根据连入的文本中的关键道具生成道具设定图：单个道具居中，干净背景，材质与结构细节清晰。',
+  character: '根据备注中的角色设定生成角色设定图：单一角色，全身正面站姿，干净浅色背景，服装、发型与配饰细节清晰。',
+  scene: '根据备注中的场景描述生成场景概念图：不出现人物，交代空间结构、光线与氛围。',
+  prop: '根据备注中的关键道具生成道具设定图：单个道具居中，干净背景，材质与结构细节清晰。',
 };
 
 /**
- * 派生节点只写「要什么资产」的指令；文本本身经连线作为 prompt 上下文流入，
- * 用户改了原文后重跑即可，提示词与模型都留在画布节点上可二次微调。
+ * 备注不参与连线生成：派生资产时把原文直接写进新节点的 prompt。
+ * 用户之后可以分别修改备注和生成提示词，不再有两份隐式输入的合并规则。
  */
-export function buildTextAssetPrompt(kind: WorkflowTextAssetKind): string {
-  return INSTRUCTIONS[kind];
+export function buildTextAssetPrompt(kind: WorkflowTextAssetKind, content = ''): string {
+  const instruction = INSTRUCTIONS[kind];
+  const text = content.trim();
+  return text ? `${instruction}\n\n备注内容：\n${text}` : instruction;
 }
 
 export function textAssetSpec(kind: WorkflowTextAssetKind) {
