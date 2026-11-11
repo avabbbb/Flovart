@@ -2751,7 +2751,7 @@ export function InfiniteWorkflow({
   const promptAbove = !promptExpanded && overlayBounds !== null && promptBelowTop + 220 > promptRootHeight - 60;
   const promptTop = promptExpanded ? Math.max(8, (promptRootHeight - 60 - 520) / 2) : overlayBounds ? promptBelowTop : 0;
   const promptBottom = promptRootHeight - toolbarTop + 8;
-  const gridSize = (project.backgroundMode === 'dots' ? 20 : 24) * project.viewport.k;
+  const gridSize = 24 * project.viewport.k;
 
   const batchGroups = useMemo(() => {
     const groups = new Map<string, WorkflowNodeData[]>();
@@ -3064,11 +3064,11 @@ export function InfiniteWorkflow({
         <div className="workflow-canvas-empty" data-workflow-overlay onPointerDown={event => event.stopPropagation()}>
           <strong>{language === 'zho' ? '从一个节点开始' : 'Start with a node'}</strong>
           <span>{language === 'zho' ? '双击空白处可以添加任意节点，也可以把图片或视频直接拖进来。' : 'Double-click anywhere to add a node, or drop an image or video here.'}</span>
-          <div>
-            <button type="button" onClick={() => addNode('image')}>{language === 'zho' ? '图片节点' : 'Image node'}</button>
+          <div className="workflow-canvas-empty__actions">
+            <button type="button" className="is-primary" onClick={() => addNode('image')}>{language === 'zho' ? '图片节点' : 'Image node'}</button>
             <button type="button" onClick={() => addNode('video')}>{language === 'zho' ? '视频节点' : 'Video node'}</button>
-            <button type="button" data-testid="workflow-open-sample" onClick={openSampleCanvas}>{language === 'zho' ? '打开示例画布（示例，免 Key）' : 'Open sample canvas (sample, no key)'}</button>
           </div>
+          <button type="button" className="workflow-canvas-empty__sample" data-testid="workflow-open-sample" onClick={openSampleCanvas}>{language === 'zho' ? '或打开示例画布，无需 Key' : 'Or open the sample canvas — no key needed'}</button>
         </div>
       )}
       <div ref={worldRef} className="workflow-world" style={{ transform: `translate(${project.viewport.x}px, ${project.viewport.y}px) scale(${project.viewport.k})` }}>

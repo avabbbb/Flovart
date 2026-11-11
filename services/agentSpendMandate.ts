@@ -1,4 +1,5 @@
 import type { GenerationGateDetails } from './generationGate';
+import type { ToolRisk } from './agentToolPolicy';
 
 /**
  * 自动模式的付费授权（Spend Mandate）。
@@ -19,6 +20,10 @@ export interface AgentConfirmRequest {
   command: string;
   /** 仅 generation：每个待运行节点一项。 */
   gates?: readonly GenerationGateDetails[];
+  /** 原始命令参数：确认卡据此把节点 ID 换成标题、写出一句人话。 */
+  args?: Readonly<Record<string, unknown>>;
+  /** 来自工具策略层的询问（手动模式的写入等）。 */
+  risk?: ToolRisk;
 }
 
 export type SpendCurrency = 'USD' | 'CNY';

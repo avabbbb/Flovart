@@ -24,6 +24,7 @@ import { createTodoTool, TODO_TOOL_NAME } from '../agent/todo.js';
 import type { ImageContent } from '@earendil-works/pi-ai';
 import type { WorkflowNode } from '../components/workflow/types';
 import { loadAgentNodeMedia, type AgentVideoFrame } from './agentMediaView';
+import { WORKFLOW_OPERATION_CAPABILITIES, WORKFLOW_OPERATION_CAPABILITY_IDS, WORKFLOW_OPERATION_NODE_TOOLS } from '../components/workflow/operationRegistry';
 import { formatSearchSources, searchAgentWeb, WEB_SEARCH_TOOL_NAME, type AgentSearchCredential, type SearchRecency } from './agentWebSearch';
 import { formatGrepMatches, grepLocalFolders, LOCAL_GREP_TOOL_NAME } from './agentLocalGrep';
 import { decideToolCall, toolRiskFor, type ApprovalPolicy, type SandboxPolicy } from './agentToolPolicy';
@@ -485,8 +486,41 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
     if (verdict.decision === 'deny') throw new Error(verdict.reason);
     if (verdict.decision === 'allow') return;
     if (workflowCommandNeedsConfirmation(command, params)) return;
-    const approved = await dependencies.confirm(verdict.summary);
+    const approved = await dependencies.confirm(verdict.summary, {
+      kind: risk === 'delete' ? 'destructive' : 'other',
+      command,
+      args: params,
+      risk,
+    });
     if (!approved) throw new Error('用户拒绝了该操作');
+  };
+  // 命令面工具共用的一次调用：策略层 → 浏览器契约 → 需要时请用户确认后带批准重发。
+  const runCommand = async (command: string, params: Record<string, unknown>) => {
+    const envelope = {
+      id: crypto.randomUUID(),
+      command,
+      args: {
+        ...params,
+        projectId: dependencies.projectId,
+        workspaceMode: 'browser',
+      },
+      source: 'agent',
+      idempotencyKey: dependencies.activeChangeSetId,
+    } as const;
+    await guard(command, params);
+    let result = await workflowContract.dispatch(envelope);
+    if (result.confirmation?.required) {
+      const approved = await dependencies.confirm(result.confirmation.summary, workflowConfirmRequest(envelope));
+      if (!approved) throw new Error('用户拒绝了该操作');
+      result = await workflowContract.dispatch(withWorkflowHumanApproval(envelope));
+    }
+    if (!result.ok) {
+      throw new Error(result.error?.message || `${command} 执行失败`);
+    }
+    return {
+      content: [{ type: 'text' as const, text: JSON.stringify(result.result ?? { ok: true }) }],
+      details: result,
+    };
   };
   const commandTools: AgentTool[] = AGENT_BROWSER_COMMANDS.map(command => {
     const definition = COMMAND_REGISTRY[command] || { args: {}, summary: command };
@@ -506,38 +540,13 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
       label: command,
       description: command === 'workflow.apply' ? summary + ' ' + WORKFLOW_APPLY_GUIDE : summary,
       parameters,
-      execute: async (_toolCallId, params, _signal) => {
-        const envelope = {
-          id: crypto.randomUUID(),
-          command,
-          args: {
-            ...(params as Record<string, unknown>),
-            projectId: dependencies.projectId,
-            workspaceMode: 'browser',
-          },
-          source: 'agent',
-          idempotencyKey: dependencies.activeChangeSetId,
-        } as const;
-        await guard(command, params as Record<string, unknown>);
-        let result = await workflowContract.dispatch(envelope);
-        if (result.confirmation?.required) {
-          const approved = await dependencies.confirm(result.confirmation.summary, workflowConfirmRequest(envelope));
-          if (!approved) throw new Error('用户拒绝了该操作');
-          result = await workflowContract.dispatch(withWorkflowHumanApproval(envelope));
-        }
-        if (!result.ok) {
-          throw new Error(result.error?.message || `${command} 执行失败`);
-        }
-        return {
-          content: [{ type: 'text', text: JSON.stringify(result.result ?? { ok: true }) }],
-          details: result,
-        };
-      },
+      execute: async (_toolCallId, params, _signal) => runCommand(command, params as Record<string, unknown>),
     };
   });
   const extraTools: AgentTool[] = [];
   extraTools.push(createWebSearchTool(dependencies.webSearch, guard));
   extraTools.push(createLocalGrepTool(guard));
+  extraTools.push(createNodeToolTool(runCommand));
   if (dependencies.getNodes) extraTools.push(createMediaViewTool(dependencies.getNodes));
   return [...commandTools, ...extraTools];
 }
@@ -594,6 +603,58 @@ function createLocalGrepTool(guard: (command: string, params: Record<string, unk
   };
 }
 
+export const NODE_TOOL_TOOL_NAME = 'flovart_workflow_node_tool';
+
+/** 画布后处理工具清单，直接来自 Operation 注册表：以后新增的工具不需要再改 Agent。 */
+export function describeWorkflowNodeTools(): string {
+  return WORKFLOW_OPERATION_CAPABILITY_IDS
+    .map(id => WORKFLOW_OPERATION_CAPABILITIES[id])
+    .filter(capability => capability.nodeTool)
+    .map(capability => {
+      const cost = capability.executor === 'local-transform' ? '本地处理，免费' : '调用 AI 服务，会先请用户确认';
+      return `- ${capability.nodeTool}：${capability.label}（${capability.mediaType}，${cost}）${capability.agentUsage ? '；' + capability.agentUsage : ''}`;
+    })
+    .join('\n');
+}
+
+function createNodeToolTool(runCommand: (command: string, params: Record<string, unknown>) => Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }>): AgentTool {
+  const optionalNumber = (description: string) => Type.Optional(Type.Number({ description }));
+  return {
+    name: NODE_TOOL_TOOL_NAME,
+    label: 'workflow.node.tool',
+    description: '在画布节点上执行后处理工具（与节点工具条按钮同一实现），结果作为新节点写回画布并自动连线，返回 outputNodeIds。先用 inspect 拿到节点 ID；视频截帧前可先用 media_view 的 times 找准时间点。可用工具：\n' + describeWorkflowNodeTools(),
+    parameters: Type.Object({
+      nodeId: Type.String({ description: '源节点 ID（video-merge 可省略，改用 sourceNodeIds）' }),
+      tool: Type.Union(WORKFLOW_OPERATION_NODE_TOOLS.map(tool => Type.Literal(tool))),
+      position: Type.Optional(Type.Union([Type.Literal('first'), Type.Literal('current'), Type.Literal('last')], { description: 'video-extract-frame：first 首帧 / last 尾帧 / current 指定秒数' })),
+      currentTimeSec: optionalNumber('video-extract-frame 的 position=current 时截取的秒数，例如 10'),
+      startSec: optionalNumber('剪辑开始秒数'),
+      endSec: optionalNumber('剪辑结束秒数'),
+      sourceNodeIds: Type.Optional(Type.Array(Type.String(), { description: 'video-merge 的有序视频节点 ID' })),
+      audio: Type.Optional(Type.Union([Type.Literal('full'), Type.Literal('vocals'), Type.Literal('background')])),
+      prompt: Type.Optional(Type.String()),
+      maskNodeId: Type.Optional(Type.String()),
+      targetLongEdge: optionalNumber('upscale 目标长边 512-8192'),
+      algorithm: Type.Optional(Type.String()),
+      action: Type.Optional(Type.String({ description: 'rotate：rotate-90/rotate-180/rotate-270/flip-h/flip-v' })),
+      rows: optionalNumber('split-grid 行数 1-6'),
+      cols: optionalNumber('split-grid 列数 1-6'),
+      speed: optionalNumber('audio-speed 倍速 0.25-4'),
+      x: optionalNumber('crop 归一化左边'),
+      y: optionalNumber('crop 归一化上边'),
+      width: optionalNumber('crop 归一化宽度'),
+      height: optionalNumber('crop 归一化高度'),
+      style: Type.Optional(Type.String()),
+      count: optionalNumber('layer 候选数量 1-4'),
+    }),
+    execute: async (_toolCallId, params) => {
+      const input = { ...(params as Record<string, unknown>) };
+      if (input.tool === 'video-merge' && !input.nodeId && Array.isArray(input.sourceNodeIds)) input.nodeId = input.sourceNodeIds[0];
+      return runCommand('workflow.node.tool', input);
+    },
+  };
+}
+
 export const MEDIA_VIEW_TOOL_NAME = 'flovart_workflow_media_view';
 
 function createMediaViewTool(getNodes: () => readonly WorkflowNode[]): AgentTool {
@@ -637,6 +698,7 @@ const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，Flovart 生成式 
 - flovart_workflow_selection_get：读取用户当前选中的节点。
 - flovart_workflow_apply：结构化修改画布。operations 只允许 add_node、create_connected_node、update_node、delete_nodes、delete_connections、connect_nodes、move_nodes、reorder_nodes、group_nodes、ungroup_nodes、set_batch_primary。
 - flovart_workflow_node_run：运行生成节点（nodeId 或 nodeIds 批量，一次确认费用）。
+- flovart_workflow_node_tool：在节点上执行后处理工具（截取视频任意秒数的帧、剪辑、音视频分离、拼接、裁剪、放大、去背景等），结果作为新节点写回画布。
 - flovart_workflow_media_view：查看图片/视频节点的真实画面（nodeIds；视频可用 frames: first/middle/last 或 times: [秒数] 指定任意时间点）。inspect 里的 [media] 只是脱敏占位；需要判断构图、风格或检查生成结果时调用它。用户 @引用的图片/视频会自动附带画面。用户粘贴的截图、拖入的视频会作为本轮图片内容直接附上。
 - flovart_web_search：联网搜索（Parallel 公共 MCP，免 Key，失败回退 DeepSeek）。需要外部资料、竞品信息、风格参考或事实核对时调用；结果给出来源 URL，引用时要带上。
 - flovart_grep：在用户连接过的本地文件夹里搜文本文件（正则）。用户说“我本地的素材/文档里有…”时先用它；只能搜已授权文件夹，读不到任意路径。
@@ -652,9 +714,9 @@ command.list/schema 属于 CLI discovery/debug，不是你的工具；不得访�
 - 参考角色（连线/引用的 role）：first_frame、last_frame、reference、character、style、mask、source_video、source_audio。首尾帧视频要把两张图分别以 first_frame / last_frame 连到视频配置节点。
 - 当前模型路由不支持某个 submode 时会返回明确错误：如实转告并建议换模型，不要假装成功。
 
-媒体后处理工具（用户在节点工具条上点击执行；你目前不能直接触发，只能推荐，并说清在哪个节点上点哪个按钮、填什么参数）：
+媒体后处理工具（用 flovart_workflow_node_tool 直接执行，与节点工具条按钮同一实现；用户想自己点时，再说明在哪个节点上点哪个按钮）：
 - 图片：裁剪、高清放大（长边 512-8192）、去背景、拆分图层、AI 编辑（编辑/扩图/局部重绘/标注/重打光，需提示词）、旋转/镜像、宫格切分（1-6 行列）、图层贴纸、矢量化（SVG）、滤镜、反推 Prompt（结果生成一个「反推提示词」文本节点）。
-- 视频：视频剪辑（起止秒）、音视频分离（完整音轨/人声/背景音，输出无声视频 + 音频节点）、视频拼接（按顺序 ≥2 段）、截取首帧/当前帧/尾帧（输出图片节点，可直接作为下一段的 first_frame 做续镜）。
+- 视频：视频剪辑（起止秒）、音视频分离（完整音轨/人声/背景音，输出无声视频 + 音频节点）、视频拼接（按顺序 ≥2 段）、截取首帧/尾帧/任意秒数的帧（position=current + currentTimeSec，输出图片节点，可直接作为下一段的 first_frame 做续镜）。只想看画面用 media_view，需要把帧留在画布上用 node_tool。
 - 音频：音频剪辑、变速（0.25-4×）、人声/伴奏分离。
 - 工具栏菜单可开启「新视频自动截首帧 / 尾帧 / 自动音视频分离」。
 其中本地处理（裁剪、旋转、宫格、剪辑、分离、拼接、截帧、变速）不花费额度；放大、去背景、AI 编辑、拆图层、图层贴纸会调用模型服务。

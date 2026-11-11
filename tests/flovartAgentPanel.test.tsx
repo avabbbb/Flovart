@@ -151,7 +151,7 @@ describe('Flovart Agent panel', () => {
     });
 
     await waitFor(() => expect(useWorkflowStore.getState().projects[0].nodes).toHaveLength(1));
-    expect(screen.queryByText('Agent 请求确认')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog', { name: 'Agent 请求确认' })).not.toBeInTheDocument();
 
     const createdId = useWorkflowStore.getState().projects[0].nodes[0].id;
     StubEventSource.current!.emit('tool_call', {
@@ -165,10 +165,16 @@ describe('Flovart Agent panel', () => {
       },
     });
 
-    expect(await screen.findByText('Agent 请求确认')).toBeInTheDocument();
+    const card = await screen.findByRole('alertdialog', { name: 'Agent 请求确认' });
+    // 一句人话：动作 + 节点标题，不再出现内部命令名或节点 ID。
+    expect(card).toHaveTextContent('删除「脚本大纲」');
+    expect(card).not.toHaveTextContent('workflow.node.delete');
+    expect(card).not.toHaveTextContent(createdId);
+    // 删除只能逐次确认，不提供授权范围。
+    expect(screen.queryByRole('combobox', { name: '授权范围' })).not.toBeInTheDocument();
     expect(onActivityChange).toHaveBeenCalledWith('waiting');
     fireEvent.click(screen.getByRole('button', { name: '拒绝' }));
-    await waitFor(() => expect(screen.queryByText('Agent 请求确认')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('alertdialog', { name: 'Agent 请求确认' })).not.toBeInTheDocument());
     expect(useWorkflowStore.getState().projects[0].nodes).toHaveLength(1);
   });
 
@@ -192,10 +198,21 @@ describe('Flovart Agent panel', () => {
       },
     });
 
-    expect(await screen.findByText('Agent 请求确认')).toBeInTheDocument();
+    expect(await screen.findByRole('alertdialog', { name: 'Agent 请求确认' })).toBeInTheDocument();
     expect(useWorkflowStore.getState().projects[0].nodes).toHaveLength(0);
+    // 可逆写入可以选「本次对话」：同类操作在本次对话里不再重复询问。
+    fireEvent.change(screen.getByRole('combobox', { name: '授权范围' }), { target: { value: 'session' } });
     fireEvent.click(screen.getByRole('button', { name: '允许' }));
     await waitFor(() => expect(useWorkflowStore.getState().projects[0].nodes).toHaveLength(1));
+    StubEventSource.current!.emit('tool_call', {
+      requestId: 'request-manual-create-2',
+      envelope: {
+        id: 'command-manual-create-2', command: 'workflow.node.create',
+        args: { type: 'text', title: '第二个大纲' }, source: 'agent', idempotencyKey: 'manual-create-v2',
+      },
+    });
+    await waitFor(() => expect(useWorkflowStore.getState().projects[0].nodes).toHaveLength(2));
+    expect(screen.queryByRole('alertdialog', { name: 'Agent 请求确认' })).not.toBeInTheDocument();
   });
 
   it('sends a selected Production Skill as a typed attachment to the main PI turn', async () => {

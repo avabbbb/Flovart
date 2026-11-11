@@ -496,8 +496,12 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         const normalizedArgs = capability ? parseWorkflowOperationNodeToolArguments(capability.id, toolArgs) : toolArgs;
         const outcome = await runner(project.id, nodeId, tool, normalizedArgs);
         const committed = Boolean(outcome && typeof outcome === 'object' && (outcome as { status?: string }).status === 'committed');
+        // 把新产出的节点 ID 交回调用方（Agent 据此继续连线或运行），不用再整图 inspect 一次。
+        const before = new Set(project.nodes.map(node => node.id));
+        const after = dependencies.getState().projects.find(item => item.id === project.id)?.nodes || [];
+        const outputNodeIds = after.filter(node => !before.has(node.id) && node.type !== 'operation').map(node => node.id);
         dependencies.updateProject(project.id, draftLogPatch(project, envelope, true, { nodeIds: [nodeId] }));
-        result = { ok: true, commandId: envelope.id, result: { projectId: project.id, nodeId, tool, committed } };
+        result = { ok: true, commandId: envelope.id, result: { projectId: project.id, nodeId, tool, committed, outputNodeIds } };
       } else {
         const requestedNodeId = String(args.nodeId || args.id || '');
         if (['workflow.node.update', 'workflow.node.delete', 'workflow.node.move', 'workflow.node.resize'].includes(command)
