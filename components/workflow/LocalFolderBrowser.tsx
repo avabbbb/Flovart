@@ -168,6 +168,7 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+  const [sourceCollapsed, setSourceCollapsed] = useState(false);
   const lastClickedIndex = useRef(-1);
   const [dropping, setDropping] = useState(false);
   const [inserting, setInserting] = useState(false);
@@ -218,7 +219,7 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
     return () => { cancelled = true; };
   }, [activeId, scan]);
 
-  useEffect(() => { setSelected(new Set()); }, [activeId]);
+  useEffect(() => { setSelected(new Set()); setSourceCollapsed(false); }, [activeId]);
 
   const pick = useCallback(async () => {
     setNotice(null);
@@ -356,7 +357,15 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
     });
     lastClickedIndex.current = index;
   };
-  const selectAllVisible = () => setSelected(new Set(orderedEntries.map(entry => entry.relativePath)));
+  const allVisibleSelected = orderedEntries.length > 0 && orderedEntries.every(entry => selected.has(entry.relativePath));
+  const toggleSelectAllVisible = () => {
+    setSelected(current => {
+      const next = new Set(current);
+      if (allVisibleSelected) for (const entry of orderedEntries) next.delete(entry.relativePath);
+      else for (const entry of orderedEntries) next.add(entry.relativePath);
+      return next;
+    });
+  };
   const toggleFolder = (path: string) => {
     setCollapsedFolders(current => {
       const next = new Set(current);
@@ -516,6 +525,17 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
 
       {activeSource && (
         <div className="local-folder-connected" data-testid="local-folder-connected">
+          <button
+            type="button"
+            className="local-folder-btn local-folder-connected__collapse"
+            aria-expanded={!sourceCollapsed}
+            aria-label={sourceCollapsed ? (zho ? '展开文件夹' : 'Expand folder') : (zho ? '收起文件夹' : 'Collapse folder')}
+            title={sourceCollapsed ? (zho ? '展开文件夹' : 'Expand folder') : (zho ? '收起文件夹' : 'Collapse folder')}
+            onClick={() => setSourceCollapsed(value => !value)}
+            data-testid="local-folder-collapse"
+          >
+            {sourceCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+          </button>
           <FolderOpen size={12} aria-hidden />
           <span className="local-folder-connected__name" title={activeSource.name}>{activeSource.name}</span>
           <span className="local-folder-connected__count">
@@ -569,7 +589,7 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
         </div>
       )}
 
-      {activeId && permission === 'granted' && (
+      {activeId && permission === 'granted' && !sourceCollapsed && (
         <>
           <div className="local-folder-search">
             <Search size={12} />
@@ -609,8 +629,8 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
 
           <div className="local-folder-footer">
             <span>{zho ? `已选 ${selected.size} / ${entries.length}` : `${selected.size} / ${entries.length} selected`}</span>
-            <button type="button" className="local-folder-btn" onClick={selectAllVisible} disabled={!orderedEntries.length} data-testid="local-folder-select-all">
-              {zho ? '全选可见' : 'Select visible'}
+            <button type="button" className="local-folder-btn" onClick={toggleSelectAllVisible} disabled={!orderedEntries.length} aria-pressed={allVisibleSelected} data-testid="local-folder-select-all">
+              {allVisibleSelected ? (zho ? '取消全选' : 'Clear selection') : (zho ? '全选可见' : 'Select visible')}
             </button>
             <button type="button" className="local-folder-btn is-primary" onClick={() => void insertSelected()} disabled={inserting || !selected.size} data-testid="local-folder-insert">
               {inserting ? <Loader2 size={13} className="animate-spin" /> : null}

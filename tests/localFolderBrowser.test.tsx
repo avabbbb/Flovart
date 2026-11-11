@@ -117,6 +117,37 @@ describe('LocalFolderBrowser', () => {
     await settle();
   });
 
+  it('toggles select-all and collapses the source and nested folders', async () => {
+    stubPicker(fakeDirectoryHandle('可折叠素材', [
+      ['cover.png', fakeFileHandle({ name: 'cover.png', type: 'image/png' })],
+      ['场景', fakeDirectoryHandle('场景', [
+        ['a.png', fakeFileHandle({ name: 'a.png', type: 'image/png' })],
+      ])],
+    ]));
+    await renderPanel(vi.fn());
+    fireEvent.click(screen.getByTestId('local-folder-pick'));
+    await screen.findByTestId('local-folder-group-场景');
+
+    fireEvent.click(screen.getByTestId('local-folder-collapse'));
+    expect(screen.queryByTestId('local-folder-grid')).toBeNull();
+    fireEvent.click(screen.getByTestId('local-folder-collapse'));
+    expect(await screen.findByTestId('local-folder-grid')).toBeInTheDocument();
+
+    const header = screen.getByTestId('local-folder-group-场景').querySelector('button')!;
+    fireEvent.click(header);
+    expect(screen.queryByTestId('local-folder-card-场景/a.png')).toBeNull();
+    fireEvent.click(header);
+    expect(screen.getByTestId('local-folder-card-场景/a.png')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('local-folder-select-all'));
+    expect(screen.getByTestId('local-folder-card-cover.png').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('local-folder-select-all').textContent).toContain('取消全选');
+    fireEvent.click(screen.getByTestId('local-folder-select-all'));
+    expect(screen.getByTestId('local-folder-card-cover.png').getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByTestId('local-folder-card-场景/a.png').getAttribute('aria-pressed')).toBe('false');
+    await settle();
+  });
+
   it('asks for a fresh grant instead of pretending the folder is readable', async () => {
     stubPicker(fakeDirectoryHandle('受限素材', [
       ['hero.png', fakeFileHandle({ name: 'hero.png', type: 'image/png' })],
