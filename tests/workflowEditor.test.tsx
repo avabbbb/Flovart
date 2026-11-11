@@ -577,6 +577,19 @@ describe('InfiniteWorkflow surface interactions', () => {
     expect(sourceHandle()).toHaveFocus();
   });
 
+  it('drags a node by its title bar (text nodes keep an editable body)', () => {
+    render(<Harness />);
+    const source = editor().querySelector<HTMLElement>('[data-workflow-node-id="source"]')!;
+    const title = source.querySelector<HTMLElement>('.workflow-node__title')!;
+    expect(projectNode('source').position).toEqual({ x: 100, y: 100 });
+
+    fireEvent.pointerDown(title, { button: 0, pointerId: 7, clientX: 120, clientY: 80 });
+    fireEvent.pointerMove(window, { buttons: 1, pointerId: 7, clientX: 220, clientY: 180 });
+    fireEvent.pointerUp(window, { pointerId: 7, clientX: 220, clientY: 180 });
+
+    expect(projectNode('source').position).toEqual({ x: 200, y: 200 });
+  });
+
   it('opens the same create menu when a source connection is dropped on blank space and can cancel it', async () => {
     render(<Harness />);
 

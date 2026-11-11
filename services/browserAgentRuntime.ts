@@ -10,6 +10,8 @@ import type { ProductionSkillAttachment } from './productionSkillCatalog';
 import {
   BrowserAgentKernel,
   createBrowserAgentTools,
+  type AgentAskRequest,
+  type AgentAskResult,
   type BrowserAgentTextRoute,
 } from './browserAgentKernel';
 
@@ -17,6 +19,7 @@ export interface BrowserAgentRuntimeDeps {
   projectId: string;
   route: BrowserAgentTextRoute;
   confirm: (summary: string, request?: AgentConfirmRequest) => Promise<boolean>;
+  ask?: (request: AgentAskRequest) => Promise<AgentAskResult>;
   systemPrompt: string;
   getNodes?: () => readonly WorkflowNode[];
   getPolicy?: () => { sandbox: SandboxPolicy; approval: ApprovalPolicy };
@@ -124,6 +127,7 @@ export class BrowserAgentRuntime {
       tools: createBrowserAgentTools({
         projectId: deps.projectId,
         confirm: deps.confirm,
+        ask: deps.ask,
         activeChangeSetId: '',
         getNodes: deps.getNodes,
         // 委派回合进行时强制套用只读/受限策略，不跟随面板模式。

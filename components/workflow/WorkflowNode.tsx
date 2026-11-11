@@ -477,7 +477,6 @@ export function WorkflowNode({
       ) : (
         <div
           className="workflow-node__title"
-          onPointerDown={event => event.stopPropagation()}
           onDoubleClick={event => {
             event.stopPropagation();
             // 子画布：双击标题文字重命名；标题条其余区域双击回到逆向。

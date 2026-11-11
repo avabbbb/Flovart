@@ -3,7 +3,7 @@ import { createWorkflowNode } from '../components/workflow/constants';
 import { createWorkflowProject, useWorkflowStore } from '../components/workflow/store';
 import { confirmGrantKey, confirmScopesFor, describeAgentConfirmation } from '../components/agent/agentConfirmCopy';
 import { agentToolLabel, displayUserTurnText } from '../components/agent/agentTurnText';
-import { createBrowserAgentTools, NODE_TOOL_TOOL_NAME } from '../services/browserAgentKernel';
+import { ASK_TOOL_NAME, createBrowserAgentTools, NODE_TOOL_TOOL_NAME } from '../services/browserAgentKernel';
 import { setWorkflowNodeToolRunner } from '../services/workflowDispatcher';
 
 const video = createWorkflowNode('video-1', 'video', { x: 0, y: 0 }, { storageKey: 'video-key', mimeType: 'video/mp4', name: 'dragon.mp4' });
@@ -41,6 +41,24 @@ describe('Agent transcript text', () => {
     expect(displayUserTurnText(stored)).toBe('抽第十秒的帧\n\n引用：@视频 1');
     expect(agentToolLabel('flovart_workflow_inspect', 'zho')).toBe('读取画布');
     expect(agentToolLabel('plugin_tool', 'zho')).toBe('plugin_tool');
+  });
+});
+
+describe('built-in Agent ask tool', () => {
+  it('exposes flovart_ask and returns the submitted form data', async () => {
+    const ask = vi.fn(async () => ({ ok: true as const, data: { style: 'fresh' } }));
+    const tools = createBrowserAgentTools({ projectId: 'p', confirm: vi.fn(async () => true), ask, activeChangeSetId: 'turn' });
+    const tool = tools.find(item => item.name === ASK_TOOL_NAME)!;
+    expect(tool).toBeDefined();
+    const result = await tool.execute('call', { html: '<form><input name="style"></form>' } as never, undefined as never);
+    expect(ask).toHaveBeenCalledWith({ html: '<form><input name="style"></form>' });
+    expect(JSON.parse((result.content[0] as { text: string }).text)).toEqual({ ok: true, data: { style: 'fresh' } });
+  });
+
+  it('turns a cancelled ask into a tool error', async () => {
+    const tools = createBrowserAgentTools({ projectId: 'p', confirm: vi.fn(async () => true), ask: vi.fn(async () => ({ ok: false as const, cancelled: true as const })), activeChangeSetId: 'turn' });
+    const tool = tools.find(item => item.name === ASK_TOOL_NAME)!;
+    await expect(tool.execute('call', { html: '<form><input name="x"></form>' } as never, undefined as never)).rejects.toThrow(/取消/);
   });
 });
 

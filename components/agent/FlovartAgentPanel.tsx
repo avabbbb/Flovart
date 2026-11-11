@@ -23,7 +23,7 @@ import {
 } from '../../services/productionSkillCatalog';
 import { createLocalSkillRegistry } from '../../services/localSkillRegistry';
 import { consumePendingProductionSkill } from '../../stores/useProductionSkillComposerStore';
-import { BROWSER_DEFAULT_SYSTEM_PROMPT, resolveBrowserAgentTextRoute } from '../../services/browserAgentKernel';
+import { BROWSER_DEFAULT_SYSTEM_PROMPT, resolveBrowserAgentTextRoute, type AgentAskRequest, type AgentAskResult } from '../../services/browserAgentKernel';
 import { BrowserAgentRuntime } from '../../services/browserAgentRuntime';
 import { loadAgentNodeMedia } from '../../services/agentMediaView';
 import { formatReceiptContext } from '../../services/agentReceipts';
@@ -47,6 +47,8 @@ import { AGENT_TODO_TOOL_NAME, latestTodoFromMessages, todoFromToolResult, type 
 import { AgentHeaderLeadingContext } from './agentHeaderSlot';
 import { DrawerChromeCollapse, DrawerChromeTabs } from '../studio/drawerChrome';
 import { AgentConfirmCard } from './AgentConfirmCard';
+import { AgentAskCard } from './AgentAskCard';
+import { parseAgentAskHtml, type AgentAskForm } from './agentAskForm';
 import { confirmGrantKey, confirmScopesFor, readAlwaysGrants, writeAlwaysGrants, type AgentConfirmScope } from './agentConfirmCopy';
 import { displayUserTurnText, agentToolLabel } from './agentTurnText';
 import { activityAfterConfirmation, agentLayerReducer, blockerAfterCredentialSignal, closedLayers, needsCredential, replacePendingConfirmation, useAgentTurn } from './agentPanelState';
@@ -149,6 +151,7 @@ const userApiKeysRef = useRef(userApiKeys);
   const workspaceBridge = useRef<WorkflowAgentBridge | undefined>(undefined);
   const abort = useRef<AbortController | undefined>(undefined);
   type PendingConfirmation = { id?: string; summary: string; resolve: (approved: boolean) => void; request?: AgentConfirmRequest; offerMandate?: boolean; blocked?: boolean };
+  type PendingAsk = { id: string; form: AgentAskForm; resolve: (result: AgentAskResult) => void };
   const composer = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -159,6 +162,7 @@ const userApiKeysRef = useRef(userApiKeys);
   const activity = useRef(onActivityChange);
   const modeRef = useRef<'manual' | 'auto'>('auto');
   const confirmationRef = useRef<PendingConfirmation | undefined>(undefined);
+  const askRef = useRef<PendingAsk | undefined>(undefined);
   // 自动模式付费授权：第一次生成时确认上限，之后上限内的生成自动批准。
   const mandateRef = useRef<AgentSpendMandate | null>(null);
   // 「本次对话」授权：同一类操作在当前会话里不再重复询问；切换会话或项目时清空。
@@ -179,6 +183,7 @@ const userApiKeysRef = useRef(userApiKeys);
   const { turn, turnRef, dispatchTurn } = useAgentTurn();
   const sending = turn.phase !== 'idle';
   const [confirmation, setConfirmation] = useState<PendingConfirmation>();
+  const [pendingAsk, setPendingAsk] = useState<PendingAsk>();
   const [mandate, setMandate] = useState<AgentSpendMandate | null>(null);
   const [mandateTasks, setMandateTasks] = useState(10);
   const [mode, setMode] = useState<'manual' | 'auto'>('auto');
@@ -234,6 +239,27 @@ const userApiKeysRef = useRef(userApiKeys);
     confirmationRef.current = undefined;
     pending.resolve(approved);
     setConfirmation(undefined);
+    dispatchTurn({ type: 'confirmResolved' });
+    if (nextActivity) activity.current(nextActivity);
+  };
+  const presentAsk = (request: AgentAskRequest): Promise<AgentAskResult> => {
+    const parsed = parseAgentAskHtml(request.html);
+    if ('error' in parsed) return Promise.resolve({ ok: false, error: parsed.error });
+    askRef.current?.resolve({ ok: false, error: '新的提问替换了本次提问。' });
+    return new Promise(resolve => {
+      const pending = { id: crypto.randomUUID(), form: parsed.form, resolve };
+      askRef.current = pending;
+      setPendingAsk(pending);
+      dispatchTurn({ type: 'confirmRequested' });
+      activity.current('waiting');
+    });
+  };
+  const settleAsk = (pending: PendingAsk, result: AgentAskResult) => {
+    if (askRef.current?.id !== pending.id) return;
+    const nextActivity = activityAfterConfirmation(turnRef.current.phase);
+    askRef.current = undefined;
+    pending.resolve(result);
+    setPendingAsk(undefined);
     dispatchTurn({ type: 'confirmResolved' });
     if (nextActivity) activity.current(nextActivity);
   };
@@ -411,6 +437,9 @@ const userApiKeysRef = useRef(userApiKeys);
     client.current = undefined;
     kernelRef.current = undefined;
     setConfirmation(undefined);
+    askRef.current?.resolve({ ok: false, cancelled: true });
+    askRef.current = undefined;
+    setPendingAsk(undefined);
     mandateRef.current = null;
     sessionGrantsRef.current.clear();
     setMandate(null);
@@ -435,6 +464,7 @@ const userApiKeysRef = useRef(userApiKeys);
         projectId: project.id,
         route,
         confirm,
+        ask: presentAsk,
         systemPrompt: BROWSER_DEFAULT_SYSTEM_PROMPT + receiptContext,
         getNodes: () => projectRef.current.nodes,
         webSearch: searchCredential ?? undefined,
@@ -822,6 +852,9 @@ const userApiKeysRef = useRef(userApiKeys);
       }
     } finally {
       dispatchTurn({ type: 'settled', turnId });
+      // 会话标题由内核在 persist 时从首条用户消息派生；回合结束后主动刷新，
+      // 否则标题要等用户点开会话菜单才更新。
+      void refreshSessions();
     }
   };
 
@@ -832,6 +865,9 @@ const userApiKeysRef = useRef(userApiKeys);
     dispatchTurn({ type: 'stop' });
     replacePendingConfirmation(confirmationRef, undefined);
     setConfirmation(undefined);
+    askRef.current?.resolve({ ok: false, cancelled: true });
+    askRef.current = undefined;
+    setPendingAsk(undefined);
     abort.current?.abort();
     activity.current('idle');
     const cancelled = kernelRef.current ? kernelRef.current.cancel() : client.current?.cancel(project.id);
@@ -1007,6 +1043,13 @@ const userApiKeysRef = useRef(userApiKeys);
             : <button type="button" onClick={() => void saveGroupAsSkill()}>{language === 'zho' ? '保存为 Skill' : 'Save as Skill'}</button>}
           <button type="button" aria-label={language === 'zho' ? '关闭' : 'Dismiss'} onClick={() => setGroupBanner(null)}><X size={12} /></button>
         </div>}
+        {pendingAsk && <AgentAskCard
+          key={pendingAsk.id}
+          form={pendingAsk.form}
+          language={language === 'zho' ? 'zho' : 'en'}
+          onSubmit={data => settleAsk(pendingAsk, { ok: true, data })}
+          onCancel={() => settleAsk(pendingAsk, { ok: false, cancelled: true })}
+        />}
         {confirmation && <AgentConfirmCard
           key={confirmation.id}
           summary={confirmation.summary}

@@ -461,10 +461,22 @@ function descriptorSchema(descriptor: string) {
   return optional ? Type.Optional(schema) : schema;
 }
 
+export interface AgentAskRequest {
+  /** 与 omp ask 相同：一个 HTML <form>，控件必须带 name。 */
+  html: string;
+}
+
+export type AgentAskResult =
+  | { ok: true; data: Record<string, unknown> }
+  | { ok: false; error: string }
+  | { ok: false; cancelled: true };
+
 export interface BrowserAgentToolDependencies {
   projectId: string;
   /** 高风险操作（删除、付费、Production 运行等）的用户确认；返回 false 表示拒绝 */
   confirm: (summary: string, request?: AgentConfirmRequest) => Promise<boolean>;
+  /** 结构化提问；提供时注册 flovart_ask（与 omp ask 的 HTML form 契约一致） */
+  ask?: (request: AgentAskRequest) => Promise<AgentAskResult>;
   /** 当前 Agent 回合的幂等键（可逆写操作合并进同一 ChangeSet） */
   activeChangeSetId: string;
   /** 读取当前画布节点；提供时注册 flovart_workflow_media_view，让 Agent 看图片/视频的真实画面 */
@@ -547,6 +559,7 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
   extraTools.push(createWebSearchTool(dependencies.webSearch, guard));
   extraTools.push(createLocalGrepTool(guard));
   extraTools.push(createNodeToolTool(runCommand));
+  if (dependencies.ask) extraTools.push(createAskTool(dependencies.ask));
   if (dependencies.getNodes) extraTools.push(createMediaViewTool(dependencies.getNodes));
   return [...commandTools, ...extraTools];
 }
@@ -655,6 +668,34 @@ function createNodeToolTool(runCommand: (command: string, params: Record<string,
   };
 }
 
+export const ASK_TOOL_NAME = 'flovart_ask';
+
+/** omp ask 的浏览器版：模型给一个 <form>，宿主渲染并回传 JSON。 */
+function createAskTool(ask: (request: AgentAskRequest) => Promise<AgentAskResult>): AgentTool {
+  return {
+    name: ASK_TOOL_NAME,
+    label: 'ask',
+    description: '向用户提出需要决定的问题。html 必须是一个 <form>，每个控件都要有 name；提交后返回 JSON。'
+      + '用 radio/checkbox/select 给选项，用 text/textarea 收集自由输入；不要写 script/style/button，不要要求密钥。'
+      + '一次只问一个关键决定，表单保持简短，用 checked/selected 预选推荐项。',
+    parameters: Type.Object({
+      html: Type.String({ description: 'one HTML <form> with named controls' }),
+    }),
+    execute: async (_toolCallId, params) => {
+      const request = params as AgentAskRequest;
+      if (typeof request.html !== 'string' || !request.html.trim()) {
+        throw new Error('ask 需要一个非空的 html 表单。');
+      }
+      const result = await ask(request);
+      if (!result.ok && 'cancelled' in result) throw new Error('用户取消了提问。');
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result) }],
+        details: result,
+      };
+    },
+  };
+}
+
 export const MEDIA_VIEW_TOOL_NAME = 'flovart_workflow_media_view';
 
 function createMediaViewTool(getNodes: () => readonly WorkflowNode[]): AgentTool {
@@ -699,6 +740,7 @@ const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，Flovart 生成式 
 - flovart_workflow_apply：结构化修改画布。operations 只允许 add_node、create_connected_node、update_node、delete_nodes、delete_connections、connect_nodes、move_nodes、reorder_nodes、group_nodes、ungroup_nodes、set_batch_primary。
 - flovart_workflow_node_run：运行生成节点（nodeId 或 nodeIds 批量，一次确认费用）。
 - flovart_workflow_node_tool：在节点上执行后处理工具（截取视频任意秒数的帧、剪辑、音视频分离、拼接、裁剪、放大、去背景等），结果作为新节点写回画布。
+- flovart_ask：需要用户在几个方案里做选择或补充关键信息时，用 HTML <form> 结构化提问（控件必须带 name；一次只问一个关键决定）。不要用它询问 API Key、Token 等秘密，也不要在正文里堆长问题让用户再回一轮。
 - flovart_workflow_media_view：查看图片/视频节点的真实画面（nodeIds；视频可用 frames: first/middle/last 或 times: [秒数] 指定任意时间点）。inspect 里的 [media] 只是脱敏占位；需要判断构图、风格或检查生成结果时调用它。用户 @引用的图片/视频会自动附带画面。用户粘贴的截图、拖入的视频会作为本轮图片内容直接附上。
 - flovart_web_search：联网搜索（Parallel 公共 MCP，免 Key，失败回退 DeepSeek）。需要外部资料、竞品信息、风格参考或事实核对时调用；结果给出来源 URL，引用时要带上。
 - flovart_grep：在用户连接过的本地文件夹里搜文本文件（正则）。用户说“我本地的素材/文档里有…”时先用它；只能搜已授权文件夹，读不到任意路径。
