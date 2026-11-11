@@ -182,7 +182,30 @@ export interface RunPlan {
   toGenerate: number;
 }
 
-export function planRun(project: Pick<ReverseVideoProject, 'analysis' | 'axes' | 'variants' | 'slots' | 'outputs'>, dialogueFor?: (shot: ReverseShot) => string): RunPlan {
+/** 登记待生成的镜头计划：去重、标 planned、记录归属项目；不写任何完成语义。 */
+export function appendPlannedOutputs(
+  outputs: readonly ReverseOutputRef[],
+  steps: readonly RunStep[],
+  options: { workflowProjectId?: string; workflowNodeId?: string; now: string; createId: () => string },
+): ReverseOutputRef[] {
+  const known = new Set(outputs.filter((o) => o.ownerKind === 'shot' && o.key).map((o) => o.key as string));
+  const added = steps
+    .filter((step) => !known.has(step.key))
+    .map((step): ReverseOutputRef => ({
+      id: options.createId(),
+      ownerKind: 'shot',
+      ownerId: step.shotId,
+      key: step.key,
+      status: 'planned',
+      origin: 'generated',
+      ...(options.workflowProjectId ? { workflowProjectId: options.workflowProjectId } : {}),
+      ...(options.workflowNodeId ? { workflowNodeId: options.workflowNodeId } : {}),
+      createdAt: options.now,
+    }));
+  return added.length ? [...outputs, ...added] : [...outputs];
+}
+
+export function planRun(project: Pick<ReverseVideoProject, 'analysis' | 'axes' | 'variants' | 'slots' | 'outputs' | 'workflowProjectId'>, dialogueFor?: (shot: ReverseShot) => string): RunPlan {
   const shots = new Map((project.analysis?.shots ?? []).map((s) => [s.id, s] as const));
   const words = project.analysis?.words ?? [];
   const steps = planShotRenders(project).map((plan): RunStep => {
@@ -201,7 +224,13 @@ export function planRun(project: Pick<ReverseVideoProject, 'analysis' | 'axes' |
         }
       : {};
     const key = plan.key + '@' + fnv1a(JSON.stringify(inputs));
-    const reuse = project.outputs.find((o) => o.ownerKind === 'shot' && o.key === key);
+    // 只有「已完成且产物可定位」的 output 才可复用；计划占位（planned）永不参与，
+    // 否则点一次「转为画布」就会把自己的待生成步骤伪装成缓存。
+    const reuse = project.outputs.find((o) => o.ownerKind === 'shot'
+      && o.key === key
+      && o.status === 'completed'
+      && Boolean(o.path || o.artifactId)
+      && (!o.workflowProjectId || !project.workflowProjectId || o.workflowProjectId === project.workflowProjectId));
     return reuse ? { key, shotId: plan.shotId, variantIds: plan.variantIds, reuse } : { key, shotId: plan.shotId, variantIds: plan.variantIds };
   });
   const reused = steps.filter((s) => s.reuse).length;

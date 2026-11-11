@@ -37,13 +37,19 @@ interface ReverseState {
 
 // v1 → v2：产物补 origin。旧产物没有 key，所以永远不会被当作可复用候选（复用只认 key 相同）。
 // v2 → v3：游戏方向暂缓，丢弃旧 game 工程与其 activeId。
+// v3 → v4：区分 planned / completed。历史上点过「转为画布」的占位 output 带 key 但没有真实产物，
+//           必须降级成 planned，否则 planRun 会把它们当缓存、跳过真正的生成。
 export function migrateReverseState(persisted: unknown, version: number): unknown {
-  if (!persisted || typeof persisted !== 'object' || version >= 3) return persisted;
+  if (!persisted || typeof persisted !== 'object' || version >= 4) return persisted;
   const state = persisted as { projects?: Array<{ direction?: string; outputs?: ReverseOutputRef[] }>; activeIds?: Record<string, string | null> };
-  const fixOutput = (o: ReverseOutputRef): ReverseOutputRef => (o.origin ? o : { ...o, origin: 'generated' });
+  const fixOutput = (o: ReverseOutputRef): ReverseOutputRef => {
+    const origin = o.origin ? o : { ...o, origin: 'generated' as const };
+    if (origin.status === 'planned' || origin.status === 'completed') return origin;
+    return { ...origin, status: origin.path || origin.artifactId ? 'completed' : 'planned' };
+  };
   const projects = (state.projects ?? [])
     .filter((p) => p.direction === 'video')
-    .map((p) => (version < 2 ? { ...p, outputs: (p.outputs ?? []).map(fixOutput) } : p) as ReverseProject);
+    .map((p) => ({ ...p, outputs: (p.outputs ?? []).map(fixOutput) }) as ReverseProject);
   return { ...state, tab: 'video', projects, activeIds: { video: state.activeIds?.video ?? null } };
 }
 
@@ -74,6 +80,6 @@ export const useReverseStore = create<ReverseState>()(
         return { projects, activeIds };
       }),
     }),
-    { name: 'flovart-reverse', version: 3, migrate: (persisted, version) => migrateReverseState(persisted, version) as ReverseState },
+    { name: 'flovart-reverse', version: 4, migrate: (persisted, version) => migrateReverseState(persisted, version) as ReverseState },
   ),
 );

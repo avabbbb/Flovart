@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  appendPlannedOutputs,
   buildShotsFromCuts,
   expandVariantMatrix,
+  planRun,
   planShotRenders,
   toScriptBreakdown,
   tokenizeScript,
   wordRangeForShot,
 } from '../services/reverse/video';
+import type { ReverseOutputRef } from '../services/reverse/types';
 import type { ReverseVariantAxis, ReverseVideoProject } from '../services/reverse/types';
 
 const axes: ReverseVariantAxis[] = [
@@ -72,5 +75,59 @@ describe('reverse video', () => {
     expect([count('s1'), count('s2'), count('s3')]).toEqual([2, 1, 3]);
     expect(plans.find((p) => p.shotId === 's2')?.variantIds).toHaveLength(6);
     expect(toScriptBreakdown(project).shots.map((s) => s.durationSec)).toEqual([1, 1, 1]);
+  });
+});
+
+
+describe('reverse run reuse', () => {
+  const project = {
+    references: [],
+    axes: [],
+    variants: expandVariantMatrix([]).variants,
+    slots: [],
+    outputs: [] as ReverseOutputRef[],
+    analysis: {
+      durationMs: 2000,
+      words: [],
+      segments: [],
+      analyzedAt: 'fixture',
+      source: 'manual' as const,
+      shots: [
+        { id: 's1', index: 1, startMs: 0, endMs: 1000, slotIds: [] },
+        { id: 's2', index: 2, startMs: 1000, endMs: 2000, slotIds: [] },
+      ],
+    },
+  };
+
+  it('never reuses a planned placeholder', () => {
+    const first = planRun(project);
+    expect(first.toGenerate).toBe(2);
+
+    const planned = appendPlannedOutputs([], first.steps, { workflowProjectId: 'w1', now: 'now', createId: () => 'o1' });
+    const second = planRun({ ...project, outputs: planned, workflowProjectId: 'w1' });
+    expect(second.reused).toBe(0);
+    expect(second.toGenerate).toBe(2);
+  });
+
+  it('reuses only completed outputs with a locatable artifact in the same project', () => {
+    const first = planRun(project);
+    const planned = appendPlannedOutputs([], [first.steps[0]!], { workflowProjectId: 'w1', now: 'now', createId: () => 'o1' });
+    const base = { ...project, outputs: planned, workflowProjectId: 'w1' };
+
+    expect(planRun({ ...base, outputs: [{ ...planned[0]!, status: 'completed' as const }] }).reused).toBe(0);
+    expect(planRun({ ...base, outputs: [{ ...planned[0]!, status: 'completed' as const, artifactId: 'art-1' }] }).reused).toBe(1);
+    expect(planRun({ ...base, outputs: [{ ...planned[0]!, status: 'completed' as const, path: '/media/a.mp4' }] }).reused).toBe(1);
+    expect(planRun({
+      ...base,
+      outputs: [{ ...planned[0]!, status: 'completed' as const, path: '/media/a.mp4', workflowProjectId: 'w2' }],
+    }).reused).toBe(0);
+  });
+
+  it('deduplicates planned outputs by key', () => {
+    const first = planRun(project);
+    const once = appendPlannedOutputs([], first.steps, { now: 'now', createId: () => 'o' });
+    const twice = appendPlannedOutputs(once, first.steps, { now: 'later', createId: () => 'o2' });
+    expect(twice).toHaveLength(2);
+    expect(twice.map((o) => o.id)).toEqual(['o', 'o']);
   });
 });

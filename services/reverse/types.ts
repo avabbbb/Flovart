@@ -229,6 +229,12 @@ export interface ReverseOutputRef {
   createdAt: string;
   // 复用自其他产出。
   reusedFrom?: string;
+  // planned = 只登记了生成计划，还没有媒体；completed = 产物已落盘、可参与复用。
+  status?: 'planned' | 'completed';
+  // 产物归属的 Workflow 项目；跨项目/跨子画布不允许复用。
+  workflowProjectId?: string;
+  // 本地 Runtime / Artifact Store 的稳定引用；与 path 至少有一个才算真正可复用。
+  artifactId?: string;
 }
 
 export type ReverseGateKind = 'anchor-approval' | 'layout' | 'budget' | 'aigc-label';

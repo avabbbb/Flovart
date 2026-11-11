@@ -45,6 +45,7 @@ Reverse 占据原 Table 的顶栏位置，是**按 Hypit 代码架构与功能�
 - 同步：子节点以稳定 key（镜头 / 槽位）对应逆向工程；重新同步只增改变化项，不覆盖用户在画布上已选的新版本。
 - 双击 subgraph → 切到 Reverse 并打开对应工程；Reverse 内「在画布中打开」→ 切回 Canvas 并定位。
 - 持久化：Workflow 持久化升版本并给旧节点补默认值；workspace 视图枚举 `table` 迁移为 `reverse`。
+- 产物复用只认「已完成且可定位」（`status: completed` 且带 `path`/`artifactId`，并与 `workflowProjectId` 一致）；「转为画布」只登记 `planned` 计划，不写完成语义，也不进入复用缓存。v3 → v4 迁移把历史占位降级为 `planned`。
 
 ## 6. 游戏素材替换（暂缓）
 

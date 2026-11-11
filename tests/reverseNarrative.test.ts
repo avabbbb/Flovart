@@ -89,7 +89,7 @@ describe('reverse retiming and run reuse', () => {
     };
     const first = planRun(project);
     expect(first).toMatchObject({ reused: 0, toGenerate: 2 });
-    const outputs = first.steps.map((s) => ({ id: 'o-' + s.shotId, ownerKind: 'shot' as const, ownerId: s.shotId, key: s.key, origin: 'generated' as const, createdAt: 'fixture' }));
+    const outputs = first.steps.map((s) => ({ id: 'o-' + s.shotId, ownerKind: 'shot' as const, ownerId: s.shotId, key: s.key, origin: 'generated' as const, status: 'completed' as const, path: '/media/' + s.shotId + '.mp4', createdAt: 'fixture' }));
     expect(planRun({ ...project, outputs })).toMatchObject({ reused: 2, toGenerate: 0 });
     const changed = planRun({ ...project, outputs, slots: [{ ...project.slots[0]!, replacement: 'blue bottle' }] });
     expect(changed).toMatchObject({ reused: 1, toGenerate: 1 });

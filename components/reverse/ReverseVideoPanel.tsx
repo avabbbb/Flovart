@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { buildShotsFromCuts, expandVariantMatrix, planRun, readReference, wordRangeForShot, wordsText } from '../../services/reverse/video';
+import { appendPlannedOutputs, buildShotsFromCuts, expandVariantMatrix, planRun, readReference, wordRangeForShot, wordsText } from '../../services/reverse/video';
 import type { ReferenceReading } from '../../services/reverse/video';
 import { parseTranscriptJson } from '../../services/reverse/evidence';
 import { planTarget, segmentsFromNarrative } from '../../services/reverse/target';
@@ -435,17 +435,9 @@ export function ReverseVideoPanel({ project, language, workflowProjectId, onUpda
       const pending = run.steps.filter((s) => !s.reuse);
       onUpdate((p) => ({
         ...p,
-        status: 'generating',
         workflowProjectId,
-        outputs: [...p.outputs, ...pending.map((step) => ({
-          id: newId('out'),
-          ownerKind: 'shot' as const,
-          ownerId: step.shotId,
-          key: step.key,
-          origin: 'generated' as const,
-          ...(res.frameId ? { workflowNodeId: res.frameId } : {}),
-          createdAt: now,
-        }))],
+        // 只登记计划：素材尚未生成，不能带 completed 语义，也不能被 planRun 复用。
+        outputs: appendPlannedOutputs(p.outputs, pending, { workflowProjectId, workflowNodeId: res.frameId, now, createId: () => newId('out') }),
       }));
       setNotice(res.mode === 'create' ? t.converted : t.synced);
     } finally {

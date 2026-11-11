@@ -7,6 +7,7 @@ describe('reverse store migration', () => {
     const next = migrateReverseState(v1, 1) as typeof v1 & { projects: Array<{ outputs: Array<Record<string, unknown>> }> };
     expect(next.projects[0]!.outputs[0]!.origin).toBe('generated');
     expect(next.projects[0]!.outputs[0]!.key).toBeUndefined();
+    expect(next.projects[0]!.outputs[0]!.status).toBe('planned');
   });
 
   it('drops game projects and their active id when moving to v3', () => {
@@ -17,8 +18,24 @@ describe('reverse store migration', () => {
     expect(next.tab).toBe('video');
   });
 
+  it('marks v3 outputs as planned unless a real artifact exists', () => {
+    const v3 = {
+      projects: [{
+        id: 'p1', direction: 'video',
+        outputs: [
+          { id: 'placeholder', ownerKind: 'shot', ownerId: 's1', key: 'k1', origin: 'generated', createdAt: 'x' },
+          { id: 'real', ownerKind: 'shot', ownerId: 's2', key: 'k2', origin: 'generated', path: '/media/a.mp4', createdAt: 'x' },
+        ],
+      }],
+      activeIds: { video: 'p1' },
+    };
+    const next = migrateReverseState(v3, 3) as { projects: Array<{ outputs: Array<Record<string, unknown>> }> };
+    expect(next.projects[0]!.outputs[0]).toMatchObject({ status: 'planned' });
+    expect(next.projects[0]!.outputs[1]).toMatchObject({ status: 'completed' });
+  });
+
   it('leaves current-version state untouched', () => {
-    const v3 = { projects: [] };
-    expect(migrateReverseState(v3, 3)).toBe(v3);
+    const v4 = { projects: [] };
+    expect(migrateReverseState(v4, 4)).toBe(v4);
   });
 });
