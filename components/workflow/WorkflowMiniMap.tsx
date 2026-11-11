@@ -2,7 +2,8 @@ import type { WorkflowNode, WorkflowViewport } from './types';
 
 const MAP_WIDTH = 150;
 const MAP_HEIGHT = 96;
-const MAP_INSET = 8;
+// 小地图内容四周留白：节点不贴边，避免整张图被节点铺满。
+const MAP_PADDING = 20;
 
 export function WorkflowMiniMap({ nodes, viewport, onCenter }: { nodes: WorkflowNode[]; viewport: WorkflowViewport; onCenter: (x: number, y: number) => void }) {
   if (nodes.length === 0) return null;
@@ -12,11 +13,11 @@ export function WorkflowMiniMap({ nodes, viewport, onCenter }: { nodes: Workflow
   const maxY = Math.max(...nodes.map(node => node.position.y + node.height));
   const width = Math.max(1, maxX - minX);
   const height = Math.max(1, maxY - minY);
-  const scale = Math.min(MAP_WIDTH / width, MAP_HEIGHT / height);
+  const scale = Math.min((MAP_WIDTH - MAP_PADDING * 2) / width, (MAP_HEIGHT - MAP_PADDING * 2) / height);
   const contentWidth = width * scale;
   const contentHeight = height * scale;
-  const offsetX = MAP_INSET + (MAP_WIDTH - contentWidth) / 2;
-  const offsetY = MAP_INSET + (MAP_HEIGHT - contentHeight) / 2;
+  const offsetX = (MAP_WIDTH - contentWidth) / 2;
+  const offsetY = (MAP_HEIGHT - contentHeight) / 2;
   return (
     <button
       type="button"
