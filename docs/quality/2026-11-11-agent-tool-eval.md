@@ -63,7 +63,14 @@
 - 分组框本身可点击：点击框内非节点区域即选中整组并开始拖动；不再只能点左上角标签。
 - 组框整组选中后，直接拖组内某个节点只移动该节点；组框保持原位并随内容重算包围盒。移动整组需拖组框空白处或左上角标签。
 
-### 6. Agent 工具面
+### 6. 本地文件夹恢复
+
+- 重新授权、重新选择或拖入同一文件夹后，引用该文件夹的节点立即重读原件，不再等重新挂载。
+- 通过 BroadcastChannel 同步同一站点的其他标签页。
+- 权限失效节点上直接显示「重新连接文件夹」，点击即调用 requestPermission。
+- `useWorkflowMediaUrl` 在错误态返回 `errorCode`，focus/visibilitychange 时复查权限。
+
+### 7. Agent 工具面
 
 - `workflow.inspect` 新增：
   - `summary: true`：轻量图，只给 id/type/title/position/size/status。
@@ -85,7 +92,7 @@
   - 裁剪弹窗可拖拽、比例按钮与数值输入正常；
   - 视频剪辑/指定帧弹窗显示帧、时间码，拖动进度条画面同步变化；
   - 示例画布打开后备注与镜头独立。
-- 交付：提交 `4ca53dd`，已部署 Pages（`1316af34.flovart-b5a.pages.dev`）；DSH webui 重新构建并安装到本地 profile。
+- 交付：提交 `3405d90`，已部署 Pages（`caf42439.flovart-b5a.pages.dev`）；DSH webui 重新构建并安装到本地 profile。
 
 ## 未完成 / 下一轮
 
