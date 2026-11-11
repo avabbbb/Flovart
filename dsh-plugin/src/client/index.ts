@@ -18,7 +18,7 @@ import { isRecord, setLocale, setScheme, watchDocumentTheme, type ColorScheme } 
 import { OverlayHost } from './OverlayHost.tsx'
 
 // Required services on the guarded browser ctx.
-export const inject = ['slots', 'sessions'] as const
+export const inject = ['slots'] as const
 
 const VIEW_ID = 'flovart'
 
