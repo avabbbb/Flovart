@@ -972,7 +972,7 @@ const userApiKeysRef = useRef(userApiKeys);
           {confirmation.offerMandate && <div className="workflow-agent__mandate">
             <label>批准后，本会话自动模式最多自动生成 <input type="number" min={1} value={mandateTasks} onChange={event => setMandateTasks(Math.max(1, Math.floor(Number(event.target.value) || 1)))} aria-label="自动生成任务上限" /> 个任务（含本批），超出会再次询问；删除、取消始终单独确认。</label>
           </div>}
-          <div>
+          <div className="workflow-agent__confirm-actions">
             <button type="button" onClick={() => settleConfirmation(confirmation, false)}>{t('agentPanel.deny')}</button>
             {confirmation.offerMandate && confirmation.request && <button type="button" onClick={() => {
               const request = confirmation.request!;
