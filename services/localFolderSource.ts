@@ -256,13 +256,33 @@ export async function getLocalFolderPermission(folderId: string): Promise<LocalF
   }
 }
 
+type LocalFolderPermissionListener = (folderId: string) => void;
+const permissionListeners = new Set<LocalFolderPermissionListener>();
+
+/** 授权恢复后通知画布上的 local-folder 媒体重新读取。 */
+export function subscribeLocalFolderPermission(listener: LocalFolderPermissionListener): () => void {
+  permissionListeners.add(listener);
+  return () => { permissionListeners.delete(listener); };
+}
+
+function notifyLocalFolderPermission(folderId: string): void {
+  for (const listener of [...permissionListeners]) {
+    try { listener(folderId); } catch { /* 单个订阅者失败不影响其他节点 */ }
+  }
+}
+
 /** 必须在用户手势中调用；刷新后重新获得同一目录的读取权限。 */
 export async function requestLocalFolderPermission(folderId: string): Promise<boolean> {
   const handle = await loadLocalFolderHandle(folderId);
   if (!handle) return false;
-  if (typeof handle.requestPermission !== 'function') return true;
+  if (typeof handle.requestPermission !== 'function') {
+    notifyLocalFolderPermission(folderId);
+    return true;
+  }
   try {
-    return await handle.requestPermission({ mode: 'read' }) === 'granted';
+    const granted = await handle.requestPermission({ mode: 'read' }) === 'granted';
+    if (granted) notifyLocalFolderPermission(folderId);
+    return granted;
   } catch {
     return false;
   }

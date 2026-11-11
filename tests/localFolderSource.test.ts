@@ -13,6 +13,7 @@ import {
   readLocalFolderThumbnail,
   requestLocalFolderPermission,
   scanLocalFolder,
+  subscribeLocalFolderPermission,
   writeLocalFolderThumbnail,
 } from '../services/localFolderSource';
 import { loadFallbackMediaBlob } from '../components/workflow/media';
@@ -115,6 +116,21 @@ describe('local folder reference source', () => {
     await expect(scanLocalFolder(source.id)).rejects.toMatchObject({ code: 'PERMISSION' });
     expect(await requestLocalFolderPermission(source.id)).toBe(true);
     await expect(scanLocalFolder(source.id)).resolves.toBeInstanceOf(Array);
+  });
+
+  it('notifies canvas media subscribers when permission is restored', async () => {
+    const source = await adopt(sampleFolder('prompt'));
+    const seen: string[] = [];
+    const unsubscribe = subscribeLocalFolderPermission(folderId => seen.push(folderId));
+    try {
+      expect(await requestLocalFolderPermission(source.id)).toBe(true);
+      expect(seen).toEqual([source.id]);
+      unsubscribe();
+      expect(await requestLocalFolderPermission(source.id)).toBe(true);
+      expect(seen).toEqual([source.id]);
+    } finally {
+      unsubscribe();
+    }
   });
 
   it('reports missing sources instead of guessing a path', async () => {

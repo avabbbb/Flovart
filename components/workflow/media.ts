@@ -6,7 +6,7 @@ import { readColdMedia } from '../../utils/mediaIndexedDB';
 import { getAssetById } from '../../utils/assetStorage';
 import { loadRuntimeArtifactBlob } from '../../services/runtimeArtifacts';
 import { loadBrowserImportArtifactBlob, parseBrowserImportHref } from '../../services/browserImportArtifacts';
-import { LocalFolderError, parseLocalFolderHref, readLocalFolderFile } from '../../services/localFolderSource';
+import { LocalFolderError, parseLocalFolderHref, readLocalFolderFile, subscribeLocalFolderPermission } from '../../services/localFolderSource';
 import { fetchRemoteMediaBlob, shouldUseDesktopNativeFetch } from '../../services/desktopNetwork';
 import { transcodeVideoToH264 } from '../../services/videoTools';
 import { workflowMediaStorage } from './storage';
@@ -574,6 +574,16 @@ export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string, 
   const mediaKey = storageKey || artifactKey || fallbackHref || '';
   const nativeRemote = shouldUseDesktopNativeFetch(fallbackHref);
   const immediateUrl = storageKey || nativeRemote ? null : (fallbackHref && !isFetchableMediaHref(fallbackHref) ? null : fallbackHref || null);
+  const localFolderId = fallbackHref ? parseLocalFolderHref(fallbackHref)?.folderId : undefined;
+  // 目录授权是按用户手势重新获取的；授权恢复后必须主动重读原件，
+  // 否则节点会一直停在“权限已失效”，直到组件因其他原因重新挂载。
+  const [folderRevision, setFolderRevision] = useState(0);
+  useEffect(() => {
+    if (!localFolderId) return;
+    return subscribeLocalFolderPermission(id => {
+      if (id === localFolderId) setFolderRevision(revision => revision + 1);
+    });
+  }, [localFolderId]);
   const [state, setState] = useState<{ key: string; url: string | null; error: string | null }>({
     key: mediaKey,
     url: immediateUrl,
@@ -607,7 +617,7 @@ export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string, 
       active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [artifactKey, artifactRef?.mimeType, fallbackHref, mediaKey, nativeRemote, storageKey]);
+  }, [artifactKey, artifactRef?.mimeType, fallbackHref, folderRevision, mediaKey, nativeRemote, storageKey]);
 
   return state.key === mediaKey ? state : { url: immediateUrl, error: null };
 }
