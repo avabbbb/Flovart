@@ -627,7 +627,7 @@ export function describeWorkflowNodeTools(): string {
       const cost = capability.executor === 'local-transform' ? '本地处理，免费' : '调用 AI 服务，会先请用户确认';
       return `- ${capability.nodeTool}：${capability.label}（${capability.mediaType}，${cost}）${capability.agentUsage ? '；' + capability.agentUsage : ''}`;
     });
-  return [...operationTools, '- reverse-prompt：反推提示词（image/video，调用视觉模型，把结果写回节点 prompt）', '- filter：图片滤镜（image，参数 filters：{ brightness, contrast, saturation, ... }，只改节点显示参数）'].join('\n');
+  return [...operationTools, '- reverse-prompt：反推提示词（image/video，调用视觉模型，把结果写回节点 prompt）', '- filter：图片滤镜（image，参数 filters：{ brightness, contrast, saturation, ... }，只改节点显示参数）', '- outpaint：扩展画面（image，参数 direction/amount/prompt；direction 为 left/right/top/bottom/all）', '- mask：蒙版编辑（image，参数 prompt + maskNodeId 或 maskHref/maskMimeType；生成新的结果图）'].join('\n');
 }
 
 function createNodeToolTool(runCommand: (command: string, params: Record<string, unknown>) => Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }>): AgentTool {
@@ -638,7 +638,7 @@ function createNodeToolTool(runCommand: (command: string, params: Record<string,
     description: '在画布节点上执行后处理工具（与节点工具条按钮同一实现），结果作为新节点写回画布并自动连线，返回 outputNodeIds。先用 inspect 拿到节点 ID；视频截帧前可先用 media_view 的 times 找准时间点。可用工具：\n' + describeWorkflowNodeTools(),
     parameters: Type.Object({
       nodeId: Type.String({ description: '源节点 ID（video-merge 可省略，改用 sourceNodeIds）' }),
-      tool: Type.Union([...WORKFLOW_OPERATION_NODE_TOOLS.map(tool => Type.Literal(tool)), Type.Literal('reverse-prompt'), Type.Literal('filter')]),
+      tool: Type.Union([...WORKFLOW_OPERATION_NODE_TOOLS.map(tool => Type.Literal(tool)), Type.Literal('reverse-prompt'), Type.Literal('filter'), Type.Literal('outpaint'), Type.Literal('mask')]),
       position: Type.Optional(Type.Union([Type.Literal('first'), Type.Literal('current'), Type.Literal('last')], { description: 'video-extract-frame：first 首帧 / last 尾帧 / current 指定秒数' })),
       currentTimeSec: optionalNumber('video-extract-frame 的 position=current 时截取的秒数，例如 10'),
       startSec: optionalNumber('剪辑开始秒数'),
@@ -646,7 +646,12 @@ function createNodeToolTool(runCommand: (command: string, params: Record<string,
       sourceNodeIds: Type.Optional(Type.Array(Type.String(), { description: 'video-merge 的有序视频节点 ID' })),
       audio: Type.Optional(Type.Union([Type.Literal('full'), Type.Literal('vocals'), Type.Literal('background')])),
       prompt: Type.Optional(Type.String()),
+      filters: Type.Optional(Type.Record(Type.String(), Type.Number(), { description: 'filter：亮度/对比度/饱和度等数值' })),
       maskNodeId: Type.Optional(Type.String()),
+      maskHref: Type.Optional(Type.String()),
+      maskMimeType: Type.Optional(Type.String()),
+      direction: Type.Optional(Type.String({ description: 'outpaint：left/right/top/bottom/all' })),
+      amount: optionalNumber('outpaint 扩展幅度 0.05-2'),
       targetLongEdge: optionalNumber('upscale 目标长边 512-8192'),
       algorithm: Type.Optional(Type.String()),
       action: Type.Optional(Type.String({ description: 'rotate：rotate-90/rotate-180/rotate-270/flip-h/flip-v' })),

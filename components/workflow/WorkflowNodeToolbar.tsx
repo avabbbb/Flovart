@@ -1,4 +1,4 @@
-import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, AudioLines, ChevronsDown, ChevronsUp, Copy, CornerDownRight, Crop, Download, Eraser, Expand, FilePenLine, Frame, Grid2x2, Group, Layers, Layers3, Library, Lightbulb, Maximize2, MessageSquareText, Play, RefreshCw, RotateCw, ScanLine, ScanText, Scissors, SlidersHorizontal, Square, Trash2, Ungroup, ZoomIn, Gauge, Palette, PenTool, Move } from 'lucide-react';
+import { AlignCenter, AlignLeft, AlignRight, ArrowDownToLine, ArrowUpToLine, AudioLines, ChevronsDown, ChevronsUp, Copy, CornerDownRight, Crop, Download, Eraser, Expand, FilePenLine, Frame, Grid2x2, Group, Layers, Layers3, Library, Maximize2, MessageSquareText, Play, RefreshCw, RotateCw, ScanLine, ScanText, Scissors, SlidersHorizontal, Square, Trash2, Ungroup, ZoomIn, Gauge, PenTool } from 'lucide-react';
 import { AlignHorizontalSpaceAround, AlignVerticalSpaceAround, Bot, Box, Camera, Focus, LayoutGrid, Mic, Mountain, Music, Sparkles, StretchHorizontal, StretchVertical, Space, UserRound } from 'lucide-react';
 import { sequencedFileNames, type WorkflowAlignment, type WorkflowArrangeLayout, type WorkflowDistributeAxis } from './arrange';
 import { useRef, useState } from 'react';
@@ -23,11 +23,7 @@ export interface WorkflowImageToolHandlers {
   splitLayers?: (id: string) => void;
   rotate?: (id: string) => void;
   splitGrid?: (id: string) => void;
-  annotate?: (id: string) => void;
-  relight?: (id: string) => void;
   vectorize?: (id: string) => void;
-  moveObject?: (id: string) => void;
-  restyle?: (id: string) => void;
   layer?: (id: string) => void;
   storyboard?: (ids: string[]) => void;
 }
@@ -149,11 +145,7 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     node?.type === 'image' && mediaUrl && imageTools?.splitLayers && { key: 'split', label: toolLabel('split-layers'), icon: <Layers3 size={18} />, group: 'ai', disabled: advancedToolBusy || Boolean(toolHints?.split), hint: toolHints?.split, onClick: () => imageTools.splitLayers?.(node.id) },
     node?.type === 'image' && mediaUrl && imageTools?.rotate && { key: 'rotate', label: toolLabel('rotate'), icon: <RotateCw size={18} />, group: 'local', disabled: advancedToolBusy, onClick: () => imageTools.rotate?.(node.id) },
     node?.type === 'image' && mediaUrl && imageTools?.vectorize && { key: 'vectorize', label: L('矢量化', 'Vectorize'), icon: <PenTool size={18} />, group: 'local', disabled: advancedToolBusy, onClick: () => imageTools.vectorize?.(node.id) },
-    node?.type === 'image' && mediaUrl && imageTools?.moveObject && { key: 'move-object', label: L('移动物体', 'Move object'), icon: <Move size={18} />, group: 'ai', disabled: advancedToolBusy || Boolean(toolHints?.['move-object']), hint: toolHints?.['move-object'], onClick: () => imageTools.moveObject?.(node.id) },
     node?.type === 'image' && mediaUrl && imageTools?.splitGrid && { key: 'splitGrid', label: toolLabel('split-grid'), icon: <Grid2x2 size={18} />, group: 'output', disabled: advancedToolBusy || Boolean(toolHints?.splitGrid), hint: toolHints?.splitGrid, onClick: () => imageTools.splitGrid?.(node.id) },
-    node?.type === 'image' && mediaUrl && imageTools?.annotate && { key: 'annotate', label: L('标注涂鸦', 'Annotate'), icon: <ScanLine size={18} />, group: 'local', disabled: advancedToolBusy || Boolean(toolHints?.annotate), hint: toolHints?.annotate, onClick: () => imageTools.annotate?.(node.id) },
-    node?.type === 'image' && mediaUrl && imageTools?.relight && { key: 'relight', label: L('打光面板', 'Relight'), icon: <Lightbulb size={18} />, group: 'ai', disabled: advancedToolBusy || Boolean(toolHints?.relight), hint: toolHints?.relight, onClick: () => imageTools.relight?.(node.id) },
-    node?.type === 'image' && mediaUrl && imageTools?.restyle && { key: 'restyle', label: L('视角与风格', 'Angle & style'), icon: <Palette size={18} />, group: 'ai', disabled: advancedToolBusy || Boolean(toolHints?.restyle), hint: toolHints?.restyle, onClick: () => imageTools.restyle?.(node.id) },
     node?.type === 'image' && mediaUrl && imageTools?.layer && { key: 'layer', label: L('叠加层', 'Overlay layer'), icon: <Layers size={18} />, group: 'ai', disabled: advancedToolBusy || Boolean(toolHints?.layer), hint: toolHints?.layer, onClick: () => imageTools.layer?.(node.id) },
     node?.type === 'text' && (node.metadata.noteMergeTargetIds?.length || 0) > 0 && onMergeNotePrompt && { key: 'merge-note-prompt', label: L('并入下游提示词', 'Merge into downstream prompt'), icon: <CornerDownRight size={18} />, onClick: () => onMergeNotePrompt(node.id) },
     selectedMedia.length > 1 && selectedMedia.every(n => n.type === 'image') && imageTools?.storyboard && { key: 'storyboard', label: L('分镜组拼接', 'Storyboard sheet'), icon: <Frame size={18} />, disabled: advancedToolBusy, onClick: () => imageTools.storyboard?.(ids) },

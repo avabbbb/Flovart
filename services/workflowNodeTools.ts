@@ -4,6 +4,7 @@ import {
   runWorkflowCropOperation,
   runWorkflowImageEditOperation,
   runWorkflowLayerOperation,
+  runWorkflowOutpaintOperation,
   runWorkflowRemoveBackgroundOperation,
   runWorkflowRotateOperation,
   runWorkflowSplitGridOperation,
@@ -69,6 +70,24 @@ export async function runWorkflowNodeTool(
           ? { href: String(args.maskHref), mimeType: String(args.maskMimeType || 'image/png') }
           : undefined;
       return runWorkflowImageEditOperation(projectId, nodeId, String(args.prompt || ''), mask ? 'mask' : 'edit', mask, runtime);
+    }
+    case 'mask': {
+      const mask = args.maskNodeId
+        ? { nodeId: String(args.maskNodeId) }
+        : args.maskHref
+          ? { href: String(args.maskHref), mimeType: String(args.maskMimeType || 'image/png') }
+          : undefined;
+      if (!mask) throw new Error('mask 需要 maskNodeId 或 maskHref');
+      return runWorkflowImageEditOperation(projectId, nodeId, String(args.prompt || ''), 'mask', mask, runtime);
+    }
+    case 'outpaint': {
+      const requested = String(args.direction || 'right');
+      const direction = (['left', 'right', 'top', 'bottom', 'all'].includes(requested) ? requested : 'right') as 'left' | 'right' | 'top' | 'bottom' | 'all';
+      return runWorkflowOutpaintOperation(projectId, nodeId, {
+        direction,
+        amount: finite(args.amount, 0.5, 0.05, 2),
+        prompt: String(args.prompt || ''),
+      }, runtime);
     }
     case 'rotate': {
       const requested = String(args.action || args.rotation || 'rotate-90');

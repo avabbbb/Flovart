@@ -849,7 +849,7 @@ export function InfiniteWorkflow({
   const builtInImageTools = useMemo<WorkflowImageToolHandlers>(() => ({
     crop: id => openImageTool('crop', id), filter: id => openImageTool('filter', id), upscale: id => openImageTool('upscale', id),
     removeBackground: id => openImageTool('remove-background', id), outpaint: id => openImageTool('outpaint', id), mask: id => openImageTool('mask', id), splitLayers: id => openImageTool('split', id),
-    rotate: id => openImageTool('rotate', id), splitGrid: id => openImageTool('splitGrid', id), annotate: id => openImageTool('annotate', id), relight: id => openImageTool('relight', id), restyle: id => openImageTool('restyle', id), vectorize: id => openImageTool('vectorize', id), moveObject: id => openImageTool('move', id),
+    rotate: id => openImageTool('rotate', id), splitGrid: id => openImageTool('splitGrid', id), vectorize: id => openImageTool('vectorize', id),
     layer: id => {
       const target = projectRef.current.nodes.find(node => node.id === id);
       // 有媒体的图片节点先在节点内圈选，再进入参数弹窗；其余情况直接弹窗。
@@ -3420,7 +3420,7 @@ export function InfiniteWorkflow({
                       return extractVideoFrame(video, 'first');
                     })();
                   href = await workflowBlobToDataUrl(frame.blob);
-                  mimeType = 'image/png';
+                  mimeType = frame.blob.type || 'image/png';
                   width = frame.width || width;
                   height = frame.height || height;
                 }
