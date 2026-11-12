@@ -14,7 +14,11 @@ describe('Agent surfaces', () => {
     expect(screen.getByRole('heading', { name: '用 DeepSeek Harness（DSH）指挥画布' })).toBeInTheDocument();
     expect(screen.queryByTestId('agent-host-picker')).not.toBeInTheDocument();
     expect(screen.getByText('npm run dsh:profile:install')).toBeInTheDocument();
-    expect(screen.getByText('npm run dsh:start')).toBeInTheDocument();
+    expect(screen.getByTestId('agent-dsh-steps')).toHaveTextContent('npm run dsh:start');
+    const handoff = screen.getByTestId('agent-handoff-prompt');
+    expect(handoff).toHaveTextContent('https://github.com/avabbbb/Flovart');
+    expect(handoff).toHaveTextContent('workflow.inspect --summary');
+    expect(screen.getByRole('button', { name: '一键复制提示词' })).toBeInTheDocument();
     expect(screen.getByTestId('agent-env-note')).toHaveAttribute('data-env', 'local');
     expect(screen.getByTestId('agent-dsh-status')).toHaveTextContent('npm 发布与插件市场尚未完成');
     expect(screen.queryByText('正在优化，后续上线')).not.toBeInTheDocument();

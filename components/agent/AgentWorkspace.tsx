@@ -1,4 +1,6 @@
 import { Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import { copyToClipboard } from './agentTranscript';
 import '../../styles/agent.css';
 import type { WorkflowProject } from '../workflow/types';
 
@@ -20,6 +22,7 @@ export function AgentConnectionsPage({ project, language = 'zho' }: { project: W
   void project;
   const hosted = isHostedDemo();
   const zh = language === 'zho';
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
   const copy = zh
     ? {
         tag: 'Agent · DSH',
@@ -55,6 +58,49 @@ export function AgentConnectionsPage({ project, language = 'zho' }: { project: W
         status: 'Status: packaged and installed into a clean profile locally; npm publish and marketplace listing not done yet; conversation acceptance under a real DeepSeek login still unverified.',
         drawer: 'Without DSH you can keep working in the assistant panel beside the canvas.',
       };
+  const handoffPrompt = zh
+    ? `你是 Flovart 的本地编码 Agent。请通过可见的 Flovart Workflow 操作画布，不要直接改前端状态。
+
+仓库：https://github.com/avabbbb/Flovart
+
+准备：
+git clone https://github.com/avabbbb/Flovart.git
+cd Flovart
+npm install
+npm run flovart:cli -- ensure --json
+npm run flovart:cli -- status --json
+
+连接后先读：
+npm run flovart:cli -- workflow.inspect --summary --json
+
+约束：
+- 只通过 flovart CLI / Flovart Skill 的 Workflow 契约读写；参考 .claude/skills/flovart/SKILL.md。
+- 写入只用 workflow.apply，带 projectId、expectedRevision、mutationId；多个修改合并为一次 apply。
+- 不直接写 React/Zustand、浏览器存储、Runtime 数据库或 Provider 私有 API。
+- 修改前后都要 inspect；付费生成前先让用户确认。
+
+如果在 DSH 中运行：先执行 npm run dsh:profile:install，然后在 DSH 主会话切到 Iris 页签，用同一套自然语言指令操作画布；其他 Agent 使用上面的 CLI 方式。`
+    : `You are a local coding agent working on Flovart. Operate only through the visible Flovart Workflow; never write frontend state directly.
+
+Repository: https://github.com/avabbbb/Flovart
+
+Prepare:
+git clone https://github.com/avabbbb/Flovart.git
+cd Flovart
+npm install
+npm run flovart:cli -- ensure --json
+npm run flovart:cli -- status --json
+
+Read the graph first:
+npm run flovart:cli -- workflow.inspect --summary --json
+
+Constraints:
+- Read/write only through the flovart CLI / Flovart Skill Workflow contract; see .claude/skills/flovart/SKILL.md.
+- Writes go through workflow.apply with projectId, expectedRevision and mutationId; batch related edits into one apply.
+- Never write React/Zustand, browser storage, Runtime databases or Provider private APIs directly.
+- Inspect before and after changes; ask the user before any paid generation.
+
+For DSH: run npm run dsh:profile:install, then switch to the Iris tab in the DSH main conversation and use the same natural-language instructions. Other agents should use the CLI setup above.`;
   return (
     <div className="h-full min-h-0 overflow-y-auto" data-testid="agent-connections-page" style={{ color: 'var(--isl-ink)' }}>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 sm:p-6">
@@ -80,6 +126,30 @@ export function AgentConnectionsPage({ project, language = 'zho' }: { project: W
                 </li>
               ))}
             </ol>
+          </div>
+          <div className="m-3 rounded-xl border p-4" data-testid="agent-handoff-prompt" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }}>
+            <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <strong className="text-sm">{zh ? '给其他本地 Agent 的提示词' : 'Prompt for another local agent'}</strong>
+                <p className="mt-1 text-xs" style={{ color: 'var(--isl-ink-soft)' }}>
+                  {zh ? '复制后直接发给 Codex / Claude Code / 你自己的 Agent。没有 DSH 也能通过 GitHub 源码和 Flovart CLI 接入本地可见画布。' : 'Copy this into Codex, Claude Code or your own agent. It can use the GitHub source and Flovart CLI without DSH.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
+                style={{ borderColor: 'var(--isl-border)', color: 'var(--isl-ink)' }}
+                aria-live="polite"
+                onClick={async () => {
+                  if (!await copyToClipboard(handoffPrompt)) return;
+                  setCopiedPrompt(true);
+                  window.setTimeout(() => setCopiedPrompt(false), 1600);
+                }}
+              >
+                {copiedPrompt ? (zh ? '已复制' : 'Copied') : (zh ? '一键复制提示词' : 'Copy prompt')}
+              </button>
+            </div>
+            <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg p-3 text-xs leading-relaxed" style={{ background: 'var(--isl-surface-strong, rgba(0,0,0,0.06))', color: 'var(--isl-ink-soft)', userSelect: 'text' }}>{handoffPrompt}</pre>
           </div>
           <p className="mx-3 text-xs" data-testid="agent-dsh-status" style={{ color: 'var(--isl-ink-soft)' }}>{copy.status}</p>
           <p className="mx-3 mb-3 mt-1 text-xs" style={{ color: 'var(--isl-ink-soft)' }}>{copy.drawer}</p>
