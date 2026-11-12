@@ -72,7 +72,13 @@
 - 权限失效节点上直接显示「重新连接文件夹」，点击即调用 requestPermission。
 - `useWorkflowMediaUrl` 在错误态返回 `errorCode`，focus/visibilitychange 时复查权限。
 
-### 7. Agent 工具面
+### 7. 外部 Agent 交接提示词
+
+- Agent 连接页新增「给其他本地 Agent 的提示词」：包含 GitHub 地址、clone/install、`flovart ensure/status/inspect`、写入门禁和 Skill 路径。
+- 一键复制，明确说明 DSH 之外的 Agent 同样可以通过源码 + CLI 接入本地可见画布。
+- 不要求 DSH；DSH profile 只作为其中一条可选路径。
+
+### 8. Agent 工具面
 
 - `workflow.inspect` 新增：
   - `summary: true`：轻量图，只给 id/type/title/position/size/status。
@@ -94,7 +100,7 @@
   - 裁剪弹窗可拖拽、比例按钮与数值输入正常；
   - 视频剪辑/指定帧弹窗显示帧、时间码，拖动进度条画面同步变化；
   - 示例画布打开后备注与镜头独立。
-- 交付：提交 `e81ddb7`，已部署 Pages（`ec2b3c8b.flovart-b5a.pages.dev`）；DSH webui 重新构建并安装到本地 profile。
+- 交付：提交 `6a76b86`，已部署 Pages（`6efee01a.flovart-b5a.pages.dev`）；DSH webui 重新构建并安装到本地 profile。
 
 ## 未完成 / 下一轮
 
