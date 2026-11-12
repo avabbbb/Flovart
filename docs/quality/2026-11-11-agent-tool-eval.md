@@ -57,6 +57,7 @@
 - 音频节点改为 LibTV 式卡片：内联「截取 / 变速 / 变调 / 人声分离」、波形、原生播放器和文件名/时长。
 - 新增 `audio.pitch@1`（±12 半音）及 `audio-pitch` Agent 工具；`audio.speed` 保持不变。
 - Agent 工具目录补齐 `vectorize`、`reverse-prompt`、`filter`、`audio-pitch`。
+- 图片工具条移除标注、打光、风格、移动；扩图与蒙版保留 UI，并新增 Agent 工具 `outpaint` / `mask`（mask 支持 maskNodeId 或 maskHref）。
 
 ### 5. 工具可执行性与信息架构
 
@@ -108,7 +109,7 @@
   - 裁剪弹窗可拖拽、比例按钮与数值输入正常；
   - 视频剪辑/指定帧弹窗显示帧、时间码，拖动进度条画面同步变化；
   - 示例画布打开后备注与镜头独立。
-- 交付：提交 `7b6af9c`，已部署 Pages（`9df07aad.flovart-b5a.pages.dev`）；DSH webui 重新构建并安装到本地 profile。
+- 交付：提交 `83e3da2`，已部署 Pages（`929e085b.flovart-b5a.pages.dev`）；DSH webui 重新构建并安装到本地 profile。
 
 ## 未完成 / 下一轮
 
