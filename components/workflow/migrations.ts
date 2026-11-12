@@ -149,6 +149,26 @@ function migrateNoteSemantics(
   };
 }
 
+function migrateLegacyManualGroups(nodes: WorkflowNode[]): WorkflowNode[] {
+  const groups = new Map<string, WorkflowNode[]>();
+  for (const node of nodes) {
+    if (!node.batchId) continue;
+    const group = groups.get(node.batchId) || [];
+    group.push(node);
+    groups.set(node.batchId, group);
+  }
+  const legacyManualIds = new Set([...groups].flatMap(([batchId, group]) => (
+    group.length > 1
+    && group.every(node => node.batchGroupSource === undefined && node.batchIndex === undefined)
+      ? [batchId]
+      : []
+  )));
+  if (!legacyManualIds.size) return nodes;
+  return nodes.map(node => node.batchId && legacyManualIds.has(node.batchId)
+    ? { ...node, batchGroupSource: 'manual' as const }
+    : node);
+}
+
 export function migrateWorkflowProject(value: unknown, now = new Date().toISOString()): WorkflowProject {
   if (!isRecord(value) || typeof value.id !== 'string' || typeof value.title !== 'string') {
     throw new Error('工作流迁移失败：项目缺少 id 或 title');
@@ -165,11 +185,12 @@ export function migrateWorkflowProject(value: unknown, now = new Date().toISOStr
   const draftVersion = positive(value.draftVersion, positive(value.revision, 1));
   const backgroundMode = value.backgroundMode === 'lines' || value.backgroundMode === 'none' ? value.backgroundMode : 'dots';
   const noteMigration = migrateNoteSemantics(nodes, connections);
+  const migratedNodes = migrateLegacyManualGroups(noteMigration.nodes);
   return {
     ...value,
     id: value.id,
     title: value.title,
-    nodes: noteMigration.nodes,
+    nodes: migratedNodes,
     connections: noteMigration.connections,
     selectedNodeIds,
     viewport: viewportOf(value.viewport),

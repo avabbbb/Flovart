@@ -199,6 +199,9 @@ export function WorkflowToolbar({
       {onToggleSnap && <button type="button" role="menuitemcheckbox" aria-checked={Boolean(snapEnabled)} onClick={() => { onToggleSnap(); closePopover(true); }}><Magnet size={15} />{copy.snap}{snapEnabled ? ' ✓' : ''}</button>}
       <button type="button" role="menuitem" onClick={() => { onToggleGrid(); closePopover(true); }}><Grid2X2 size={15} />{language === 'en' ? 'Toggle grid' : '切换网格'}</button>
       {setWheelMode && wheelMode && <button type="button" role="menuitem" onClick={() => { setWheelMode(wheelMode === 'pan' ? 'zoom' : 'pan'); closePopover(true); }}>{wheelMode === 'pan' ? <MousePointer2 size={15} /> : <ZoomIn size={15} />}{wheelMode === 'pan' ? copy.wheelPan : copy.wheelZoom}</button>}
+      {staleCount > 0 && onRerunStale && (
+        <button type="button" role="menuitem" data-testid="workflow-rerun-stale" onClick={() => { onRerunStale(); closePopover(true); }}><RotateCcw size={15} />{copy.rerunStale(staleCount)}</button>
+      )}
       {onExportCanvas && <button type="button" role="menuitem" data-testid="workflow-export-png" onClick={() => { onExportCanvas('png'); closePopover(true); }}><ImageDown size={15} />{copy.exportPng}{exportSelection ? copy.selectionSuffix : ''}</button>}
       {onExportCanvas && <button type="button" role="menuitem" data-testid="workflow-export-pdf" onClick={() => { onExportCanvas('pdf'); closePopover(true); }}><FileDown size={15} />{copy.exportPdf}{exportSelection ? copy.selectionSuffix : ''}</button>}
       {autoMediaDerive && onToggleAutoMediaDerive && <>
@@ -257,9 +260,6 @@ export function WorkflowToolbar({
     <div className="workflow-toolbar theme-aware" role="toolbar" aria-label={copy.workflowToolbar}>
       {typeof revision === 'number' && revision > 0 && (
         <Tip title={copy.revisionHint}><span className="workflow-canvas-controls__revision" data-testid="workflow-revision" aria-label={`${copy.revision(revision)}. ${copy.revisionHint}`} aria-live="polite">{copy.revision(revision)}</span></Tip>
-      )}
-      {staleCount > 0 && onRerunStale && (
-        <Tip title={copy.rerunStaleHint}><button type="button" className="workflow-canvas-controls__action" data-testid="workflow-rerun-stale" onClick={onRerunStale}><RotateCcw size={14} aria-hidden="true" />{copy.rerunStale(staleCount)}</button></Tip>
       )}
       {hostSend && (
         hostSend.status

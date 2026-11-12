@@ -65,9 +65,10 @@ describe('WorkflowToolbar stale rerun and host send', () => {
   it('offers a selective rerun only when something is stale', () => {
     const onRerunStale = vi.fn();
     const view = render(<WorkflowToolbar {...base} staleCount={2} onRerunStale={onRerunStale} />);
+    fireEvent.click(screen.getByRole('button', { name: '工具箱' }));
+    expect(screen.getByTestId('workflow-rerun-stale')).toHaveTextContent('重跑 2 个过期节点');
     fireEvent.click(screen.getByTestId('workflow-rerun-stale'));
     expect(onRerunStale).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId('workflow-rerun-stale')).toHaveTextContent('重跑 2 个过期节点');
     view.rerender(<WorkflowToolbar {...base} staleCount={0} onRerunStale={onRerunStale} />);
     expect(screen.queryByTestId('workflow-rerun-stale')).not.toBeInTheDocument();
   });

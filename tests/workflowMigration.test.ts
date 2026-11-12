@@ -122,6 +122,23 @@ describe('workflow persistence migrations', () => {
     expect(operationNode?.metadata.operation?.recipe.inputBindings).toEqual([]);
   });
 
+  it('recovers legacy manual groups that predate batchGroupSource', async () => {
+    const project = {
+      ...legacyProject,
+      id: 'legacy-group',
+      nodes: [
+        { ...legacyProject.nodes[0], id: 'legacy-a', type: 'image', batchId: 'manual-legacy' },
+        { ...legacyProject.nodes[0], id: 'legacy-b', type: 'image', batchId: 'manual-legacy' },
+        { ...legacyProject.nodes[0], id: 'auto-a', type: 'image', batchId: 'auto-legacy', batchIndex: 0 },
+        { ...legacyProject.nodes[0], id: 'auto-b', type: 'image', batchId: 'auto-legacy', batchIndex: 1 },
+      ],
+    };
+    const result = await migrateWorkflowPersistedState({ projects: [project], activeProjectId: project.id }, 2);
+    const nodes = result.projects[0].nodes;
+    expect(nodes.filter(node => node.batchId === 'manual-legacy').every(node => node.batchGroupSource === 'manual')).toBe(true);
+    expect(nodes.filter(node => node.batchId === 'auto-legacy').every(node => node.batchGroupSource === undefined)).toBe(true);
+  });
+
   it('rehydrates a legacy storage envelope through the store migration and writes the current version', async () => {
     await workflowStorage.set(WORKFLOW_STORE_KEY, { state: { projects: [legacyProject], activeProjectId: legacyProject.id }, version: 0 });
     await useWorkflowStore.persist.rehydrate();
