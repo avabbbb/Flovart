@@ -45,6 +45,7 @@ export interface WorkflowVideoToolHandlers {
 export interface WorkflowAudioToolHandlers {
   trim?: (id: string) => void;
   speed?: (id: string) => void;
+  pitch?: (id: string) => void;
   stemSplit?: (id: string) => void;
 }
 
@@ -137,7 +138,7 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     media && hasMediaSource && { key: 'download', label: L('下载媒体', 'Download media'), icon: <Download size={18} />, group: 'output', disabled: !mediaUrl, onClick: () => { if (mediaUrl) void saveMediaUrl(mediaUrl, media.metadata.name || media.id).catch(error => console.warn('[Workflow] Media download failed.', error)); } },
     media?.type === 'image' && onSaveMedia && { key: 'save', label: L('保存到素材库', 'Save to media library'), icon: <Library size={18} />, group: 'output', onClick: () => onSaveMedia(media.id) },
     media && hasMediaSource && onPreviewMedia && { key: 'preview', label: L('放大预览', 'Preview'), icon: <Maximize2 size={18} />, group: 'output', disabled: !mediaUrl, onClick: () => onPreviewMedia(media.id) },
-    media?.type === 'image' && mediaUrl && onReversePrompt && { key: 'reverse-prompt', label: L('反推 Prompt', 'Reverse prompt'), icon: <ScanText size={18} />, group: 'ai', disabled: advancedToolBusy || Boolean(toolHints?.['reverse-prompt']), hint: toolHints?.['reverse-prompt'], onClick: () => onReversePrompt(media.id, mediaUrl) },
+    (media?.type === 'image' || media?.type === 'video') && mediaUrl && onReversePrompt && { key: 'reverse-prompt', label: L('反推提示词', 'Reverse prompt'), icon: <ScanText size={18} />, group: 'ai', disabled: advancedToolBusy || Boolean(toolHints?.['reverse-prompt']), hint: toolHints?.['reverse-prompt'], onClick: () => onReversePrompt(media.id, mediaUrl) },
     media && onReplaceMedia && { key: 'replace', label: L('替换媒体', 'Replace media'), icon: <FilePenLine size={18} />, group: 'output', onClick: () => inputRef.current?.click() },
     node?.type === 'image' && mediaUrl && imageTools?.crop && { key: 'crop', label: toolLabel('crop'), icon: <Crop size={18} />, group: 'local', disabled: advancedToolBusy, onClick: () => imageTools.crop?.(node.id) },
     node?.type === 'image' && mediaUrl && imageTools?.filter && { key: 'filter', label: L('图片滤镜', 'Filters'), icon: <SlidersHorizontal size={18} />, group: 'local', disabled: advancedToolBusy, onClick: () => imageTools.filter?.(node.id) },
@@ -160,6 +161,7 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
     selectedMedia.length > 1 && selectedMedia.every(n => n.type === 'video') && videoTools?.merge && { key: 'video-merge', label: toolLabel('video-merge'), icon: <Frame size={18} />, disabled: videoToolBusy, onClick: () => videoTools.merge?.(ids) },
     node?.type === 'audio' && mediaUrl && audioTools?.trim && { key: 'audio-trim', label: toolLabel('audio-trim'), icon: <Scissors size={18} />, disabled: audioToolBusy, onClick: () => audioTools.trim?.(node.id) },
     node?.type === 'audio' && mediaUrl && audioTools?.speed && { key: 'audio-speed', label: toolLabel('audio-speed'), icon: <Gauge size={18} />, disabled: audioToolBusy, onClick: () => audioTools.speed?.(node.id) },
+    node?.type === 'audio' && mediaUrl && audioTools?.pitch && { key: 'audio-pitch', label: L('变调', 'Pitch'), icon: <Music size={18} />, disabled: audioToolBusy, onClick: () => audioTools.pitch?.(node.id) },
     node?.type === 'audio' && mediaUrl && audioTools?.stemSplit && { key: 'audio-stem-split', label: toolLabel('audio-stem-split'), icon: <AudioLines size={18} />, disabled: audioToolBusy, onClick: () => audioTools.stemSplit?.(node.id) },
     node && (node.type === 'image' || node.type === 'video') && onToggleFreeResize && { key: 'resize', label: L('切换自由缩放', 'Toggle free resize'), icon: <Expand size={18} />, active: Boolean(node.freeResize), onClick: () => onToggleFreeResize(node.id) },
     // Generate lives in the prompt bar. The toolbar only carries the state

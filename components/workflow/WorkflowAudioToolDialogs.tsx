@@ -4,11 +4,12 @@ import { useResolvedTheme } from '../../hooks/useResolvedTheme';
 import { isFFmpegSupported } from '../../services/ffmpegClient';
 import type { WorkflowNode } from './types';
 
-export type WorkflowAudioToolKind = 'trim' | 'speed' | 'stem-split';
+export type WorkflowAudioToolKind = 'trim' | 'speed' | 'pitch' | 'stem-split';
 export interface WorkflowAudioToolState { kind: WorkflowAudioToolKind; nodeId: string }
 export type WorkflowAudioToolConfirmation =
   | { kind: 'trim'; startSec: number; endSec: number }
   | { kind: 'speed'; speed: number }
+  | { kind: 'pitch'; semitones: number }
   | { kind: 'stem-split' };
 
 function WorkflowAudioToolDialogsBody({ tool, node, mediaUrl, busy, error, onClose, onConfirm }: {
@@ -24,6 +25,7 @@ function WorkflowAudioToolDialogsBody({ tool, node, mediaUrl, busy, error, onClo
   const common = { open: true, mediaUrl, busy, error, onClose };
   if (tool.kind === 'trim') return <AudioTrimDialog {...common} onConfirm={(startSec, endSec) => onConfirm({ kind: 'trim', startSec, endSec })} />;
   if (tool.kind === 'speed') return <AudioSpeedDialog {...common} onConfirm={(speed) => onConfirm({ kind: 'speed', speed })} />;
+  if (tool.kind === 'pitch') return <AudioPitchDialog {...common} onConfirm={(semitones) => onConfirm({ kind: 'pitch', semitones })} />;
   if (tool.kind === 'stem-split') return <StemSplitDialog {...common} onConfirm={() => onConfirm({ kind: 'stem-split' })} />;
   return null;
 }
@@ -118,6 +120,22 @@ function AudioSpeedDialog(props: CommonProps & { onConfirm: (speed: number) => v
         <p className="workflow-image-tool__hint">当前速度 {speed.toFixed(2)}x，使用 atempo 滤镜变速不变调。输出为 MP3 格式。</p>
         <DialogError error={props.error} />
         <Button type="primary" loading={props.busy} disabled={speed === 1 || !isFFmpegSupported()} onClick={() => props.onConfirm(speed)}>应用变速</Button>
+      </div>
+    </div>
+  </Modal>;
+}
+
+function AudioPitchDialog(props: CommonProps & { onConfirm: (semitones: number) => void }) {
+  const [semitones, setSemitones] = useState(2);
+  return <Modal {...modalProps(props, 620)} title="音频变调">
+    <div className="workflow-image-tool__simple" data-workflow-overlay>
+      <div className="workflow-image-tool__preview"><audio src={props.mediaUrl} controls style={{ width: '100%' }} /></div>
+      <div className="workflow-image-tool__controls">
+        <FFmpegStatus />
+        <label>半音（{semitones > 0 ? '+' : ''}{semitones}）<Slider min={-12} max={12} step={1} value={semitones} onChange={setSemitones} /></label>
+        <p className="workflow-image-tool__hint">升高或降低音高，保持时长基本不变；输出为 MP3。范围 ±12 半音。</p>
+        <DialogError error={props.error} />
+        <Button type="primary" loading={props.busy} disabled={semitones === 0 || !isFFmpegSupported()} onClick={() => props.onConfirm(semitones)}>应用变调</Button>
       </div>
     </div>
   </Modal>;

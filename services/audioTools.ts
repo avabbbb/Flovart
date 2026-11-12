@@ -78,6 +78,34 @@ export async function changeAudioSpeed(blob: Blob, speed: number, originalName =
   return resultBlob;
 }
 
+/**
+ * 变调不变速：先用 asetrate 把采样率按半音比例改变，再用反向 atempo 把时长拉回。
+ * ffmpeg.wasm 没有可靠的分帧音高算法，这里以 44.1k 基准处理；输出统一重采样为 44.1k。
+ */
+export async function changeAudioPitch(blob: Blob, semitones: number, originalName = 'audio.mp3'): Promise<Blob> {
+  if (!Number.isFinite(semitones) || semitones === 0) throw new Error('变调半音数必须是非零数字。');
+  const clamped = Math.max(-12, Math.min(12, semitones));
+  const ratio = Math.pow(2, clamped / 12);
+  const ffmpeg = await getFFmpeg();
+  const format = guessAudioFormat(originalName);
+  const inputName = `input.${format}`;
+  const outputName = 'output-pitch.mp3';
+  await ffmpeg.writeFile(inputName, await fetchFile(blob));
+  try {
+    await ffmpeg.exec([
+      '-i', inputName,
+      '-filter:a', `asetrate=${Math.round(44100 * ratio)},aresample=44100,atempo=${(1 / ratio).toFixed(4)}`,
+      '-vn', '-acodec', 'libmp3lame', '-q:a', '2',
+      outputName,
+    ]);
+    const data = await ffmpeg.readFile(outputName);
+    return new Blob([data], { type: 'audio/mpeg' });
+  } finally {
+    await ffmpeg.deleteFile(inputName).catch(() => undefined);
+    await ffmpeg.deleteFile(outputName).catch(() => undefined);
+  }
+}
+
 function buildAtempoChain(speed: number): string {
   if (!Number.isFinite(speed) || speed <= 0) throw new Error(`无效的音频变速倍率：${speed}（必须为正数）。`);
   const factors: number[] = [];

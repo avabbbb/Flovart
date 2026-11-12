@@ -1,5 +1,5 @@
 import { parseWorkflowOperationParameters } from '../components/workflow/operationRegistry';
-import { changeAudioSpeed, splitAudioStems, trimAudio } from './audioTools';
+import { changeAudioPitch, changeAudioSpeed, splitAudioStems, trimAudio } from './audioTools';
 import { enqueueFFmpegTask } from './videoTools';
 import {
   commitWorkflowOperation,
@@ -16,6 +16,7 @@ import {
 export interface WorkflowAudioOperationRuntime extends WorkflowOperationRuntime {
   executeAudioTrim?: typeof trimAudio;
   executeAudioSpeed?: typeof changeAudioSpeed;
+  executeAudioPitch?: typeof changeAudioPitch;
   executeAudioStemSplit?: typeof splitAudioStems;
 }
 
@@ -130,6 +131,44 @@ async function executeAudioSpeed(
   }
 }
 
+export async function runWorkflowAudioPitchOperation(
+  projectId: string,
+  sourceNodeId: string,
+  semitones: number,
+  runtime: WorkflowAudioOperationRuntime,
+): Promise<WorkflowOperationOutcome> {
+  const started = await startWorkflowOperation({
+    runtime, projectId, capabilityId: 'audio.pitch@1',
+    sources: [{ nodeId: sourceNodeId, role: 'source_audio' }],
+    parameters: { semitones },
+  });
+  return executeAudioPitch(projectId, started, semitones, runtime);
+}
+
+async function executeAudioPitch(
+  projectId: string,
+  started: StartedWorkflowOperation,
+  semitones: number,
+  runtime: WorkflowAudioOperationRuntime,
+) {
+  try {
+    const source = started.sourceNodes[0];
+    const blob = await loadWorkflowOperationSourceBlob(source, runtime);
+    const result = await enqueueFFmpegTask(() => (runtime.executeAudioPitch || changeAudioPitch)(blob, semitones, source.metadata.name || 'audio.mp3'));
+    const baseName = (source.metadata.name || 'audio').replace(/\.[^.]+$/, '');
+    return await commitWorkflowOperation(runtime, projectId, started, [{
+      blob: result,
+      title: `变调 ${semitones > 0 ? '+' : ''}${semitones} 半音`,
+      fileName: `pitch-${semitones > 0 ? 'up' : 'down'}${Math.abs(semitones)}-${baseName}.mp3`,
+      mimeType: 'audio/mpeg',
+      role: 'result_audio',
+    }]);
+  } catch (error) {
+    await failWorkflowOperation(runtime, projectId, started, error);
+    throw error;
+  }
+}
+
 export async function rerunWorkflowAudioOperation(
   projectId: string,
   operationNodeId: string,
@@ -144,6 +183,10 @@ export async function rerunWorkflowAudioOperation(
   if (record.capabilityId === 'audio.speed@1') {
     const { speed } = parseWorkflowOperationParameters(record.capabilityId, record.recipe.parameters) as { speed: number };
     return executeAudioSpeed(projectId, await restartWorkflowOperation(runtime, projectId, operationNodeId), speed, runtime);
+  }
+  if (record.capabilityId === 'audio.pitch@1') {
+    const { semitones } = parseWorkflowOperationParameters(record.capabilityId, record.recipe.parameters) as { semitones: number };
+    return executeAudioPitch(projectId, await restartWorkflowOperation(runtime, projectId, operationNodeId), semitones, runtime);
   }
   if (record.capabilityId === 'audio.stem-split@1') {
     return executeAudioStemSplit(projectId, await restartWorkflowOperation(runtime, projectId, operationNodeId), runtime);

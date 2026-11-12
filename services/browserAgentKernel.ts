@@ -620,14 +620,14 @@ export const NODE_TOOL_TOOL_NAME = 'flovart_workflow_node_tool';
 
 /** 画布后处理工具清单，直接来自 Operation 注册表：以后新增的工具不需要再改 Agent。 */
 export function describeWorkflowNodeTools(): string {
-  return WORKFLOW_OPERATION_CAPABILITY_IDS
+  const operationTools = WORKFLOW_OPERATION_CAPABILITY_IDS
     .map(id => WORKFLOW_OPERATION_CAPABILITIES[id])
     .filter(capability => capability.nodeTool)
     .map(capability => {
       const cost = capability.executor === 'local-transform' ? '本地处理，免费' : '调用 AI 服务，会先请用户确认';
       return `- ${capability.nodeTool}：${capability.label}（${capability.mediaType}，${cost}）${capability.agentUsage ? '；' + capability.agentUsage : ''}`;
-    })
-    .join('\n');
+    });
+  return [...operationTools, '- reverse-prompt：反推提示词（image/video，调用视觉模型，把结果写回节点 prompt）', '- filter：图片滤镜（image，参数 filters：{ brightness, contrast, saturation, ... }，只改节点显示参数）'].join('\n');
 }
 
 function createNodeToolTool(runCommand: (command: string, params: Record<string, unknown>) => Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }>): AgentTool {
@@ -638,7 +638,7 @@ function createNodeToolTool(runCommand: (command: string, params: Record<string,
     description: '在画布节点上执行后处理工具（与节点工具条按钮同一实现），结果作为新节点写回画布并自动连线，返回 outputNodeIds。先用 inspect 拿到节点 ID；视频截帧前可先用 media_view 的 times 找准时间点。可用工具：\n' + describeWorkflowNodeTools(),
     parameters: Type.Object({
       nodeId: Type.String({ description: '源节点 ID（video-merge 可省略，改用 sourceNodeIds）' }),
-      tool: Type.Union(WORKFLOW_OPERATION_NODE_TOOLS.map(tool => Type.Literal(tool))),
+      tool: Type.Union([...WORKFLOW_OPERATION_NODE_TOOLS.map(tool => Type.Literal(tool)), Type.Literal('reverse-prompt'), Type.Literal('filter')]),
       position: Type.Optional(Type.Union([Type.Literal('first'), Type.Literal('current'), Type.Literal('last')], { description: 'video-extract-frame：first 首帧 / last 尾帧 / current 指定秒数' })),
       currentTimeSec: optionalNumber('video-extract-frame 的 position=current 时截取的秒数，例如 10'),
       startSec: optionalNumber('剪辑开始秒数'),

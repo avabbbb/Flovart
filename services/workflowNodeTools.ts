@@ -9,6 +9,7 @@ import {
   runWorkflowSplitGridOperation,
   runWorkflowSplitLayersOperation,
   runWorkflowUpscaleOperation,
+  runWorkflowVectorizeOperation,
   type WorkflowImageOperationRuntime,
 } from './workflowImageOperations';
 import {
@@ -19,6 +20,7 @@ import {
   type WorkflowVideoOperationRuntime,
 } from './workflowVideoOperations';
 import {
+  runWorkflowAudioPitchOperation,
   runWorkflowAudioSpeedOperation,
   runWorkflowAudioStemSplitOperation,
   runWorkflowAudioTrimOperation,
@@ -73,6 +75,10 @@ export async function runWorkflowNodeTool(
       const action = (['rotate-90', 'rotate-180', 'rotate-270', 'flip-h', 'flip-v'].includes(requested) ? requested : 'rotate-90') as 'rotate-90' | 'rotate-180' | 'rotate-270' | 'flip-h' | 'flip-v';
       return runWorkflowRotateOperation(projectId, nodeId, action, runtime);
     }
+    case 'vectorize': {
+      const preset = String(args.preset || 'detailed');
+      return runWorkflowVectorizeOperation(projectId, nodeId, (['detailed', 'poster', 'line'].includes(preset) ? preset : 'detailed') as 'detailed' | 'poster' | 'line', runtime);
+    }
     case 'split-grid':
       return runWorkflowSplitGridOperation(projectId, nodeId, {
         rows: Math.round(finite(args.rows, 2, 1, 6)), cols: Math.round(finite(args.cols, 2, 1, 6)),
@@ -113,6 +119,8 @@ export async function runWorkflowNodeTool(
       }, runtime);
     case 'audio-speed':
       return runWorkflowAudioSpeedOperation(projectId, nodeId, finite(args.speed, 1, .25, 4), runtime);
+    case 'audio-pitch':
+      return runWorkflowAudioPitchOperation(projectId, nodeId, finite(args.semitones, 1, -12, 12), runtime);
     case 'audio-stem-split':
       return runWorkflowAudioStemSplitOperation(projectId, nodeId, runtime);
   }

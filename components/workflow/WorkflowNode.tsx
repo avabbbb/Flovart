@@ -1,6 +1,6 @@
 import { localizeWorkflowNodeTitle } from './constants';
 import { TextNodeBody } from './TextNodeBody';
-import { ArrowLeftRight, Bot, Camera, Check, ChevronsDown, Clapperboard, FileText, Image as ImageIcon, Music2, Pause, Pencil, Play, Plus, RefreshCw, Sparkles, Star, Upload, Video, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowLeftRight, AudioLines, Bot, Camera, Check, ChevronsDown, Clapperboard, FileText, Gauge, Image as ImageIcon, Music2, Pause, Pencil, Play, Plus, RefreshCw, Scissors, Sparkles, Star, Upload, Video, Volume2, VolumeX, X } from 'lucide-react';
 import { WorkflowNodeLasso } from './WorkflowNodeLasso';
 import type { LassoPoint } from './lasso';
 import { Component, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
@@ -149,6 +149,7 @@ export function WorkflowNode({
   onToggleCollapse,
   uploadStage,
   onCancelUpload,
+  onAudioTool,
 }: {
   node: WorkflowNodeData;
   selected: boolean;
@@ -207,6 +208,8 @@ export function WorkflowNode({
   uploadStage?: { stage: 'probe' | 'download' | 'transcode' | 'store'; progress?: number };
   // 取消入库：终止转码并移除占位节点。
   onCancelUpload?: () => void;
+  /** 音频节点内联工具条：截取 / 变速 / 变调 / 人声分离。 */
+  onAudioTool?: (kind: 'trim' | 'speed' | 'pitch' | 'stem-split') => void;
 }) {
   const status = node.metadata.status || 'idle';
   // 只有上游给出的真实百分比才显示；undefined 表示没有百分比。
@@ -613,7 +616,7 @@ export function WorkflowNode({
               {mediaActions}</>
           : <div className="workflow-node__empty"><Video size={26} /><span>{mediaError || (language === 'en' ? 'Video node' : '视频节点')}</span>{regrantAction}{mediaActions}</div>)}
         {node.type === 'audio' && (media.url
-          ? <><audio src={media.url} controls preload="metadata" style={{ width: '100%' }} />{mediaActions}</>
+          ? <AudioNodeCard node={node} src={media.url} language={language} onTool={onAudioTool} />
           : <div className="workflow-node__empty"><Music2 size={26} /><span>{mediaError || (language === 'en' ? 'Audio node' : '音频节点')}</span>{regrantAction}{mediaActions}</div>)}
         {node.type === 'text' && <TextNodeBody value={node.metadata.content || ''} onChange={onChangeText} />}
         {node.type === 'script' && <ScriptNodeCard node={node} />}
@@ -831,7 +834,42 @@ function formatShotSeconds(seconds: number) {
   return Number.isInteger(seconds) ? `${seconds}s` : `${seconds.toFixed(1)}s`;
 }
 
-/** LibTV 式分镜表：每镜一行，列为镜号 / 时长 / 场景 / 画面描述 / 运镜 / 台词与音效。 */
+/** LibTV 式音频卡：内联工具条 + 波形 + 原生播放器。 */
+function AudioNodeCard({ node, src, language, onTool }: {
+  node: WorkflowNodeData;
+  src: string;
+  language: 'en' | 'zho';
+  onTool?: (kind: 'trim' | 'speed' | 'pitch' | 'stem-split') => void;
+}) {
+  const zh = language === 'zho';
+  const duration = node.metadata.durationMs ? `${Math.floor(node.metadata.durationMs / 60000)}:${String(Math.floor((node.metadata.durationMs % 60000) / 1000)).padStart(2, '0')}` : '';
+  const actions: Array<{ kind: 'trim' | 'speed' | 'pitch' | 'stem-split'; label: string; icon: ReactNode }> = [
+    { kind: 'trim', label: zh ? '截取' : 'Trim', icon: <Scissors size={13} /> },
+    { kind: 'speed', label: zh ? '变速' : 'Speed', icon: <Gauge size={13} /> },
+    { kind: 'pitch', label: zh ? '变调' : 'Pitch', icon: <Music2 size={13} /> },
+    { kind: 'stem-split', label: zh ? '人声分离' : 'Stems', icon: <AudioLines size={13} /> },
+  ];
+  return (
+    <div className="workflow-audio-card" data-workflow-overlay onPointerDown={event => event.stopPropagation()}>
+      <div className="workflow-audio-card__tools">
+        {actions.map(action => (
+          <button key={action.kind} type="button" disabled={!onTool} onClick={() => onTool?.(action.kind)} title={action.label}>
+            {action.icon}<span>{action.label}</span>
+          </button>
+        ))}
+      </div>
+      <div className="workflow-audio-card__wave" aria-hidden="true">
+        {Array.from({ length: 42 }, (_, index) => <span key={index} style={{ height: `${18 + ((index * 37 + 19) % 64)}%` }} />)}
+      </div>
+      <audio src={src} controls preload="metadata" />
+      <div className="workflow-audio-card__footer">
+        <span className="workflow-audio-card__name">{node.metadata.name || node.title}</span>
+        {duration && <span>{duration}</span>}
+      </div>
+    </div>
+  );
+}
+
 function ScriptNodeCard({ node }: { node: WorkflowNodeData }) {
   const breakdown = node.metadata.scriptBreakdown;
   const shots = breakdown?.shots || [];

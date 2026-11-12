@@ -5,10 +5,12 @@ import {
 } from './operationRegistry';
 
 /** 尚未迁入 Operation Registry 的旧工具；每迁完一项就从这里删除。 */
-export type WorkflowNodeToolName = WorkflowOperationNodeToolName;
+export type WorkflowNodeToolName = WorkflowOperationNodeToolName | 'reverse-prompt' | 'filter';
 
 export const WORKFLOW_NODE_TOOLS: readonly WorkflowNodeToolName[] = [
   ...WORKFLOW_OPERATION_NODE_TOOLS,
+  'reverse-prompt',
+  'filter',
 ];
 
 const OPERATION_TOOL_LABELS = Object.fromEntries(WORKFLOW_OPERATION_NODE_TOOLS.map(tool => [
@@ -18,6 +20,8 @@ const OPERATION_TOOL_LABELS = Object.fromEntries(WORKFLOW_OPERATION_NODE_TOOLS.m
 
 export const WORKFLOW_NODE_TOOL_LABELS: Record<WorkflowNodeToolName, string> = {
   ...OPERATION_TOOL_LABELS,
+  'reverse-prompt': '反推提示词',
+  filter: '图片滤镜',
 };
 
 export function isWorkflowNodeTool(value: string): value is WorkflowNodeToolName {

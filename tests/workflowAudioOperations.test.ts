@@ -3,6 +3,7 @@ import { createWorkflowNode } from '../components/workflow/constants';
 import type { WorkflowProject } from '../components/workflow/types';
 import {
   rerunWorkflowAudioOperation,
+  runWorkflowAudioPitchOperation,
   runWorkflowAudioSpeedOperation,
   runWorkflowAudioTrimOperation,
 } from '../services/workflowAudioOperations';
@@ -67,6 +68,17 @@ describe('workflow audio operation executors', () => {
     expect(state.current.nodes.filter(node => node.type === 'operation')).toHaveLength(1);
     expect(rerun.metadata.operation?.takes).toHaveLength(2);
     expect(rerun.metadata.operation?.selectedTakeId).toBe(rerun.metadata.operation?.takes[1].id);
+  });
+
+  it('commits a pitch shift and labels the result', async () => {
+    const state = harness();
+    const executeAudioPitch = vi.fn().mockResolvedValue(new Blob(['pitch'], { type: 'audio/mpeg' }));
+    await runWorkflowAudioPitchOperation('project-audio', 'audio-1', 3, { ...state.runtime, executeAudioPitch });
+    const operation = state.current.nodes.find(node => node.type === 'operation');
+    const output = state.current.nodes.find(node => node.metadata.sourceOperationNodeId === operation?.id);
+    expect(operation?.metadata.operation).toMatchObject({ capabilityId: 'audio.pitch@1', recipe: { parameters: { semitones: 3 } } });
+    expect(output?.metadata).toMatchObject({ name: 'pitch-up3-song.mp3', mimeType: 'audio/mpeg', operationOutputRole: 'result_audio' });
+    expect(executeAudioPitch).toHaveBeenCalledWith(expect.any(Blob), 3, 'song.wav');
   });
 
   it('rejects invalid parameters before creation and keeps execution failures retryable', async () => {

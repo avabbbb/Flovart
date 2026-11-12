@@ -24,7 +24,8 @@ import { consumeWorkflowAgentDrawerRequest, subscribeWorkflowAgentDrawer } from 
 import type {  } from './components/workflow/WorkflowConfigPanel';
 import { getGenerationCapability, type GenerationMode } from './services/generationCapabilities';
 import { cancelWorkflowGeneration, findInterruptedWorkflowNodes, runWorkflowGeneration, stopOrphanedWorkflowNode, terminalGenerationPatch } from './services/workflowGeneration';
-import { loadWorkflowMediaBlob } from './components/workflow/media';
+import { loadWorkflowMediaBlob, workflowBlobToDataUrl } from './components/workflow/media';
+import { extractVideoFrame } from './services/videoFrameExtractor';
 import { setWorkflowExecutor, setWorkflowNodeToolRunner } from './services/workflowDispatcher';
 import { createWorkflowExecutor, normalizeWorkflowExecutionError, WorkflowExecutionError, type WorkflowExecutionContext, type WorkflowRunAdapterResult, type WorkflowRunCommand } from './services/workflowExecutor';
 import type { CanonicalGenerationInput } from './components/workflow/inputResolver';
@@ -543,6 +544,66 @@ const App: React.FC = () => {
     const handleWorkflowNodeTool = useCallback(async (projectId: string, nodeId: string, tool: string, args: Record<string, unknown>) => {
         // 画布二次处理工具服务含 ffmpeg 等重型依赖，懒加载避免拖进主 chunk。
         const { runWorkflowNodeTool } = await import('./services/workflowNodeTools');
+        if (tool === 'reverse-prompt') {
+            const project = useWorkflowStore.getState().projects.find(item => item.id === projectId);
+            const node = project?.nodes.find(item => item.id === nodeId);
+            if (!project || !node || (node.type !== 'image' && node.type !== 'video')) throw new Error('反推提示词只支持图片或视频节点');
+            let href: string;
+            let mimeType: string;
+            let width = node.metadata.naturalWidth;
+            let height = node.metadata.naturalHeight;
+            if (node.type === 'video') {
+                const poster = await loadWorkflowMediaBlob(node.metadata.posterStorageKey, node.metadata.poster);
+                const frame = poster ? null : await (async () => {
+                    const video = await loadWorkflowMediaBlob(node.metadata.storageKey, node.metadata.href, node.metadata.artifactRef);
+                    if (!video) throw new Error('视频媒体不存在，无法反推');
+                    return extractVideoFrame(video, 'first');
+                })();
+                const blob = poster || frame!.blob;
+                href = await workflowBlobToDataUrl(blob);
+                mimeType = 'image/png';
+                width = poster ? width : frame!.width;
+                height = poster ? height : frame!.height;
+            } else {
+                const blob = await loadWorkflowMediaBlob(node.metadata.storageKey, node.metadata.href, node.metadata.artifactRef);
+                if (!blob) throw new Error('图片媒体不存在，无法反推');
+                href = await workflowBlobToDataUrl(blob);
+                mimeType = node.metadata.mimeType || blob.type || 'image/png';
+            }
+            const route = await resolveRouteMappingForSubmit(
+                { kind: 'runtime-capability', capability: 'image-understanding' },
+                userApiKeys,
+                confirmRouteFallback,
+            );
+            const prompt = await reversePromptStreamWithProvider(href, mimeType, route.routeId, route.key, () => undefined, undefined, language, { width, height });
+            if (!prompt.trim()) throw new Error('视觉模型没有返回提示词');
+            const latest = useWorkflowStore.getState().projects.find(item => item.id === projectId);
+            if (!latest) throw new Error('项目已切换或删除');
+            const next = {
+                ...latest,
+                nodes: latest.nodes.map(item => item.id === nodeId ? { ...item, metadata: { ...item.metadata, prompt } } : item),
+                draftVersion: (latest.draftVersion || 1) + 1,
+                updatedAt: new Date().toISOString(),
+            };
+            useWorkflowStore.getState().updateProject(projectId, { nodes: next.nodes, draftVersion: next.draftVersion, updatedAt: next.updatedAt });
+            return { status: 'committed' as const, project: next };
+        }
+        if (tool === 'filter') {
+            const project = useWorkflowStore.getState().projects.find(item => item.id === projectId);
+            const node = project?.nodes.find(item => item.id === nodeId);
+            if (!project || !node || node.type !== 'image') throw new Error('滤镜只支持图片节点');
+            const raw = args.filters;
+            if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('filter 需要 filters 对象');
+            const filters = Object.fromEntries(Object.entries(raw as Record<string, unknown>).filter(([, value]) => typeof value === 'number' && Number.isFinite(value)));
+            const next = {
+                ...project,
+                nodes: project.nodes.map(item => item.id === nodeId ? { ...item, metadata: { ...item.metadata, filters } } : item),
+                draftVersion: (project.draftVersion || 1) + 1,
+                updatedAt: new Date().toISOString(),
+            };
+            useWorkflowStore.getState().updateProject(projectId, { nodes: next.nodes, draftVersion: next.draftVersion, updatedAt: next.updatedAt });
+            return { status: 'committed' as const, project: next };
+        }
         const runtime: WorkflowNodeToolRuntime = {
             userApiKeys,
             confirmRouteFallback,

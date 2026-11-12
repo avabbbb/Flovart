@@ -161,6 +161,15 @@
 .workflow-node__body textarea { box-sizing: border-box; width: 100%; height: 100%; resize: none; border: 0; outline: 0; padding: 12px; color: inherit; background: transparent; font: inherit; user-select: text; }
 .workflow-node__regrant { padding:4px 9px; border:1px solid var(--wf-border); border-radius:6px; color:var(--wf-text); background:color-mix(in srgb,var(--wf-panel) 78%,transparent); font-size:11px; cursor:pointer; }
 .workflow-node__regrant:hover { border-color:var(--wf-accent); color:var(--wf-accent); }
+.workflow-audio-card { box-sizing:border-box; display:flex; height:100%; flex-direction:column; gap:4px; padding:6px; }
+.workflow-audio-card__tools { display:flex; flex:0 0 auto; gap:2px; overflow:hidden; }
+.workflow-audio-card__tools button { display:inline-flex; flex:0 0 auto; align-items:center; gap:3px; height:22px; padding:0 5px; border:1px solid var(--wf-border); border-radius:5px; color:var(--wf-muted); background:transparent; font-size:10px; cursor:pointer; }
+.workflow-audio-card__tools button:hover { color:var(--wf-text); background:color-mix(in srgb,var(--wf-accent) 12%,transparent); }
+.workflow-audio-card__wave { display:flex; flex:1 1 auto; min-height:18px; align-items:center; gap:2px; overflow:hidden; }
+.workflow-audio-card__wave span { flex:1 1 0; min-width:1px; border-radius:99px; background:linear-gradient(180deg,var(--wf-accent),color-mix(in srgb,var(--wf-accent) 38%,transparent)); opacity:.72; }
+.workflow-audio-card audio { flex:0 0 auto; width:100%; height:28px; color-scheme:dark; }
+.workflow-audio-card__footer { display:flex; flex:0 0 auto; justify-content:space-between; gap:8px; color:var(--wf-muted); font-size:10px; }
+.workflow-audio-card__name { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .workflow-video-placeholder { box-sizing:border-box; display:grid; place-content:center; justify-items:center; gap:8px; width:100%; height:100%; color:var(--wf-muted); background:radial-gradient(120% 90% at 25% 15%,color-mix(in srgb,var(--wf-accent,#6c64b0) 14%,transparent),transparent 62%),linear-gradient(145deg,var(--wf-strong),color-mix(in srgb,var(--wf-panel) 78%,var(--wf-bg))); font-size:11px; }
 .workflow-video-preparing { position:relative; box-sizing:border-box; display:grid; place-content:center; justify-items:center; gap:8px; width:100%; height:100%; padding:16px; overflow:hidden; text-align:center; color:var(--wf-muted); background:radial-gradient(120% 90% at 25% 15%,color-mix(in srgb,var(--wf-accent,#6c64b0) 20%,transparent),transparent 62%),linear-gradient(145deg,var(--wf-strong),color-mix(in srgb,var(--wf-panel) 78%,var(--wf-bg))); font-size:11px; }
 .workflow-video-preparing-icon { display:grid; width:38px; height:38px; place-items:center; border-radius:50%; color:var(--wf-accent,#6c64b0); background:color-mix(in srgb,var(--wf-accent,#6c64b0) 14%,transparent); }

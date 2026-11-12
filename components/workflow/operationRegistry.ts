@@ -17,6 +17,7 @@ export type WorkflowOperationNodeToolName =
   | 'split-layers'
   | 'edit'
   | 'rotate'
+  | 'vectorize'
   | 'split-grid'
   | 'layer'
   | 'video-trim'
@@ -25,6 +26,7 @@ export type WorkflowOperationNodeToolName =
   | 'video-extract-frame'
   | 'audio-trim'
   | 'audio-speed'
+  | 'audio-pitch'
   | 'audio-stem-split';
 
 export interface WorkflowOperationInputRoleSpec {
@@ -67,7 +69,7 @@ const OPERATION_LABELS_EN: Readonly<Record<string, string>> = {
   'image.rotate@1': 'Rotate / flip', 'image.vectorize@1': 'Vectorize', 'image.split-grid@1': 'Split grid',
   'image.layer@1': 'Overlay layer', 'video.trim@1': 'Trim video', 'video.av-split@1': 'Split audio and video',
   'video.merge@1': 'Merge videos', 'video.extract-frame@1': 'Extract frame', 'audio.trim@1': 'Trim audio',
-  'audio.speed@1': 'Audio speed', 'audio.stem-split@1': 'Split vocals / accompaniment',
+  'audio.speed@1': 'Audio speed', 'audio.pitch@1': 'Audio pitch', 'audio.stem-split@1': 'Split vocals / accompaniment',
 };
 const PARAMETER_LABELS_EN: Readonly<Record<string, string>> = {
   x: 'Left', y: 'Top', width: 'Width', height: 'Height', targetLongEdge: 'Long edge', algorithm: 'Algorithm',
@@ -179,6 +181,7 @@ const audioTrimParameters = z.object({
 }).refine(value => value.endSec > value.startSec, '音频结束时间必须晚于开始时间');
 
 const audioSpeedParameters = z.object({ speed: z.number().min(.25).max(4) });
+const audioPitchParameters = z.object({ semitones: z.number().min(-12).max(12).refine(value => value !== 0, '变调半音数不能为 0') });
 
 export const WORKFLOW_OPERATION_CAPABILITIES: Readonly<Record<WorkflowOperationCapabilityId, WorkflowOperationCapability>> = {
   'image.generate@1': {
@@ -278,7 +281,7 @@ export const WORKFLOW_OPERATION_CAPABILITIES: Readonly<Record<WorkflowOperationC
     inputRoles: [{ role: 'source_image', nodeTypes: ['image'], min: 1, max: 1 }],
     outputRoles: [{ role: 'result_image', nodeType: 'image', min: 1, max: 1 }],
     executor: 'local-transform', confirmation: 'none', workflow: true, table: true,
-    uiKey: 'image-vectorize',
+    uiKey: 'image-vectorize', nodeTool: 'vectorize', agentUsage: 'vectorize 使用 preset（detailed/poster/line），输出 SVG 图片',
     parameters: imageVectorizeParameters,
     parameterControls: [{ key: 'preset', kind: 'select', label: '风格', options: [
       { label: '细节', value: 'detailed' }, { label: '色块', value: 'poster' }, { label: '线稿', value: 'line' },
@@ -388,6 +391,16 @@ export const WORKFLOW_OPERATION_CAPABILITIES: Readonly<Record<WorkflowOperationC
     parameters: audioSpeedParameters,
     parameterControls: [{ key: 'speed', kind: 'number', label: '速度', min: .25, max: 4, step: .05, suffix: '×' }],
     summarizeParameters: parameters => `${Number(parameters.speed || 1).toFixed(2)}×`,
+  },
+  'audio.pitch@1': {
+    id: 'audio.pitch@1', label: '音频变调', mediaType: 'audio',
+    inputRoles: [{ role: 'source_audio', nodeTypes: ['audio'], min: 1, max: 1 }],
+    outputRoles: [{ role: 'result_audio', nodeType: 'audio', min: 1, max: 1 }],
+    executor: 'local-transform', confirmation: 'none', workflow: true, table: true,
+    uiKey: 'audio-pitch', nodeTool: 'audio-pitch', agentUsage: 'audio-pitch 使用 semitones（-12 到 12，且不能为 0）',
+    parameters: audioPitchParameters,
+    parameterControls: [{ key: 'semitones', kind: 'number', label: '半音', min: -12, max: 12, step: 1, suffix: '半音' }],
+    summarizeParameters: parameters => `${Number(parameters.semitones || 0) > 0 ? '+' : ''}${Number(parameters.semitones || 0)} 半音`,
   },
   'audio.stem-split@1': {
     id: 'audio.stem-split@1', label: '人声/伴奏分离', mediaType: 'audio',

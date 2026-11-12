@@ -18,6 +18,7 @@ import type { AssetSuggestion } from '../MentionList';
 import type { MentionData } from '../MediaMentionExtension';
 import { createWorkflowNode, scriptNodeHeight, WORKFLOW_NODE_SPECS } from './constants';
 import { inheritGenerationConfig } from '../../services/generationInheritance';
+import { extractVideoFrame } from '../../services/videoFrameExtractor';
 import { applyWorkflowMutation, redoWorkflowDraftChangeSet, undoWorkflowDraftChangeSet, workflowDocumentOperationsFromFrames } from './draftAuthority';
 import {
   discardWorkflowMediaRecord,
@@ -26,6 +27,7 @@ import {
   generateWorkflowVideoPreview,
   ingestWorkflowMedia,
   loadWorkflowMediaBlob,
+  workflowBlobToDataUrl,
   pruneWorkflowMedia,
   registerWorkflowMediaTransientReferences,
   releaseWorkflowMediaRecord,
@@ -93,7 +95,7 @@ import {
   runWorkflowVideoTrimOperation,
 } from '../../services/workflowVideoOperations';
 import { loadAutoMediaDeriveSettings, planAutoMediaDerivations, saveAutoMediaDeriveSettings, type AutoMediaDeriveSettings } from '../../services/autoMediaDerive';
-import { runWorkflowAudioSpeedOperation, runWorkflowAudioStemSplitOperation, runWorkflowAudioTrimOperation } from '../../services/workflowAudioOperations';
+import { runWorkflowAudioPitchOperation, runWorkflowAudioSpeedOperation, runWorkflowAudioStemSplitOperation, runWorkflowAudioTrimOperation } from '../../services/workflowAudioOperations';
 import { exportMediaArchive } from '../../utils/batchMediaExport';
 import { exportWorkflowCanvas, pickWorkflowExportNodes, type WorkflowCanvasExportFormat } from './canvasExport';
 import { addWorkflowSnapshot, createWorkflowSnapshot, removeWorkflowSnapshot, workflowSnapshotFrame } from './snapshots';
@@ -1034,6 +1036,7 @@ export function InfiniteWorkflow({
   const builtInAudioTools = useMemo<WorkflowAudioToolHandlers>(() => ({
     trim: id => openAudioTool('trim', id),
     speed: id => openAudioTool('speed', id),
+    pitch: id => openAudioTool('pitch', id),
     stemSplit: id => openAudioTool('stem-split', id),
   }), [openAudioTool]);
 
@@ -1064,6 +1067,9 @@ export function InfiniteWorkflow({
       } else if (confirmation.kind === 'speed') {
         result = await runWorkflowAudioSpeedOperation(transaction.projectId, node.id, confirmation.speed, imageToolRuntime);
         successNotice = '音频变速完成 (' + confirmation.speed.toFixed(2) + 'x)';
+      } else if (confirmation.kind === 'pitch') {
+        result = await runWorkflowAudioPitchOperation(transaction.projectId, node.id, confirmation.semitones, imageToolRuntime);
+        successNotice = '音频变调完成 (' + (confirmation.semitones > 0 ? '+' : '') + confirmation.semitones + ' 半音)';
       } else {
         result = await runWorkflowAudioStemSplitOperation(transaction.projectId, node.id, imageToolRuntime);
         successNotice = '人声/伴奏分离完成';
@@ -3206,6 +3212,7 @@ export function InfiniteWorkflow({
               : undefined}
             onDeactivateMedia={() => setActiveMedia(active => active?.projectId === project.id && active.nodeId === node.id ? null : active)}
             onExtractFrame={node.type === 'video' ? (position, currentTimeSec) => void handleExtractFrame(node.id, position, currentTimeSec) : undefined}
+            onAudioTool={node.type === 'audio' ? kind => openAudioTool(kind, node.id) : undefined}
             onPointerDown={event => startNodeDrag(event, node)}
             onConnectStart={event => {
               if (event.button !== 0) return;
@@ -3398,7 +3405,27 @@ export function InfiniteWorkflow({
               const node = projectRef.current.nodes.find(item => item.id === id);
               if (!node || node.isLocked) return;
               setNotice('正在反推 Prompt…');
-              void onReversePrompt(mediaUrl, node.metadata.mimeType || 'image/png', node.metadata.naturalWidth, node.metadata.naturalHeight)
+              void (async () => {
+                let href = mediaUrl;
+                let mimeType = node.metadata.mimeType || 'image/png';
+                let width = node.metadata.naturalWidth;
+                let height = node.metadata.naturalHeight;
+                if (node.type === 'video') {
+                  const poster = await loadWorkflowMediaBlob(node.metadata.posterStorageKey, node.metadata.poster);
+                  const frame = poster
+                    ? { blob: poster, width: node.metadata.naturalWidth || 0, height: node.metadata.naturalHeight || 0 }
+                    : await (async () => {
+                      const video = await loadWorkflowMediaBlob(node.metadata.storageKey, node.metadata.href, node.metadata.artifactRef);
+                      if (!video) throw new Error('视频媒体不存在，无法反推');
+                      return extractVideoFrame(video, 'first');
+                    })();
+                  href = await workflowBlobToDataUrl(frame.blob);
+                  mimeType = 'image/png';
+                  width = frame.width || width;
+                  height = frame.height || height;
+                }
+                return onReversePrompt(href, mimeType, width, height);
+              })()
                 .then(prompt => {
                   if (!prompt) { setNotice('反推没有返回可用 Prompt，请检查视觉模型配置'); return; }
                   if (projectRef.current.nodes.find(item => item.id === id)?.isLocked) return;

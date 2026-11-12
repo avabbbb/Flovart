@@ -50,8 +50,15 @@
 - 提取帧支持目标帧、帧率、时间码、步进和同步预览。
 - 三个视频/音频弹窗统一到扁平玻璃主题。
 
-### 4. 工具可执行性与信息架构
+### 4. 反推提示词与音频节点
 
+- 反推提示词扩展到视频节点：优先用视频封面，没有封面时从视频首帧提取 PNG，再走视觉模型。
+- 图片/视频反推写入节点自己的 `metadata.prompt`；内置 Agent 的 `workflow.node.tool` 也支持 `reverse-prompt`。
+- 音频节点改为 LibTV 式卡片：内联「截取 / 变速 / 变调 / 人声分离」、波形、原生播放器和文件名/时长。
+- 新增 `audio.pitch@1`（±12 半音）及 `audio-pitch` Agent 工具；`audio.speed` 保持不变。
+- Agent 工具目录补齐 `vectorize`、`reverse-prompt`、`filter`、`audio-pitch`。
+
+### 5. 工具可执行性与信息架构
 - 工具栏动作支持 `hint`：不可用时 native tooltip 说明原因。
 - 拆分图层在没有图片工具 endpoint 时禁用，并说明需要 `/split-layers`；反推 Prompt 在没有文本/视觉路由时禁用。
 - 图片溢出菜单按「编辑 / AI 工具 / 输出」分组；本地工具与 Provider 工具不再平铺混排。
