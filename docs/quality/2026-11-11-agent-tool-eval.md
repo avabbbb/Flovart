@@ -59,6 +59,7 @@
 - Agent 工具目录补齐 `vectorize`、`reverse-prompt`、`filter`、`audio-pitch`。
 
 ### 5. 工具可执行性与信息架构
+
 - 工具栏动作支持 `hint`：不可用时 native tooltip 说明原因。
 - 拆分图层在没有图片工具 endpoint 时禁用，并说明需要 `/split-layers`；反推 Prompt 在没有文本/视觉路由时禁用。
 - 图片溢出菜单按「编辑 / AI 工具 / 输出」分组；本地工具与 Provider 工具不再平铺混排。
@@ -107,7 +108,7 @@
   - 裁剪弹窗可拖拽、比例按钮与数值输入正常；
   - 视频剪辑/指定帧弹窗显示帧、时间码，拖动进度条画面同步变化；
   - 示例画布打开后备注与镜头独立。
-- 交付：提交 `6a76b86`，已部署 Pages（`6efee01a.flovart-b5a.pages.dev`）；DSH webui 重新构建并安装到本地 profile。
+- 交付：提交 `7b6af9c`，已部署 Pages（`9df07aad.flovart-b5a.pages.dev`）；DSH webui 重新构建并安装到本地 profile。
 
 ## 未完成 / 下一轮
 
