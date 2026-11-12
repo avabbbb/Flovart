@@ -1,6 +1,6 @@
 # Flovart 文档索引
 
-## 设计（current truth，共 9 份）
+## 设计（current truth，共 12 份）
 
 | 文档 | 内容 |
 | --- | --- |
@@ -41,6 +41,7 @@
 
 ## 开发日志
 
+- [2026-11-12 Agent / 工具链迭代 · 第二份](quality/2026-11-12-agent-tool-eval-2.md)：重跑工具条、旧分组迁移、视频反推、LibTV 音频卡、变调、Agent 蒙版/扩图
 - [2026-11-11 Agent / 工具链迭代](quality/2026-11-11-agent-tool-eval.md)：备注语义、裁剪 v2、帧级视频工具、工具就绪门禁、Agent inspect/dryRun/focus
 - [2026-11-03 浏览器插件 × 网页画布](blog/2026-11-03-extension-web-canvas-bridge.md):配对、导入、密钥同步与插件内反推
 
