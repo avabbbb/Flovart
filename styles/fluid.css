@@ -47,7 +47,7 @@
 }
 
 /* ── 右侧面板：拖过最小宽度 → 吸附收起预览 ── */
-.compact-right-panel[data-snap='collapse'] { opacity: .45; transform: scale(.97); transform-origin: right top; transition: opacity .12s ease, transform .12s ease; }
+.compact-right-panel[data-snap='collapse'] { opacity: .5; transform: translateX(12px); transition: opacity .12s ease, transform .12s ease; }  /* 只做淡出 + 右移，不缩放，避免上下留空 */
 .compact-right-panel { transition: opacity .12s ease, transform .12s ease; }
 @media (prefers-reduced-motion: reduce) { .compact-right-panel { transition: none; } }
 
