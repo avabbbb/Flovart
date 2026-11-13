@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"context"
+	"log"
 	"net/http"
 	"strings"
 
@@ -11,7 +13,7 @@ import (
 type contextKey string
 
 type AccountSessionReader interface {
-	SessionState(id string) (status string, tokenVersion int64, err error)
+	SessionState(ctx context.Context, id string) (status string, tokenVersion int64, err error)
 }
 
 type userClaims struct {
@@ -42,8 +44,14 @@ func Auth(secret string, readers ...AccountSessionReader) gin.HandlerFunc {
 			return
 		}
 		if len(readers) > 0 && readers[0] != nil {
-			status, tokenVersion, stateErr := readers[0].SessionState(claims.Subject)
-			if stateErr != nil || status != "active" || tokenVersion != claims.TokenVersion {
+			status, tokenVersion, stateErr := readers[0].SessionState(c.Request.Context(), claims.Subject)
+			if stateErr != nil {
+				// 数据库故障不应被前端当成"登录失效"而清掉 token
+				log.Printf("auth: session state lookup failed: %v", stateErr)
+				c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"code": 503, "data": nil, "msg": "服务暂不可用，请稍后重试"})
+				return
+			}
+			if status != "active" || tokenVersion != claims.TokenVersion {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": 401, "data": nil, "msg": "登录已失效"})
 				return
 			}
@@ -67,9 +75,10 @@ func RequireRole(role string) gin.HandlerFunc {
 }
 
 func extractToken(c *gin.Context) string {
-	auth := c.GetHeader("Authorization")
-	if strings.HasPrefix(auth, "Bearer ") {
-		return strings.TrimPrefix(auth, "Bearer ")
+	auth := strings.TrimSpace(c.GetHeader("Authorization"))
+	const prefix = "bearer "
+	if len(auth) > len(prefix) && strings.EqualFold(auth[:len(prefix)], prefix) {
+		return strings.TrimSpace(auth[len(prefix):])
 	}
 	return ""
 }

@@ -11,13 +11,25 @@ type Query struct {
 	Size     int
 }
 
+// 分页上限：防止超大 size 或极深 offset 拖垮数据库
+const (
+	MaxPageSize = 50
+	MaxPage     = 1000
+)
+
 // Normalize 填充默认值并约束边界
 func (q *Query) Normalize() {
 	if q.Page <= 0 {
 		q.Page = 1
 	}
-	if q.Size <= 0 || q.Size > 50 {
+	if q.Size <= 0 {
 		q.Size = 20
+	}
+	if q.Size > MaxPageSize {
+		q.Size = MaxPageSize
+	}
+	if q.Page > MaxPage {
+		q.Page = MaxPage
 	}
 	if q.Sort == "" {
 		q.Sort = "latest"

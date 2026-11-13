@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -64,16 +65,19 @@ func (c *R2Client) PutObject(ctx context.Context, key string, contentType string
 	return c.PublicURL(key), nil
 }
 
-// PresignPut 生成预签名 PUT URL，前端直传用；默认 15 分钟过期
-func (c *R2Client) PresignPut(ctx context.Context, key, contentType string) (string, error) {
+// PresignPut 生成预签名 PUT URL，前端直传用；ttl<=0 时默认 15 分钟
+func (c *R2Client) PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (string, error) {
 	if c == nil {
 		return "", errors.New("R2 client 未初始化")
+	}
+	if ttl <= 0 {
+		ttl = 15 * time.Minute
 	}
 	req, err := c.presigner.PresignPutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(c.bucket),
 		Key:         aws.String(key),
 		ContentType: aws.String(contentType),
-	}, s3.WithPresignExpires(15*time.Minute))
+	}, s3.WithPresignExpires(ttl))
 	if err != nil {
 		return "", err
 	}
@@ -119,15 +123,15 @@ func (c *R2Client) HeadObject(ctx context.Context, key string) (int64, string, e
 	if err != nil {
 		return 0, "", err
 	}
-	size := 0
+	var size int64
 	if out.ContentLength != nil {
-		size = int(*out.ContentLength)
+		size = *out.ContentLength
 	}
 	ct := ""
 	if out.ContentType != nil {
 		ct = *out.ContentType
 	}
-	return int64(size), ct, nil
+	return size, ct, nil
 }
 
 // PublicURL 拼出公开访问 URL；如果 publicBase 为空则返回空字符串
@@ -135,12 +139,7 @@ func (c *R2Client) PublicURL(key string) string {
 	if c == nil || c.publicBase == "" {
 		return ""
 	}
-	base := c.publicBase
-	// strings.TrimSuffix 也行；这里手写避免额外 import
-	if base[len(base)-1] == '/' {
-		return base + key
-	}
-	return base + "/" + key
+	return strings.TrimRight(c.publicBase, "/") + "/" + key
 }
 
 // DetectContentType 简单 Content-Type 嗅探（fallback）
