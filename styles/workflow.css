@@ -866,3 +866,14 @@ textarea.agent-ask__control { resize: vertical; min-height: 56px; }
 .agent-md__table{margin:0 0 8px;overflow-x:auto;border:1px solid var(--wf-border);border-radius:8px}.agent-md table{width:100%;border-collapse:collapse;font-size:11.5px}
 .agent-md th,.agent-md td{border-bottom:1px solid var(--wf-border);padding:5px 8px;text-align:left;vertical-align:top}.agent-md th{font-weight:600;background:var(--wf-strong)}.agent-md tr:last-child td{border-bottom:0}
 .workflow-toolbar__history-browser { box-sizing: border-box; display: flex; flex-direction: column; height: min(520px, 68vh); padding: 0; overflow: hidden; }
+
+/* ── 斜叠卡片 · DESIGN.md §9.5 ─────────────────────────────── */
+.image-fan { position: relative; display: grid; width: min(78%, 220px); aspect-ratio: 4 / 3; margin: 8px auto 6px; isolation: isolate; }
+.workflow-agent__message--user .image-fan { margin-right: 4px; margin-left: auto; }
+.image-fan__card { grid-area: 1 / 1; position: relative; padding: 0; border: 0; border-radius: 14px; overflow: hidden; background: var(--card-on-shell, var(--wf-panel)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--wf-text) 8%, transparent), 0 10px 24px rgba(0,0,0,.16); cursor: zoom-in; transform-origin: 50% 90%; }
+.image-fan__card img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.image-fan__card--back { filter: saturate(.92) brightness(.97); }
+.image-fan__count { position: absolute; right: 8px; bottom: 8px; min-width: 22px; padding: 2px 7px; border-radius: 999px; color: #fff; background: rgba(13,15,18,.62); font: 600 11px/18px ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.workflow-batch-stack__layer { overflow: hidden; border-radius: 14px; transform-origin: 50% 90%; }
+.workflow-batch-stack__layer img { display: block; width: 100%; height: 100%; object-fit: cover; filter: saturate(.92) brightness(.97); }
+.workflow-batch-stack__preview { border-radius: 14px; }

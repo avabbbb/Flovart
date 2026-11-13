@@ -1,3 +1,4 @@
+import { ImageFan } from '../ui/ImageFan';
 import { CheckCircle2, CircleAlert, Copy, GitBranch, LoaderCircle, Wrench, XCircle } from 'lucide-react';
 import { AgentMarkdown } from './AgentMarkdown';
 
@@ -38,7 +39,8 @@ export function WorkflowAgentMessages({ messages, running, language = 'zho', onC
           <div key={message.id} className={`workflow-agent__message workflow-agent__message--${message.role}`}>
             <span>{message.role === 'user' ? (en ? 'You' : '你') : message.role === 'assistant' ? 'Agent' : message.role === 'error' ? (en ? 'Error' : '错误') : (en ? 'System' : '系统')}</span>
             {message.role === 'assistant' ? <AgentMarkdown text={message.text} language={language} /> : <p>{message.text}</p>}
-            {message.attachments?.length ? <div className="workflow-agent__message-attachments">{message.attachments.map(item => <img key={item.id} src={item.previewUrl} alt={item.name} title={item.name} />)}</div> : null}
+            {message.attachments?.length === 1 ? <div className="workflow-agent__message-attachments">{message.attachments.map(item => <img key={item.id} src={item.previewUrl} alt={item.name} title={item.name} />)}</div> : null}
+            {message.attachments && message.attachments.length > 1 ? <ImageFan className="workflow-agent__message-fan" items={message.attachments.map(item => ({ id: item.id, src: item.previewUrl, alt: item.name }))} /> : null}
             {(onCopyMessage || (onBranchMessage && message.role === 'assistant')) && (
               <div className="workflow-agent__message-actions">
                 {onCopyMessage && <button type="button" onClick={() => onCopyMessage(message)} aria-label={`${en ? 'Copy message' : '复制这条消息'}`} title={en ? 'Copy message' : '复制这条消息'}><Copy size={11} />{en ? 'Copy' : '复制'}</button>}

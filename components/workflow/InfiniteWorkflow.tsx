@@ -1,3 +1,4 @@
+import { FAN_SPRING, fanPose } from '../ui/ImageFan';
 import { workflowFitOnOpen } from './templates';
 import { pickVideoFile, promptUndecodableVideo } from '../../services/undecodableVideoPrompt';
 import { anchorApprovalPatch } from '../../services/anchorApproval';
@@ -202,8 +203,21 @@ function WorkflowVideoPreview({ node, className }: { node: WorkflowNodeData; cla
     : <div className={`${className || ''} workflow-video-placeholder`} role="img" aria-label={`${node.title} 视频预览`} data-testid="workflow-video-placeholder" data-workflow-media-preview>视频预览</div>;
 }
 
-function WorkflowBatchStack({ head, count, historyOpen = false, onPointerDown, onExpand }: {
+function WorkflowBatchStackLayer({ node, slot }: { node?: WorkflowNodeData; slot: number }) {
+  const media = useWorkflowMediaUrl(
+    !node || node.type === 'video' ? undefined : node.metadata.storageKey,
+    !node || node.type === 'video' ? undefined : node.metadata.href,
+  );
+  return (
+    <motion.div className="workflow-batch-stack__layer" style={{ zIndex: 1 + (1 - slot) }} variants={{ rest: fanPose(slot, false), hover: fanPose(slot, true) }} transition={FAN_SPRING}>
+      {media.url && <img src={media.url} alt="" draggable={false} />}
+    </motion.div>
+  );
+}
+
+function WorkflowBatchStack({ head, others = [], count, historyOpen = false, onPointerDown, onExpand }: {
   head: WorkflowNodeData;
+  others?: WorkflowNodeData[];
   count: number;
   historyOpen?: boolean;
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
@@ -214,7 +228,7 @@ function WorkflowBatchStack({ head, count, historyOpen = false, onPointerDown, o
     head.type === 'video' ? undefined : head.metadata.href,
   );
   const unit = head.type === 'video' ? '个' : '张';
-  // LibTV 式叠放：两层卡片斜错在主图之后，悬停时向右下散开一点，提示可展开。
+  // 斜叠：另外两张结果左右斜出在主图之后，悬停时散开（与 ImageFan 同一套姿态和弹簧，DESIGN.md §9.5）。
   return (
     <motion.div
       className="workflow-batch-stack"
@@ -228,8 +242,8 @@ function WorkflowBatchStack({ head, count, historyOpen = false, onPointerDown, o
       onPointerDown={onPointerDown}
       onDoubleClick={event => { event.stopPropagation(); onExpand(); }}
     >
-      <motion.div className="workflow-batch-stack__layer" variants={{ rest: { x: 10, y: 6, rotate: 2.5 }, hover: { x: 16, y: 10, rotate: 4 } }} transition={{ type: 'spring', stiffness: 420, damping: 24 }} />
-      <motion.div className="workflow-batch-stack__layer" variants={{ rest: { x: 5, y: 3, rotate: 1 }, hover: { x: 8, y: 5, rotate: 1.8 } }} transition={{ type: 'spring', stiffness: 420, damping: 24 }} />
+      <WorkflowBatchStackLayer node={others[0]} slot={0} />
+      <WorkflowBatchStackLayer node={others[1]} slot={1} />
       {head.type === 'video'
         ? <WorkflowVideoPreview node={head} className="workflow-batch-stack__preview" />
         : media.url && <img src={media.url} alt={head.title} className="workflow-batch-stack__preview" draggable={false} />}
@@ -3190,6 +3204,7 @@ export function InfiniteWorkflow({
           <WorkflowBatchStack
             key={'batch-stack-' + batchId}
             head={head}
+            others={(batchGroups.get(batchId) || []).filter(n => n.id !== head.id && n.type !== 'video').slice(0, 2)}
             count={count}
             historyOpen={expandedBatches.has(batchId)}
             onPointerDown={event => { const group = batchGroups.get(batchId) || []; if (group.length) startBatchDrag(event, batchId, group); }}
