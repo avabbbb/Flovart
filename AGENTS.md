@@ -38,7 +38,7 @@
 
   Hypit 复刻边界：以 gitignored 的 `_ref/hypit` 为参照，对齐包分层、数据模型、术语与数据流，代码在 `services/reverse/` 自写；不复制 Hypit 源文件，不把 `@hypit/*` 打进 bundle（附加条件的 Apache-2.0 要求衍生品同许可、禁止商业再分发与多租户托管，与本仓库 MIT 冲突）。WhisperX / ffmpeg / 渲染等本地能力走本地 Runtime 或用户自装的 hypit CLI，结果作为 durable artifact 导回。
 
-  不要重新引入 Agent full-page chat、Tasks/Artifacts/Context 工作区、Production Crew / Director / Operator 必经层、Production Skill Marketplace 或第二套 Canvas/Workflow。
+  不要重新引入 Agent full-page chat、Tasks/Artifacts/Context 工作区、Production Crew / Director / Operator 必经层、Production Skill Marketplace 或第二套 Canvas/Workflow。多步制作（如 Agent 视频流水线 run）的对话与 trace 只放在 Canvas 的 Assistant drawer（对话 + 运行日志分区）与画布本身；Agent 页最多放只读的跳转链接，不放对话或 run 编辑。
 
   外部 Agent 默认走 **Skill + CLI**；MCP 是同一 operation contract 的可选投影。内置 Assistant、宿主面板和外部 Agent 必须复用同一业务能力与权限边界
 
@@ -74,6 +74,18 @@ UI / Agent / Host entry
 ```
 
 素材需要稳定来源、版本与校验信息；临时 URL、聊天消息、base64 不能冒充 durable artifact。晚到任务不能覆盖用户已选择的新版本。
+
+## 4.1 Agent 视频流水线（PROPOSAL）
+
+提案见 `docs/design/16-agent-video-pipeline.md`（能力矩阵、工具集、trace 模型、放置决定、分阶段计划、验收）。被接受前，以下规则约束相关施工：
+
+- **trace 是唯一权威**：一次多步制作是一个 run（durable `runId`），由本地 Runtime 保存 run → step → tool call → artifact → version → review round；Step 由命令边界自动记录，不让模型自己“写日志”。会话只存 `runId` 引用。
+- **工具只投影已有业务函数**：pipeline 工具（`pipeline.run.*`、`asset.import`、`audio.tts`、`audio.transcribe`、`timeline.align`、`composition.patch`、`composition.render`、`media.probe`、`media.frames`、`review.submit`、`run.archive`、`capture.ui`）先有业务实现，再登记 canonical registry；内置 Assistant、CLI、MCP、DSH 同一份 schema 与权限。它们只在 run 激活时加载，不进入稳定 baseline，认证后才按 Support Matrix 升级。
+- **不开放任意执行**：内置 Agent 不得获得 shell、任意文件读写或任意 ffmpeg 参数；跑用户仓库、注入演示数据、截图录屏这类步骤交给外部 Coding Agent，结果以 `asset.import` 带回同一 run。
+- **评审循环可审计**：每轮评审写成结构化 findings（具体时间点 / 片段、层、问题、修法、结论）；修补必须基于版本号，不得改动 locked 片段，除非显式解锁并留痕；轮数受 run 预算上限约束。
+- **素材全部 durable**：截图、底片、干声、转写证据、静帧、每一版渲染都是带 sha256 的 artifact；被否掉的版本标记 rejected 保留，不删除。
+- **本机执行**：渲染（Remotion）、转写（WhisperX / hypit CLI）、ffmpeg / ffprobe 在本地 Runtime；云端只做 Provider 生成（Seedance、MiniMax speech、文本 LLM）。依赖缺失返回 `CAPABILITY_UNAVAILABLE` 与诊断动作，不静默跳过。
+- **费用**：run 级预算（任务数 / 金额 / 最大评审轮数）一次确认，复用 spend mandate 与 Runtime gate；范围变化重新确认。
 
 ## 5. Creative host / native effect 规则
 

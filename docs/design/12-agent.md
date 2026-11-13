@@ -53,6 +53,10 @@ Skill 教 Agent 组合 **Resolve native MCP（宿主状态）+ Flovart CLI（生
 
 已准备 / 需安装 / 需登录 / 离线 / 异常，每个配一个动作。内部 Writer、Projection、URL、Token、协议版本只在高级诊断。
 
+## 6.1 多步制作（提案）
+
+内置 Assistant 驱动多步视频制作（brief → 素材 → 配音 → 合成 → 渲染 → 帧级评审 → 定向修补 → 归档）的 run / trace 模型、pipeline 工具集与放置决定见 [16 Agent 视频流水线（PROPOSAL）](16-agent-video-pipeline.md)。结论：run 在 Canvas 的 Assistant drawer 发起与查看，Agent surface 仍只做连接中心。
+
 ## 7. 不采用
 
 Agent 全页聊天；Production Crew / Director / Operator 强制分层；Host 专属 Workflow store；连接中心与 drawer 同时维护 Host picker；跨 Agent 登录态 / 记忆无损迁移。

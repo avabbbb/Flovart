@@ -17,6 +17,12 @@
 | [31 Notion 式紧凑 UI](design/31-notion-compact-ui.zh-CN.md) | 扁平分层、密度与组件改造清单 |
 | [32 流式用量](design/32-stream-usage.zh-CN.md) | SSE 统一读取、usage 累积、缺失计数与 opt-in |
 
+## 提案（PROPOSAL，未进入 current truth）
+
+| 文档 | 内容 |
+| --- | --- |
+| [16 Agent 视频流水线](design/16-agent-video-pipeline.md) | 产品宣传片流水线能力矩阵、Agent 工具集、run trace 模型、素材归档、放置决定（Canvas Assistant drawer）、P0–P2 计划与验收 |
+
 支持等级只看 [SUPPORT_MATRIX](../SUPPORT_MATRIX.md)；AI / 自动化开发约束见 [AGENTS.md](../AGENTS.md)。
 
 ## 进度
