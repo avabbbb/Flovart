@@ -1,5 +1,7 @@
 # 沉浸式翻译对标 → Flovart 插件上架方案
 
+> **已归档（2026-11-13）**：一次性 / 已完成文档，不是 current truth。归档原因见本目录 [README](README.md)。
+
 调研日期：2026-11-06。来源：immersivetranslate.com 定价页与会员协议（经 masonailab.com 2026-08-13 核查的整理）、官方 FAQ 与快速开始文档。价格以官方账号页为准。
 
 ## 1. 产品模式

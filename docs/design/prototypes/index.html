@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flovart 交互原型 · 设计语言 2026-11-13</title>
+<!--
+  Flovart 交互原型（设计目标，非实现）。单文件、无外部资源。
+  规范：docs/design/01-interaction.md §11 token、§12 三档弹簧、§13 玻璃边界、§16 run/trace、§19 交互模式。
+  参考（只借交互思路，不含任何外部素材）：见每个页签底部的 Inspora 引用。
+-->
+<style>
+:root{
+  --isl-font:"Inter","Noto Sans SC","Noto Sans CJK SC","Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+  --app-bg:#f1ede3;--canvas-bg:#f4f1ea;
+  --isl-surface:#faf9f6;--isl-surface-2:#f1efe9;--isl-surface-sunk:#f4f2ec;--isl-card:#ffffff;
+  --isl-ink:#1f1d1a;--isl-ink-soft:#6b6862;--isl-ink-ghost:#a8a49c;
+  --isl-mint:#19c8b9;--isl-mint-deep:#12a89b;--isl-mint-bg:#e3f7f4;--isl-sun:#f5c31c;--isl-coral:#e8615a;--isl-coral-deep:#cf4b45;
+  --isl-border:#e3e0d8;--isl-border-strong:#cfcbc1;
+  --isl-r-sm:6px;--isl-r:8px;--isl-r-lg:10px;
+  --isl-shadow-sm:0 1px 2px rgba(31,29,26,.06);--isl-shadow:0 2px 8px rgba(31,29,26,.08);--isl-shadow-lg:0 6px 18px rgba(31,29,26,.10);
+  /* §12.3 三档弹簧：CSS linear() 近似，时长 = 落定时长 */
+  --spring-snappy:linear(0,.121,.331,.528,.681,.791,.866,.915,.946,.967,.98,.988,.992,.995,.997,.998,1);--spring-snappy-ms:330ms;
+  --spring-smooth:linear(0,.119,.328,.522,.676,.787,.863,.914,.946,.966,.979,.987,.992,.995,.997,.998,1);--spring-smooth-ms:520ms;
+  --spring-expressive:linear(0,.108,.317,.534,.713,.841,.926,.976,1.002,1.012,1.015,1.013,1.01,1.007,1.004,1.002,1);--spring-expressive-ms:565ms;
+  --ease-standard:cubic-bezier(.4,0,.2,1);--ease-exit:cubic-bezier(.4,0,1,1);--ease-soft-out:cubic-bezier(.22,1,.36,1);
+  /* §13.3 玻璃 regular */
+  --glass-bg:color-mix(in srgb,var(--isl-card) 72%,transparent);--glass-bg-thick:color-mix(in srgb,var(--isl-card) 84%,transparent);
+  --glass-filter:blur(20px) saturate(160%);--glass-border:1px solid color-mix(in srgb,var(--isl-border) 70%,transparent);
+  --glass-highlight:inset 0 1px 0 rgba(255,255,255,.55);
+  color-scheme:light;
+}
+:root[data-theme='dark']{
+  --app-bg:#131210;--canvas-bg:#15140f;
+  --isl-surface:#1a1917;--isl-surface-2:#232220;--isl-surface-sunk:#151412;--isl-card:#201f1d;
+  --isl-ink:#f4f2ec;--isl-ink-soft:#b4b0a8;--isl-ink-ghost:#76726b;
+  --isl-mint:#3ad9c9;--isl-mint-deep:#1fb8a9;--isl-mint-bg:rgba(58,217,201,.14);--isl-sun:#f7d04a;--isl-coral:#f07a72;--isl-coral-deep:#e8615a;
+  --isl-border:#3a3834;--isl-border-strong:#4c4944;
+  --isl-shadow-sm:0 1px 2px rgba(0,0,0,.3);--isl-shadow:0 2px 8px rgba(0,0,0,.34);--isl-shadow-lg:0 6px 18px rgba(0,0,0,.4);
+  --glass-bg:color-mix(in srgb,var(--isl-card) 70%,transparent);--glass-bg-thick:color-mix(in srgb,var(--isl-card) 82%,transparent);
+  --glass-filter:blur(20px) saturate(140%);--glass-border:1px solid rgba(255,255,255,.08);--glass-highlight:inset 0 1px 0 rgba(255,255,255,.06);
+  color-scheme:dark;
+}
+/* 减弱动效 / 减弱透明度（系统设置或页面开关） */
+@media (prefers-reduced-motion:reduce){:root{--spring-snappy:linear(0,1);--spring-smooth:linear(0,1);--spring-expressive:linear(0,1);--spring-snappy-ms:120ms;--spring-smooth-ms:120ms;--spring-expressive-ms:120ms}}
+:root[data-motion='reduce']{--spring-snappy:linear(0,1);--spring-smooth:linear(0,1);--spring-expressive:linear(0,1);--spring-snappy-ms:120ms;--spring-smooth-ms:120ms;--spring-expressive-ms:120ms}
+.glass{background:var(--glass-bg);-webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter);border:var(--glass-border);box-shadow:var(--glass-highlight),var(--isl-shadow-lg)}
+.glass-thick{background:var(--glass-bg-thick);-webkit-backdrop-filter:var(--glass-filter);backdrop-filter:var(--glass-filter);border:var(--glass-border);box-shadow:var(--glass-highlight),var(--isl-shadow)}
+@supports not (backdrop-filter:blur(1px)){.glass,.glass-thick{background:var(--isl-card)}}
+@media (prefers-reduced-transparency:reduce),(prefers-contrast:more){.glass,.glass-thick{background:var(--isl-card);backdrop-filter:none;-webkit-backdrop-filter:none;border-color:var(--isl-border-strong)}}
+:root[data-transparency='reduce'] .glass,:root[data-transparency='reduce'] .glass-thick{background:var(--isl-card);backdrop-filter:none;-webkit-backdrop-filter:none;border:1px solid var(--isl-border-strong)}
+
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--app-bg);color:var(--isl-ink);font:12px/18px var(--isl-font);transition:background-color 220ms var(--ease-standard),color 220ms var(--ease-standard)}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--isl-mint);outline-offset:2px}
+.top{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--isl-border);background:var(--isl-surface)}
+.top h1{font-size:13px;line-height:20px;font-weight:600;margin:0}
+.top .sub{color:var(--isl-ink-soft);font-size:11px}
+.sp{flex:1}
+.tabs{display:inline-flex;gap:2px;padding:2px;border-radius:var(--isl-r);background:var(--isl-surface-sunk);position:relative}
+.tab{position:relative;z-index:1;border:0;background:transparent;padding:4px 10px;border-radius:var(--isl-r-sm);font-size:11px;font-weight:600;color:var(--isl-ink-soft);transition:color 120ms var(--ease-standard)}
+.tab[aria-selected=true]{color:var(--isl-ink)}
+.tabs .ind{position:absolute;z-index:0;top:2px;bottom:2px;border-radius:var(--isl-r-sm);background:var(--isl-card);box-shadow:var(--isl-shadow-sm);transition:left var(--spring-snappy-ms) var(--spring-snappy),width var(--spring-snappy-ms) var(--spring-snappy)}
+.chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;border-radius:var(--isl-r-sm);border:1px solid var(--isl-border-strong);background:var(--isl-surface);font-size:11px;font-weight:600;transition:background 120ms var(--ease-standard),border-color 120ms,color 120ms}
+.chip:hover{border-color:var(--isl-mint);color:var(--isl-mint-deep)}
+.chip.on,.chip[aria-pressed=true]{background:var(--isl-mint-bg);border-color:var(--isl-mint);color:var(--isl-mint-deep)}
+.chip .n{font-variant-numeric:tabular-nums;color:var(--isl-ink-soft);font-weight:500}
+.go{height:28px;padding:0 12px;border:0;border-radius:var(--isl-r);background:var(--isl-mint);color:#fff;font-weight:800;font-size:11px;transition:background 120ms var(--ease-standard)}
+:root[data-theme='dark'] .go{color:#131210}
+.go:hover{background:var(--isl-mint-deep)}
+.ghost{height:28px;padding:0 10px;border:1px solid var(--isl-border);border-radius:var(--isl-r);background:var(--isl-surface);font-size:11px;font-weight:600}
+.ghost:hover{background:var(--isl-surface-2)}
+main{padding:16px}
+section.view{display:none}
+section.view.on{display:block;animation:viewIn var(--spring-smooth-ms) var(--spring-smooth)}
+@keyframes viewIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.vh{display:flex;align-items:baseline;gap:10px;margin:0 0 10px}
+.vh h2{margin:0;font-size:15px;line-height:22px;font-weight:600}
+.vh .doc{color:var(--isl-ink-soft);font-size:11px}
+.ctl{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.refs{margin-top:10px;color:var(--isl-ink-soft);font-size:11px}
+.refs a{color:var(--isl-mint-deep)}
+.stage{position:relative;border:1px solid var(--isl-border);border-radius:var(--isl-r-lg);background:var(--canvas-bg);background-image:radial-gradient(color-mix(in srgb,var(--isl-ink) 12%,transparent) 1px,transparent 1px);background-size:18px 18px;overflow:hidden}
+.ico{display:inline-grid;place-items:center;width:14px;height:14px;border-radius:50%;font-size:9px;line-height:1;font-weight:800;flex:none}
+.i-ok{background:var(--isl-mint);color:#fff}.i-run{border:2px solid var(--isl-mint);border-right-color:transparent;animation:spin 1.2s linear infinite}
+.i-fail{background:var(--isl-coral);color:#fff}.i-wait{background:var(--isl-sun);color:#1f1d1a}.i-q{border:1.5px solid var(--isl-ink-ghost)}.i-lock{background:var(--isl-ink);color:var(--isl-card);border-radius:3px}
+@keyframes spin{to{transform:rotate(360deg)}}
+:root[data-motion='reduce'] .i-run{animation:none;border-right-color:var(--isl-mint)}
+@media (prefers-reduced-motion:reduce){.i-run{animation:none;border-right-color:var(--isl-mint)}}
+.muted{color:var(--isl-ink-soft)}.ghosttxt{color:var(--isl-ink-ghost)}
+.num{font-variant-numeric:tabular-nums}
+/* ===== 1 pipeline ===== */
+.flow{display:flex;align-items:center;gap:0;padding:56px 24px 28px;min-height:250px}
+.st{position:relative;width:132px;min-height:106px;flex:none;border:1px solid var(--isl-border);border-radius:var(--isl-r);background:var(--isl-card);padding:8px 9px;transition:border-color 160ms var(--ease-standard),box-shadow 160ms var(--ease-standard)}
+.st h4{margin:0;font-size:11px;line-height:16px;font-weight:600;display:flex;align-items:center;gap:6px}
+.st .meta{font-size:10px;line-height:14px;color:var(--isl-ink-soft);margin-top:4px;min-height:28px}
+.st .thumb{height:34px;border-radius:var(--isl-r-sm);margin-top:6px;background:var(--isl-surface-2);overflow:hidden;position:relative}
+.st[data-s=succeeded] .thumb{background:linear-gradient(135deg,#cfe9e5,#f3e3c4)}
+:root[data-theme='dark'] .st[data-s=succeeded] .thumb{background:linear-gradient(135deg,#1f4b47,#4a3d22)}
+.st[data-s=running]{border-color:var(--isl-mint)}
+.st[data-s=awaiting]{border-color:var(--isl-sun)}
+.st[data-s=failed]{border-color:var(--isl-coral)}
+.st[data-s=pending]{opacity:.62}
+.st .bar{position:absolute;left:8px;right:8px;bottom:5px;height:2px;border-radius:2px;background:var(--isl-surface-2);overflow:hidden}
+.st .bar i{display:block;height:100%;width:0;background:var(--isl-mint);transition:width var(--spring-smooth-ms) var(--spring-smooth)}
+.edge{flex:1;min-width:22px;height:2px;background:var(--isl-border-strong);position:relative}
+.edge.dash{background:repeating-linear-gradient(90deg,var(--isl-border-strong) 0 4px,transparent 4px 8px)}
+.edge.live::after{content:"";position:absolute;top:-2px;left:0;width:6px;height:6px;border-radius:50%;background:var(--isl-mint);animation:dot 1.2s var(--ease-standard) infinite}
+@keyframes dot{from{left:0}to{left:calc(100% - 6px)}}
+:root[data-motion='reduce'] .edge.live::after{animation:none;left:calc(50% - 3px)}
+@media (prefers-reduced-motion:reduce){.edge.live::after{animation:none;left:calc(50% - 3px)}}
+.rounds{display:flex;gap:4px;margin-top:6px}
+.rounds span{font-size:9px;line-height:14px;padding:0 5px;border-radius:999px;border:1px solid var(--isl-border-strong)}
+.rounds .rv{border-color:var(--isl-sun)}.rounds .ps{border-color:var(--isl-mint);background:var(--isl-mint-bg);color:var(--isl-mint-deep)}
+.floattool{position:absolute;left:16px;top:12px;display:flex;gap:4px;padding:4px;border-radius:var(--isl-r-lg)}
+.floattool span{font-size:10px;padding:2px 7px;border-radius:var(--isl-r-sm)}
+.timeline{margin:0 24px 18px;position:relative;height:30px;border-radius:var(--isl-r-sm);background:var(--isl-card);border:1px solid var(--isl-border)}
+.timeline .pin{position:absolute;top:-6px;width:12px;height:12px;border-radius:50%;background:var(--isl-sun);border:2px solid var(--isl-card);transform:translateX(-6px) scale(0);transition:transform var(--spring-expressive-ms) var(--spring-expressive)}
+.timeline.on .pin{transform:translateX(-6px) scale(1)}
+.timeline .lbl{position:absolute;left:8px;top:6px;font-size:10px;color:var(--isl-ink-soft)}
+/* ===== 2 island + drawer ===== */
+.two{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:0;height:470px}
+.two .stage{border-radius:var(--isl-r-lg) 0 0 var(--isl-r-lg)}
+.island{position:absolute;z-index:3;left:50%;top:12px;transform:translateX(-50%);width:300px;border-radius:18px;overflow:hidden;transition:width var(--spring-expressive-ms) var(--spring-expressive),border-radius var(--spring-expressive-ms) var(--spring-expressive),border-color 160ms}
+.island.open{width:400px;border-radius:var(--isl-r-lg)}
+.island.await{border-color:var(--isl-sun)}
+.island.fail{border-color:var(--isl-coral)}
+.pill{position:relative;display:flex;align-items:center;gap:8px;height:34px;padding:0 12px;cursor:pointer}
+.pill .sweep{position:absolute;inset:0;width:0;background:color-mix(in srgb,var(--isl-mint) 18%,transparent);transition:width var(--spring-smooth-ms) var(--spring-smooth);pointer-events:none}
+.pill b{font-weight:600;position:relative}.pill .m{position:relative;color:var(--isl-ink-soft);font-size:11px}
+.pill .cost{margin-left:auto;position:relative;font-variant-numeric:tabular-nums;font-size:11px;color:var(--isl-ink-soft)}
+.ipanel{display:grid;grid-template-rows:0fr;transition:grid-template-rows var(--spring-smooth-ms) var(--spring-smooth)}
+.island.open .ipanel{grid-template-rows:1fr}
+.ipanel>div{overflow:hidden;background:var(--isl-card)}
+.isteps{list-style:none;margin:0;padding:6px 10px 10px;border-top:1px solid var(--isl-border)}
+.isteps li{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:11px;opacity:0;transform:translateY(4px);transition:opacity 200ms var(--ease-standard),transform var(--spring-snappy-ms) var(--spring-snappy)}
+.island.open .isteps li{opacity:1;transform:none}
+.isteps li .t{margin-left:auto;color:var(--isl-ink-ghost);font-variant-numeric:tabular-nums;font-size:10px}
+.cb{font-size:9px;line-height:14px;padding:0 5px;border-radius:999px;background:var(--isl-surface-2);color:var(--isl-ink-soft)}
+.cb.ext{background:color-mix(in srgb,var(--isl-sun) 22%,transparent);color:var(--isl-ink)}
+.node{position:absolute;width:150px;border:1px solid var(--isl-border);border-radius:var(--isl-r);background:var(--isl-card);padding:6px}
+.node .ph{height:72px;border-radius:var(--isl-r-sm);background:linear-gradient(135deg,#d8ece9,#efe2c7)}
+:root[data-theme='dark'] .node .ph{background:linear-gradient(135deg,#21433f,#463a22)}
+.node .nt{font-size:11px;font-weight:600;margin-top:4px;display:flex;gap:6px;align-items:center}
+.node.sel{border-color:var(--isl-mint);box-shadow:0 0 0 2px var(--isl-mint-bg)}
+.drawer{display:flex;flex-direction:column;border:1px solid var(--isl-border);border-left:0;border-radius:0 var(--isl-r-lg) var(--isl-r-lg) 0;overflow:hidden;background:var(--isl-card);position:relative}
+.dh{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:8px;padding:8px 10px;border:0;border-bottom:var(--glass-border);box-shadow:none;border-radius:0}
+.dh strong{font-size:13px;font-weight:600}
+.seg{display:inline-flex;padding:2px;border-radius:var(--isl-r);background:var(--isl-surface-sunk);margin-left:auto}
+.seg button{border:0;background:transparent;padding:3px 9px;border-radius:var(--isl-r-sm);font-size:11px;font-weight:600;color:var(--isl-ink-soft)}
+.seg button[aria-selected=true]{background:var(--isl-card);color:var(--isl-ink);box-shadow:var(--isl-shadow-sm)}
+.runbar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--isl-border);background:var(--isl-surface);font-size:11px}
+.dbody{flex:1;overflow:auto;padding:10px}
+.trhead{display:flex;align-items:center;gap:8px;font-size:11px;margin-bottom:6px}
+.trhead b{font-size:13px}
+.segbar{display:flex;gap:2px;height:6px;margin:6px 0 10px}
+.segbar i{flex:1;border-radius:2px;background:var(--isl-surface-2);transition:background 200ms var(--ease-standard)}
+.segbar i.ok{background:var(--isl-mint)}.segbar i.fail{background:var(--isl-coral)}
+.segbar i.run{background:repeating-linear-gradient(45deg,var(--isl-mint) 0 4px,color-mix(in srgb,var(--isl-mint) 35%,transparent) 4px 8px)}
+.steps{list-style:none;margin:0;padding:0;border:1px solid var(--isl-border);border-radius:var(--isl-r)}
+.steps li{display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--isl-border);font-size:11px;animation:rowIn var(--spring-snappy-ms) var(--spring-snappy) both}
+.steps li:last-child{border-bottom:0}
+.steps li .r{margin-left:auto;display:flex;gap:6px;align-items:center;color:var(--isl-ink-ghost);font-size:10px}
+.steps li.err{background:color-mix(in srgb,var(--isl-coral) 7%,transparent)}
+.steps .why{font-size:10px;color:var(--isl-coral-deep);display:block}
+@keyframes rowIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.vers{display:flex;align-items:center;gap:6px;margin:10px 0 6px;font-size:11px}
+.vers span{padding:1px 7px;border-radius:999px;border:1px solid var(--isl-border-strong)}
+.vers span.cur{background:var(--isl-mint-bg);border-color:var(--isl-mint);color:var(--isl-mint-deep)}
+.finding{border:1px solid var(--isl-border);border-left:3px solid var(--isl-sun);border-radius:var(--isl-r-sm);padding:6px 8px;margin-top:6px;font-size:11px}
+.finding .at{font-variant-numeric:tabular-nums;font-weight:600}
+.confirm{border:1px solid var(--isl-border);border-left:3px solid var(--isl-sun);border-radius:var(--isl-r);padding:8px 10px;background:var(--isl-card);margin:0 10px 10px;animation:rowIn var(--spring-expressive-ms) var(--spring-expressive) both}
+.confirm p{margin:2px 0 8px;color:var(--isl-ink-soft)}
+.composer{margin:0 10px 10px;border:1px solid var(--isl-border);border-radius:var(--isl-r);padding:8px;color:var(--isl-ink-ghost);background:var(--isl-surface);display:flex;align-items:center}
+.composer .send{margin-left:auto;width:24px;height:24px;border-radius:var(--isl-r-sm);background:var(--isl-mint);display:grid;place-items:center;color:#fff;font-size:11px;border:0}
+.tray{font-size:10px;color:var(--isl-ink-soft);margin:0 10px 6px}
+/* ===== 3 plan ===== */
+.planwrap{display:grid;grid-template-columns:360px minmax(0,1fr);gap:16px;align-items:start}
+.chat{border:1px solid var(--isl-border);border-radius:var(--isl-r-lg);overflow:hidden;background:var(--isl-card);display:flex;flex-direction:column;min-height:440px}
+.msg{margin:10px 10px 0;font-size:12px}
+.msg .who{font-size:10px;color:var(--isl-ink-soft);font-weight:600}
+.msg.user p{background:var(--isl-surface-2);border-radius:var(--isl-r);padding:6px 9px;margin:2px 0 0}
+.plan{margin:10px;border:1px solid var(--isl-border);border-radius:var(--isl-r);overflow:hidden}
+.plan header{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--isl-border);font-weight:600}
+.plan header .p{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--isl-ink-soft);font-weight:500}
+.plan .budget{display:flex;flex-wrap:wrap;gap:4px 10px;white-space:nowrap;padding:6px 10px;font-size:11px;color:var(--isl-ink-soft);background:var(--isl-surface);border-bottom:1px solid var(--isl-border)}
+.plan ol{list-style:none;margin:0;padding:4px 0}
+.plan li{display:grid;grid-template-columns:16px 1fr auto;gap:8px;align-items:center;padding:5px 10px;font-size:11px}
+.plan li.done .tt{color:var(--isl-ink-soft)}
+.plan li.active .tt{font-weight:600}
+.plan li .x{grid-column:2/4;display:none;border:1px solid var(--isl-border);border-left:3px solid var(--isl-sun);border-radius:var(--isl-r-sm);padding:6px 8px;background:var(--isl-surface)}
+.plan li.ask .x{display:block;animation:rowIn var(--spring-expressive-ms) var(--spring-expressive) both}
+.plan li.blocked .x{display:block;border-left-color:var(--isl-coral)}
+.plan footer{display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--isl-border)}
+.dpill{display:inline-flex;align-items:center;gap:6px;height:20px;padding:0 8px;border-radius:999px;font-size:10px}
+.note{border:1px dashed var(--isl-border-strong);border-radius:var(--isl-r);padding:10px 12px;color:var(--isl-ink-soft);font-size:11px;background:var(--isl-surface)}
+.note b{color:var(--isl-ink)}
+.statet{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}
+.statet th,.statet td{border-bottom:1px solid var(--isl-border);text-align:left;padding:4px 6px;vertical-align:top}
+.statet th{color:var(--isl-ink-soft);font-weight:600}
+/* ===== 4 assets ===== */
+.lib{display:grid;grid-template-columns:170px minmax(0,1fr) 300px;border:1px solid var(--isl-border);border-radius:var(--isl-r-lg);overflow:hidden;background:var(--isl-card);height:470px}
+.tree{border-right:1px solid var(--isl-border);padding:8px;background:var(--isl-surface);font-size:11px}
+.tree div{padding:4px 6px;border-radius:var(--isl-r-sm);display:flex;gap:6px;align-items:center}
+.tree div.on{background:var(--isl-mint-bg);color:var(--isl-mint-deep);font-weight:600}
+.tree .c{margin-left:auto;color:var(--isl-ink-ghost);font-variant-numeric:tabular-nums}
+.grid{padding:10px;overflow:auto}
+.grid .bar{display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;transition:all var(--spring-smooth-ms) var(--spring-smooth)}
+.cards.table{grid-template-columns:1fr;gap:0}
+.card{position:relative;border:1px solid var(--isl-border);border-radius:var(--isl-r);padding:6px;background:var(--isl-card);cursor:grab;transition:border-color 120ms var(--ease-standard)}
+.card:hover{border-color:var(--isl-border-strong)}
+.card .ph{height:62px;border-radius:var(--isl-r-sm)}
+.card .nm{font-size:11px;font-weight:600;margin-top:4px;display:flex;gap:6px;align-items:center}
+.card .sub{font-size:10px;color:var(--isl-ink-soft)}
+.cards.table .card{display:grid;grid-template-columns:36px 1fr 70px 60px;align-items:center;gap:8px;border-radius:0;border-width:0 0 1px 0;padding:4px 6px}
+.cards.table .card .ph{height:24px}
+.cards.table .card .nm{margin:0}
+.folder{position:relative;height:84px;border:1px solid var(--isl-border);border-radius:var(--isl-r);background:var(--isl-surface);padding:6px;overflow:visible}
+.folder .fan{position:absolute;left:50%;bottom:22px;width:44px;height:32px;border-radius:5px;border:2px solid var(--isl-card);box-shadow:var(--isl-shadow-sm);transform:translateX(-50%);transition:transform var(--spring-snappy-ms) var(--spring-snappy)}
+.folder:hover .fan.a,.folder.open .fan.a{transform:translateX(-120%) rotate(-10deg) translateY(-8px)}
+.folder:hover .fan.c,.folder.open .fan.c{transform:translateX(20%) rotate(10deg) translateY(-8px)}
+.folder:hover .fan.b,.folder.open .fan.b{transform:translateX(-50%) translateY(-14px)}
+.folder .fl{position:absolute;left:8px;bottom:6px;font-size:11px;font-weight:600}
+.detail{border-left:1px solid var(--isl-border);padding:10px;display:flex;flex-direction:column;gap:8px}
+.cmp{position:relative;height:150px;border-radius:var(--isl-r);overflow:hidden;background:#000;user-select:none}
+.cmp .a,.cmp .b{position:absolute;inset:0}
+.cmp .a{background:linear-gradient(135deg,#7fc8bf,#e8c98a)}
+.cmp .b{background:linear-gradient(135deg,#5aa3d8,#f0a17a);clip-path:inset(0 0 0 var(--x,50%))}
+.cmp .h{position:absolute;top:0;bottom:0;left:var(--x,50%);width:2px;background:#fff;transform:translateX(-1px)}
+.cmp .h::after{content:"⇆";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:50%;background:#fff;color:#1f1d1a;display:grid;place-items:center;font-size:11px;box-shadow:var(--isl-shadow)}
+.cmp .tg{position:absolute;bottom:6px;font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(0,0,0,.35);color:#fff;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.vstrip{display:flex;gap:4px;flex-wrap:wrap}
+.vstrip button{position:relative;height:24px;padding:0 8px;border-radius:var(--isl-r-sm);border:1px solid var(--isl-border-strong);background:var(--isl-surface);font-size:11px;font-weight:600}
+.vstrip button.sel{background:var(--isl-mint-bg);border-color:var(--isl-mint);color:var(--isl-mint-deep)}
+.vstrip button.cmpsel{border-color:var(--isl-ink)}
+.vstrip button.rej{color:var(--isl-ink-ghost);text-decoration:line-through}
+.vstrip button.late::after{content:"";position:absolute;top:-3px;right:-3px;width:7px;height:7px;border-radius:50%;background:var(--isl-mint)}
+.drop{border:1.5px dashed var(--isl-border-strong);border-radius:var(--isl-r);min-height:60px;display:grid;place-items:center;color:var(--isl-ink-soft);font-size:11px;transition:border-color 120ms,background 120ms;position:relative}
+.drop.over{border-color:var(--isl-mint);background:var(--isl-mint-bg)}
+.drop .landed{position:absolute;inset:8px auto auto 8px;width:70px;height:44px;border-radius:var(--isl-r-sm);animation:land var(--spring-expressive-ms) var(--spring-expressive) both}
+@keyframes land{from{transform:scale(.85) translateY(-10px);opacity:0}to{transform:none;opacity:1}}
+.pop{position:absolute;z-index:5;padding:8px;border-radius:var(--isl-r-lg);font-size:11px;width:190px}
+/* ===== 5 progress ===== */
+.gen{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.gcard{border:1px solid var(--isl-border);border-radius:var(--isl-r);background:var(--isl-card);padding:6px;position:relative}
+.gcard h5{margin:6px 0 0;font-size:11px;font-weight:600;display:flex;gap:6px;align-items:center}
+.gcard .d{font-size:10px;color:var(--isl-ink-soft);min-height:28px}
+.media{position:relative;height:96px;border-radius:var(--isl-r-sm);overflow:hidden;background:var(--isl-surface-2)}
+.media.skel::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,color-mix(in srgb,var(--isl-card) 60%,transparent) 50%,transparent 70%);transform:translateX(-100%);animation:shim 1.4s var(--ease-standard) infinite}
+@keyframes shim{to{transform:translateX(100%)}}
+:root[data-motion='reduce'] .media.skel::after{animation:none;opacity:0}
+@media (prefers-reduced-motion:reduce){.media.skel::after{animation:none;opacity:0}}
+.media .img{position:absolute;inset:0;background:linear-gradient(135deg,#86cfc5,#f1cd8e)}
+.media .img.preview{filter:blur(6px) saturate(.8);opacity:.85}
+.media .img.reveal{animation:reveal 680ms var(--ease-soft-out) both}
+@keyframes reveal{0%{opacity:0;filter:blur(12px) saturate(.6);transform:scale(.97)}60%{opacity:1;filter:blur(2px)}100%{opacity:1;filter:none;transform:none}}
+.media .tag{position:absolute;right:6px;top:6px;font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(0,0,0,.35);color:#fff;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);font-variant-numeric:tabular-nums}
+.media .pbar{position:absolute;left:0;right:0;bottom:0;height:2px;background:rgba(0,0,0,.12)}
+.media .pbar i{display:block;height:100%;background:var(--isl-mint);width:0;transition:width var(--spring-smooth-ms) var(--spring-smooth)}
+.rows{padding:6px}
+.rows div{height:10px;border-radius:3px;background:var(--isl-surface-2);margin:5px 0}
+.rows div.in{background:none;height:auto;font-size:10px;line-height:12px;animation:rowReveal 420ms var(--ease-soft-out) both}
+@keyframes rowReveal{from{opacity:0;filter:blur(4px)}to{opacity:1;filter:none}}
+.state{display:block;margin-top:4px;font-size:10px;padding:4px 6px;border-radius:var(--isl-r-sm);background:var(--isl-surface)}
+.state.err{background:color-mix(in srgb,var(--isl-coral) 10%,transparent);color:var(--isl-coral-deep)}
+.btnmorph{display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 12px;border:0;border-radius:var(--isl-r);background:var(--isl-mint);color:#fff;font-weight:800;font-size:11px;transition:width var(--spring-smooth-ms) var(--spring-smooth),background 160ms;overflow:hidden;white-space:nowrap}
+.btnmorph.busy{background:var(--isl-ink);color:var(--isl-card);font-weight:600}
+.btnmorph .sq{width:9px;height:9px;border-radius:2px;background:currentColor;display:none}
+.btnmorph.busy .sq{display:inline-block}
+.long{display:flex;gap:14px;align-items:center;border:1px solid var(--isl-border);border-radius:var(--isl-r-lg);padding:12px;background:var(--isl-card)}
+.ring{--p:0;width:64px;height:64px;border-radius:50%;background:conic-gradient(var(--isl-mint) calc(var(--p)*1%),var(--isl-surface-2) 0);display:grid;place-items:center;transition:--p 400ms}
+.ring>span{width:50px;height:50px;border-radius:50%;background:var(--isl-card);display:grid;place-items:center;font-weight:600;font-variant-numeric:tabular-nums}
+.kv{display:grid;grid-template-columns:repeat(4,auto);gap:2px 16px;font-size:11px}
+.kv b{font-variant-numeric:tabular-nums;font-size:13px}
+.lateb{position:absolute;left:12px;top:12px;font-size:10px;padding:2px 7px;border-radius:999px;background:var(--isl-card);border:1px solid var(--isl-mint);color:var(--isl-mint-deep);animation:rowIn var(--spring-expressive-ms) var(--spring-expressive) both}
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:10px;color:var(--isl-ink-soft)}
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>Flovart 交互原型</h1><span class="sub">设计目标 · 规范见 01-interaction.md §11–§21 · 无外部资源</span>
+  <span class="sp"></span>
+  <div class="tabs" role="tablist" id="tabs">
+    <span class="ind" id="ind"></span>
+    <button class="tab" role="tab" data-v="flow">1 流程视图</button>
+    <button class="tab" role="tab" data-v="island">2 状态岛 + 实时 trace</button>
+    <button class="tab" role="tab" data-v="plan">3 计划与审批</button>
+    <button class="tab" role="tab" data-v="assets">4 素材库与版本对比</button>
+    <button class="tab" role="tab" data-v="gen">5 生成进度</button>
+  </div>
+  <a class="chip" href="reverse-studio.html" style="text-decoration:none;color:inherit">0 逆向 · 全能助手 →</a>
+  <button class="chip" id="themeBtn" aria-pressed="false">暗色</button>
+  <button class="chip" id="motionBtn" aria-pressed="false">减弱动效</button>
+  <button class="chip" id="glassBtn" aria-pressed="false">减弱透明度</button>
+</div>
+<main>
+<!-- ============ 1 pipeline flow ============ -->
+<section class="view" id="v-flow">
+  <div class="vh"><h2>视频制作流视图</h2><span class="doc">§19.1 · brief → 脚本 → 分镜 → 生成 → 渲染 → 评审轮次，同一 run 画在画布上</span></div>
+  <div class="ctl">
+    <button class="go" id="flowNext">推进一步</button>
+    <button class="ghost" id="flowFail">让当前站失败</button>
+    <button class="ghost" id="flowApprove">批准待确认</button>
+    <button class="ghost" id="flowReset">重置</button>
+    <span class="muted" id="flowMsg" style="align-self:center"></span>
+  </div>
+  <div class="stage">
+    <div class="floattool glass"><span>选择</span><span>节点</span><span>连线</span><span>运行 run</span></div>
+    <div class="flow" id="flow"></div>
+    <div class="timeline" id="tl"><span class="lbl">成片 v2 时间轴 · 评审钉</span><i class="pin" style="left:22%"></i><i class="pin" style="left:58%"></i><i class="pin" style="left:81%"></i></div>
+  </div>
+  <div class="legend"><span>站点：灰=待开始 · mint 边=运行（入边流动点）· 黄边=待确认 · 红边=失败 · 勾=完成</span><span>评审：revise 黄 / pass mint</span><span>浮动工具条 = 玻璃；站点 = 实底</span></div>
+  <div class="refs">依据 Inspora：<a href="https://www.inspora.design/posts/dynamic-release-island">dynamic release island</a>（站点进度扫光）· <a href="https://www.inspora.design/posts/tests-visualised">tests visualised</a>（分段进度 + 失败标记 + 重跑修复）· <a href="https://www.inspora.design/posts/spreadsheet-ui">spreadsheet UI</a>（脚本逐行揭示）</div>
+</section>
+
+<!-- ============ 2 island + drawer trace ============ -->
+<section class="view" id="v-island">
+  <div class="vh"><h2>run 状态岛 + Assistant drawer 实时 trace</h2><span class="doc">§16.2 / §16.3 / §19.4 · 岛与抽屉同源；抽屉顶栏玻璃、正文实底</span></div>
+  <div class="ctl">
+    <button class="go" id="isToggle">展开 / 收起状态岛</button>
+    <button class="ghost" id="isStep">追加一个 Step</button>
+    <button class="ghost" id="isFail">某步失败</button>
+    <button class="ghost" id="isAwait">需要确认</button>
+    <button class="ghost" id="isDone">完成</button>
+    <button class="ghost" id="isReset">重置</button>
+  </div>
+  <div class="two">
+    <div class="stage">
+      <div class="island glass" id="island" tabindex="0" role="button" aria-expanded="false" aria-label="run 状态">
+        <div class="pill" id="pill"><span class="sweep" id="sweep"></span><span class="ico i-run" id="pillIco"></span><b id="pillName">产品宣传片</b><span class="m" id="pillStep">· 渲染 v2 · 第 2 轮</span><span class="cost num" id="pillCost">¥12.4</span></div>
+        <div class="ipanel"><div><ul class="isteps" id="isteps"></ul></div></div>
+      </div>
+      <div class="node" style="left:40px;top:300px"><div class="ph"></div><div class="nt"><span class="ico i-ok">✓</span>镜头 3 · 实景底片</div></div>
+      <div class="node sel" style="left:230px;top:330px"><div class="ph"></div><div class="nt"><span class="ico i-run"></span>成片 v2</div></div>
+      <div class="node" style="left:440px;top:290px"><div class="ph"></div><div class="nt"><span class="ico i-ok">✓</span>干声 · 声线 B</div></div>
+    </div>
+    <aside class="drawer">
+      <div class="dh glass"><strong>Assistant</strong><span class="muted" style="font-size:11px">· 宣传片项目</span>
+        <div class="seg" role="tablist"><button role="tab" aria-selected="false">对话</button><button role="tab" aria-selected="true">运行</button></div></div>
+      <div class="runbar"><span class="ico i-run" id="rbIco"></span><span id="rbText">渲染 v2 · 第 2/5 轮 · 已用 ¥12.4 / ¥40</span></div>
+      <div class="dbody">
+        <div class="trhead"><b>产品宣传片</b><span class="cb">round 2/5</span><span class="muted num" id="trCount">6/9 步</span></div>
+        <div class="segbar" id="segbar"></div>
+        <div style="display:flex;gap:4px;margin-bottom:8px"><button class="chip on">全部 <span class="n" id="cAll">6</span></button><button class="chip">失败 <span class="n" id="cFail">0</span></button><button class="chip">外部 <span class="n">1</span></button></div>
+        <ul class="steps" id="steps"></ul>
+        <div class="vers"><span>v1</span>→<span class="cur">v2</span>→<span class="ghosttxt" style="border-style:dashed">v3</span></div>
+        <div class="finding"><span class="at">00:04.2–00:05.0</span> · 字幕层 · 遮挡 UI 按钮 → 上移 48px <span class="cb">revise</span></div>
+        <div class="finding"><span class="at">00:11.0</span> · 镜头 6 · 转场过快 → 延长 6 帧 <span class="cb">revise</span></div>
+      </div>
+      <div id="confirmSlot"></div>
+      <div class="tray" id="tray"></div>
+      <div class="composer">描述下一步…<button class="send" aria-label="发送">↑</button></div>
+    </aside>
+  </div>
+  <div class="refs">依据 Inspora：<a href="https://www.inspora.design/posts/dynamic-release-island">dynamic release island</a>（pill 展开为阶段面板，扫光填充，完成打勾）· <a href="https://www.inspora.design/posts/tests-visualised">tests visualised</a>（分段进度、失败红标）· <a href="https://www.inspora.design/posts/agent-dashboard">agent dashboard</a>（外部 Agent 委派标记）</div>
+</section>
+
+<!-- ============ 3 plan & approvals ============ -->
+<section class="view" id="v-plan">
+  <div class="vh"><h2>Agent 计划、步骤清单与审批</h2><span class="doc">§19.2 · 清单是 trace 的投影；审批行内展开，与对话确认卡是同一请求</span></div>
+  <div class="ctl">
+    <button class="go" id="plStart">开始制作（批准整个 run 预算）</button>
+    <button class="ghost" id="plAdv">推进</button>
+    <button class="ghost" id="plBlock">某步阻塞</button>
+    <button class="ghost" id="plReset">重置</button>
+  </div>
+  <div class="planwrap">
+    <div class="chat">
+      <div class="dh glass"><strong>Assistant</strong><div class="seg"><button aria-selected="true">对话</button><button aria-selected="false">运行</button></div></div>
+      <div class="msg user"><span class="who">你</span><p>用画布上的截图和录屏，做一条 30 秒产品宣传片，两种声线试听。</p></div>
+      <div class="plan" id="plan">
+        <header><span class="ico i-wait" id="plIco">?</span><span id="plTitle">计划 · 待批准</span><span class="p" id="plProg">0/7</span></header>
+        <div class="budget"><span>任务 ≤ 14</span><span>金额 ≤ ¥40</span><span>评审 ≤ 5 轮</span><span>Seedance · MiniMax speech</span></div>
+        <ol id="plList"></ol>
+        <footer id="plFoot"><button class="go" id="plStart2">开始制作</button><button class="ghost">修改计划</button><button class="ghost">取消</button></footer>
+      </div>
+      <div class="composer" style="margin-top:auto">回复或补充要求…<button class="send">↑</button></div>
+    </div>
+    <div>
+      <div class="note"><b>规则</b>：模型只写“计划”，完成状态由命令边界回填（不是模型自报）；同一时刻只展开一张待处理卡（确认 &gt; 提问 &gt; 计划）；已完成项降低对比度、不划掉；超预算前停下并请求追加。</div>
+      <table class="statet">
+        <tr><th>状态</th><th>主动作</th><th>出口</th></tr>
+        <tr><td>待批准</td><td>开始制作</td><td>修改 / 取消；超时作废</td></tr>
+        <tr><td>执行中</td><td>—</td><td>暂停 / 停止</td></tr>
+        <tr><td>某步待确认</td><td>确认此步</td><td>跳过 / 停止</td></tr>
+        <tr><td>某步阻塞</td><td>补素材 / 改参数 / 重试</td><td>跳过 / 停止</td></tr>
+        <tr><td>委派外部 Agent</td><td>—（显示进行中小岛）</td><td>收回 / 停止</td></tr>
+        <tr><td>完成</td><td>打开成片 / 归档</td><td>再来一轮评审</td></tr>
+      </table>
+      <div class="refs">依据 Inspora：<a href="https://www.inspora.design/posts/agent-dashboard">agent dashboard</a>（任务行状态点与 Delegate → thinking 小 pill）· <a href="https://www.inspora.design/posts/onboarding-for-anything">onboarding for Anything</a>（示例 prompt 卡叠放）</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4 asset library ============ -->
+<section class="view" id="v-assets">
+  <div class="vh"><h2>素材库、版本 v1→vN、对比、锁定、归档、拖到画布</h2><span class="doc">§19.3 · 网格 ↔ 表格同一批记录重排；拖动右侧分界线对比两版</span></div>
+  <div class="ctl">
+    <button class="chip on" id="aGrid" aria-pressed="true">网格</button><button class="chip" id="aTable" aria-pressed="false">表格</button>
+    <button class="ghost" id="aLock">锁定当前版本</button>
+    <button class="ghost" id="aLate">晚到新版本</button>
+    <button class="ghost" id="aArchive">归档 run</button>
+  </div>
+  <div class="lib">
+    <div class="tree"><div class="on">全部 <span class="c">128</span></div><div>上传 <span class="c">41</span></div><div>生成 <span class="c">72</span></div><div>run · 宣传片 <span class="c">15</span></div><div class="ghosttxt">废片 <span class="c">9</span></div></div>
+    <div class="grid">
+      <div class="bar"><button class="chip on">final <span class="n">3</span></button><button class="chip">locked <span class="n">2</span></button><button class="chip">rejected <span class="n">9</span></button><span class="muted" style="margin-left:auto;font-size:10px">拖动卡片到右下“画布”</span></div>
+      <div class="cards" id="cards"></div>
+    </div>
+    <div class="detail">
+      <div style="display:flex;align-items:center;gap:6px"><b style="font-size:13px">成片</b><span class="cb">run · 宣传片</span><span class="ico i-lock" id="lockIco" style="display:none">⌂</span></div>
+      <div class="cmp" id="cmp"><div class="a"></div><div class="b"></div><div class="h"></div><span class="tg" style="left:6px">v1</span><span class="tg" style="right:6px" id="cmpB">v2</span></div>
+      <div class="vstrip" id="vstrip"></div>
+      <div class="muted" style="font-size:10px" id="vhint">点击版本切换右侧；v3 已被评审否决（保留为废片）</div>
+      <div class="drop" id="drop">画布落点 · 松手新建节点（引用 / 副本按来源）</div>
+      <div id="archiveSlot"></div>
+    </div>
+  </div>
+  <div class="refs">依据 Inspora：<a href="https://www.inspora.design/posts/admin-dashboard">admin dashboard</a>（表格 ↔ 卡片重排）· <a href="https://www.inspora.design/posts/interactive-folder-cards">interactive folder cards</a>（文件夹悬停扇出）· <a href="https://www.inspora.design/posts/folders-ui">Folders UI</a>（树 + 文件夹卡 + 文件表）· <a href="https://www.inspora.design/posts/ui-dropdown-filter">UI Dropdown filter</a>（状态 + 计数）· <a href="https://www.inspora.design/posts/photo-download-ui-design">Photo download UI</a>（归档进度）</div>
+</section>
+
+<!-- ============ 5 generation progress ============ -->
+<section class="view" id="v-gen">
+  <div class="vh"><h2>生成动效与进度</h2><span class="doc">§19.6 · 排队 / 等待供应商 / 已知进度 / 流式 / 预览 / 完成 / 失败重试 / 晚到结果</span></div>
+  <div class="ctl">
+    <button class="go" id="gPlay">播放一次完整生成</button>
+    <button class="btnmorph" id="gBtn"><span class="sq"></span><span id="gBtnT">生成</span></button>
+    <button class="ghost" id="gLate">模拟晚到结果</button>
+    <button class="ghost" id="gReset">重置</button>
+  </div>
+  <div class="gen" id="gen">
+    <div class="gcard"><div class="media skel"></div><h5><span class="ico i-q"></span>排队中</h5><div class="d">第 3 位 · 骨架同尺寸，无扫光以外的动画</div></div>
+    <div class="gcard"><div class="media skel"><span class="tag">00:42</span></div><h5><span class="ico i-run"></span>等待供应商</h5><div class="d">进度未知：单向扫光 + 计时；减弱动效时静态</div></div>
+    <div class="gcard"><div class="media"><div class="img preview" id="gPrevImg" style="opacity:.0"></div><span class="tag" id="gPct">0%</span><div class="pbar"><i id="gBar"></i></div></div><h5><span class="ico i-run"></span>已知进度 · 视频</h5><div class="d" id="gStage">排队 → 生成 → 下载 → 转码 → 入库</div></div>
+    <div class="gcard"><div class="media" style="background:var(--isl-card);border:1px solid var(--isl-border)"><div class="rows" id="gRows"><div></div><div></div><div></div><div></div><div></div></div></div><h5><span class="ico i-run"></span>流式 · 分镜表</h5><div class="d">逐行由模糊到清晰（新行 snappy）</div></div>
+    <div class="gcard"><div class="media"><div class="img preview"></div><span class="tag">预览</span></div><h5><span class="ico i-run"></span>中间帧预览</h5><div class="d">低清预览替换骨架，交叉淡化 220ms</div></div>
+    <div class="gcard" id="gDoneCard"><div class="media"><div class="img reveal" id="gDoneImg"></div></div><h5><span class="ico i-ok">✓</span>完成</h5><div class="d">结果揭示 680ms；批量依次落定</div></div>
+    <div class="gcard"><div class="media" style="filter:grayscale(1)"></div><h5><span class="ico i-fail">!</span>失败</h5><span class="state err">供应商限流，30 秒后可重试 <button class="ghost" style="height:20px;margin-left:4px">重试</button></span></div>
+    <div class="gcard" id="gLateCard"><div class="media"><div class="img"></div></div><h5><span class="ico i-ok">✓</span>已选 v2</h5><div class="d">晚到结果挂到版本条末尾，不替换选中</div><div class="vstrip" style="margin-top:4px"><button>v1</button><button class="sel">v2</button><button id="gV3" style="display:none" class="late">v3</button></div></div>
+  </div>
+  <div class="long" style="margin-top:12px">
+    <div class="ring" id="ring"><span id="ringT">0%</span></div>
+    <div><b style="font-size:13px">批量生成 · 宣传片 12 镜</b>
+      <div class="kv" style="margin-top:6px"><span class="muted">已完成</span><span class="muted">失败</span><span class="muted">速度</span><span class="muted">剩余</span><b id="kDone">0 / 12</b><b id="kFail">0</b><b>1.2 镜/分</b><b id="kLeft">约 10 分</b></div>
+      <div class="muted" style="font-size:10px;margin-top:4px">剩余时间只在供应商给出数据时显示；进度不回退、不停在 99%</div>
+    </div>
+  </div>
+  <div class="refs">依据 Inspora：<a href="https://www.inspora.design/posts/photo-download-ui-design">Photo download UI design</a>（环形进度 + 计数 + 速度 / 剩余 + 完成打勾）· <a href="https://www.inspora.design/posts/spreadsheet-ui">spreadsheet UI</a>（逐行模糊揭示）· <a href="https://www.inspora.design/posts/glass-recorder">glass recorder</a>（按钮原位变为进行中 pill + 停止）· <a href="https://www.inspora.design/posts/dynamic-release-island">dynamic release island</a>（扫光进度）</div>
+</section>
+</main>
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const root=document.documentElement;
+/* ---- tabs with sliding indicator ---- */
+function show(v){
+  $$('.tab').forEach(t=>t.setAttribute('aria-selected',t.dataset.v===v));
+  $$('section.view').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
+  const t=$(`.tab[data-v="${v}"]`), ind=$('#ind');
+  ind.style.left=t.offsetLeft+'px'; ind.style.width=t.offsetWidth+'px';
+  history.replaceState(null,'','#'+v);
+}
+$$('.tab').forEach(t=>t.onclick=()=>show(t.dataset.v));
+const toggle=(btn,attr,val)=>{const on=btn.getAttribute('aria-pressed')!=='true';btn.setAttribute('aria-pressed',on);if(on)root.setAttribute(attr,val);else if(attr==='data-theme')root.setAttribute(attr,'light');else root.removeAttribute(attr);};
+$('#themeBtn').onclick=e=>toggle(e.currentTarget,'data-theme','dark');
+$('#motionBtn').onclick=e=>toggle(e.currentTarget,'data-motion','reduce');
+$('#glassBtn').onclick=e=>toggle(e.currentTarget,'data-transparency','reduce');
+
+/* ---- 1 flow ---- */
+const STATIONS=[['Brief','brief.md · 3 个卖点'],['脚本','三栏脚本 · 9 段'],['分镜 ×9','shot.index 1–9'],['生成 ×9','每镜 2 候选'],['渲染','v2 · 1080p 30s'],['评审','findings 钉在时间轴']];
+let fs={i:0,s:['ready','pending','pending','pending','pending','pending'],p:[0,0,0,0,0,0],rounds:[]};
+function renderFlow(){
+  const f=$('#flow'); f.innerHTML='';
+  STATIONS.forEach(([n,m],k)=>{
+    const s=fs.s[k];
+    const ico={pending:'<span class="ico i-q"></span>',ready:'<span class="ico i-q"></span>',running:'<span class="ico i-run"></span>',awaiting:'<span class="ico i-wait">?</span>',succeeded:'<span class="ico i-ok">✓</span>',failed:'<span class="ico i-fail">!</span>'}[s];
+    const extra = s==='awaiting'?'<div class="meta" style="color:var(--isl-ink)">需要确认 · 预计 ¥8.6</div>': s==='failed'?'<div class="meta" style="color:var(--isl-coral-deep)">转写依赖未就绪<br>打开 Agent 页诊断</div>':`<div class="meta">${m}</div>`;
+    const rounds = k===5&&fs.rounds.length?`<div class="rounds">${fs.rounds.map((r,j)=>`<span class="${r==='pass'?'ps':'rv'}">r${j+1} ${r}</span>`).join('')}</div>`:'';
+    const el=document.createElement('div'); el.className='st'; el.dataset.s=s;
+    el.innerHTML=`<h4>${ico}${n}</h4>${extra}${k!==5?'<div class="thumb"></div>':rounds}<div class="bar"><i style="width:${fs.p[k]}%"></i></div>`;
+    f.appendChild(el);
+    if(k<STATIONS.length-1){const e=document.createElement('div');e.className='edge'+(fs.s[k+1]==='pending'?' dash':'')+(fs.s[k+1]==='running'?' live':'');f.appendChild(e);}
+  });
+  $('#tl').classList.toggle('on',fs.rounds.length>0);
+}
+function flowNext(){
+  const i=fs.i; if(i>5){$('#flowMsg').textContent='run 已完成';return;}
+  const s=fs.s[i];
+  if(s==='ready'){ if(i===3){fs.s[i]='awaiting';} else {fs.s[i]='running';fs.p[i]=45;} }
+  else if(s==='running'){ fs.p[i]=100; fs.s[i]='succeeded';
+     if(i===5){ fs.rounds.push(fs.rounds.length<2?'revise':'pass'); if(fs.rounds.at(-1)!=='pass'){fs.s[i]='running';fs.p[i]=30;} else fs.i=6; }
+     else { fs.i=i+1; fs.s[i+1]='ready'; } }
+  else if(s==='failed'){ fs.s[i]='running'; fs.p[i]=20; }
+  else if(s==='awaiting'){ $('#flowMsg').textContent='等待确认：点“批准待确认”'; }
+  $('#flowMsg').textContent = fs.i>5?'run 完成：评审 pass':`当前：${STATIONS[Math.min(fs.i,5)][0]} · ${({ready:'就绪',running:'运行中',awaiting:'待确认',failed:'失败',succeeded:'完成',pending:'待开始'})[fs.s[Math.min(fs.i,5)]]}`;
+  renderFlow();
+}
+$('#flowNext').onclick=flowNext;
+$('#flowFail').onclick=()=>{const i=Math.min(fs.i,5); fs.s[i]='failed'; fs.p[i]=30; renderFlow(); $('#flowMsg').textContent='失败：可重试此站 / 跳过 / 停止 run';};
+$('#flowApprove').onclick=()=>{const i=fs.i; if(fs.s[i]==='awaiting'){fs.s[i]='running';fs.p[i]=40;renderFlow();}};
+$('#flowReset').onclick=()=>{fs={i:0,s:['ready','pending','pending','pending','pending','pending'],p:[0,0,0,0,0,0],rounds:[]};renderFlow();$('#flowMsg').textContent='';};
+window.flowTo=n=>{$('#flowReset').click();for(let k=0;k<n;k++)flowNext();};
+
+/* ---- 2 island + trace ---- */
+const STEP_POOL=[
+ ['asset.import','user','产品截图 ×6',' 0.8s'],['script.write','built-in','三栏脚本',' 6.1s'],['audio.tts','built-in','声线 A/B 试听',' 9.4s'],
+ ['capture.ui','claude-code','录屏 2 段','42s'],['timeline.align','built-in','动作时间戳','1.3s'],['composition.patch','built-in','v1 → v2 修补','0.4s'],
+ ['composition.render','built-in','v2 渲染 1080p','58s'],['media.frames','built-in','关键帧 ×8','2.0s'],['review.submit','built-in','r2 · 2 条 findings','—']];
+let is={n:6,fail:-1,mode:'run',open:false};
+function renderIsland(){
+  const isl=$('#island'); isl.classList.toggle('open',is.open); isl.setAttribute('aria-expanded',is.open);
+  isl.classList.toggle('await',is.mode==='await'); isl.classList.toggle('fail',is.mode==='fail');
+  const done=is.mode==='done', pct=done?100:Math.round(is.n/STEP_POOL.length*100);
+  $('#sweep').style.width=pct+'%';
+  const icoCls={run:'ico i-run',await:'ico i-wait',fail:'ico i-fail',done:'ico i-ok'}[is.mode];
+  $('#pillIco').className=icoCls; $('#pillIco').textContent={await:'?',fail:'!',done:'✓',run:''}[is.mode];
+  $('#rbIco').className=icoCls; $('#rbIco').textContent=$('#pillIco').textContent;
+  const cur=STEP_POOL[Math.min(is.n,STEP_POOL.length)-1];
+  const txt={run:`· ${cur[2]} · 第 2 轮`,await:'· 需要确认 · 预计 ¥8.6',fail:`· 第 ${is.fail+1} 步失败 · 查看`,done:'· 已完成 v2 · 打开'}[is.mode];
+  $('#pillStep').textContent=txt;
+  $('#rbText').textContent={run:`${cur[2]} · 第 2/5 轮 · 已用 ¥12.4 / ¥40`,await:'等待确认：追加 4 个生成任务（¥8.6）',fail:`第 ${is.fail+1} 步失败：转码器未就绪`,done:'run 完成 · v2 · 评审 pass · 已用 ¥14.1'}[is.mode];
+  // island steps
+  $('#isteps').innerHTML=STEP_POOL.slice(0,is.n).slice(-6).map((s,j)=>{const k=is.n-Math.min(6,is.n)+j;const st=k===is.fail?'fail':(k===is.n-1&&is.mode==='run'?'run':'ok');
+    return `<li style="transition-delay:${j*30}ms"><span class="ico ${st==='ok'?'i-ok':st==='run'?'i-run':'i-fail'}">${st==='ok'?'✓':st==='fail'?'!':''}</span>${s[2]}<span class="cb ${s[1]!=='built-in'?'ext':''}">${s[1]}</span><span class="t">${s[3]}</span></li>`;}).join('');
+  // drawer
+  $('#segbar').innerHTML=STEP_POOL.map((s,k)=>`<i class="${k<is.n?(k===is.fail?'fail':(k===is.n-1&&is.mode==='run'?'run':'ok')):''}"></i>`).join('');
+  $('#steps').innerHTML=STEP_POOL.slice(0,is.n).map((s,k)=>{const st=k===is.fail?'fail':(k===is.n-1&&is.mode==='run'?'run':'ok');
+    return `<li class="${st==='fail'?'err':''}"><span class="ico ${st==='ok'?'i-ok':st==='run'?'i-run':'i-fail'}">${st==='ok'?'✓':st==='fail'?'!':''}</span><span>${s[2]}${st==='fail'?'<span class="why">转码器未就绪 · 重试此步 / 跳过 / 停止</span>':''}</span><span class="r"><span class="cb ${s[1]!=='built-in'?'ext':''}">${s[1]}</span><span class="num">${s[3]}</span></span></li>`;}).join('');
+  $('#trCount').textContent=`${is.n}/${STEP_POOL.length} 步`; $('#cAll').textContent=is.n; $('#cFail').textContent=is.fail>=0?1:0;
+  $('#confirmSlot').innerHTML=is.mode==='await'?`<div class="confirm"><b>追加 4 个生成任务</b><p>镜头 6–9 重新生成 · Seedance · 预计 ¥8.6（run 预算内）</p><div style="display:flex;gap:6px"><button class="go" onclick="isApprove()">确认</button><button class="ghost">修改</button><button class="ghost">取消</button></div></div>`:'';
+  $('#tray').textContent=is.mode==='await'?'还有 1 项待处理（提问）':'';
+}
+window.isApprove=()=>{is.mode='run';is.n=Math.min(is.n+1,STEP_POOL.length);renderIsland();};
+const pill=$('#pill'); pill.onclick=()=>{is.open=!is.open;renderIsland();};
+$('#island').onkeydown=e=>{if(e.key==='Enter'){is.open=!is.open;renderIsland();}};
+$('#isToggle').onclick=()=>{is.open=!is.open;renderIsland();};
+$('#isStep').onclick=()=>{is.mode='run';is.n=Math.min(is.n+1,STEP_POOL.length);renderIsland();};
+$('#isFail').onclick=()=>{is.mode='fail';is.fail=is.n-1;renderIsland();};
+$('#isAwait').onclick=()=>{is.mode='await';renderIsland();};
+$('#isDone').onclick=()=>{is.mode='done';is.n=STEP_POOL.length;is.fail=-1;renderIsland();};
+$('#isReset').onclick=()=>{is={n:6,fail:-1,mode:'run',open:false};renderIsland();};
+window.isSet=o=>{Object.assign(is,o);renderIsland();};
+
+/* ---- 3 plan ---- */
+const PLAN=['导入截图与录屏','写三栏脚本与静态关键帧','两种声线试听并测动作时间戳','录制产品 UI（交给外部 Agent）','生成实景底片 ×9','合成并渲染 15 秒小样','逐帧评审并修补'];
+let pl={phase:'draft',i:-1,block:-1};
+function renderPlan(){
+  const draft=pl.phase==='draft';
+  $('#plIco').className='ico '+(draft?'i-wait':pl.phase==='done'?'i-ok':'i-run'); $('#plIco').textContent=draft?'?':pl.phase==='done'?'✓':'';
+  $('#plTitle').textContent=draft?'计划 · 待批准':pl.phase==='done'?'计划 · 已完成':'计划 · 执行中';
+  const done=Math.max(0,pl.i); $('#plProg').textContent=`${pl.phase==='done'?PLAN.length:done}/${PLAN.length}`;
+  $('#plList').innerHTML=PLAN.map((t,k)=>{
+    let cls='',ico='<span class="ico i-q"></span>',right='';
+    if(!draft){ if(k<pl.i||pl.phase==='done'){cls='done';ico='<span class="ico i-ok">✓</span>';}
+      else if(k===pl.i){ cls='active'; ico='<span class="ico i-run"></span>';
+        if(k===3){right='<span class="dpill glass"><span class="ico i-run"></span>Claude Code 正在处理</span>';}
+        if(k===4){cls+=' ask';ico='<span class="ico i-wait">?</span>';}
+        if(k===pl.block){cls='blocked';ico='<span class="ico i-fail">!</span>';} } }
+    const x = cls.includes('ask')?'<div class="x"><b>确认此步：生成 9 个底片</b><div class="muted">Seedance · 预计 ¥18（run 预算内）</div><div style="display:flex;gap:6px;margin-top:6px"><button class="go" onclick="plNext()">确认此步</button><button class="ghost">跳过</button><button class="ghost">停止</button></div></div>'
+      : cls.includes('blocked')?'<div class="x"><b>缺少素材</b><div class="muted">录屏目录为空。补素材后重试，或跳过此步。</div><div style="display:flex;gap:6px;margin-top:6px"><button class="go">补素材</button><button class="ghost">跳过</button></div></div>':'';
+    return `<li class="${cls}">${ico}<span class="tt">${t}</span>${right||(k<pl.i&&!draft?(k===3?'<span class="cb ext">claude-code</span>':'<span class="cb">built-in</span>'):'<span></span>')}${x}</li>`;}).join('');
+  $('#plFoot').style.display=draft?'flex':'none';
+}
+window.plNext=()=>{if(pl.phase==='draft'){pl.phase='run';pl.i=0;}else if(pl.i<PLAN.length-1){pl.i++;pl.block=-1;}else pl.phase='done';renderPlan();};
+$('#plStart').onclick=$('#plStart2').onclick=()=>{pl.phase='run';pl.i=0;renderPlan();};
+$('#plAdv').onclick=plNext;
+$('#plBlock').onclick=()=>{if(pl.phase!=='run')return;pl.block=pl.i;renderPlan();};
+$('#plReset').onclick=()=>{pl={phase:'draft',i:-1,block:-1};renderPlan();};
+window.plSet=o=>{Object.assign(pl,o);renderPlan();};
+
+/* ---- 4 assets ---- */
+const GRADS=['#86cfc5,#f1cd8e','#5aa3d8,#f0a17a','#c9b3e6,#f5d0a9','#9bd18e,#e9e1a6','#e8a1a1,#a9c6f0'];
+function renderCards(){
+  const items=[{f:'截图'},{n:'成片 v2',s:'final · 1080p',g:0},{n:'干声 · 声线 B',s:'locked',g:2,l:1},{n:'镜头 3 底片',s:'生成 · 5s',g:3},{n:'镜头 6 底片',s:'生成 · 5s',g:1},{n:'片头卡',s:'上传',g:4}];
+  $('#cards').innerHTML=items.map((it,k)=>it.f?`<div class="folder" tabindex="0"><i class="fan a" style="background:linear-gradient(135deg,${GRADS[1]})"></i><i class="fan b" style="background:linear-gradient(135deg,${GRADS[0]})"></i><i class="fan c" style="background:linear-gradient(135deg,${GRADS[3]})"></i><span class="fl">产品截图 · 6</span></div>`
+   :`<div class="card" draggable="true" data-g="${it.g}"><div class="ph" style="background:linear-gradient(135deg,${GRADS[it.g]})"></div><div class="nm">${it.l?'<span class="ico i-lock">⌂</span>':''}${it.n}</div><div class="sub">${it.s}</div><div class="sub num">${['1.2 MB','840 KB','14 MB','9 MB','220 KB'][k%5]}</div></div>`).join('');
+  $$('.card').forEach(c=>c.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',c.dataset.g);}));
+}
+let av={sel:1,cmp:0,lock:false,late:false};
+function renderV(){
+  const vs=['v1','v2','v3','v4'];
+  $('#vstrip').innerHTML=vs.map((v,k)=>{if(k===3&&!av.late)return'';const cls=[k===av.sel?'sel':'',k===av.cmp?'cmpsel':'',k===2?'rej':'',k===3?'late':''].join(' ');return `<button class="${cls}" data-k="${k}">${v}${k===av.sel&&av.lock?' ⌂':''}</button>`;}).join('');
+  $$('#vstrip button').forEach(b=>b.onclick=()=>{const k=+b.dataset.k; if(k===2){$('#vhint').textContent='v3 已被否决（r1：字幕遮挡 UI）· 保留在废片';return;} av.sel=k; $('#cmpB').textContent=vs[k]; renderV();});
+  $('#lockIco').style.display=av.lock?'inline-grid':'none';
+}
+$('#aGrid').onclick=()=>{$('#cards').classList.remove('table');$('#aGrid').classList.add('on');$('#aTable').classList.remove('on');};
+$('#aTable').onclick=()=>{$('#cards').classList.add('table');$('#aTable').classList.add('on');$('#aGrid').classList.remove('on');};
+$('#aLock').onclick=()=>{av.lock=!av.lock;renderV();$('#vhint').textContent=av.lock?'已锁定：Agent 修补需显式解锁并写入 trace':'已解锁（已写入 trace）';};
+$('#aLate').onclick=()=>{av.late=true;renderV();$('#vhint').textContent='v4 晚到：挂在版本条末尾，当前选中不变';};
+$('#aArchive').onclick=()=>{$('#archiveSlot').innerHTML=`<div class="long" style="padding:8px"><div class="ring" style="--p:100;width:40px;height:40px"><span style="width:30px;height:30px;font-size:10px">✓</span></div><div style="font-size:11px"><b>已归档</b> · final / spec / stems / rejected / reviews / manifest<div class="muted">23 个文件 · 412 MB · sha256 清单</div></div></div>`;};
+const cmp=$('#cmp'); let drag=false;
+const setX=e=>{const r=cmp.getBoundingClientRect();const x=Math.max(5,Math.min(95,(e.clientX-r.left)/r.width*100));cmp.style.setProperty('--x',x+'%');};
+cmp.onpointerdown=e=>{drag=true;cmp.setPointerCapture(e.pointerId);setX(e);}; cmp.onpointermove=e=>drag&&setX(e); cmp.onpointerup=()=>drag=false;
+const drop=$('#drop');
+drop.ondragover=e=>{e.preventDefault();drop.classList.add('over');}; drop.ondragleave=()=>drop.classList.remove('over');
+drop.ondrop=e=>{e.preventDefault();drop.classList.remove('over');landOn(+e.dataTransfer.getData('text/plain')||0);};
+window.landOn=g=>{drop.innerHTML=`<i class="landed" style="background:linear-gradient(135deg,${GRADS[g]})"></i><span style="margin-left:80px">已新建节点 · 引用</span>`;};
+window.avSet=o=>{Object.assign(av,o);renderV();};
+
+/* ---- 5 generation ---- */
+let gTimer=null;
+function gReset(){clearInterval(gTimer);$('#gBar').style.width='0';$('#gPct').textContent='0%';$('#gPrevImg').style.opacity=0;$('#gRows').innerHTML='<div></div><div></div><div></div><div></div><div></div>';$('#ring').style.setProperty('--p',0);$('#ringT').textContent='0%';$('#kDone').textContent='0 / 12';$('#kLeft').textContent='约 10 分';$('#gBtn').classList.remove('busy');$('#gBtnT').textContent='生成';$('#gV3').style.display='none';$('#gLateCard .lateb')?.remove();$('#gStage').textContent='排队 → 生成 → 下载 → 转码 → 入库';}
+const ROWS=['镜 1 · 2.5s · 产品特写 · “一键把素材叠成一层”','镜 2 · 3.0s · 时间线 · Resolve 面板','镜 3 · 2.0s · 手部操作 · 圈选区域','镜 4 · 3.5s · 候选网格 · 比较','镜 5 · 2.0s · Add to Media Pool'];
+function gSet(p){
+  $('#gBar').style.width=p+'%'; $('#gPct').textContent=Math.round(p)+'%'; $('#gPrevImg').style.opacity=p>40?.85:0;
+  $('#gStage').textContent=p<15?'排队 → **生成** …'.replace(/\*\*/g,''):p<70?'生成中 · 第 '+Math.round(p/10)+' / 10 段':p<90?'下载 → 转码':'入库';
+  const rows=Math.min(5,Math.floor(p/20)); $('#gRows').innerHTML=ROWS.map((r,k)=>k<rows?`<div class="in">${r}</div>`:'<div></div>').join('');
+  $('#ring').style.setProperty('--p',p); $('#ringT').textContent=Math.round(p)+'%';
+  const d=Math.round(p/100*12); $('#kDone').textContent=`${d} / 12`; $('#kLeft').textContent=p>=100?'—':`约 ${Math.max(1,Math.round((12-d)/1.2))} 分`;
+  if(p>=100){$('#ringT').textContent='✓';$('#gBtn').classList.remove('busy');$('#gBtnT').textContent='生成';const img=$('#gDoneImg');img.classList.remove('reveal');void img.offsetWidth;img.classList.add('reveal');}
+}
+$('#gPlay').onclick=$('#gBtn').onclick=()=>{gReset();$('#gBtn').classList.add('busy');$('#gBtnT').textContent='生成中 00:00 · 停止';let p=0,t=0;gTimer=setInterval(()=>{p=Math.min(100,p+4);t++;$('#gBtnT').textContent=p<100?`生成中 00:${String(t).padStart(2,'0')} · 停止`:'生成';gSet(p);if(p>=100)clearInterval(gTimer);},160);};
+$('#gLate').onclick=()=>{$('#gV3').style.display='';if(!$('#gLateCard .lateb')){const b=document.createElement('span');b.className='lateb';b.textContent='有一个晚到的结果 · 查看';$('#gLateCard').appendChild(b);setTimeout(()=>b.remove(),3000);}};
+$('#gReset').onclick=gReset;
+window.gAt=p=>{gReset();$('#gBtn').classList.add('busy');$('#gBtnT').textContent='生成中 00:23 · 停止';gSet(p);};
+window.gLateNow=()=>{$('#gV3').style.display='';const b=document.createElement('span');b.className='lateb';b.textContent='有一个晚到的结果 · 查看';$('#gLateCard').appendChild(b);};
+
+/* init */
+renderFlow();renderIsland();renderPlan();renderCards();renderV();
+const q=new URLSearchParams(location.search);
+if(q.get('theme')==='dark'){root.setAttribute('data-theme','dark');$('#themeBtn').setAttribute('aria-pressed','true');}
+if(q.get('motion')==='reduce'){root.setAttribute('data-motion','reduce');}
+show((location.hash||'#flow').slice(1));
+window.addEventListener('resize',()=>show((location.hash||'#flow').slice(1)));
+</script>
+</body>
+</html>

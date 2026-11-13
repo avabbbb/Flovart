@@ -40,7 +40,7 @@
 
 [![观看 Flovart：保留原片，多一层创意](pic/readme/vision/Flovart_Promo_60s_v4-poster.jpg)](https://github.com/avabbbb/Flovart/raw/refs/heads/main/pic/readme/vision/Flovart_Promo_60s_v4.mp4)
 
-**保留原片，描述变化，比较候选。** Flovart 把你自己的 Coding Agent 和可见创作 Workflow 放在一起：Canvas 做多步创作，Table 做批量处理，Agent 连接你习惯的助手。
+**保留原片，描述变化，比较候选。** Flovart 把你自己的 Coding Agent 和可见创作 Workflow 放在一起：Canvas 做生成与可见 Workflow，逆向拆解参考视频，Agent 连接你习惯的助手。
 
 影片展示 Resolve-first 的设计目标：指出画面位置，生成创意层，比较多个版本，再送回选定结果。**这是更名前录制的概念片，片尾仍显示 Iris。** 宿主集成、透明叠加层和新增轨道仍属 Experimental / Planned。Resolve P0 只以显式 **Add to Media Pool** 为安全输出。
 
@@ -121,7 +121,7 @@ Canvas 仍然是多镜头、复杂依赖和 Workflow 编排的 power surface，*
 | 自动化 | 显式的 inspect/apply/run 操作，带版本与审批边界 |
 | 数据 | 本地优先，并明确浏览器与 Runtime 的边界 |
 
-你可以把图片、文本、视频、音频和配置节点组合起来，让项目和参考素材留在自己的工作区，并通过明确契约扩展 Provider、宿主和节点操作。当前顶栏三个产品 surface 是：**Canvas** 负责空间化 Workflow，**Table** 负责结构化媒体处理，**Agent** 只负责本地/外部 Coding Agent 的连接、准备、状态与切换；内置 **Assistant / Context / History** 留在 Canvas/Table 右侧 drawer，不在 Agent 页复制——详见[功能说明](docs/content/docs/overview/features.mdx)。
+你可以把图片、文本、视频、音频和配置节点组合起来，让项目和参考素材留在自己的工作区，并通过明确契约扩展 Provider、宿主和节点操作。当前顶栏三个产品 surface 是：**Canvas** 负责空间化 Workflow，**逆向 Reverse** 负责参考视频逆向拆解，**Agent** 只负责本地/外部 Coding Agent 的连接、准备、状态与切换；内置 **Assistant / Context / History** 留在 Canvas 右侧 drawer，不在 Agent 页复制——详见[功能说明](docs/content/docs/overview/features.mdx)。
 
 ## 同一份 Workflow，人和 Agent 共用
 
@@ -173,7 +173,7 @@ flowchart LR
   L --> W
   W --> P["Provider 适配层"]
   W --> R["本地素材 + 产物"]
-  T["Table 工作区"] -. 独立入口 .-> W
+  RV["逆向工作区"] -->|"workflow.apply"| W
 ```
 
 现有 `flovart` CLI 名称在 Flovart 改名期间继续作为兼容入口。CLI 与实验性 stdio MCP 共用操作语义，当前都绑定可见的 Browser Workflow。确定性操作直接执行，不需要第二个 AI 再解释一遍。

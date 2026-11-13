@@ -49,6 +49,21 @@ Canvas 是空间化的 Workflow 创作面：节点、素材、连线、生成与
 
 稳定操作：`workflow.inspect`、`workflow.selection.get`、`workflow.apply`、`workflow.node.run`（加 `status`）。其他 helper 仅在 Skill 明确需要时教给 Agent，并走同一 mutation 边界。详见 [12-agent](12-agent.md)。
 
+## 5.1 制作机制（已实现）
+
+> 2026-11-13 由原 `30-competitive-replication.zh-CN.md`（LibTV / RHTV / Higgsfield 机制对照）蒸馏；对照矩阵与方案取舍原文见 [archive/2026-11-13-design-refresh](../archive/2026-11-13-design-refresh/30-competitive-replication.zh-CN.md)。竞品一侧的描述仍待对照官方资料复核。
+
+| 机制 | 实现 | 测试 |
+| --- | --- | --- |
+| 结构化分镜 | 节点可选 `shot` 元数据（镜号、时长、场景、机位、台词、`anchorNodeIds`），`workflow.apply` 校验；`services/shotPlanning.ts` 排序与校验 | `tests/shotPlanning.test.ts` |
+| 角色 / 风格锁定 | 锚点节点“已批准”标记：下游镜头生成自动注入已批准锚点（受模型参考图上限约束），未批准则阻断；批准 / 取消走 `update_node`，可撤销（`services/anchorLock.ts`、`services/anchorApproval.ts`） | `tests/anchorLock.test.ts`、`tests/anchorApproval.test.ts` |
+| 参数继承 | 新建 / 下游节点沿用模型与风格，不继承 count、seedanceRefs、operationParameters（`services/generationInheritance.ts`） | — |
+| 自动派生 | 视频截帧、音视频分离自动上画布，默认关闭，排除 operation 输出防递归（`services/autoMediaDerive.ts`） | 3 文件 / 15 测试（2026-10-30 记录） |
+| 成片拼接 | `video.merge@1` 按 `shot.index` 排序后 `mergeVideos`；时间线精修交给 Resolve，刻意不内置时间线 | `tests/workflowVideoOperations.test.ts` |
+| Skill 输入槽与费用授权 | `services/skillInputs.ts`（≤ 12 槽）；`agentSpendMandate.ts` + `generationGate.ts`（批量一次确认、超限重新确认） | — |
+
+不采用：独立 Storyboard store、内置完整时间线、云端角色模型训练、全页 Agent 聊天。
+
 ## 6. 已知缺口
 
 - `workflow.project.use` 应为跨进程激活握手（Agent 请求 → Browser 激活 → 快照回推 → 新目标确立后才返回）；当前实现未完成，记录于 pending-test。

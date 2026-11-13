@@ -1,7 +1,9 @@
 # 机制级复刻方案：LibTV / RunningHub RHTV / Higgsfield → Flovart
 
+> **已归档（2026-11-13）**：本文不是 current truth，现行结论见本目录 [README](README.md) 指向的设计文档。
+
 > 状态：**Working plan**（2026-10-30）。竞品机制来自用户提供视频的逐帧观察与公开资料；标注「待复核」的条目尚未对照官方文档确认。Flovart 侧状态只写代码与测试可证实的内容。
-> 约束：遵守 [Agent 模块](12-agent.md)（CLI + Skill 为默认路径、MCP 仅投影、`tools/flovart/registry.js` 唯一来源、不做全页 Agent 聊天）与本地优先执行（ADR 0002 / 0010）。
+> 约束：遵守 [Agent 模块](../../design/12-agent.md)（CLI + Skill 为默认路径、MCP 仅投影、`tools/flovart/registry.js` 唯一来源、不做全页 Agent 聊天）与本地优先执行（ADR 0002 / 0010）。
 
 ## 1. 状态图例
 

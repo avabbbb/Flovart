@@ -1,5 +1,7 @@
 # 面试可展示的真实场景
 
+> **已归档（2026-11-13）**：一次性 / 已完成文档，不是 current truth。归档原因见本目录 [README](README.md)。
+
 > 用途：AI 产品实习面试的现场演示与追问准备。
 > 数字来源：tools/flovart/evaluations/ 下的评测报告、docs/blog/2026-11-03-extension-web-canvas-bridge.md、以及 2026-11-03 本机测试输出。没有实跑的场景标注“未运行”，不填数字。
 > 价格都是提交前价格预览或 route plan 确认价，最终以 RunningHub 账单为准。面试里要主动说清这一点。

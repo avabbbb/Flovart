@@ -8,11 +8,11 @@ Flovart is currently a local-first, agent-native visual production workspace. Hu
 
 | Surface | Responsibility | Boundary |
 | --- | --- | --- |
-| **Canvas** | Spatial Workflow for nodes, assets, connections, generation and result editing | Primary creation surface |
-| **Table** | Structured media processing and explicit commit back to Workflow/assets | Not a second Workflow authority |
-| **Agent** | Discover, prepare, inspect and switch local/external coding agents such as Codex and WorkBuddy | **Not a chat page**; does not embed the built-in Assistant |
+| **Canvas** | GenAI generation and the base Workflow: nodes, assets, connections, generation, versions | Primary creation surface |
+| **Reverse** | Reference-video reverse engineering (script, transcript evidence, alignment, timeline) with explicit "convert to canvas" through `workflow.apply`. Planned (design target, not yet available): becoming the all-in-one assistant workspace where agents work visibly on the canvas | Not a second Workflow authority; not a chat-only page |
+| **Agent** | Agent connections and state: discover, prepare, inspect and switch local/external coding agents such as Codex and WorkBuddy | **Not a chat page**; does not embed the built-in Assistant |
 
-Canvas and Table share one contextual right drawer: **Assistant / Context / History**. The built-in Assistant has no extra privilege over external agents and does not manage host installation or connection.
+Canvas has a contextual right drawer: **Assistant / Context / History**. The built-in Assistant has no extra privilege over external agents and does not manage host installation or connection.
 
 Older designs that made Agent a full-page chat workspace, or removed the top-level Agent surface entirely in favor of one global drawer, are historical only.
 
@@ -34,7 +34,7 @@ Real support levels for Codex, Claude Code, OpenCode, WorkBuddy and TeleAgent ar
 
 Canvas supports image, video, audio, text and configuration nodes plus references, connections, local media tools and visible results.
 
-Table is a structured media-processing view. Results return to Workflow or the asset library through explicit commits; Table does not silently mirror Canvas state.
+Reverse writes to Canvas only through an explicit `workflow.apply` (a subgraph node); it does not silently mirror Canvas state.
 
 ## Providers and local data
 

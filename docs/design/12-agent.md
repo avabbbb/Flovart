@@ -7,8 +7,9 @@
 | 概念 | 是什么 | 不是什么 |
 | --- | --- | --- |
 | **外部 Agent 接入** | Codex、Claude Code、OpenCode、WorkBuddy 等通过 Skill + CLI（或 MCP 投影）调用 Flovart | 第二套业务实现 |
-| **Agent surface** | 顶栏连接中心：发现、准备、状态、切换 | 聊天页、Tasks / Artifacts 工作区 |
-| **Assistant drawer** | Canvas / Reverse 旁的内置上下文助手，调用同一批受控操作 | Host picker、Agent 安装、更高权限 |
+| **Agent surface** | 顶栏 Agent 连接与状态中心：runtime、模型 / Provider 路由、外部 Agent（Codex、Claude Code、DSH）的发现、准备、健康、每个 Agent 的状态与切换；向逆向供应 Agent 与模型 | 对话、run 编辑、Tasks / Artifacts 工作区 |
+| **逆向（全能助手）** | 内置 Agent 的主场：prompt 首页、画布上可见的多 Agent 光标、docked 侧栏 trace / 计划 / 审批（[01](01-interaction.md) §11–§12） | 只有聊天的整页、第二份 Workflow 或业务实现 |
+| **Assistant drawer** | Canvas 旁的轻量上下文助手，调用同一批受控操作；多步制作“在逆向中继续”进入同一 run | Host picker、Agent 安装、更高权限、独立 run 主场 |
 
 三者不复制彼此的 UI、会话、Host picker 或状态。
 
@@ -55,11 +56,11 @@ Skill 教 Agent 组合 **Resolve native MCP（宿主状态）+ Flovart CLI（生
 
 ## 6.1 多步制作（提案）
 
-内置 Assistant 驱动多步视频制作（brief → 素材 → 配音 → 合成 → 渲染 → 帧级评审 → 定向修补 → 归档）的 run / trace 模型、pipeline 工具集与放置决定见 [16 Agent 视频流水线（PROPOSAL）](16-agent-video-pipeline.md)。结论：run 在 Canvas 的 Assistant drawer 发起与查看，Agent surface 仍只做连接中心。
+内置 Agent 驱动多步视频制作（brief → 素材 → 配音 → 合成 → 渲染 → 帧级评审 → 定向修补 → 归档）的 run / trace 模型、pipeline 工具集与放置决定见 [16 Agent 视频流水线（PROPOSAL）](16-agent-video-pipeline.md)。放置（2026-11-13 修订）：run 在**逆向（全能助手）**发起和驱动，画布是其工具之一并以可见光标执行；Canvas 抽屉只做轻量入口并交接到同一 run；Agent 页供应 Agent / 模型 / Runtime，不放对话与 run 编辑；外部 Agent 通过 CLI / MCP 写入同一条 trace。
 
 ## 7. 不采用
 
-Agent 全页聊天；Production Crew / Director / Operator 强制分层；Host 专属 Workflow store；连接中心与 drawer 同时维护 Host picker；跨 Agent 登录态 / 记忆无损迁移。
+只有聊天的整页；Production Crew / Director / Operator 强制分层；Host 专属 Workflow store；连接中心与 drawer 同时维护 Host picker；跨 Agent 登录态 / 记忆无损迁移。
 
 ## 8. 验证
 
