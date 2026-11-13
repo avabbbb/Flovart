@@ -1,6 +1,8 @@
 # @flovart/dsh-plugin — DeepSeek Harness Iris Plugin
 
-> 当前兼容集：DeepSeek Harness `0.1.0-rc.8`、Node `^22.19.0 || >=24.0.0`。
+> 当前兼容范围：DeepSeek Harness `>=0.2.2-rc.1 <0.3.0-0`（已验证 `0.2.2-rc.1`、`0.2.2-rc.2`）、Node `^22.19.0 || >=24.0.0`。
+>
+> DSH 插件管理器会用 `@deepseek-ai/dsh-*` peerDependencies 校验正在运行的 dsh 版本；peer 写死成单一版本时，DSH 一升级（如 2026-11-12 发布的 0.2.2-rc.2）就会以 “Plugin @flovart/dsh-plugin@0.1.0 is incompatible with dsh …” 拒绝安装/加载插件。因此 peer 必须保持为范围。
 > 当前仓库已验证 packed profile 安装、`--dump-config`、Host/Client 构建与 Cordis service lifecycle contract；真实登录会话、真实 Harness 页面 tracer 和发布升级回滚仍需单独放行。
 
 ## 用户路径

@@ -24,11 +24,16 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { homedir } from 'node:os'
 import { dirname, join, posix, resolve, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 import { WorkspaceSupervisor } from './workspace-supervisor.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const REPOSITORY_ROOT = resolve(ROOT, '..')
-const TARGET_DSH = '0.1.0-rc.8'
+// The DSH runtime range this plugin accepts. DSH's plugin manager checks the
+// @deepseek-ai/dsh-* peerDependencies against the running dsh version, so this
+// range must stay identical to those peers (an exact pin rejects every new RC).
+const PLUGIN_MANIFEST = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+const TARGET_DSH = PLUGIN_MANIFEST.peerDependencies?.['@deepseek-ai/dsh-tools'] ?? '*'
 const BUNDLES = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@flovart/dsh-plugin']
 
 const PROFILE_PATCH_TEMPLATE = `# Your patch layer for the flovart profile, applied after every bundle layer.
@@ -197,7 +202,7 @@ function resolveDshEntrypoint() {
     const entry = join(root, '@deepseek-ai', 'dsh', 'lib', 'bin.js')
     if (existsSync(entry)) return entry
   }
-  throw new Error('找不到 DeepSeek Harness。请先安装兼容版本：npm i -g @deepseek-ai/dsh@0.1.0-rc.8')
+  throw new Error('找不到 DeepSeek Harness。请先安装兼容版本：npm i -g @deepseek-ai/dsh@0.2.2-rc.2（兼容范围 ' + TARGET_DSH + '）')
 }
 
 export async function start(homeArg) {
@@ -320,10 +325,13 @@ export function doctor(homeArg) {
 
   const version = runDsh(['--version'])
   const installed = (version.stdout ?? '').trim()
-  console.log(`[flovart] dsh 版本：${installed}（兼容集目标：${TARGET_DSH}）`)
-  if (installed !== TARGET_DSH) {
-    console.error(`[flovart] 已安装版本 ${installed} 与兼容集 ${TARGET_DSH} 不一致。`)
+  console.log(`[flovart] dsh 版本：${installed}（兼容范围：${TARGET_DSH}）`)
+  const compatible = dshVersionSatisfies(installed, TARGET_DSH)
+  if (compatible === false) {
+    console.error(`[flovart] 已安装版本 ${installed} 不在兼容范围 ${TARGET_DSH} 内；DSH 会拒绝加载本插件。`)
     process.exitCode = 1
+  } else if (compatible === undefined) {
+    console.warn('[flovart] 无法解析 semver，跳过 dsh 版本范围校验。')
   }
 
   // Verify the copy the profile actually loads (installed from the packed tarball),
@@ -386,6 +394,16 @@ export function uninstall(homeArg) {
   rmSync(profileDir, { recursive: true, force: true })
   console.log(`[flovart] 已移除 Flovart Harness Profile：${profileDir}`)
   return { removed: true, profileDir }
+}
+
+/** Same check DSH's plugin manager applies (prereleases included); undefined when semver is unavailable. */
+function dshVersionSatisfies(version, range) {
+  try {
+    const semver = createRequire(resolveDshEntrypoint())('semver')
+    return semver.satisfies(version, range, { includePrerelease: true })
+  } catch {
+    return undefined
+  }
 }
 
 function runCliProbe() {
