@@ -9,7 +9,7 @@ export interface PresignResult {
 }
 
 export const uploadApi = {
-  presign: (body: { filename: string; contentType: string; purpose: string }) =>
+  presign: (body: { filename: string; contentType: string; purpose: string; sizeBytes?: number }) =>
     api.post<PresignResult>(HUB_BASE_URL, '/uploads/presign', body),
   confirm: (key: string) =>
     api.post<{ key: string; url: string }>(HUB_BASE_URL, '/uploads/confirm', { key }),
@@ -22,7 +22,7 @@ export async function uploadFileToR2(
   contentType: string,
   purpose: string,
 ): Promise<{ key: string; publicUrl: string }> {
-  const pre = await uploadApi.presign({ filename, contentType, purpose });
+  const pre = await uploadApi.presign({ filename, contentType, purpose, sizeBytes: file.size });
   const putRes = await fetch(pre.putUrl, {
     method: 'PUT',
     headers: { 'Content-Type': contentType },

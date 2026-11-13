@@ -3,9 +3,9 @@ package handler
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"flovart/hub/middleware"
 	"flovart/hub/service"
+	"github.com/gin-gonic/gin"
 )
 
 type UploadHandler struct {
@@ -20,6 +20,7 @@ type presignReq struct {
 	Filename    string `json:"filename"`
 	ContentType string `json:"contentType"`
 	Purpose     string `json:"purpose"`
+	SizeBytes   int64  `json:"sizeBytes"` // 可选：客户端声明的文件大小，用于预检上限
 }
 
 func (h *UploadHandler) Presign(c *gin.Context) {
@@ -34,10 +35,10 @@ func (h *UploadHandler) Presign(c *gin.Context) {
 		return
 	}
 	result, err := h.svc.Presign(c.Request.Context(), uid, service.PresignInput{
-		Filename: req.Filename, ContentType: req.ContentType, Purpose: req.Purpose,
+		Filename: req.Filename, ContentType: req.ContentType, Purpose: req.Purpose, SizeBytes: req.SizeBytes,
 	})
 	if err != nil {
-		Fail(c, http.StatusBadRequest, err.Error())
+		FailErr(c, err)
 		return
 	}
 	OK(c, result)
@@ -48,14 +49,15 @@ type confirmReq struct {
 }
 
 func (h *UploadHandler) Confirm(c *gin.Context) {
+	uid := c.GetString(string(middleware.ContextUserID))
 	var req confirmReq
 	if err := c.ShouldBindJSON(&req); err != nil || req.Key == "" {
 		Fail(c, http.StatusBadRequest, "key 必填")
 		return
 	}
-	url, err := h.svc.ConfirmUpload(c.Request.Context(), req.Key)
+	url, err := h.svc.ConfirmUpload(c.Request.Context(), uid, req.Key)
 	if err != nil {
-		Fail(c, http.StatusBadRequest, err.Error())
+		FailErr(c, err)
 		return
 	}
 	OK(c, gin.H{"key": req.Key, "url": url})

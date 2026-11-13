@@ -2,11 +2,10 @@ package handler
 
 import (
 	"net/http"
-	"strings"
 
-	"github.com/gin-gonic/gin"
 	"flovart/hub/middleware"
 	"flovart/hub/service"
+	"github.com/gin-gonic/gin"
 )
 
 type AuthHandler struct {
@@ -29,9 +28,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		Fail(c, http.StatusBadRequest, "入参格式错误")
 		return
 	}
-	user, token, err := h.svc.Register(req.Username, req.Email, req.Password)
+	user, token, err := h.svc.Register(c.Request.Context(), req.Username, req.Email, req.Password)
 	if err != nil {
-		Fail(c, http.StatusBadRequest, err.Error())
+		FailErr(c, err)
 		return
 	}
 	OK(c, gin.H{"user": user, "token": token})
@@ -48,9 +47,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		Fail(c, http.StatusBadRequest, "入参格式错误")
 		return
 	}
-	user, token, err := h.svc.Login(req.Identifier, req.Password)
+	user, token, err := h.svc.Login(c.Request.Context(), req.Identifier, req.Password)
 	if err != nil {
-		Fail(c, http.StatusUnauthorized, err.Error())
+		FailErr(c, err)
 		return
 	}
 	OK(c, gin.H{"user": user, "token": token})
@@ -62,11 +61,14 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		Fail(c, http.StatusUnauthorized, "未登录")
 		return
 	}
-	user, err := h.svc.GetUserByID(uid)
-	if err != nil || user == nil {
+	user, err := h.svc.GetUserByID(c.Request.Context(), uid)
+	if err != nil {
+		FailErr(c, err)
+		return
+	}
+	if user == nil {
 		Fail(c, http.StatusUnauthorized, "用户不存在")
 		return
 	}
 	OK(c, gin.H{"userId": user.ID, "username": user.Username, "email": user.Email, "role": user.Role})
-	_ = strings.TrimSpace
 }

@@ -2,14 +2,18 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
-	"net/url"
-	"strings"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 
 	"flovart/hub/config"
 	"flovart/hub/handler"
@@ -20,14 +24,21 @@ import (
 	"flovart/hub/storage"
 )
 
+// maxRequestBody 单个 JSON 请求体上限；上传走 R2 预签名直传，不经过本服务
+const maxRequestBody = 4 << 20
+
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("config load: %v", err)
 	}
-	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
+	if len(cfg.JWTSecret) < 32 {
+		log.Printf("WARNING: JWT_SECRET is shorter than 32 bytes; use a long random secret outside local dev")
+	}
+
+	db, err := openDB(cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("db open: %v", err)
+		log.Fatalf("db: %v", err)
 	}
 	if err := db.AutoMigrate(&model.User{}, &model.PromptPack{}, &model.PromptItem{}, &model.PromptLike{}); err != nil {
 		log.Fatalf("migrate: %v", err)
@@ -40,7 +51,6 @@ func main() {
 	authH := handler.NewAuthHandler(authSvc)
 	promptH := handler.NewPromptHandler(promptSvc)
 
-
 	var uploadH *handler.UploadHandler
 	if cfg.StorageReady() {
 		r2, err := storage.NewR2Client(context.Background(),
@@ -49,30 +59,48 @@ func main() {
 		if err != nil {
 			log.Printf("R2 client init failed: %v (upload routes disabled)", err)
 		} else {
-			uploadSvc := service.NewUploadService(r2)
-			uploadH = handler.NewUploadHandler(uploadSvc)
+			uploadH = handler.NewUploadHandler(service.NewUploadService(r2))
 			log.Printf("R2 storage ready: bucket=%s publicBase=%s", cfg.Storage.Bucket, cfg.Storage.PublicBase)
 		}
 	} else {
 		log.Printf("R2 storage not configured (R2_ACCOUNT_ID/Bucket missing); upload routes disabled")
 	}
 
-	if strings.ToLower(cfg.CORSAllow) != "off" {
+	// 旧实现把 gin 模式与 CORS_ALLOW 绑定（off 时进入 debug）；改为遵循标准 GIN_MODE，默认 release
+	if os.Getenv(gin.EnvGinMode) == "" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	r := gin.Default()
-	r.Use(corsMiddleware(cfg.CORSAllow))
-	r.GET("/", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"service": "flovart/hub", "status": "ok", "api": "/api/v1"}) })
-	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+	r := gin.New()
+	r.Use(gin.Logger(), gin.CustomRecovery(func(c *gin.Context, rec any) {
+		log.Printf("panic: %s %s: %v", c.Request.Method, c.Request.URL.Path, rec)
+		handler.Fail(c, http.StatusInternalServerError, "服务器内部错误")
+		c.Abort()
+	}))
+	r.Use(middleware.CORS(cfg.CORSAllow), middleware.BodyLimit(maxRequestBody))
+	r.NoRoute(func(c *gin.Context) { handler.Fail(c, http.StatusNotFound, "接口不存在") })
 
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"service": "flovart/hub", "status": "ok", "api": "/api/v1"})
+	})
+	r.GET("/healthz", func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+		defer cancel()
+		if sqlDB, err := db.DB(); err != nil || sqlDB.PingContext(ctx) != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"ok": false})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	requireAuth := middleware.Auth(cfg.JWTSecret, userRepo)
 	api := r.Group("/api/v1")
 	{
 		auth := api.Group("/auth")
 		{
 			auth.POST("/register", authH.Register)
 			auth.POST("/login", authH.Login)
-			auth.GET("/me", middleware.Auth(cfg.JWTSecret, userRepo), authH.Me)
+			auth.GET("/me", requireAuth, authH.Me)
 		}
 		p := api.Group("/prompts")
 		{
@@ -80,7 +108,7 @@ func main() {
 			p.GET("/by-slug/:slug", promptH.GetBySlug)
 			p.GET("/:id", promptH.Get)
 			p.GET("/:id/download", promptH.Download)
-			pAuth := p.Group("", middleware.Auth(cfg.JWTSecret, userRepo))
+			pAuth := p.Group("", requireAuth)
 			{
 				pAuth.POST("", promptH.Create)
 				pAuth.PUT("/:id", promptH.Update)
@@ -89,7 +117,7 @@ func main() {
 			}
 		}
 		if uploadH != nil {
-			up := api.Group("/uploads", middleware.Auth(cfg.JWTSecret, userRepo))
+			up := api.Group("/uploads", requireAuth)
 			{
 				up.POST("/presign", uploadH.Presign)
 				up.POST("/confirm", uploadH.Confirm)
@@ -97,70 +125,60 @@ func main() {
 		}
 	}
 
-	log.Printf("flovart/hub listening on %s:%s", cfg.Bind, cfg.Port)
-	if err := r.Run(cfg.Bind + ":" + cfg.Port); err != nil {
-		log.Fatalf("server: %v", err)
+	srv := &http.Server{
+		Addr:              cfg.Bind + ":" + cfg.Port,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}
+	go func() {
+		log.Printf("flovart/hub listening on %s", srv.Addr)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("server: %v", err)
+		}
+	}()
+
+	// 优雅退出：收到 SIGINT/SIGTERM 后停止接新连接，等待在途请求最多 10 秒，再关闭连接池
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	<-stop
+	log.Printf("shutting down...")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("server shutdown: %v", err)
+	}
+	if sqlDB, err := db.DB(); err == nil {
+		_ = sqlDB.Close()
 	}
 }
 
-func corsMiddleware(allow string) gin.HandlerFunc {
-	allow = strings.ToLower(strings.TrimSpace(allow))
-	return func(c *gin.Context) {
-		origin := c.GetHeader("Origin")
-		switch {
-		case allow == "loopback":
-			// 本地开发模式：仅放行回环与 Tauri WebView 来源，回显具体 Origin 并携带凭据。
-			// 开发页面的端口是动态分配的，无法用固定 Origin 白名单表达。
-			if isLoopbackOrigin(origin) {
-				c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
-				c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-				c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-				c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-			}
-		case allow == "*":
-			// 通配模式：不回显 Origin、不携带凭据
-			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		case allow == "", allow == "off":
-			// 关闭 CORS：不输出任何 CORS 头
-		default:
-			// 白名单模式：仅放行匹配的 Origin 并携带凭据
-			if origin == allow {
-				c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
-				c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-				c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-				c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-			}
-		}
-		if c.Request.Method == http.MethodOptions {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
-		c.Next()
+// openDB 打开连接、开启错误翻译（唯一键冲突 → gorm.ErrDuplicatedKey）、配置连接池并做一次带超时的连通性检查
+func openDB(dsn string) (*gorm.DB, error) {
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+		TranslateError: true,
+		Logger:         logger.Default.LogMode(logger.Warn),
+	})
+	if err != nil {
+		return nil, err
 	}
-}
-
-// isLoopbackOrigin 判断 Origin 是否为本机回环或 Tauri WebView 来源。
-// tauri://localhost（macOS/Linux WebView）与 http://tauri.localhost（Windows）
-// 都是桌面壳的本地来源；其余非回环来源一律不放行。
-func isLoopbackOrigin(origin string) bool {
-	u, err := url.Parse(strings.ToLower(origin))
-	if err != nil || u.Host == "" {
-		return false
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
 	}
-	host := u.Hostname()
-	if u.Scheme == "tauri" {
-		return host == "localhost"
+	sqlDB.SetMaxOpenConns(25)
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetConnMaxLifetime(30 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := sqlDB.PingContext(ctx); err != nil {
+		return nil, err
 	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return false
-	}
-	switch host {
-	case "localhost", "127.0.0.1", "::1", "tauri.localhost":
-		return true
-	}
-	return false
+	return db, nil
 }
 
 func atoiDefault(s string, def int) int {
@@ -170,6 +188,9 @@ func atoiDefault(s string, def int) int {
 			return def
 		}
 		n = n*10 + int(ch-'0')
+		if n > 1<<20 {
+			return def
+		}
 	}
 	if n <= 0 {
 		return def

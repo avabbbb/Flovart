@@ -1,15 +1,18 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"regexp"
 	"strings"
 	"time"
 
+	"flovart/hub/apperr"
 	"flovart/hub/model"
 	"flovart/hub/repository"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 type AuthService struct {
@@ -30,31 +33,54 @@ func NewAuthService(users *repository.UserRepository, jwtSecret string, jwtExpH 
 	return &AuthService{users: users, jwtSecret: jwtSecret, jwtExpH: jwtExpH}
 }
 
+// 密码长度约束：bcrypt 只处理前 72 字节，超出时 x/crypto 会直接返回错误
+const (
+	minPasswordLen = 6
+	maxPasswordLen = 72
+)
+
+// dummyHash 用于账号不存在时也做一次 bcrypt 比较，抹平响应时间差，防止按耗时枚举账号
+var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("flovart-dummy-password"), bcrypt.DefaultCost)
+
 // Register 注册新用户
-func (s *AuthService) Register(username, email, password string) (*model.User, string, error) {
+func (s *AuthService) Register(ctx context.Context, username, email, password string) (*model.User, string, error) {
 	username = strings.TrimSpace(username)
 	email = strings.ToLower(strings.TrimSpace(email))
 	if !validUsername(username) {
-		return nil, "", errors.New("用户名只能含字母数字下划线，3-32 位")
+		return nil, "", apperr.BadRequest("用户名只能含字母数字下划线，3-32 位")
 	}
 	if !validEmail(email) {
-		return nil, "", errors.New("邮箱格式不正确")
+		return nil, "", apperr.BadRequest("邮箱格式不正确")
 	}
-	if len(password) < 6 {
-		return nil, "", errors.New("密码至少 6 位")
+	if len(password) < minPasswordLen {
+		return nil, "", apperr.BadRequest("密码至少 6 位")
 	}
-	if existing, _ := s.users.FindByUsername(username); existing != nil {
-		return nil, "", errors.New("用户名已存在")
+	if len(password) > maxPasswordLen {
+		return nil, "", apperr.BadRequest("密码不能超过 72 字节")
 	}
-	if existing, _ := s.users.FindByEmail(email); existing != nil {
-		return nil, "", errors.New("邮箱已注册")
+	existing, err := s.users.FindByUsername(ctx, username)
+	if err != nil {
+		return nil, "", err
+	}
+	if existing != nil {
+		return nil, "", apperr.BadRequest("用户名已存在")
+	}
+	if existing, err = s.users.FindByEmail(ctx, email); err != nil {
+		return nil, "", err
+	}
+	if existing != nil {
+		return nil, "", apperr.BadRequest("邮箱已注册")
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, "", err
 	}
 	user := &model.User{Username: username, Email: email, Password: string(hash), Role: "user", Status: "active", TokenVersion: 1}
-	if err := s.users.Create(user); err != nil {
+	if err := s.users.Create(ctx, user); err != nil {
+		// 并发注册同名/同邮箱时由唯一索引兜底
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			return nil, "", apperr.BadRequest("用户名或邮箱已存在")
+		}
 		return nil, "", err
 	}
 	token, err := s.issueToken(user)
@@ -65,26 +91,29 @@ func (s *AuthService) Register(username, email, password string) (*model.User, s
 }
 
 // Login 用户名/邮箱 + 密码登录
-func (s *AuthService) Login(identifier, password string) (*model.User, string, error) {
+func (s *AuthService) Login(ctx context.Context, identifier, password string) (*model.User, string, error) {
 	identifier = strings.TrimSpace(identifier)
 	var user *model.User
 	var err error
 	if validEmail(identifier) {
-		user, err = s.users.FindByEmail(identifier)
+		// 注册时邮箱统一小写存储，登录也需小写后再查
+		user, err = s.users.FindByEmail(ctx, strings.ToLower(identifier))
 	} else {
-		user, err = s.users.FindByUsername(identifier)
+		user, err = s.users.FindByUsername(ctx, identifier)
 	}
 	if err != nil {
 		return nil, "", err
 	}
 	if user == nil {
-		return nil, "", errors.New("账号或密码错误")
+		_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
+		return nil, "", errInvalidCredentials
+	}
+	// 先校验密码再暴露账号状态，避免未知密码者探测账号是否被停用
+	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)) != nil {
+		return nil, "", errInvalidCredentials
 	}
 	if !AccountCanAuthenticate(user.Status) {
-		return nil, "", errors.New("账号已停用，请联系平台管理员")
-	}
-	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)) != nil {
-		return nil, "", errors.New("账号或密码错误")
+		return nil, "", apperr.Forbidden("账号已停用，请联系平台管理员")
 	}
 	token, err := s.issueToken(user)
 	if err != nil {
@@ -92,6 +121,8 @@ func (s *AuthService) Login(identifier, password string) (*model.User, string, e
 	}
 	return user, token, nil
 }
+
+var errInvalidCredentials = apperr.Unauthorized("账号或密码错误")
 
 func (s *AuthService) issueToken(user *model.User) (string, error) {
 	now := time.Now()
@@ -117,8 +148,8 @@ func validUsername(v string) bool { return usernameRe.MatchString(v) }
 func validEmail(v string) bool    { return emailRe.MatchString(v) }
 
 // GetUserByID 根据 ID 查询用户
-func (s *AuthService) GetUserByID(id string) (*model.User, error) {
-	return s.users.FindByID(id)
+func (s *AuthService) GetUserByID(ctx context.Context, id string) (*model.User, error) {
+	return s.users.FindByID(ctx, id)
 }
 
 type UserClaims struct {

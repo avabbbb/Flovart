@@ -74,7 +74,7 @@ export const promptApi = {
     tags?: string[];
     items: PromptItem[];
   }) => api.post<PromptPack>(HUB_BASE_URL, '/prompts', body),
-  update: (id: string, body: Parameters<typeof promptApi.create>[1]) =>
+  update: (id: string, body: Parameters<typeof promptApi.create>[0]) =>
     api.put<PromptPack>(HUB_BASE_URL, `/prompts/${id}`, body),
   remove: (id: string) => api.del<{ deleted: string }>(HUB_BASE_URL, `/prompts/${id}`),
   toggleLike: (id: string) => api.post<{ liked: boolean }>(HUB_BASE_URL, `/prompts/${id}/like`),

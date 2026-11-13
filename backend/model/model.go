@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"github.com/lib/pq"
+)
 
 // User 共享生态注册用户
 type User struct {
@@ -19,19 +23,19 @@ type User struct {
 
 // PromptPack 提示词包 — 节点级创作提示词生态的共享单元
 type PromptPack struct {
-	ID            string       `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
-	Slug          string       `gorm:"size:80;uniqueIndex;not null" json:"slug"`
-	Title         string       `gorm:"size:120;not null;index" json:"title"`
-	Description   string       `gorm:"size:1000" json:"description"`
-	AuthorID      string       `gorm:"type:uuid;index;not null" json:"authorId"`
-	Author        *User        `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
-	Mode          string       `gorm:"size:24;index" json:"mode"` // image | video | text
-	Tags          []string     `gorm:"type:text[]" json:"tags"`   // pg text[]
-	Items         []PromptItem `gorm:"foreignKey:PackID" json:"items"`
-	LikeCount     int          `gorm:"default:0;index" json:"likeCount"`
-	DownloadCount int          `gorm:"default:0" json:"downloadCount"`
-	CreatedAt     time.Time    `json:"createdAt"`
-	UpdatedAt     time.Time    `json:"updatedAt"`
+	ID            string         `gorm:"primaryKey;type:uuid;default:gen_random_uuid()" json:"id"`
+	Slug          string         `gorm:"size:80;uniqueIndex;not null" json:"slug"`
+	Title         string         `gorm:"size:120;not null;index" json:"title"`
+	Description   string         `gorm:"size:1000" json:"description"`
+	AuthorID      string         `gorm:"type:uuid;index;not null" json:"authorId"`
+	Author        *User          `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
+	Mode          string         `gorm:"size:24;index" json:"mode"` // image | video | text
+	Tags          pq.StringArray `gorm:"type:text[]" json:"tags"`   // pg text[]；[]string 无法被 pgx 编解码为数组
+	Items         []PromptItem   `gorm:"foreignKey:PackID" json:"items"`
+	LikeCount     int            `gorm:"default:0;index" json:"likeCount"`
+	DownloadCount int            `gorm:"default:0" json:"downloadCount"`
+	CreatedAt     time.Time      `json:"createdAt"`
+	UpdatedAt     time.Time      `json:"updatedAt"`
 }
 
 // PromptItem 提示词包内单条提示词

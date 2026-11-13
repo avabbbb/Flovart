@@ -8,13 +8,13 @@ import (
 )
 
 type Config struct {
-	Port           string
-	Bind           string
-	DatabaseURL    string
-	JWTSecret      string
-	JWTExpHours    string
-	CORSAllow      string
-	Storage        StorageConfig
+	Port        string
+	Bind        string
+	DatabaseURL string
+	JWTSecret   string
+	JWTExpHours string
+	CORSAllow   string
+	Storage     StorageConfig
 }
 
 type StorageConfig struct {
@@ -29,15 +29,15 @@ type StorageConfig struct {
 func Load() (*Config, error) {
 	_ = godotenv.Load()
 	cfg := &Config{
-		Port:           env("PORT", "11452"),
+		Port: env("PORT", "11452"),
 		// Bind defaults to loopback: the dev hub must not listen on every
 		// interface. Containers set HUB_BIND=0.0.0.0 explicitly so port
 		// mapping keeps working (see docker-compose.yml).
-		Bind:           env("HUB_BIND", "127.0.0.1"),
-		DatabaseURL:    os.Getenv("DATABASE_URL"),
-		JWTSecret:      env("JWT_SECRET", ""),
-		JWTExpHours:    env("JWT_EXP_HOURS", "168"),
-		CORSAllow:      env("CORS_ALLOW", "*"),
+		Bind:        env("HUB_BIND", "127.0.0.1"),
+		DatabaseURL: os.Getenv("DATABASE_URL"),
+		JWTSecret:   env("JWT_SECRET", ""),
+		JWTExpHours: env("JWT_EXP_HOURS", "168"),
+		CORSAllow:   env("CORS_ALLOW", "*"),
 		Storage: StorageConfig{
 			Provider:   env("STORAGE_PROVIDER", "r2"),
 			AccountID:  os.Getenv("R2_ACCOUNT_ID"),
