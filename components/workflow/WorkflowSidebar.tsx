@@ -161,25 +161,17 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
         <aside
           ref={panelRef}
           data-docked={docked ? 'true' : undefined}
-          className={`workflow-sidebar theme-aware ${docked ? 'relative self-stretch' : 'absolute'} z-40 flex min-w-0 flex-col overflow-hidden ${docked ? '' : 'rounded-2xl border-[1.5px]'}`}
+          className={`workflow-sidebar theme-aware flv-glass ${docked ? 'relative self-stretch' : 'absolute'} z-40 flex min-w-0 flex-col overflow-hidden`}
           style={docked ? {
-            // In-flow dock：aside 参与 .workflow-workspace 的 flex 行，画布为之让位，
-            // 图层点击后聚焦的节点不会被浮层遮住。Visual parity with the right
-            // drawer: a flush docked column (single divider border), not a
-            // floating rounded card — matching radius/shadow on only one side
-            // reads as a popup sitting on the canvas.
+            // In-flow dock，但视觉与右侧 Agent 面板一致：内缩 8px 的悬浮玻璃圆角卡
+            // （样式见 styles/glass.css .workflow-sidebar[data-docked]）。
             flex: '0 0 auto',
             width: `clamp(200px, 19vw, 300px)`,
-            background: 'var(--isl-card)',
-            borderRight: '1px solid var(--isl-border)',
           } : {
             top: outerGap,
             left: outerGap,
             bottom: outerGap,
             width: `clamp(200px, 19vw, 300px)`,
-            background: 'var(--isl-card)',
-            borderColor: 'var(--isl-border)',
-            boxShadow: 'var(--isl-shadow-lg)',
           }}
         >
           {/* tab 切换 */}

@@ -1,0 +1,152 @@
+/* ───────────────────────────────────────────────────────────────
+   Glass chrome · DESIGN.md §9.2
+   只给“浮在画布之上”的 chrome：节点工具条、图层面板、右侧 Agent 面板、
+   工具弹窗、菜单。节点主体、正文、trace、表格保持实底。
+   ─────────────────────────────────────────────────────────────── */
+:root {
+  --glass-radius: 14px;
+  --glass-radius-lg: 18px;
+  --glass-bg: color-mix(in srgb, var(--isl-card) 72%, transparent);
+  --glass-bg-thick: color-mix(in srgb, var(--isl-card) 86%, transparent);
+  --glass-filter: blur(20px) saturate(160%);
+  --glass-stroke: color-mix(in srgb, var(--isl-border) 75%, transparent);
+  /* Apple 式三层：顶部 1px 内高光 + 0.5px 外描边 + 柔和远投影 */
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, .55);
+  --glass-shadow: 0 0 0 .5px rgba(31, 29, 26, .08), 0 2px 6px rgba(31, 29, 26, .06), 0 12px 32px -8px rgba(31, 29, 26, .20);
+}
+:root[data-theme='dark'] {
+  --glass-bg: color-mix(in srgb, var(--isl-card) 66%, transparent);
+  --glass-bg-thick: color-mix(in srgb, var(--isl-card) 84%, transparent);
+  --glass-filter: blur(20px) saturate(140%);
+  --glass-stroke: rgba(255, 255, 255, .09);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, .07);
+  --glass-shadow: 0 0 0 .5px rgba(0, 0, 0, .55), 0 2px 6px rgba(0, 0, 0, .30), 0 16px 40px -10px rgba(0, 0, 0, .65);
+}
+
+.flv-glass {
+  background: var(--glass-bg) !important;
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border: 1px solid var(--glass-stroke) !important;
+  border-radius: var(--glass-radius);
+  box-shadow: var(--glass-highlight), var(--glass-shadow) !important;
+}
+.flv-glass--thick { background: var(--glass-bg-thick) !important; }
+
+/* 回退：不支持 / 用户要求减弱透明度 / 高对比 → 实底 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .flv-glass { background: var(--isl-card) !important; }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .flv-glass { background: var(--isl-card) !important; backdrop-filter: none; -webkit-backdrop-filter: none; border-color: var(--isl-border-strong) !important; }
+}
+
+/* ── 1. 节点工具条：玻璃 pill，按钮 hover 用柔和底而非描边 ── */
+.workflow-node-toolbar-glass { padding: 5px !important; border-radius: var(--glass-radius) !important; }
+.workflow-node-toolbar-glass button { border-radius: 9px; }
+
+/* ── 2. 图层面板（停靠态）：与右侧 Agent 面板同一张悬浮玻璃卡 ── */
+.workflow-sidebar[data-docked] {
+  margin: 8px 0 8px 8px;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.workflow-layer-card { border-radius: 10px; }
+.workflow-layer-card--selected {
+  background: color-mix(in srgb, var(--isl-mint) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--isl-mint) 35%, transparent);
+}
+.workflow-layer-card__thumb { border-radius: 7px; box-shadow: 0 0 0 .5px var(--glass-stroke); }
+
+/* ── 3. 工具弹窗（高清放大 / 调色 / 扩图 / 裁剪 …） ── */
+.flv-tool-modal .ant-modal-content,
+.flv-tool-modal .ant-modal-container {
+  padding: 20px 22px 22px;
+  border-radius: 22px;
+  background: var(--glass-bg-thick);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border: 1px solid var(--glass-stroke);
+  box-shadow: var(--glass-highlight), var(--glass-shadow), 0 40px 80px -20px rgba(0, 0, 0, .35);
+}
+.flv-tool-modal .ant-modal-header { background: transparent; margin-bottom: 16px; }
+.flv-tool-modal .ant-modal-title { font-size: 15px; font-weight: 600; letter-spacing: 0; color: var(--isl-ink); }
+.flv-tool-modal .ant-modal-close {
+  top: 16px; inset-inline-end: 16px; width: 28px; height: 28px; border-radius: 999px;
+  background: color-mix(in srgb, var(--isl-ink) 7%, transparent);
+  color: var(--isl-ink-soft);
+}
+.flv-tool-modal .ant-modal-close:hover { background: color-mix(in srgb, var(--isl-ink) 12%, transparent); color: var(--isl-ink); }
+.flv-tool-modal .ant-modal-mask,
+.flv-tool-modal-mask { background: rgba(10, 10, 12, .38) !important; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+
+.flv-tool-modal .workflow-image-tool__preview,
+.flv-tool-modal .workflow-image-tool__mask {
+  border: 0;
+  border-radius: 14px;
+  background: var(--isl-surface-sunk);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--isl-border) 60%, transparent);
+}
+.flv-tool-modal .workflow-image-tool__preview img { border-radius: 8px; }
+.flv-tool-modal .workflow-image-tool__controls { display: flex; flex-direction: column; gap: 18px; }
+.flv-tool-modal .workflow-image-tool__controls > label { display: flex; flex-direction: column; gap: 8px; font-size: 11px; font-weight: 600; color: var(--isl-ink-soft); }
+
+/* Segmented → iOS 分段控件：凹槽 + 浮起的白色滑块 */
+.flv-tool-modal .ant-segmented {
+  padding: 2px; border-radius: 10px;
+  background: color-mix(in srgb, var(--isl-ink) 7%, transparent);
+}
+.flv-tool-modal .ant-segmented-item { border-radius: 8px; font-size: 12px; font-weight: 500; color: var(--isl-ink-soft); }
+.flv-tool-modal .ant-segmented-item-selected,
+.flv-tool-modal .ant-segmented-thumb {
+  border-radius: 8px;
+  background: var(--isl-card);
+  color: var(--isl-ink);
+  box-shadow: 0 0 0 .5px rgba(0, 0, 0, .06), 0 2px 6px rgba(0, 0, 0, .12);
+}
+.flv-tool-modal .ant-btn-primary { height: 36px; border-radius: 10px; font-weight: 600; box-shadow: 0 1px 0 rgba(255, 255, 255, .25) inset, 0 4px 12px -4px color-mix(in srgb, var(--isl-mint) 70%, transparent); }
+
+/* ── 4. 节点内的悬浮菜单 / 角标：统一玻璃 ── */
+.workflow-node__media-menu {
+  border-radius: 12px;
+  background: var(--glass-bg-thick);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border: 1px solid var(--glass-stroke);
+  box-shadow: var(--glass-highlight), var(--glass-shadow);
+}
+.workflow-node__media-menu button { border-radius: 7px; color: var(--isl-ink); }
+.workflow-node__media-menu button:hover { background: color-mix(in srgb, var(--isl-ink) 8%, transparent); }
+
+/* ── 5. 空的图片 / 视频节点：居中空态 + 虚线内框 + 上传入口 ── */
+.workflow-node__empty {
+  position: absolute; inset: 10px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  border: 1.5px dashed color-mix(in srgb, var(--isl-ink) 16%, transparent);
+  border-radius: 10px;
+  color: var(--isl-ink-ghost);
+  font-size: 11px; font-weight: 500; text-align: center;
+  transition: border-color .14s ease, background .14s ease, color .14s ease;
+}
+.workflow-node__empty > svg { width: 30px; height: 30px; stroke-width: 1.5; opacity: .75; }
+.workflow-node:hover .workflow-node__empty,
+.workflow-node.is-selected .workflow-node__empty {
+  border-color: color-mix(in srgb, var(--isl-mint) 55%, transparent);
+  background: color-mix(in srgb, var(--isl-mint) 4%, transparent);
+  color: var(--isl-ink-soft);
+}
+.workflow-node__empty-cta {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 12px; border: 0; border-radius: 999px;
+  background: color-mix(in srgb, var(--isl-ink) 7%, transparent);
+  color: var(--isl-ink);
+  font: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
+  transition: background .14s ease;
+}
+.workflow-node__empty-cta:hover { background: color-mix(in srgb, var(--isl-mint) 18%, transparent); color: var(--isl-mint-deep); }
+.workflow-node__empty-hint { font-size: 10px; color: var(--isl-ink-ghost); }
+.workflow-node__empty .workflow-node__media-actions { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .workflow-node__empty, .workflow-node__empty-cta { transition: none; }
+}

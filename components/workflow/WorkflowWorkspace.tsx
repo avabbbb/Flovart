@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../types';
 import type { RouteFallbackResolution } from '../../services/routeMapping';
 import '../../styles/workflow.css';
+import '../../styles/glass.css';
 import type { GenerationCapability, GenerationMode } from '../../services/generationCapabilities';
 import { activateBrowserWorkflowWriter } from '../../services/agentHostDiscovery';
 import { useAgentConnectionStore } from '../../stores/useAgentConnectionStore';
