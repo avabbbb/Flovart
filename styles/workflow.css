@@ -54,9 +54,9 @@
 .workflow-connection.is-selected { stroke-dasharray: 6 5; animation: workflow-connection-flow 1s linear infinite; }
 @keyframes workflow-connection-flow { to { stroke-dashoffset: -22; } }
 .workflow-connection.is-active { stroke-dasharray: 6 5; } .workflow-connection-hit { cursor: pointer; }
-.workflow-node { position: absolute; box-sizing: border-box; display: flex; flex-direction: column; overflow: visible; border: 1px solid var(--wf-border); border-radius: 12px; background: var(--wf-strong); box-shadow: var(--isl-shadow-sm); transition: border-color .18s ease, box-shadow .18s ease; }
+.workflow-node { position: absolute; box-sizing: border-box; display: flex; flex-direction: column; overflow: visible; border: 1px solid color-mix(in srgb,var(--wf-border) 45%,transparent); border-radius: 16px; background: var(--wf-strong); transition: border-color .18s ease, box-shadow .18s ease; } /* 阴影见文件末“节点表面” */
 .workflow-node:focus-visible { outline: 2px solid var(--wf-accent); outline-offset: 3px; }
-.workflow-node.is-selected { z-index: 10; border-color: var(--wf-accent); box-shadow: 0 0 0 1px color-mix(in srgb,var(--wf-accent) 16%,transparent),var(--isl-shadow); }
+.workflow-node.is-selected { z-index: 10; border-color: var(--wf-accent); }
 .workflow-node__body { position: relative; flex: 1; min-height: 0; overflow: hidden; border-radius: 11px; }
 .workflow-node__title { position:absolute; z-index:8; left:0; right:0; top:-28px; display:flex; align-items:center; gap:5px; min-height:24px; padding:0 2px; color:var(--wf-muted); background:transparent; border:0; border-radius:0; font-size:11px; line-height:1; cursor:grab; user-select:none; }
 .workflow-node__title:active { cursor:grabbing; }
@@ -794,12 +794,13 @@ textarea.agent-ask__control { resize: vertical; min-height: 56px; }
 
 /* 节点工具条：带文字的主操作 */
 .workflow-toolbar-labelled { display: inline-flex; align-items: center; font-size: 12px; font-weight: 500; white-space: nowrap; }
-/* LibTV 式立体感：所有节点叠一层柔和的分层阴影；悬停略抬升，选中保留强调描边。 */
-.workflow-node { --wf-node-shadow: 0 1px 2px rgba(15,17,21,.06), 0 4px 10px -2px rgba(15,17,21,.08), 0 16px 36px -10px rgba(15,17,21,.22); box-shadow: var(--wf-node-shadow); }
-.workflow-node:hover { --wf-node-shadow: 0 1px 2px rgba(15,17,21,.07), 0 6px 14px -3px rgba(15,17,21,.1), 0 22px 44px -12px rgba(15,17,21,.28); }
-.workflow-node.is-selected { box-shadow: 0 0 0 1px color-mix(in srgb,var(--wf-accent) 16%,transparent), var(--wf-node-shadow); }
-:root[data-theme='dark'] .workflow-node { --wf-node-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.4), 0 6px 14px -4px rgba(0,0,0,.45), 0 20px 44px -12px rgba(0,0,0,.6); }
-:root[data-theme='dark'] .workflow-node:hover { --wf-node-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 1px 2px rgba(0,0,0,.45), 0 8px 18px -4px rgba(0,0,0,.5), 0 26px 52px -12px rgba(0,0,0,.68); }
+/* 节点表面 · DESIGN.md §9：内容层实底、不用玻璃；几乎看不见的发丝边 + 一层柔和远投影；悬停略抬升，选中只加强调环。 */
+.workflow-node { --wf-node-shadow: 0 1px 2px rgba(31,29,26,.05), 0 8px 24px -8px rgba(31,29,26,.14); box-shadow: var(--wf-node-shadow); }
+.workflow-node:hover { --wf-node-shadow: 0 1px 2px rgba(31,29,26,.06), 0 14px 32px -10px rgba(31,29,26,.20); }
+.workflow-node.is-selected { box-shadow: 0 0 0 3px color-mix(in srgb,var(--wf-accent) 18%,transparent), var(--wf-node-shadow); }
+:root[data-theme='dark'] .workflow-node { --wf-node-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.4), 0 10px 28px -8px rgba(0,0,0,.6); }
+:root[data-theme='dark'] .workflow-node:hover { --wf-node-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 1px 2px rgba(0,0,0,.45), 0 16px 36px -10px rgba(0,0,0,.68); }
+.workflow-node.workflow-node--subgraph { box-shadow: none; }
 @media (prefers-reduced-motion: reduce) { .workflow-node { transition: border-color .18s ease; } }
 
 /* LibTV 式文本节点排版：更宽的页边距、舒展的行距、细滚动条。 */

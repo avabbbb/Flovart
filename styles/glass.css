@@ -150,3 +150,36 @@
 @media (prefers-reduced-motion: reduce) {
   .workflow-node__empty, .workflow-node__empty-cta { transition: none; }
 }
+
+/* ── 4. 壳套卡 · DESIGN.md §9.3 ──
+   左右停靠面板是“壳”：偏灰的玻璃；里面需要读写的内容（输入区、提示卡、选中行）是“卡”：不透明白底、无描边、柔和阴影。
+   层级靠表面明度区分，不靠线框。两侧外壳必须用同一个 --shell-bg。 */
+:root {
+  --shell-bg: color-mix(in srgb, var(--isl-surface-2) 80%, transparent);
+  --card-on-shell: var(--isl-card);
+  --card-on-shell-shadow: 0 0 0 .5px rgba(31, 29, 26, .06), 0 1px 2px rgba(31, 29, 26, .04), 0 6px 16px -8px rgba(31, 29, 26, .14);
+}
+:root[data-theme='dark'] {
+  --shell-bg: color-mix(in srgb, var(--isl-surface-sunk) 78%, transparent);
+  --card-on-shell: color-mix(in srgb, var(--isl-card) 92%, white 8%);
+  --card-on-shell-shadow: 0 0 0 .5px rgba(255, 255, 255, .06), 0 6px 16px -8px rgba(0, 0, 0, .5);
+}
+.workflow-sidebar[data-docked].flv-glass,
+.compact-right-panel[data-open='true'][data-docked='true'],
+:root[data-theme='dark'] .compact-right-panel[data-open='true'][data-docked='true'] { background: var(--shell-bg) !important; }
+
+.compact-right-panel .agent-conversation .workflow-agent__composer {
+  background: var(--card-on-shell) !important;
+  border-color: transparent !important;
+  box-shadow: var(--card-on-shell-shadow) !important;
+}
+.compact-right-panel .agent-conversation .workflow-agent__composer:focus-within {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--isl-mint) 16%, transparent), var(--card-on-shell-shadow) !important;
+}
+/* 选中图层：从薄荷色描边改成浮起的白胶囊 */
+.workflow-sidebar[data-docked] .workflow-layer-card--selected {
+  background: var(--card-on-shell);
+  box-shadow: var(--card-on-shell-shadow);
+}
+.agent-card-on-shell { background: var(--card-on-shell); box-shadow: var(--card-on-shell-shadow); }
+.compact-right-panel .workflow-agent.is-embedded .workflow-agent__body { background: transparent; }

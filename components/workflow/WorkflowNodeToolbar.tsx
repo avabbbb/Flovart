@@ -212,9 +212,9 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
       <WorkflowToolbarActions actions={[...iconOnly, ...primary.filter(action => action.key === 'delete')]} />
       {namingOpen && onSequencedExport && selectedMedia.length > 0 && (
         <form
-          className="workflow-group-naming"
+          className="workflow-group-naming flv-glass flv-glass--thick"
           aria-label={L('批量下载命名', 'Batch download naming')}
-          style={{ position: 'absolute', top: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 12, background: 'var(--workflow-toolbar-bg, #1f1f23)', boxShadow: '0 8px 24px rgba(0,0,0,.35)', whiteSpace: 'nowrap', zIndex: 2 }}
+          style={{ position: 'absolute', top: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 12, color: 'var(--isl-ink)', whiteSpace: 'nowrap', zIndex: 2 }}
           onSubmit={event => { event.preventDefault(); onSequencedExport(ids, namePrefix); setNamingOpen(false); }}
         >
           <input aria-label={L('文件名前缀', 'File name prefix')} autoFocus value={namePrefix} placeholder="flovart" onChange={event => setNamePrefix(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setNamingOpen(false); event.stopPropagation(); }} style={{ width: 140 }} />
