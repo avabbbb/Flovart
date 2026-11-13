@@ -87,7 +87,7 @@ export function WorkflowImageToolDialogs(props: {
 }
 
 type CommonProps = { open: boolean; mediaUrl: string; busy: boolean; error: string | null; onClose: () => void };
-const modalProps = (props: CommonProps, width = 820) => ({ open: props.open, onCancel: props.busy ? undefined : props.onClose, footer: null, centered: true, width, destroyOnHidden: true, mask: { closable: !props.busy } });
+const modalProps = (props: CommonProps, width = 820) => ({ open: props.open, onCancel: props.busy ? undefined : props.onClose, footer: null, centered: true, width, destroyOnHidden: true, mask: { closable: !props.busy }, rootClassName: 'flv-tool-modal' });
 
 function DialogError({ error }: { error: string | null }) {
   return error ? <div role="alert" className="workflow-image-tool__error">{error}</div> : null;

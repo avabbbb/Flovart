@@ -7,7 +7,7 @@ export function WorkflowToolbarShell({ children, className = '', testId }: { chi
     <div
       data-workflow-overlay
       data-testid={testId}
-      className={`isl-shell isl-pop-in flex items-center justify-start gap-2 overflow-visible p-1.5 ${className}`}
+      className={`isl-shell flv-glass workflow-node-toolbar-glass isl-pop-in flex items-center justify-start gap-2 overflow-visible p-1.5 ${className}`}
       onMouseDown={stop}
       onPointerDown={stop}
       onWheel={stop}

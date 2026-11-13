@@ -541,7 +541,7 @@ export function WorkflowNode({
         {isMedia && (media.url || hasMediaReference) && <div className="workflow-node__drag-handle" data-workflow-drag-handle />}
         {node.type === 'image' && (media.url
           ? <><img src={media.url} alt={node.title} draggable={false} data-workflow-media-preview style={{ filter: buildCssFilter(node.metadata.filters) }} />{lassoActive && onLassoDone ? <WorkflowNodeLasso width={node.metadata.naturalWidth} height={node.metadata.naturalHeight} language={language} onDone={onLassoDone} /> : mediaActions}</>
-          : <div className="workflow-node__empty"><ImageIcon size={26} /><span>{mediaError || (language === 'en' ? 'Image node' : '图片节点')}</span>{regrantAction}{mediaActions}</div>)}
+          : <div className="workflow-node__empty"><ImageIcon size={30} /><span>{mediaError || (language === 'en' ? 'Drop an image here' : '拖入图片')}</span>{regrantAction || <button type="button" className="workflow-node__empty-cta" onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); mediaInput.current?.click(); }}><Upload size={12} />{language === 'en' ? 'Upload' : '上传'}</button>}<span className="workflow-node__empty-hint">{language === 'en' ? 'or describe it in the prompt bar' : '或在下方输入框描述生成'}</span>{mediaActions}</div>)}
         {node.type === 'video' && (hasMediaReference
           ? previewPlaceholder
             ? <>{previewPlaceholder}{mediaActions}</>
@@ -614,7 +614,7 @@ export function WorkflowNode({
               : <div className="workflow-node__empty workflow-video-placeholder" role="img" aria-label={`${node.title}${language === 'en' ? ' video preview' : ' 视频预览'}`} data-testid="workflow-video-placeholder" data-workflow-media-preview><Video size={26} /><span>{(language === 'en' ? 'Video preview' : '视频预览')}</span></div>}
               {onActivateMedia && <button type="button" className="workflow-node__video-activate" aria-label={(language === 'en' ? 'Load video player' : '加载视频播放器')} title={(language === 'en' ? 'Load video player' : '加载视频播放器')} data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={onActivateMedia}><Play size={18} fill="currentColor" /></button>}
               {mediaActions}</>
-          : <div className="workflow-node__empty"><Video size={26} /><span>{mediaError || (language === 'en' ? 'Video node' : '视频节点')}</span>{regrantAction}{mediaActions}</div>)}
+          : <div className="workflow-node__empty"><Video size={30} /><span>{mediaError || (language === 'en' ? 'Drop a video here' : '拖入视频')}</span>{regrantAction || <button type="button" className="workflow-node__empty-cta" onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); mediaInput.current?.click(); }}><Upload size={12} />{language === 'en' ? 'Upload' : '上传'}</button>}<span className="workflow-node__empty-hint">{language === 'en' ? 'or describe it in the prompt bar' : '或在下方输入框描述生成'}</span>{mediaActions}</div>)}
         {node.type === 'audio' && (media.url
           ? <AudioNodeCard node={node} src={media.url} language={language} onTool={onAudioTool} />
           : <div className="workflow-node__empty"><Music2 size={26} /><span>{mediaError || (language === 'en' ? 'Audio node' : '音频节点')}</span>{regrantAction}{mediaActions}</div>)}
