@@ -1,3 +1,4 @@
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { AtSign, Box, Check, ChevronDown, Copy, GitBranch, Hand, Image as ImageIcon, KeyRound, LayoutGrid, Plus, RotateCw, Send, Square, Trash2, Video, X } from 'lucide-react';
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { AGENT_ATTACHMENT_MAX, composerAttachmentsToImages, createComposerAttachment, mergeComposerAttachments, releaseComposerAttachment, type AgentComposerAttachment } from '../../services/agentComposerAttachments';
@@ -48,6 +49,7 @@ import { AgentHeaderLeadingContext } from './agentHeaderSlot';
 import { DrawerChromeCollapse, DrawerChromeTabs } from '../studio/drawerChrome';
 import { AgentConfirmCard } from './AgentConfirmCard';
 import { AgentAskCard } from './AgentAskCard';
+import '../../styles/agentComposer.css';
 import { parseAgentAskHtml, type AgentAskForm } from './agentAskForm';
 import { confirmGrantKey, confirmScopesFor, readAlwaysGrants, writeAlwaysGrants, type AgentConfirmScope } from './agentConfirmCopy';
 import { displayUserTurnText, agentToolLabel } from './agentTurnText';
@@ -1065,7 +1067,7 @@ const userApiKeysRef = useRef(userApiKeys);
         />}
         <div
           ref={composer}
-          className="workflow-agent__composer"
+          className="workflow-agent__composer agent-composer"
           data-testid="agent-composer"
           onDragEnter={event => {
             if (!Array.from(event.dataTransfer.items).some(item => item.kind === 'file' && (item.type.startsWith('image/') || item.type.startsWith('video/')))) return;
@@ -1128,14 +1130,6 @@ const userApiKeysRef = useRef(userApiKeys);
             onReplace={() => startReplace(reference)}
             onRemove={() => setReferences(current => current.filter(item => item !== reference))}
           />)}</div>}
-          {attachments.length > 0 && <div className="workflow-agent__attachments" aria-label={language === 'zho' ? '本轮附件' : 'Attachments'}>
-            {attachments.map(item => <div key={item.id} title={`${item.name} · ${item.kind === 'image' ? '图片' : '视频'}`}>
-              {item.kind === 'image'
-                ? <img src={item.previewUrl} alt={item.name} />
-                : <video src={item.previewUrl} muted playsInline preload="metadata" />}
-              <button type="button" aria-label={`${language === 'zho' ? '移除附件' : 'Remove attachment'} ${item.name}`} onClick={() => removeAttachment(item)}><X size={10} /></button>
-            </div>)}
-          </div>}
           <textarea
             ref={textarea}
             value={prompt}
@@ -1161,6 +1155,13 @@ const userApiKeysRef = useRef(userApiKeys);
             }}
             disabled={status === 'connecting'}
           />
+          <ComposerAttachmentTray
+            attachments={attachments}
+            label={language === 'zho' ? '本轮附件' : 'Attachments'}
+            removeLabel={language === 'zho' ? '移除附件' : 'Remove attachment'}
+            kindLabel={kind => (kind === 'image' ? '图片' : '视频')}
+            onRemove={removeAttachment}
+          />
           <div className="agent-composer__controls">
             <div className="agent-composer__tools">
               <div className="agent-attachment-control">
@@ -1183,12 +1184,76 @@ const userApiKeysRef = useRef(userApiKeys);
               </div>
             </div>
             {sending
-              ? <button type="button" className="agent-composer__send" aria-label="停止" onClick={stop}><Square size={13} /></button>
+              ? <span className="agent-composer__running">
+                  <span className="agent-composer__running-label" role="status">{language === 'zho' ? '运行中' : 'Working'}<i aria-hidden="true" /><i aria-hidden="true" /><i aria-hidden="true" /></span>
+                  <span className="agent-composer__stop">
+                    <span className="agent-composer__send-ring" aria-hidden="true" />
+                    <button type="button" className="agent-composer__send" aria-label="停止" onClick={stop}><Square size={13} /></button>
+                  </span>
+                </span>
               : <button type="button" className="agent-composer__send" aria-label="发送" onClick={() => void send()} disabled={status !== 'ready' || (!prompt.trim() && references.length === 0 && attachments.length === 0)}><Send size={16} /></button>}
           </div>
         </div>
       </section>
     </div>
+  );
+}
+
+/** 输入框附件托盘：大圆角方块，1-2 张两列、3 张起三列；进出带错落缩放，托盘高度随内容平滑伸缩。纯展示，不改附件逻辑。 */
+function ComposerAttachmentTray({ attachments, label, removeLabel, kindLabel, onRemove }: {
+  attachments: AgentComposerAttachment[];
+  label: string;
+  removeLabel: string;
+  kindLabel: (kind: AgentComposerAttachment['kind']) => string;
+  onRemove: (attachment: AgentComposerAttachment) => void;
+}) {
+  const reduce = useReducedMotion();
+  const grid = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState<number | 'auto'>('auto');
+  useLayoutEffect(() => {
+    const node = grid.current;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setHeight(node.offsetHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [attachments.length > 0]);
+  const ease = [0.22, 1, 0.36, 1] as const;
+  const spring = reduce ? { duration: 0 } : { type: 'spring' as const, stiffness: 520, damping: 38, mass: 0.8 };
+  const columns = attachments.length <= 2 ? 2 : 3;
+  return (
+    <AnimatePresence initial={false}>
+      {attachments.length > 0 && <motion.div
+        key="tray"
+        className="workflow-agent__attachments"
+        aria-label={label}
+        initial={{ height: 0, opacity: 0 }}
+        animate={{ height, opacity: 1 }}
+        exit={{ height: 0, opacity: 0 }}
+        transition={reduce ? { duration: 0 } : { height: { duration: 0.28, ease }, opacity: { duration: 0.18 } }}
+      >
+        <div ref={grid} className="workflow-agent__attachments-grid" data-columns={columns}>
+          <AnimatePresence mode="popLayout" initial>
+            {attachments.map((item, index) => <motion.div
+              key={item.id}
+              layout={!reduce}
+              className="workflow-agent__attachment"
+              title={`${item.name} · ${kindLabel(item.kind)}`}
+              initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 6 }}
+              animate={{ opacity: 1, scale: 1, y: 0, transition: reduce ? { duration: 0 } : { ...spring, delay: Math.min(index, 5) * 0.045 } }}
+              exit={reduce ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, scale: 0.88, transition: { duration: 0.16, ease } }}
+              transition={spring}
+            >
+              {item.kind === 'image'
+                ? <img src={item.previewUrl} alt={item.name} draggable={false} />
+                : <video src={item.previewUrl} muted playsInline preload="metadata" />}
+              <button type="button" aria-label={`${removeLabel} ${item.name}`} onClick={() => onRemove(item)}><X size={11} strokeWidth={2.4} /></button>
+            </motion.div>)}
+          </AnimatePresence>
+        </div>
+      </motion.div>}
+    </AnimatePresence>
   );
 }
 

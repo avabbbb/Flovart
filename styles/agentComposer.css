@@ -1,0 +1,233 @@
+/* ── Agent 输入卡 · composer mockup 手感（参考 inspora §4）──
+   卡片 20px 圆角；聚焦时薄荷色描边 150ms 吸附 + 淡光晕；附件为大圆角方块（1-2 张两列、3 张起三列）；
+   底栏：圆形 +、胶囊选择器、右侧主按钮；运行中底栏显示紧凑加载态。只用现有 token，明暗两套。 */
+
+:root .agent-conversation .workflow-agent__composer.agent-composer {
+  min-height: 0;
+  gap: 6px;
+  border-radius: 20px !important;
+  padding: 10px 10px 9px !important;
+  transition: box-shadow .15s cubic-bezier(.2, .8, .2, 1), border-color .15s ease;
+}
+:root .agent-conversation .workflow-agent__composer.agent-composer > textarea {
+  min-height: 56px !important;
+  padding: 4px 6px !important;
+}
+/* 聚焦环：1.5px 实描边 + 4px 半透明外环 + 一层很淡的光晕（不用蓝色，用应用主色） */
+:root .agent-conversation .workflow-agent__composer.agent-composer:focus-within {
+  box-shadow:
+    0 0 0 1.5px color-mix(in srgb, var(--isl-mint) 78%, transparent),
+    0 0 0 5px color-mix(in srgb, var(--isl-mint) 13%, transparent),
+    0 6px 22px -6px color-mix(in srgb, var(--isl-mint) 30%, transparent),
+    var(--card-on-shell-shadow) !important;
+}
+:root[data-theme='dark'] .agent-conversation .workflow-agent__composer.agent-composer:focus-within {
+  box-shadow:
+    0 0 0 1.5px color-mix(in srgb, var(--isl-mint) 70%, transparent),
+    0 0 0 5px color-mix(in srgb, var(--isl-mint) 12%, transparent),
+    0 8px 26px -6px color-mix(in srgb, var(--isl-mint) 22%, transparent),
+    var(--card-on-shell-shadow) !important;
+}
+.agent-composer .agent-composer__drop { inset: 3px; border-radius: 17px; }
+
+/* ── 附件托盘 ── */
+.agent-conversation .agent-composer .workflow-agent__attachments {
+  display: block;
+  flex: 0 0 auto;
+  padding: 0;
+  margin: 0 -2px;
+  overflow: hidden;
+}
+.agent-conversation .agent-composer .workflow-agent__attachments-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  height: auto;
+  padding: 4px 2px 6px;
+}
+/* 旧规则 .workflow-agent__attachments > div 把直接子元素钉成 48px 方块，这里还原网格容器 */
+.agent-conversation .agent-composer .workflow-agent__attachments > .workflow-agent__attachments-grid { position: static; flex: none; height: auto; }
+.agent-conversation .agent-composer .workflow-agent__attachments-grid[data-columns='3'] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.agent-conversation .agent-composer .workflow-agent__attachments .workflow-agent__attachment {
+  position: relative;
+  flex: none;
+  width: auto;
+  height: auto;
+  aspect-ratio: 5 / 4;
+  max-height: 132px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--isl-surface-2);
+  box-shadow: 0 0 0 .5px rgba(31, 29, 26, .08), 0 4px 12px -6px rgba(31, 29, 26, .22);
+  transform-origin: 50% 70%;
+}
+.agent-conversation .agent-composer .workflow-agent__attachments-grid[data-columns='3'] .workflow-agent__attachment {
+  aspect-ratio: 1;
+  max-height: 104px;
+  border-radius: 12px;
+}
+:root[data-theme='dark'] .agent-conversation .agent-composer .workflow-agent__attachments .workflow-agent__attachment {
+  box-shadow: 0 0 0 .5px rgba(255, 255, 255, .08), 0 6px 14px -6px rgba(0, 0, 0, .6);
+}
+.agent-conversation .agent-composer .workflow-agent__attachments img,
+.agent-conversation .agent-composer .workflow-agent__attachments video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  object-fit: cover;
+  user-select: none;
+}
+.agent-conversation .agent-composer .workflow-agent__attachments .workflow-agent__attachment > button {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-content: center;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(20, 20, 22, .56);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 0 .5px rgba(255, 255, 255, .18);
+  cursor: pointer;
+  opacity: .9;
+  transition: opacity .15s ease, transform .15s ease, background .15s ease;
+}
+.agent-conversation .agent-composer .workflow-agent__attachment > button:hover { opacity: 1; background: rgba(20, 20, 22, .78); transform: scale(1.06); }
+.agent-conversation .agent-composer .workflow-agent__attachment > button:focus-visible { outline: 2px solid var(--isl-mint); outline-offset: 1px; opacity: 1; }
+
+/* ── 底栏：圆形 + / 胶囊 / 主按钮 ── */
+.agent-conversation .agent-composer .agent-composer__controls { gap: 8px; padding-top: 2px; }
+.agent-conversation .agent-composer .agent-composer__tools { gap: 5px; }
+.agent-conversation .agent-composer .agent-attachment-control > button {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  padding: 0;
+  border-radius: 50%;
+  color: var(--isl-ink);
+  background: var(--isl-surface-2);
+  transition: background .15s ease, transform .15s ease;
+}
+.agent-conversation .agent-composer .agent-attachment-control > button:hover { background: color-mix(in srgb, var(--isl-ink) 10%, var(--isl-surface-2)); }
+.agent-conversation .agent-composer .agent-attachment-control > button:active { transform: scale(.94); }
+.agent-conversation .agent-composer .agent-attachment-control > button[aria-expanded='true'] svg { transform: rotate(45deg); }
+.agent-conversation .agent-composer .agent-attachment-control > button svg { transition: transform .18s cubic-bezier(.2, .8, .2, 1); }
+
+.agent-conversation .agent-composer .agent-composer__tools .agent-mode-control > button,
+.agent-conversation .agent-composer .agent-composer__tools .agent-model-trigger {
+  height: 28px;
+  gap: 4px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--isl-ink-soft);
+  background: var(--isl-surface-2);
+  font-size: 11px;
+  font-weight: 500;
+  transition: background .15s ease, color .15s ease;
+}
+.agent-conversation .agent-composer .agent-composer__tools .agent-mode-control > button:hover,
+.agent-conversation .agent-composer .agent-composer__tools .agent-mode-control > button[aria-expanded='true'],
+.agent-conversation .agent-composer .agent-composer__tools .agent-model-trigger:hover,
+.agent-conversation .agent-composer .agent-composer__tools .agent-model-trigger[aria-expanded='true'] {
+  color: var(--isl-ink);
+  background: color-mix(in srgb, var(--isl-ink) 10%, var(--isl-surface-2));
+}
+:root[data-theme='dark'] .agent-conversation .agent-composer .agent-attachment-control > button,
+:root[data-theme='dark'] .agent-conversation .agent-composer .agent-composer__tools .agent-mode-control > button,
+:root[data-theme='dark'] .agent-conversation .agent-composer .agent-composer__tools .agent-model-trigger {
+  background: color-mix(in srgb, var(--isl-ink) 8%, transparent);
+}
+:root[data-theme='dark'] .agent-conversation .agent-composer .agent-attachment-control > button:hover,
+:root[data-theme='dark'] .agent-conversation .agent-composer .agent-composer__tools .agent-mode-control > button:hover,
+:root[data-theme='dark'] .agent-conversation .agent-composer .agent-composer__tools .agent-model-trigger:hover {
+  background: color-mix(in srgb, var(--isl-ink) 14%, transparent);
+}
+
+/* 主按钮：应用主色，圆角方形 */
+:root .agent-conversation .agent-composer .agent-composer__send {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 11px !important;
+  color: #fff !important;
+  background: var(--isl-mint) !important;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .22) inset, 0 4px 12px -4px color-mix(in srgb, var(--isl-mint) 70%, transparent);
+  transition: transform .15s ease, background .15s ease, box-shadow .15s ease, opacity .15s ease;
+}
+:root[data-theme='dark'] .agent-conversation .agent-composer .agent-composer__send { color: #0d1514 !important; }
+:root .agent-conversation .agent-composer .agent-composer__send:hover:not(:disabled) { background: color-mix(in srgb, var(--isl-mint) 88%, black) !important; }
+:root .agent-conversation .agent-composer .agent-composer__send:active:not(:disabled) { transform: scale(.94); }
+:root .agent-conversation .agent-composer .agent-composer__send:disabled {
+  opacity: 1 !important;
+  color: var(--isl-ink-ghost) !important;
+  background: var(--isl-surface-2) !important;
+  box-shadow: none;
+  cursor: default;
+}
+:root[data-theme='dark'] .agent-conversation .agent-composer .agent-composer__send:disabled { background: color-mix(in srgb, var(--isl-ink) 8%, transparent) !important; }
+
+/* ── 运行中：紧凑加载态（文字胶囊 + 跳动点 + 停止键外的旋转弧） ── */
+.agent-composer__running { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 8px; margin-left: auto; }
+.agent-composer__running-label {
+  display: inline-flex;
+  height: 26px;
+  align-items: center;
+  gap: 3px;
+  padding: 0 10px;
+  border-radius: 999px;
+  color: var(--isl-mint-deep, var(--isl-mint));
+  background: color-mix(in srgb, var(--isl-mint) 13%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.agent-composer__running-label > i { width: 3px; height: 3px; border-radius: 50%; background: currentColor; animation: agent-composer-dot 1.1s ease-in-out infinite; }
+.agent-composer__running-label > i:first-of-type { margin-left: 2px; }
+.agent-composer__running-label > i:nth-of-type(2) { animation-delay: .15s; }
+.agent-composer__running-label > i:nth-of-type(3) { animation-delay: .3s; }
+.agent-composer__stop { position: relative; display: inline-grid; flex: 0 0 auto; }
+.agent-composer__stop .agent-composer__send { margin-left: 0 !important; }
+.agent-composer__send-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 14px;
+  background: conic-gradient(from 0deg, transparent 0 62%, color-mix(in srgb, var(--isl-mint) 85%, transparent) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  padding: 2px;
+  animation: agent-composer-spin 1s linear infinite;
+  pointer-events: none;
+}
+@keyframes agent-composer-spin { to { transform: rotate(360deg); } }
+@keyframes agent-composer-dot { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-2px); } }
+@container agentcomposer (max-width: 280px) { .agent-composer__running-label { display: none; } }
+
+/* 窄抽屉：工具都成 28px 圆形图标钮 */
+@container agentcomposer (max-width: 340px) {
+  .agent-conversation .agent-composer .agent-composer__tools .agent-mode-control > button,
+  .agent-conversation .agent-composer .agent-composer__tools > .agent-attachment-control > button {
+    flex: 0 0 28px; width: 28px; height: 28px; padding: 0 !important; border-radius: 50%;
+  }
+  .agent-conversation .agent-composer .agent-composer__tools .agent-model-trigger { padding: 0 9px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root .agent-conversation .workflow-agent__composer.agent-composer,
+  .agent-conversation .agent-composer .agent-attachment-control > button,
+  .agent-conversation .agent-composer .agent-attachment-control > button svg,
+  :root .agent-conversation .agent-composer .agent-composer__send { transition: none; }
+  .agent-composer__send-ring { animation-duration: 3s; }
+  .agent-composer__running-label > i { animation: none; opacity: .7; }
+}
+@container agentcomposer (max-width: 340px) {
+  .agent-conversation .agent-composer .agent-composer__tools .agent-mode-control > button > span + svg { display: none; }
+}
