@@ -43,9 +43,19 @@ function renderInline(text: string): ReactNode[] {
   ));
 }
 
-export function TextNodeBody({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+const CLICK_SLOP = 4;
+
+/**
+ * 文本节点正文。阅读态（含空白态）不是输入框：按下即可像其他节点一样拖动/选中，
+ * 双击（或聚焦后按 Enter）进入编辑；空白备注单击即可开始输入。编辑态失焦或 Esc 退出。
+ * 之前空内容会直接渲染一个铺满节点的 <textarea>，而画布把 textarea 视为交互目标、不启动拖拽，
+ * 导致新建/清空的备注只能打字、拖不动。
+ */
+export function TextNodeBody({ value, onChange, language }: { value: string; onChange: (value: string) => void; language?: string }) {
   const [editing, setEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const pressRef = useRef<{ x: number; y: number } | null>(null);
+  const en = language === 'en';
   useEffect(() => {
     if (!editing) return;
     const textarea = textareaRef.current;
@@ -53,12 +63,12 @@ export function TextNodeBody({ value, onChange }: { value: string; onChange: (va
     textarea.focus();
     textarea.setSelectionRange(textarea.value.length, textarea.value.length);
   }, [editing]);
-  if (editing || !value.trim()) {
+  if (editing) {
     return (
       <textarea
         ref={textareaRef}
         value={value}
-        placeholder="写脚本、备注或说明；这里的文字不会自动进入生成提示词"
+        placeholder={en ? 'Write a script, note or brief. This text is not added to generation prompts.' : '写脚本、备注或说明；这里的文字不会自动进入生成提示词'}
         onPointerDown={event => event.stopPropagation()}
         onChange={event => onChange(event.target.value)}
         onBlur={() => setEditing(false)}
@@ -66,14 +76,41 @@ export function TextNodeBody({ value, onChange }: { value: string; onChange: (va
       />
     );
   }
+  const empty = !value.trim();
+  const startEditing = () => setEditing(true);
+  if (empty) {
+    return (
+      <div
+        className="workflow-text-doc is-empty"
+        role="button"
+        tabIndex={0}
+        aria-label={en ? 'Empty note. Click or press Enter to write' : '空白备注，单击或按 Enter 开始输入'}
+        title={en ? 'Click to write · drag to move' : '单击输入 · 拖动移动'}
+        // 不拦截 pointerdown：让画布照常选中/拖动节点；只有“没有拖动的单击”才进入编辑。
+        onPointerDown={event => { pressRef.current = { x: event.clientX, y: event.clientY }; }}
+        onClick={event => {
+          const press = pressRef.current;
+          pressRef.current = null;
+          if (event.shiftKey || event.ctrlKey || event.metaKey) return;
+          if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > CLICK_SLOP) return;
+          event.stopPropagation();
+          startEditing();
+        }}
+        onDoubleClick={event => { event.stopPropagation(); startEditing(); }}
+        onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); startEditing(); } }}
+      >
+        <span className="workflow-text-doc__placeholder">{en ? 'Write a script, note or brief. This text is not added to generation prompts.' : '写脚本、备注或说明；这里的文字不会自动进入生成提示词'}</span>
+      </div>
+    );
+  }
   return (
     <div
       className="workflow-text-doc"
       role="document"
       tabIndex={0}
-      title="双击编辑"
-      onDoubleClick={event => { event.stopPropagation(); setEditing(true); }}
-      onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); setEditing(true); } }}
+      title={en ? 'Double-click to edit · drag to move' : '双击编辑 · 拖动移动'}
+      onDoubleClick={event => { event.stopPropagation(); startEditing(); }}
+      onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); startEditing(); } }}
       onWheel={event => event.stopPropagation()}
     >
       {parseTextBlocks(value).map((block, index) => {

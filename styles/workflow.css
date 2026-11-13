@@ -862,7 +862,9 @@ textarea.agent-ask__control { resize: vertical; min-height: 56px; }
 .workflow-node__script-table tr.is-success td.is-index::after { content: ' ✓'; }
 .workflow-node__script-table tr.is-error td.is-index { color: #e05252; }
 /* LibTV 式文本文档：标题层级 + 舒展正文，双击切回编辑。 */
-.workflow-text-doc { height: 100%; overflow: auto; padding: 16px 18px 18px; color: var(--wf-text); font-size: 12.5px; line-height: 1.75; letter-spacing: .01em; cursor: text; scrollbar-width: thin; scrollbar-color: color-mix(in srgb,var(--wf-muted) 35%,transparent) transparent; }
+.workflow-text-doc { height: 100%; overflow: auto; padding: 16px 18px 18px; color: var(--wf-text); font-size: 12.5px; line-height: 1.75; letter-spacing: .01em; cursor: grab; scrollbar-width: thin; scrollbar-color: color-mix(in srgb,var(--wf-muted) 35%,transparent) transparent; }
+.workflow-text-doc:active { cursor: grabbing; }
+.workflow-text-doc__placeholder { color: color-mix(in srgb,var(--wf-muted) 80%,transparent); }
 .workflow-text-doc:focus-visible { outline: 2px solid color-mix(in srgb,var(--wf-accent) 45%,transparent); outline-offset: -2px; }
 .workflow-text-doc > :first-child { margin-top: 0; }
 .workflow-text-doc__h1 { margin: 4px 0 10px; font-size: 17px; font-weight: 700; line-height: 1.4; letter-spacing: 0; }

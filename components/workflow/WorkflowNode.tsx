@@ -618,7 +618,7 @@ export function WorkflowNode({
         {node.type === 'audio' && (media.url
           ? <AudioNodeCard node={node} src={media.url} language={language} onTool={onAudioTool} />
           : <div className="workflow-node__empty"><Music2 size={26} /><span>{mediaError || (language === 'en' ? 'Audio node' : '音频节点')}</span>{regrantAction}{mediaActions}</div>)}
-        {node.type === 'text' && <TextNodeBody value={node.metadata.content || ''} onChange={onChangeText} />}
+        {node.type === 'text' && <TextNodeBody value={node.metadata.content || ''} onChange={onChangeText} language={language} />}
         {node.type === 'script' && <ScriptNodeCard node={node} />}
         {node.type === 'operation' && <OperationNodeCard node={node} onRun={onRun} onStop={onStop} onSelectTake={onSelectTake} language={language} layerPreview={layerPreview} />}
         {node.type === 'design' && <DesignNodeSurface node={node} language={language} />}

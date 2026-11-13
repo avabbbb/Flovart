@@ -385,6 +385,9 @@ describe('InfiniteWorkflow surface interactions', () => {
   it('records direct text editing in the shared Draft Authority', () => {
     render(<Harness />);
 
+    // 空白备注不再常驻 textarea（否则拖不动节点）：单击进入编辑。
+    expect(node('source').querySelector('textarea')).toBeNull();
+    fireEvent.click(node('source').querySelector('.workflow-text-doc.is-empty')!);
     fireEvent.change(node('source').querySelector('textarea')!, { target: { value: '真人刚刚改过的旁白' } });
 
     expect(projectNode('source').metadata.content).toBe('真人刚刚改过的旁白');
@@ -427,6 +430,26 @@ describe('InfiniteWorkflow surface interactions', () => {
     fireEvent.pointerUp(window, { pointerId: 7, clientX: 230, clientY: 200 });
     expect(projectNode('source').position).toEqual({ x: 210, y: 180 });
     expect(projectState().draftChangeSets).toHaveLength(1);
+  });
+
+  it('drags a note node from its empty body and from its document body', () => {
+    render(<Harness />);
+
+    const empty = node('source').querySelector('.workflow-text-doc.is-empty')!;
+    fireEvent.pointerDown(empty, { button: 0, pointerId: 5, clientX: 120, clientY: 120 });
+    fireEvent.pointerUp(window, { pointerId: 5, clientX: 150, clientY: 140 });
+    expect(projectNode('source').position).toEqual({ x: 130, y: 120 });
+    expect(projectState().selectedNodeIds).toEqual(['source']);
+    expect(node('source').querySelector('textarea')).toBeNull();
+
+    fireEvent.doubleClick(node('source').querySelector('.workflow-text-doc')!);
+    fireEvent.change(node('source').querySelector('textarea')!, { target: { value: '# 标题\n正文' } });
+    fireEvent.blur(node('source').querySelector('textarea')!);
+    const doc = node('source').querySelector('.workflow-text-doc:not(.is-empty)')!;
+    expect(doc).toBeTruthy();
+    fireEvent.pointerDown(doc, { button: 0, pointerId: 6, clientX: 150, clientY: 140 });
+    fireEvent.pointerUp(window, { pointerId: 6, clientX: 170, clientY: 150 });
+    expect(projectNode('source').position).toEqual({ x: 150, y: 130 });
   });
 
   it('ignores move, up, and cancel events from a different pointer', () => {

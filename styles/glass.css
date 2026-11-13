@@ -183,3 +183,33 @@
 }
 .agent-card-on-shell { background: var(--card-on-shell); box-shadow: var(--card-on-shell-shadow); }
 .compact-right-panel .workflow-agent.is-embedded .workflow-agent__body { background: transparent; }
+
+/* ── 脚本分镜编辑器 · DESIGN.md §9 ──
+   弹窗经 portal 挂在 body 上，拿不到 .workflow-workspace 的 --wf-* 令牌，这里重新声明；
+   它是读写正文的“内容层”，用实底而非玻璃：卡片下沉一级，输入框回到卡片色。 */
+.script-editor-modal {
+  --wf-bg: var(--isl-card);
+  --wf-panel: var(--isl-surface-sunk);
+  --wf-strong: var(--isl-card);
+  --wf-border: var(--isl-border);
+  --wf-text: var(--isl-ink);
+  --wf-muted: var(--isl-ink-soft);
+  --wf-accent: var(--isl-mint);
+  color: var(--isl-ink);
+}
+.flv-tool-modal.script-editor-modal .ant-modal-content,
+.flv-tool-modal.script-editor-modal .ant-modal-container {
+  background: var(--isl-card);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.script-editor-modal textarea,
+.script-editor-modal input { font-family: inherit; transition: border-color .15s ease, box-shadow .15s ease; }
+.script-editor-modal textarea:focus,
+.script-editor-modal input:focus {
+  border-color: color-mix(in srgb, var(--isl-mint) 60%, var(--isl-border)) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--isl-mint) 16%, transparent);
+}
+.script-editor-modal textarea::placeholder,
+.script-editor-modal input::placeholder { color: var(--isl-ink-ghost); }
+.script-editor-modal .ant-segmented-item-selected { background: var(--isl-card); color: var(--isl-ink); }
