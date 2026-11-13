@@ -1,0 +1,42 @@
+/* ───────────────────────────────────────────────────────────────
+   状态色 · DESIGN.md §11
+   颜色只表达状态，一次只亮一种。界面其余部分保持中性灰。
+   机器产出（计数、耗时、token、文件名）一律等宽 + tabular-nums。
+   ─────────────────────────────────────────────────────────────── */
+:root {
+  --state-think: #7c3aed;   /* 读取 / 思考 */
+  --state-tool: #2563eb;    /* 调用工具 / 搜索 */
+  --state-write: #12a970;   /* 写入画布 / 生成 / 完成 */
+  --state-blocked: #e5484d; /* 阻塞 / 失败 */
+  --state-idle: var(--isl-ink-ghost, #a8abb2);
+  --font-machine: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+}
+:root[data-theme='dark'] {
+  --state-think: #a78bfa;
+  --state-tool: #60a5fa;
+  --state-write: #34d399;
+  --state-blocked: #ff6369;
+}
+.flv-machine { font-family: var(--font-machine); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+
+/* 任务清单：Coding agent 式——壳上白卡、顶部细进度条、圆环→转圈→实心勾 */
+.agent-todo-card { position: relative; margin: 6px 0; padding: 10px 12px 10px; border-radius: 14px; font-size: 12.5px; overflow: hidden; }
+.agent-todo-card__bar { position: absolute; inset: 0 0 auto 0; height: 2px; background: color-mix(in srgb, var(--isl-ink) 6%, transparent); }
+.agent-todo-card__bar > span { display: block; height: 100%; background: var(--state-write); border-radius: 0 2px 2px 0; }
+.agent-todo-card header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-weight: 600; color: var(--isl-ink); }
+.agent-todo-card header .flv-machine { margin-left: auto; font-weight: 500; font-size: 11.5px; color: var(--isl-ink-soft); }
+.agent-todo-card ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.agent-todo-card li { display: flex; gap: 8px; align-items: flex-start; color: var(--isl-ink); transition: color .2s ease; }
+.agent-todo-card li[data-status='done'] { color: var(--state-idle); }
+.agent-todo-card li[data-status='active'] { font-weight: 600; }
+.agent-todo-card__text { text-decoration-line: line-through; text-decoration-color: transparent; transition: text-decoration-color .25s ease; }
+.agent-todo-card li[data-status='done'] .agent-todo-card__text { text-decoration-color: currentColor; }
+.agent-todo-card__note { display: block; font-weight: 400; color: var(--isl-ink-soft); }
+.agent-todo-card li[data-status='blocked'] .agent-todo-card__note { color: var(--state-blocked); }
+.agent-todo-icon { position: relative; flex: 0 0 auto; width: 16px; height: 16px; margin-top: 1px; display: grid; place-items: center; }
+.agent-todo-icon__ring { width: 14px; height: 14px; border-radius: 999px; border: 1.5px solid color-mix(in srgb, var(--isl-ink) 22%, transparent); }
+.agent-todo-icon__spin { width: 14px; height: 14px; border-radius: 999px; border: 1.5px solid color-mix(in srgb, var(--state-think) 22%, transparent); border-top-color: var(--state-think); animation: agent-todo-spin .8s linear infinite; }
+.agent-todo-icon__done { width: 15px; height: 15px; border-radius: 999px; display: grid; place-items: center; background: var(--state-write); color: #fff; }
+.agent-todo-icon__blocked { width: 15px; height: 15px; border-radius: 999px; display: grid; place-items: center; background: var(--state-blocked); color: #fff; font-size: 10px; font-weight: 700; }
+@keyframes agent-todo-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .agent-todo-icon__spin { animation-duration: 2.4s; } }

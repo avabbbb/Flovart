@@ -57,13 +57,13 @@
 .workflow-node { position: absolute; box-sizing: border-box; display: flex; flex-direction: column; overflow: visible; border: 1px solid color-mix(in srgb,var(--wf-border) 45%,transparent); border-radius: 16px; background: var(--wf-strong); transition: border-color .18s ease, box-shadow .18s ease; } /* 阴影见文件末“节点表面” */
 .workflow-node:focus-visible { outline: 2px solid var(--wf-accent); outline-offset: 3px; }
 .workflow-node.is-selected { z-index: 10; border-color: var(--wf-accent); }
-.workflow-node__body { position: relative; flex: 1; min-height: 0; overflow: hidden; border-radius: 11px; }
+.workflow-node__body { position: relative; flex: 1; min-height: 0; overflow: hidden; border-radius: 15px; }
 .workflow-node__title { position:absolute; z-index:8; left:0; right:0; top:-28px; display:flex; align-items:center; gap:5px; min-height:24px; padding:0 2px; color:var(--wf-muted); background:transparent; border:0; border-radius:0; font-size:11px; line-height:1; cursor:grab; user-select:none; }
 .workflow-node__title:active { cursor:grabbing; }
 .workflow-node:hover .workflow-node__title,.workflow-node.is-selected .workflow-node__title,.workflow-node__title.is-editing { color:var(--wf-text); }
 .workflow-node__title svg { opacity: .7; flex-shrink: 0; }
 .workflow-node__title-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.workflow-node__title-meta { flex:0 0 auto;color:var(--wf-muted);font-size:9px;font-variant-numeric:tabular-nums;opacity:.8; }
+.workflow-node__title-meta { flex:0 0 auto;color:var(--wf-muted);font-family:var(--font-machine,ui-monospace,monospace);font-size:9.5px;font-variant-numeric:tabular-nums;opacity:.8; }
 .workflow-node__title-edit-icon { opacity: 0; transition: opacity .15s; }
 .workflow-node:hover .workflow-node__title-edit-icon { opacity: .4; }
 /* 共享 chip 基类：锚点批准 / 配置项 / 本地文件夹筛选。只在各自规则里写尺寸与圆角差异。 */
