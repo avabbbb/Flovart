@@ -1,0 +1,66 @@
+/* ───────────────────────────────────────────────────────────────
+   Fluid chrome · 面板随自身宽度降级，而不是随视口
+   原则：文字标签 → 图标 + tooltip → 收进溢出。任何宽度都不允许挤压重叠。
+   用 container query（按面板自身宽度），不用 media query（按窗口）。
+   ─────────────────────────────────────────────────────────────── */
+
+/* ── 左侧图层面板：标签页 ── */
+.workflow-sidebar { container-type: inline-size; container-name: wfsb; }
+.wf-sidebar-tabs > .wf-sidebar-tab { min-width: 0; }
+.wf-sidebar-tab__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* 窄：只有当前标签保留文字，其余变成图标 */
+@container wfsb (max-width: 260px) {
+  .wf-sidebar-tab:not([data-active]) { flex: 0 0 32px; padding-inline: 0; }
+  .wf-sidebar-tab:not([data-active]) .wf-sidebar-tab__label,
+  .wf-sidebar-tab:not([data-active]) .tabular-nums { display: none; }
+}
+/* 更窄：全部图标 */
+@container wfsb (max-width: 200px) {
+  .wf-sidebar-tab { flex: 0 0 32px !important; padding-inline: 0 !important; }
+  .wf-sidebar-tab .wf-sidebar-tab__label, .wf-sidebar-tab .tabular-nums { display: none; }
+}
+
+/* ── 右侧 Agent 输入区工具行 ── */
+.workflow-agent__composer { container-type: inline-size; container-name: agentcomposer; }
+.agent-composer__tools { min-width: 0; }
+.agent-composer__tools > .agent-mode-control { min-width: 0; flex: 0 1 auto; }
+.agent-composer__tools > .agent-mode-control > button { min-width: 0; max-width: 100%; }
+.agent-composer__tools > .agent-mode-control > button > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-composer__tools .agent-model-trigger > span { max-width: 14ch; }
+
+/* 中等：模型名再收窄 */
+@container agentcomposer (max-width: 420px) {
+  .agent-composer__tools .agent-model-trigger > span { max-width: 9ch; }
+}
+/* 窄：所有工具变成 28px 图标按钮，文字靠 title 提示 */
+@container agentcomposer (max-width: 340px) {
+  .agent-composer__tools { gap: 2px; }
+  .agent-composer__tools > .agent-mode-control > button,
+  .agent-composer__tools > .agent-attachment-control > button {
+    flex: 0 0 28px; width: 28px; height: 28px; padding: 0 !important; gap: 0; justify-content: center;
+    border-radius: 8px;
+  }
+  .agent-composer__tools > .agent-mode-control > button > span,
+  .agent-composer__tools > .agent-mode-control > button > svg + svg { display: none; }
+  .agent-composer__send { width: 34px !important; height: 34px !important; border-radius: 11px !important; }
+}
+
+/* ── 右侧面板：拖过最小宽度 → 吸附收起预览 ── */
+.compact-right-panel[data-snap='collapse'] { opacity: .45; transform: scale(.97); transform-origin: right top; transition: opacity .12s ease, transform .12s ease; }
+.compact-right-panel { transition: opacity .12s ease, transform .12s ease; }
+@media (prefers-reduced-motion: reduce) { .compact-right-panel { transition: none; } }
+
+/* 侧栏窄时，激活标签也去掉计数 */
+@container wfsb (max-width: 260px) { .wf-sidebar-tab .tabular-nums { display: none; } }
+
+/* ── 画布底部工具条：不换行，按画布宽度逐级把次要按钮收进菜单 ── */
+/* 绝对定位 + left:50% 时 shrink-to-fit 只按一半宽度计算，所以会提前折行；这里改成按内容宽度排开 */
+.workflow-workspace .workflow-toolbar.workflow-toolbar { width: max-content; flex-wrap: nowrap; }
+@container workflow-canvas (width <= 700px) {
+  .workflow-toolbar .workflow-toolbar__history-direct,
+  .workflow-toolbar .workflow-canvas-controls__revision { display: none !important; }   /* 撤销/重做仍可用 Ctrl Z；修订号在历史里 */
+}
+@container workflow-canvas (width <= 480px) {
+  .workflow-toolbar .workflow-toolbar__zoom-wrap { display: none !important; }
+}
