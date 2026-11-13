@@ -1,0 +1,121 @@
+/* ───────────────────────────────────────────────────────────────
+   标签选择器 + 盲文点阵 loader
+   灰壳（--shell-bg，压在实底上，不透明）套白卡（--card-on-shell）。
+   壳 18px = 卡 14px + 4px 内边距（同心圆角）；行 10px。
+   标签色点是分类色，不是状态色；界面其余部分保持中性灰，
+   唯一的状态色是创建中的 loader（--state-write）。
+   ─────────────────────────────────────────────────────────────── */
+:root {
+  --tag-red: #f02d3b;
+  --tag-orange: #f97316;
+  --tag-green: #16c35b;
+  --tag-blue: #2f7df6;
+  --tag-violet: #8b5cf6;
+  --tag-pink: #ec4899;
+  --tag-idle: color-mix(in srgb, var(--isl-ink) 22%, transparent);
+  --tag-hl: color-mix(in srgb, var(--isl-ink) 6%, transparent);
+  --tag-pop-shadow: 0 0 0 .5px rgba(31, 29, 26, .08), 0 2px 6px rgba(31, 29, 26, .05), 0 18px 40px -12px rgba(31, 29, 26, .22);
+}
+:root[data-theme='dark'] {
+  --tag-red: #ff5a63;
+  --tag-orange: #ff8a3d;
+  --tag-green: #34d27a;
+  --tag-blue: #5b9bff;
+  --tag-violet: #a78bfa;
+  --tag-pink: #f472b6;
+  --tag-hl: color-mix(in srgb, var(--isl-ink) 8%, transparent);
+  --tag-pop-shadow: 0 0 0 .5px rgba(255, 255, 255, .07), 0 2px 6px rgba(0, 0, 0, .3), 0 18px 40px -12px rgba(0, 0, 0, .7);
+}
+
+.flv-tagpicker { position: relative; display: inline-flex; font-family: var(--isl-font); }
+
+/* 触发按钮：与工具条同高的中性小胶囊 */
+.flv-tagpicker__trigger {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 28px; max-width: 200px; padding: 0 8px 0 9px;
+  border-radius: 8px; border: 1px solid var(--isl-border);
+  background: var(--isl-card); color: var(--isl-ink);
+  font-size: 11.5px; font-weight: 500; line-height: 1;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.flv-tagpicker__trigger:hover:not(:disabled),
+.flv-tagpicker__trigger[data-open] { background: var(--isl-surface-2); border-color: var(--isl-border-strong); }
+.flv-tagpicker__trigger:disabled { opacity: .45; cursor: not-allowed; }
+.flv-tagpicker__trigger:focus-visible { outline: 2px solid color-mix(in srgb, var(--isl-ink) 35%, transparent); outline-offset: 1px; }
+.flv-tagpicker__trigger-icon, .flv-tagpicker__chevron { flex: none; color: var(--isl-ink-ghost); }
+.flv-tagpicker__chevron { transition: transform .18s ease; }
+.flv-tagpicker__trigger[data-open] .flv-tagpicker__chevron { transform: rotate(180deg); }
+.flv-tagpicker__trigger-placeholder { color: var(--isl-ink-soft); }
+.flv-tagpicker__trigger-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.flv-tagpicker__stack { display: inline-flex; flex: none; }
+.flv-tagpicker__stack i { width: 8px; height: 8px; border-radius: 999px; box-shadow: 0 0 0 1.5px var(--isl-card); }
+.flv-tagpicker__stack i + i { margin-left: -3px; }
+.flv-tagpicker__more { flex: none; font-size: 10.5px; color: var(--isl-ink-soft); }
+
+/* 弹层：灰壳 */
+.flv-tagpicker__pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 60;
+  width: 264px; padding: 4px; border-radius: 18px;
+  background: linear-gradient(var(--shell-bg), var(--shell-bg)), var(--isl-card);
+  box-shadow: var(--tag-pop-shadow);
+  transform-origin: top left;
+}
+.flv-tagpicker[data-align='end'] .flv-tagpicker__pop { left: auto; right: 0; transform-origin: top right; }
+
+.flv-tagpicker__head {
+  display: flex; align-items: center; gap: 7px;
+  height: 34px; padding: 0 10px 0 11px;
+  font-size: 12.5px; font-weight: 500; line-height: 1;
+}
+.flv-tagpicker__head-icon { flex: none; color: var(--isl-ink-ghost); }
+.flv-tagpicker__head-verb { color: var(--isl-ink-ghost); }
+.flv-tagpicker__head-dot {
+  flex: none; width: 8px; height: 8px; border-radius: 999px;
+  transition: background-color .18s ease-out;
+}
+.flv-tagpicker__head-subject { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--isl-ink); }
+.flv-tagpicker__head-count { flex: none; font-size: 11px; color: var(--isl-ink-soft); }
+
+/* 白卡：搜索 + 列表 */
+.flv-tagpicker__card { border-radius: 14px; background: var(--card-on-shell); box-shadow: var(--card-on-shell-shadow); overflow: hidden; }
+.flv-tagpicker__search {
+  display: flex; align-items: center; gap: 8px;
+  height: 38px; padding: 0 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--isl-border) 70%, transparent);
+  color: var(--isl-ink-ghost);
+}
+.flv-tagpicker__search input {
+  flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent;
+  font-size: 12.5px; color: var(--isl-ink); caret-color: var(--state-tool);
+}
+.flv-tagpicker__search input::placeholder { color: var(--isl-ink-ghost); }
+
+.flv-tagpicker__list { max-height: 248px; overflow-y: auto; padding: 4px; }
+.flv-tagpicker__empty { padding: 18px 10px; text-align: center; font-size: 11.5px; color: var(--isl-ink-ghost); }
+
+.flv-tagpicker__row {
+  position: relative; display: flex; align-items: center; gap: 10px;
+  height: 34px; padding: 0 10px; border-radius: 10px;
+  font-size: 12.5px; color: var(--isl-ink); cursor: pointer; user-select: none;
+}
+.flv-tagpicker__row > :not(.flv-tagpicker__hl) { position: relative; z-index: 1; }
+.flv-tagpicker__hl { position: absolute; inset: 0; border-radius: 10px; background: var(--tag-hl); z-index: 0; }
+.flv-tagpicker__lead { flex: none; width: 14px; height: 14px; display: grid; place-items: center; color: var(--isl-ink-soft); }
+.flv-tagpicker__dot { flex: none; width: 9px; height: 9px; border-radius: 999px; }
+.flv-tagpicker__dot--ghost { width: 7px; height: 7px; opacity: .55; }
+.flv-tagpicker__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.flv-tagpicker__row[data-kind='create'] .flv-tagpicker__label { color: var(--isl-ink-soft); }
+.flv-tagpicker__row[data-kind='create'] .flv-tagpicker__label b { font-weight: 600; color: var(--isl-ink); }
+.flv-tagpicker__row[aria-busy] { cursor: progress; }
+.flv-tagpicker__check { flex: none; color: var(--isl-ink); }
+
+/* 盲文点阵 */
+.flv-braille {
+  display: inline-grid; grid-template-columns: repeat(2, var(--braille-dot, 2px)); grid-template-rows: repeat(4, var(--braille-dot, 2px)); align-content: space-between;
+  place-items: center; color: var(--state-write); vertical-align: middle;
+}
+.flv-braille i { display: block; width: var(--braille-dot, 2px); height: var(--braille-dot, 2px); border-radius: 999px; background: currentColor; }
+
+@media (prefers-reduced-motion: reduce) {
+  .flv-tagpicker__trigger, .flv-tagpicker__chevron, .flv-tagpicker__head-dot { transition: none; }
+}

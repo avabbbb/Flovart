@@ -3,6 +3,7 @@ import { Trash2, FolderInput, Tag, X, Check, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Modal } from 'antd';
 import { useWorkflowMediaUrl } from '../workflow/media';
+import { TagPicker } from '../ui/TagPicker';
 import type { AssetItem, AssetLibrary, AssetFolder } from '../../types';
 
 interface BatchManageModalProps {
@@ -38,14 +39,15 @@ export function BatchManageModal({ open, library, language, onClose, onRemoveAss
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [moveTarget, setMoveTarget] = useState<string | null>(null);
-  const [tagDraft, setTagDraft] = useState('');
+  const [tagDraft, setTagDraft] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
-    if (open) { setSelected(new Set()); setQuery(''); setMediaFilter('all'); setMoveTarget(null); setTagDraft(''); }
+    if (open) { setSelected(new Set()); setQuery(''); setMediaFilter('all'); setMoveTarget(null); setTagDraft([]); }
   }, [open]);
 
   const flatFolders = useMemo(() => buildFolderTree(library.folders), [library.folders]);
+  const libraryTags = useMemo(() => Array.from(new Set(library.items.flatMap(i => i.tags))).sort((a, b) => a.localeCompare(b, 'zh')), [library.items]);
 
   const itemsInFolder = useMemo(() => {
     if (selectedFolderId === null) return library.items;
@@ -96,11 +98,11 @@ export function BatchManageModal({ open, library, language, onClose, onRemoveAss
 
   const batchAddTags = () => {
     const list = Array.from(selected);
-    const tags = tagDraft.split(',').map(t => t.trim()).filter(Boolean);
+    const tags = tagDraft.map(t => t.trim()).filter(Boolean);
     if (list.length === 0 || tags.length === 0) return;
     setBusy('tag');
     onAddTags(list, tags);
-    setTagDraft('');
+    setTagDraft([]);
     setBusy(null);
   };
 
@@ -222,19 +224,18 @@ export function BatchManageModal({ open, library, language, onClose, onRemoveAss
 
                 {/* batch add tags */}
                 <div className="flex items-center gap-1">
-                  <input
-                    type="text"
+                  <TagPicker
+                    language={language}
+                    options={libraryTags}
                     value={tagDraft}
-                    onChange={e => setTagDraft(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') batchAddTags(); }}
-                    placeholder={isChinese ? '逗号分隔标签' : 'comma tags'}
-                    className="h-7 w-28 rounded-md border-[1.5px] px-1.5 text-[11px] outline-none"
-                    style={{ background: 'var(--isl-card)', borderColor: 'var(--isl-border)', color: 'var(--isl-ink)' }}
+                    onChange={setTagDraft}
+                    subject={isChinese ? `${selected.size} 个素材` : `${selected.size} ${selected.size === 1 ? 'asset' : 'assets'}`}
+                    align="end"
                   />
                   <motion.button
                     type="button"
                     whileTap={{ scale: 0.94 }}
-                    disabled={!selected.size || !tagDraft.trim() || busy === 'tag'}
+                    disabled={!selected.size || !tagDraft.length || busy === 'tag'}
                     onClick={batchAddTags}
                     className="flex h-7 items-center gap-1 rounded-md border-[1.5px] px-2 text-[11px] font-bold disabled:opacity-40"
                     style={{ background: 'var(--isl-card)', borderColor: 'var(--isl-mint)', color: 'var(--isl-mint-deep)' }}
