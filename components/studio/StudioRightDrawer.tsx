@@ -31,6 +31,9 @@ export interface StudioRightDrawerProps {
   children: React.ReactNode;
 }
 
+/** 拖过最小宽度多少像素后，松手即收起为图标。 */
+const SNAP_COLLAPSE_PX = 72;
+
 export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
   open,
   onOpenChange,
@@ -54,16 +57,27 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
   useEffect(() => {
     if (!resizing) return;
     const move = (event: PointerEvent) => {
-      const next = Math.min(maxWidth, Math.max(minWidth, startRef.current.width + startRef.current.x - event.clientX));
+      const raw = startRef.current.width + startRef.current.x - event.clientX;
+      const next = Math.min(maxWidth, Math.max(minWidth, raw));
       // 拖拽期间直接操作 DOM，避免每帧触发 Workflow 巨型画布重渲染；松手时一次性 commit
       const aside = asideRef.current;
       if (aside) {
+        // 拖到最小宽度以下一段距离 → 进入“吸附收起”预览，松手后收成右上角图标（同 macOS 侧栏）
+        if (raw < minWidth - SNAP_COLLAPSE_PX) aside.dataset.snap = 'collapse';
+        else delete aside.dataset.snap;
         aside.style.setProperty('--drawer-width', `${next}px`);
         aside.style.width = `${next}px`;
       }
     };
     const stop = () => {
       setResizing(false);
+      const aside = asideRef.current;
+      if (aside?.dataset.snap === 'collapse') {
+        delete aside.dataset.snap;
+        onWidthChange(minWidth);
+        onOpenChange(false);
+        return;
+      }
       const widthNow = asideRef.current ? parseFloat(asideRef.current.style.width) : Number.NaN;
       if (Number.isFinite(widthNow)) onWidthChange(Math.min(maxWidth, Math.max(minWidth, widthNow)));
     };
@@ -73,7 +87,7 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', stop);
     };
-  }, [maxWidth, minWidth, onWidthChange, resizing]);
+  }, [maxWidth, minWidth, onOpenChange, onWidthChange, resizing]);
 
   const chromeInline = Boolean(inlineChromeTabs?.includes(activeTab));
   const chrome = chromeInline ? { tabs, activeTab, onTabChange, onCollapse: () => onOpenChange(false) } : null;

@@ -6,6 +6,7 @@ import type { PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../t
 import type { RouteFallbackResolution } from '../../services/routeMapping';
 import '../../styles/workflow.css';
 import '../../styles/glass.css';
+import '../../styles/fluid.css';
 import type { GenerationCapability, GenerationMode } from '../../services/generationCapabilities';
 import { activateBrowserWorkflowWriter } from '../../services/agentHostDiscovery';
 import { useAgentConnectionStore } from '../../stores/useAgentConnectionStore';

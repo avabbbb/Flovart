@@ -88,7 +88,7 @@ export function CreationModeControl({ value, onChange, open, onOpenChange, langu
   const Icon = MODE_ICON[value];
   return (
     <div className="agent-mode-control">
-      <button type="button" className="agent-pill" aria-label={ui(language, '创作模式', 'Creation mode')} aria-expanded={open} onClick={() => onOpenChange(!open)}>
+      <button type="button" className="agent-pill" aria-label={ui(language, '创作模式', 'Creation mode')} title={creationModeLabel(value, language)} aria-expanded={open} onClick={() => onOpenChange(!open)}>
         <Icon size={14} /><span>{creationModeLabel(value, language)}</span><ChevronDown size={12} />
       </button>
       {open && (

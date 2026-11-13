@@ -175,46 +175,46 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
           }}
         >
           {/* tab 切换 */}
-          <div className="flex shrink-0 items-center gap-1 px-3 pt-3 pb-2">
+          <div className="wf-sidebar-tabs flex min-w-0 shrink-0 items-center gap-1 px-3 pt-3 pb-2">
             <button
               type="button"
-              data-testid="sidebar-tab-layers"
+              data-testid="sidebar-tab-layers" data-active={tab === 'layers' ? 'true' : undefined} title={language === 'zho' ? '图层' : 'Layers'} aria-label={language === 'zho' ? '图层' : 'Layers'}
               onClick={() => setTab('layers')}
-              className="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-1.5 py-1.5 text-[11px] font-bold transition"
+              className="wf-sidebar-tab flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-1.5 py-1.5 text-[11px] font-bold transition"
               style={{
                 background: tab === 'layers' ? 'var(--isl-surface-2)' : 'transparent',
                 color: tab === 'layers' ? 'var(--isl-ink)' : 'var(--isl-ink-soft)',
               }}
             >
               <Layers size={13} />
-              <span>{language === 'zho' ? '图层' : 'Layers'}</span>
+              <span className="wf-sidebar-tab__label">{language === 'zho' ? '图层' : 'Layers'}</span>
               {Boolean(project?.nodes.length) && <span className="text-[10px] tabular-nums opacity-70">{project?.nodes.length}</span>}
             </button>
             <button
               type="button"
-              data-testid="sidebar-tab-assets"
+              data-testid="sidebar-tab-assets" data-active={tab === 'assets' ? 'true' : undefined} title={language === 'zho' ? '资产' : 'Assets'} aria-label={language === 'zho' ? '资产' : 'Assets'}
               onClick={() => setTab('assets')}
-              className="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-1.5 py-1.5 text-[11px] font-bold transition"
+              className="wf-sidebar-tab flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-1.5 py-1.5 text-[11px] font-bold transition"
               style={{
                 background: tab === 'assets' ? 'var(--isl-surface-2)' : 'transparent',
                 color: tab === 'assets' ? 'var(--isl-ink)' : 'var(--isl-ink-soft)',
               }}
             >
               <Folder size={13} />
-              <span>{language === 'zho' ? '资产' : 'Assets'}</span>
+              <span className="wf-sidebar-tab__label">{language === 'zho' ? '资产' : 'Assets'}</span>
             </button>
             <button
               type="button"
-              data-testid="sidebar-tab-local-folder"
+              data-testid="sidebar-tab-local-folder" data-active={tab === 'localFolder' ? 'true' : undefined} title={language === 'zho' ? '本地' : 'Local'} aria-label={language === 'zho' ? '本地' : 'Local'}
               onClick={() => setTab('localFolder')}
-              className="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-1.5 py-1.5 text-[11px] font-bold transition"
+              className="wf-sidebar-tab flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-1.5 py-1.5 text-[11px] font-bold transition"
               style={{
                 background: tab === 'localFolder' ? 'var(--isl-surface-2)' : 'transparent',
                 color: tab === 'localFolder' ? 'var(--isl-ink)' : 'var(--isl-ink-soft)',
               }}
             >
               <FolderOpen size={13} />
-              <span>{language === 'zho' ? '本地' : 'Local'}</span>
+              <span className="wf-sidebar-tab__label">{language === 'zho' ? '本地' : 'Local'}</span>
             </button>
             <button type="button" className="isl-icon-btn h-8 w-8 shrink-0" onClick={() => onOpenChange(false)} title={language === 'zho' ? '收起' : 'Close'} aria-label={language === 'zho' ? '收起' : 'Close'}>
               <X size={16} />
