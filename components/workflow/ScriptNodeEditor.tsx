@@ -1,8 +1,9 @@
 import { Bot, Clapperboard, FileText, Image as ImageIcon, Plus, Trash2, Video, X } from 'lucide-react';
 import { useState } from 'react';
-import { Button, Modal, Segmented } from 'antd';
+import { Button, ConfigProvider, Modal, Segmented, theme as antdTheme } from 'antd';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
+import { useResolvedTheme } from '../../hooks/useResolvedTheme';
 import { generateTextWithProvider } from '../../services/aiGateway';
 import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from '../../services/routeMapping';
 import type { UserApiKey } from '../../types';
@@ -106,6 +107,7 @@ export function ScriptNodeEditor({ node, onChange, onClose, userApiKeys, confirm
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'shots' | 'assets'>('shots');
+  const dark = useResolvedTheme() === 'dark';
 
   const updateBreakdown = (patch: Partial<ScriptBreakdown>) => {
     onChange({ ...node.metadata, scriptBreakdown: { ...breakdown, ...patch } });
@@ -162,17 +164,23 @@ export function ScriptNodeEditor({ node, onChange, onClose, userApiKeys, confirm
     updateBreakdown({ assets: [...breakdown.assets, { id: nanoid(), kind, name: '' }] });
   };
 
+  // Modal 通过 portal 挂到 body，脱离 .workflow-workspace：必须自带应用主题（亮/暗）和 --wf-* 令牌，
+  // 否则 antd 默认亮色白板 + 未定义的 var(--wf-*) 会让编辑器在深色画布上失去边框、底色和品牌色。
   return (
+    <ConfigProvider theme={{
+      algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+      token: { colorPrimary: '#19c8b9', fontFamily: 'inherit' },
+    }}>
     <Modal
       open
       onCancel={busy ? undefined : onClose}
       footer={null}
       centered
       width="90%"
-      className="script-editor-modal"
-      style={{ maxWidth: 1200, top: 20 }}
+      rootClassName="flv-tool-modal script-editor-modal"
+      style={{ maxWidth: 1200 }}
       destroyOnHidden
-      maskClosable={!busy}
+      mask={{ closable: !busy }}
       title={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Clapperboard size={18} />脚本分镜编辑器</div>}
     >
       <div className="script-editor__layout" style={{ display: 'flex', gap: 16, height: '72vh', minHeight: 500 }}>
@@ -183,7 +191,7 @@ export function ScriptNodeEditor({ node, onChange, onClose, userApiKeys, confirm
               value={sourceText}
               onChange={event => setSourceText(event.target.value)}
               placeholder="粘贴剧本、故事大纲或分镜描述..."
-              style={{ width: '100%', height: 180, resize: 'none', padding: 8, border: '1px solid var(--wf-border)', borderRadius: 6, background: 'var(--wf-panel)', color: 'var(--wf-text)', fontSize: 13, lineHeight: 1.5 }}
+              style={{ width: '100%', height: 180, resize: 'none', padding: 8, border: '1px solid var(--wf-border)', borderRadius: 12, background: 'var(--wf-panel)', color: 'var(--wf-text)', fontSize: 13, lineHeight: 1.5 }}
             />
             <Button type="primary" icon={<Bot size={15} />} loading={busy} onClick={handleBreakdown} block style={{ marginTop: 6 }}>
               AI 拆解剧本
@@ -200,7 +208,7 @@ export function ScriptNodeEditor({ node, onChange, onClose, userApiKeys, confirm
             {breakdown.assets.length === 0 ? (
               <div style={{ fontSize: 12, color: 'var(--wf-muted)', textAlign: 'center', padding: '20px 0' }}>点击 AI 拆解或手动添加资产</div>
             ) : breakdown.assets.map(asset => (
-              <div key={asset.id} style={{ padding: 8, border: '1px solid var(--wf-border)', borderRadius: 6, background: 'var(--wf-panel)', fontSize: 12 }}>
+              <div key={asset.id} style={{ padding: 8, border: '1px solid var(--wf-border)', borderRadius: 12, background: 'var(--wf-panel)', fontSize: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
                   <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: asset.kind === 'character' ? '#6366f1' : asset.kind === 'scene' ? '#10b981' : '#f59e0b', color: '#fff' }}>
                     {asset.kind === 'character' ? '角色' : asset.kind === 'scene' ? '场景' : '道具'}
@@ -246,7 +254,7 @@ export function ScriptNodeEditor({ node, onChange, onClose, userApiKeys, confirm
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {breakdown.shots.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--wf-muted)' }}>
-                    <FileText size={32} style={{ opacity: 0.4, marginBottom: 8 }} />
+                    <FileText size={32} style={{ display: 'block', margin: '0 auto 8px', opacity: 0.4 }} />
                     <div style={{ fontSize: 13 }}>还没有分镜，输入剧本后点击"AI 拆解剧本"</div>
                   </div>
                 ) : breakdown.shots.map(shot => (
@@ -261,7 +269,7 @@ export function ScriptNodeEditor({ node, onChange, onClose, userApiKeys, confirm
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {breakdown.assets.map(asset => (
-                  <div key={asset.id} style={{ padding: 12, border: '1px solid var(--wf-border)', borderRadius: 6, background: 'var(--wf-panel)' }}>
+                  <div key={asset.id} style={{ padding: 12, border: '1px solid var(--wf-border)', borderRadius: 12, background: 'var(--wf-panel)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                       <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: asset.kind === 'character' ? '#6366f1' : asset.kind === 'scene' ? '#10b981' : '#f59e0b', color: '#fff' }}>
                         {asset.kind === 'character' ? '角色' : asset.kind === 'scene' ? '场景' : '道具'}
@@ -270,7 +278,7 @@ export function ScriptNodeEditor({ node, onChange, onClose, userApiKeys, confirm
                         value={asset.name}
                         placeholder="资产名称"
                         onChange={event => updateAsset(asset.id, { name: event.target.value })}
-                        style={{ flex: 1, border: '1px solid var(--wf-border)', borderRadius: 4, padding: '4px 8px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 13, fontWeight: 600, outline: 'none' }}
+                        style={{ flex: 1, border: '1px solid var(--wf-border)', borderRadius: 8, padding: '4px 8px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 13, fontWeight: 600, outline: 'none' }}
                       />
                       <button className="isl-icon-btn h-7 w-7" aria-label="删除资产" onClick={() => deleteAsset(asset.id)}><Trash2 size={14} /></button>
                     </div>
@@ -279,7 +287,7 @@ export function ScriptNodeEditor({ node, onChange, onClose, userApiKeys, confirm
                       placeholder="详细描述（外貌、性格、场景细节等）"
                       onChange={event => updateAsset(asset.id, { description: event.target.value })}
                       rows={3}
-                      style={{ width: '100%', resize: 'vertical', border: '1px solid var(--wf-border)', borderRadius: 4, padding: '6px 8px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 12, outline: 'none', lineHeight: 1.5 }}
+                      style={{ width: '100%', resize: 'vertical', border: '1px solid var(--wf-border)', borderRadius: 8, padding: '6px 8px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 12, outline: 'none', lineHeight: 1.5 }}
                     />
                   </div>
                 ))}
@@ -289,6 +297,7 @@ export function ScriptNodeEditor({ node, onChange, onClose, userApiKeys, confirm
         </div>
       </div>
     </Modal>
+    </ConfigProvider>
   );
 }
 
@@ -304,12 +313,12 @@ function ShotCard({ shot, onChange, onDelete }: {
         value={String(shot[key] || '')}
         placeholder={placeholder}
         onChange={event => onChange({ [key]: event.target.value } as Partial<ScriptShot>)}
-        style={{ border: '1px solid var(--wf-border)', borderRadius: 4, padding: '3px 6px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 12, outline: 'none' }}
+        style={{ border: '1px solid var(--wf-border)', borderRadius: 8, padding: '3px 6px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 12, outline: 'none' }}
       />
     </label>
   );
   return (
-    <div style={{ padding: 10, border: '1px solid var(--wf-border)', borderRadius: 6, background: 'var(--wf-panel)' }}>
+    <div style={{ padding: 10, border: '1px solid var(--wf-border)', borderRadius: 12, background: 'var(--wf-panel)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--wf-text)', minWidth: 32 }}>#{shot.index + 1}</span>
         {shot.imageNodeId && <span title="已关联图片节点" style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: '#6366f1', color: '#fff' }}><ImageIcon size={10} style={{ verticalAlign: 'middle' }} /></span>}
@@ -333,7 +342,7 @@ function ShotCard({ shot, onChange, onDelete }: {
             value={shot.durationSec ?? ''}
             placeholder="3"
             onChange={event => { const value = Number(event.target.value); onChange({ durationSec: event.target.value === '' || !Number.isFinite(value) || value <= 0 ? undefined : value }); }}
-            style={{ border: '1px solid var(--wf-border)', borderRadius: 4, padding: '3px 6px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 12, outline: 'none' }}
+            style={{ border: '1px solid var(--wf-border)', borderRadius: 8, padding: '3px 6px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 12, outline: 'none' }}
           />
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -344,7 +353,7 @@ function ShotCard({ shot, onChange, onDelete }: {
             value={shot.camera || ''}
             placeholder="推进、横移、手持..."
             onChange={event => onChange({ camera: event.target.value || undefined })}
-            style={{ border: '1px solid var(--wf-border)', borderRadius: 4, padding: '3px 6px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 12, outline: 'none' }}
+            style={{ border: '1px solid var(--wf-border)', borderRadius: 8, padding: '3px 6px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 12, outline: 'none' }}
           />
           <datalist id={'script-shot-camera-' + shot.id}>
             {CAMERA_MOVEMENTS.map(movement => <option key={movement.id} value={movement.name} />)}
@@ -361,7 +370,7 @@ function ShotCard({ shot, onChange, onDelete }: {
             placeholder="A close-up still frame of..."
             onChange={event => onChange({ imagePromptOverride: event.target.value })}
             rows={2}
-            style={{ width: '100%', resize: 'vertical', border: '1px solid var(--wf-border)', borderRadius: 4, padding: '4px 6px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 12, outline: 'none', lineHeight: 1.4 }}
+            style={{ width: '100%', resize: 'vertical', border: '1px solid var(--wf-border)', borderRadius: 8, padding: '4px 6px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 12, outline: 'none', lineHeight: 1.4 }}
           />
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -371,7 +380,7 @@ function ShotCard({ shot, onChange, onDelete }: {
             placeholder="A tracking shot where..."
             onChange={event => onChange({ videoPromptOverride: event.target.value })}
             rows={2}
-            style={{ width: '100%', resize: 'vertical', border: '1px solid var(--wf-border)', borderRadius: 4, padding: '4px 6px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 12, outline: 'none', lineHeight: 1.4 }}
+            style={{ width: '100%', resize: 'vertical', border: '1px solid var(--wf-border)', borderRadius: 8, padding: '4px 6px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 12, outline: 'none', lineHeight: 1.4 }}
           />
         </label>
       </div>
