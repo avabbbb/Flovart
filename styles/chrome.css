@@ -1,0 +1,39 @@
+/* ───────────────────────────────────────────────────────────────
+   浮动顶栏 · DESIGN.md §9.4
+   画布视图下，画布一直铺到窗口顶端，顶栏浮在上面：顶部较实，往下渐变到全透明，
+   同一段渐变也作为模糊的遮罩，所以看不到硬边。两侧停靠面板从顶栏下沿开始。
+   其他视图（表格、Agent、逆向）顶栏保持实底占位。
+   ─────────────────────────────────────────────────────────────── */
+.studio-top-menu { background: var(--app-bg); }
+
+.app-shell:has(.workflow-workspace) { position: relative; }
+.app-shell:has(.workflow-workspace) .app-shell__topbar {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 60;
+  pointer-events: none;
+}
+.app-shell:has(.workflow-workspace) .studio-top-menu { background: transparent; isolation: isolate; }
+.app-shell:has(.workflow-workspace) .studio-top-menu > * { pointer-events: auto; }
+.app-shell:has(.workflow-workspace) .studio-top-menu::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 -28px 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(to bottom,
+    color-mix(in srgb, var(--app-bg) 88%, transparent) 0%,
+    color-mix(in srgb, var(--app-bg) 62%, transparent) 50%,
+    color-mix(in srgb, var(--app-bg) 0%, transparent) 100%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 45%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 45%, transparent 100%);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .app-shell:has(.workflow-workspace) .studio-top-menu::before { backdrop-filter: none; -webkit-backdrop-filter: none; background: linear-gradient(to bottom, var(--app-bg) 60%, transparent); }
+}
+
+/* 两侧停靠面板从顶栏下沿开始（--topbar-h 由 AppShell 量出），画布本身仍铺到顶端 */
+.app-shell:has(.workflow-workspace) .workflow-sidebar[data-docked] { margin-top: calc(var(--topbar-h, 48px) + 2px); }
+.app-shell:has(.workflow-workspace) .compact-right-panel[data-open='true'][data-docked='true'] { margin-top: calc(var(--topbar-h, 48px) + 2px); }

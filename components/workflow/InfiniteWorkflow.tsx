@@ -2545,6 +2545,32 @@ export function InfiniteWorkflow({
     if (success) closeCreateMenu();
   }, [applyOps, closeCreateMenu, createMenu]);
 
+  // 按钮触发的视角变化（适配 / 放大缩小 / 重置）走一个欠阻尼弹簧，带一点点回弹；滚轮和捏合仍然即时跟手。
+  // 和 focusBounds 一样逐帧 patchProject，叠加层（工具条、提示栏、网格）按 viewport 计算，所以始终对齐。
+  const animateViewport = useCallback((target: { x: number; y: number; k: number }) => {
+    if (focusAnimRef.current !== null) window.cancelAnimationFrame(focusAnimRef.current);
+    const reduce = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const start = { ...viewportRef.current };
+    if (reduce || (Math.abs(target.x - start.x) < 1 && Math.abs(target.y - start.y) < 1 && Math.abs(target.k - start.k) < 0.005)) {
+      focusAnimRef.current = null;
+      patchProject({ viewport: target });
+      return;
+    }
+    // 弹簧：ζ≈0.82、ω≈20rad/s，约 380ms 收敛，过冲 <1.5%
+    const zeta = 0.82;
+    const omega = 20;
+    const wd = omega * Math.sqrt(1 - zeta * zeta);
+    const spring = (t: number) => 1 - Math.exp(-zeta * omega * t) * (Math.cos(wd * t) + (zeta * omega / wd) * Math.sin(wd * t));
+    const startTime = window.performance.now();
+    const tick = (now: number) => {
+      const t = (now - startTime) / 1000;
+      const e = t >= 0.6 ? 1 : spring(t);
+      patchProject({ viewport: { x: start.x + (target.x - start.x) * e, y: start.y + (target.y - start.y) * e, k: start.k + (target.k - start.k) * e } });
+      focusAnimRef.current = e === 1 ? null : window.requestAnimationFrame(tick);
+    };
+    focusAnimRef.current = window.requestAnimationFrame(tick);
+  }, [patchProject]);
+
   const fitView = useCallback(() => {
     setFocusBadge(false);
     const rect = rootRef.current?.getBoundingClientRect();
@@ -2556,8 +2582,8 @@ export function InfiniteWorkflow({
     const maxX = Math.max(...nodes.map(node => node.position.x + node.width));
     const maxY = Math.max(...nodes.map(node => node.position.y + node.height));
     const k = Math.min(1.5, Math.max(0.12, Math.min((availableWidth - 160) / Math.max(1, maxX - minX), (rect.height - 160) / Math.max(1, maxY - minY))));
-    patchProject({ viewport: { x: availableWidth / 2 - ((minX + maxX) / 2) * k, y: rect.height / 2 - ((minY + maxY) / 2) * k, k } });
-  }, [patchProject]);
+    animateViewport({ x: availableWidth / 2 - ((minX + maxX) / 2) * k, y: rect.height / 2 - ((minY + maxY) / 2) * k, k });
+  }, [animateViewport]);
 
   const zoomBy = useCallback((factor: number) => {
     setFocusBadge(false);
@@ -2567,16 +2593,16 @@ export function InfiniteWorkflow({
     const k = Math.min(2.5, Math.max(0.12, vp.k * factor));
     const cx = rect.width / 2;
     const cy = rect.height / 2;
-    patchProject({ viewport: { x: cx - ((cx - vp.x) / vp.k) * k, y: cy - ((cy - vp.y) / vp.k) * k, k } });
-  }, [patchProject]);
+    animateViewport({ x: cx - ((cx - vp.x) / vp.k) * k, y: cy - ((cy - vp.y) / vp.k) * k, k });
+  }, [animateViewport]);
   const zoomIn = useCallback(() => zoomBy(1.2), [zoomBy]);
   const zoomOut = useCallback(() => zoomBy(1 / 1.2), [zoomBy]);
   const zoomReset = useCallback(() => {
     setFocusBadge(false);
     const rect = rootRef.current?.getBoundingClientRect();
     if (!rect) return;
-    patchProject({ viewport: { x: rect.width / 2, y: rect.height / 2, k: 1 } });
-  }, [patchProject]);
+    animateViewport({ x: rect.width / 2, y: rect.height / 2, k: 1 });
+  }, [animateViewport]);
 
   const startPan = (clientX: number, clientY: number, pointerId: number) => {
     closeCreateMenu();

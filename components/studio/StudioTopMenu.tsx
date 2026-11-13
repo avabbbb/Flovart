@@ -156,7 +156,6 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
     <>
     <header
       className="studio-top-menu theme-aware relative z-50 grid min-h-12 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1 px-2 py-1.5 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:px-4"
-      style={{ background: 'var(--app-bg)' }}
     >
       <div className='studio-top-menu__leading flex min-w-0 items-center gap-2'>
         <button
