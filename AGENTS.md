@@ -78,10 +78,13 @@ UI / Agent / Host entry → same generation/business function → Provider adapt
 ## 6. UI、交互与动效
 
 - **参考先行**：设计或实现任何 UI / 动效前，先查参考并在 PR 中引用实际打开的页面——Inspora（灵感）、Awwwards（审美校准）、GSAP Showcase（动效与交互）、Refero Styles（风格系统与 DESIGN.md，有 MCP）；规则见 `01-interaction.md` §18。
-- 视觉只用 `docs/design/DESIGN.md` 的 token：不写 hex、不加 `rounded-2xl` / `border-2`、不自定义过冲曲线；动效用三档弹簧（snappy / smooth / expressive），可打断，遵守 reduced-motion；**玻璃只给浮动 chrome**，不进入画布节点、正文、trace、表格。
+- 视觉只用 `docs/design/DESIGN.md` 的 token：不写 hex、不加 `rounded-2xl` / `border-2`、不自定义过冲曲线；动效用三档弹簧（snappy / smooth / expressive），可打断，遵守 reduced-motion；**玻璃只给浮动 chrome**（包括节点工具条、左右停靠面板外壳、工具弹窗外壳），不进入节点主体、正文、trace、表格；左右面板外壳必须同一套。
 - 动效库保持 `motion`；GSAP 只是候选（授权含竞品限制，需评估），未经决定不得加依赖。
 - 复用 container-driven layout；不要重新引入 viewport inset 补丁。新 UI 必须挂到真实入口并验证可见路径；mock-only 面板不算交付。
 - 持续任务显示真实状态，不能用动画掩盖未知提交、失败或 Provider 未响应。PromptBar、ElementToolbar 与原始媒体比例行为按现有产品保持。
+- **弹性布局是硬要求**（DESIGN.md §15）：UI 按组件自身宽度用 `@container` 逐级降级（文字 → 截断 → 图标 + title → 收纳 → 整块收成图标），不许只按一个窗口宽度做静态稿。工具行 `nowrap` + 文字 `min-width:0`；居中绝对定位浮条加 `width:max-content`；可拖面板拖过最小宽度就吸附收起；被隐藏的功能必须保留入口。
+- **样式要落地**：新写的 `className`（尤其空态、菜单、弹层）必须有对应 CSS，提交前用 grep 核对；禁止硬编码深色 rgba 和 `var(--未定义, #hex)` 兜底，统一用主题 token / `color-mix`。
+- **UI 验收**：在真实入口截宽 / 中 / 最小三档宽度 + 收起态，亮暗各一组，逐张检查重叠、折行、半截字、裁切，截图附在 PR 里。只截一个宽度不算验收。
 
 ## 7. 代码边界
 

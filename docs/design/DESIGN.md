@@ -116,7 +116,7 @@ Flovart 是给**剪辑师、创作者和他们的 Coding Agent** 用的本地创
 | --- | --- | --- | --- |
 | 0 画布 | `--canvas-bg` + 网格 | 无 | 画布 |
 | 1 内容 | `--isl-card` 实底 + 1px `--isl-border` | **无** | 节点、素材卡、面板、侧栏正文、表格 |
-| 2 浮动 chrome | 玻璃（§9.2）或 `--isl-card` | `--isl-shadow-*` | 工具条、run 状态岛、侧栏顶栏、popover、菜单、tooltip、Agent 光标标签 |
+| 2 浮动 chrome | 玻璃（§9.2）或 `--isl-card` | `--isl-shadow-*` | 工具条、节点工具条、run 状态岛、左右停靠面板（内缩 8px 的悬浮卡）、popover、菜单、工具弹窗、tooltip、Agent 光标标签 |
 
 | Token | 亮 | 暗 |
 | --- | --- | --- |
@@ -139,7 +139,7 @@ pressable 3D drop（`--isl-drop*`）已于 2026-10-30 删除；`--shadow-panel`�
 | `--glass-highlight` | `inset 0 1px 0 rgba(255,255,255,.55)` | `inset 0 1px 0 rgba(255,255,255,.06)` |
 | clear（媒体叠加） | `rgba(0,0,0,.35)` + `blur(12px)` | 同 |
 
-- **允许**：画布浮动工具条 / 快捷开关 / 小地图框、run 状态岛头部、侧栏与抽屉**顶栏**、popover / 菜单 / tooltip、Agent 光标标签、媒体上的叠加控件（clear）。
+- **允许**：画布浮动工具条 / 快捷开关 / 小地图框、节点工具条与节点内媒体菜单、run 状态岛头部、左侧图层面板与右侧 Agent 面板的**外壳**（两侧必须同一套：内缩 8px、16px 圆角、发丝描边 + 柔和远投影）、popover / 菜单 / tooltip、工具弹窗外壳、Agent 光标标签、媒体上的叠加控件（clear）。实现：`styles/glass.css` 的 `.flv-glass` 与 `--glass-*`。
 - **禁止**：节点主体、素材卡、对话 / trace 正文、表格、代码 / JSON、模态正文、宿主面板。
 - **回退**：`@supports not (backdrop-filter: blur(1px))`、`prefers-reduced-transparency: reduce`、`prefers-contrast: more` → `--isl-card` 实底 + `--isl-border-strong`。（**假设**：WebView2 对 `prefers-reduced-transparency` 的支持按当期版本核验。）
 - **对比度**：玻璃上只放 `--isl-ink` / `--isl-ink-soft`；按最坏背景估算不足 4.5:1 时提高不透明度，不加文字阴影。
@@ -152,7 +152,8 @@ pressable 3D drop（`--isl-drop*`）已于 2026-10-30 删除；`--shadow-panel`�
 | --- | --- | --- |
 | `--isl-r-sm` | 6px | 控件、chip、输入、版本按钮 |
 | `--isl-r` | 8px | 卡片、节点、面板分区、主按钮（`--isl-r-pill` 当前也是 8px） |
-| `--isl-r-lg` | 10px | 弹窗、浮动 chrome、停靠侧栏卡片 |
+| `--isl-r-lg` | 10px | 弹窗、浮动 chrome |
+| 16px | — | 只用于左右停靠面板外壳（两侧必须一致） |
 | 999px | — | 只用于状态点、头像、光标标签、run 状态岛收起态 |
 | 边框 | 1px | 强调用背景而非加粗；选中 = 1px mint + 外 2px `--isl-mint-bg` |
 
@@ -216,13 +217,16 @@ pressable 3D drop（`--isl-drop*`）已于 2026-10-30 删除；`--shadow-panel`�
 | --- | --- |
 | 用 `--isl-*` token；新色同时给亮 / 暗 | 在组件里写 hex、`rounded-2xl`、`border-2`、`font-extrabold` |
 | 薄荷只给主操作、选中、进度、成功 | 用薄荷做装饰描边或大面积底色 |
-| 面板与节点实底、无阴影 | 给面板加阴影或玻璃；给节点加抬起 |
+| 节点与面板**正文**实底；面板**外壳**按 §9.2 用玻璃 | 给节点加抬起；左右面板各用一套外壳 |
 | 玻璃只给浮动 chrome，且可退化 | 对话正文、trace、表格放在玻璃上 |
 | 状态 = 图标 + 文字 + 颜色 | 只靠颜色区分失败 / 运行 |
 | hover 换背景 | hover `translateY` / `scale` |
 | 用三档弹簧，可打断 | 自定义 cubic-bezier 过冲、对宽高做弹簧 |
 | 结果由模糊到清晰揭示一次 | 霓虹流光（`#00ff88`）、无限呼吸、彩纸粒子 |
 | 光标标签用派生色阶、≤ 6 色 | 每个工具发明一个品牌色 |
+| 按容器宽度逐级降级（§15） | 只在一个窗口宽度下设计；靠 `flex-wrap` 把工具行折成两行 |
+| 空态、菜单、弹层的类名都有样式定义 | 写了 `className` 却没有 CSS（空态“崩”就是这样来的） |
+| 跟随主题的 `color-mix` / token | `rgba(22,22,24,.86)` 这类硬编码深色；`var(--未定义, #1f1f23)` 兜底 |
 
 ## 14. Motion
 
@@ -282,3 +286,43 @@ pressable 3D drop（`--isl-drop*`）已于 2026-10-30 删除；`--shadow-panel`�
 ### 14.7 动效库
 
 保留 `motion`（12.40.0，`motion/react`）。**GSAP 只作为候选，不加依赖**：3.13 起在 Webflow 支持下全部插件免费、可商用，但授权是 Webflow 的 *Standard "No Charge" GSAP License*（非开源），其 Prohibited Uses 包含“让用户无需代码构建视觉动画、与 Webflow 视觉动画构建能力竞争的工具”——Flovart 是创作工具，引入前需法务评估。体积（unpkg UMD，gzip）：`gsap.min.js` 28.4KB + ScrollTrigger 18.0KB + Flip 9.7KB + SplitText 3.7KB；本仓库 `motion.js` UMD 44.7KB（`framer-motion.js` 60.8KB）；两者在 Vite 中的 tree-shaken 实际增量**未实测**。现有需求（弹簧、布局动画、手势）motion 已覆盖；只有当需要 FLIP 跨容器重排或文字逐字拆分且 motion 不足时再评估。
+
+## 15. Elastic layout（弹性布局）
+
+**判断**：Flovart 的每块面板都会被用户拖宽拖窄、被窗口挤压、被嵌进宿主。UI 不是为某个宽度画的静态稿，而是一条**随自身宽度降级的曲线**。任何宽度下都不允许重叠、折行、文字被截成半个字（如 `Lo…`）或控件溢出面板。
+
+### 15.1 降级梯（从宽到窄，依次执行）
+
+1. 完整：图标 + 文字标签
+2. 收窄：次要文字截断（`min-width:0` + `text-overflow: ellipsis`），当前项保留文字
+3. 图标化：所有控件变 28px 图标按钮，文字改由 `title` / `aria-label` 承担
+4. 收纳：次要控件隐藏，但必须有别的路径（菜单、快捷键）
+5. 收起：整块面板收成一个图标（右上角开关）
+
+### 15.2 规则
+
+| 项 | 规则 |
+| --- | --- |
+| 断点依据 | 用 `@container`，按**组件自身宽度**判断，不用 `@media` 按窗口判断。每个可变宽的面板都声明 `container-type: inline-size` 和名字 |
+| 断点数量 | 每个组件最多 2 个断点，值写在 `styles/fluid.css`，旁边注释写明“到这里变成什么” |
+| 工具行 | `flex-wrap: nowrap`；文字 span 必须 `min-width:0` 才能截断 |
+| 居中浮条 | `position:absolute; left:50%; translateX(-50%)` 的 shrink-to-fit 只能拿到容器一半宽度，会提前折行 → 加 `width: max-content` |
+| 可拖面板 | 有 `minWidth`；拖过最小宽度 72px 时进入半透明预览，松手收成图标（同 macOS 侧栏），而不是把内容挤爆 |
+| 隐藏 ≠ 删除 | 被收纳的功能必须保留入口：撤销 / 重做 → `Ctrl Z`；修订号 → 历史 |
+| `cqw` 基准 | 新加 `container-type` 会改变子元素里 `100cqw` 的参照对象，加之前先 grep 子树里的 `cqw` |
+
+### 15.3 当前实现（样张）
+
+| 组件 | 容器 | 断点 → 结果 |
+| --- | --- | --- |
+| 左侧图层标签 | `wfsb` | ≤260px：非当前标签变图标、隐藏计数；≤200px：全部图标 |
+| Agent 输入区工具行 | `agentcomposer` | ≤420px：模型名截到 9ch；≤340px：全部 28px 图标 |
+| 画布底部工具条 | `workflow-canvas` | ≤700px：收起撤销 / 重做 / 修订号；≤480px：收起缩放 |
+| 右侧面板 | `StudioRightDrawer` | 最小 280px；比最小宽度再窄 72px 时吸附收起 |
+
+### 15.4 验收（每个 UI PR 都要做）
+
+- 在**真实入口**截三档：宽（默认）、中（面板拖到一半）、最小（拖到 `minWidth`），并截一张收起态；亮色、暗色各一组。
+- 逐张检查：没有重叠、没有折行、没有半截字、没有贴边裁切、没有硬编码颜色在暗色下发黑或发白。
+- 截图放进 PR 描述；只给单一宽度截图的 PR 不算验收。
+
