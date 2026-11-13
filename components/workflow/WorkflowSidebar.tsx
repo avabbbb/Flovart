@@ -143,12 +143,12 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
 
   return (
     <>
-      {/* 左侧触发按钮：折叠态 */}
+      {/* 左侧触发按钮：折叠态，让出浮动顶栏 */}
       <button
         ref={triggerRef}
         type="button"
         className="isl-icon-btn theme-aware absolute z-40 h-10 w-10"
-        style={{ left: outerGap, top: outerGap, opacity: open ? 0 : 1, pointerEvents: open ? 'none' : 'auto' }}
+        style={{ left: outerGap, top: `calc(var(--topbar-h, 0px) + ${outerGap}px)`, opacity: open ? 0 : 1, pointerEvents: open ? 'none' : 'auto' }}
         onClick={() => onOpenChange(true)}
         title="打开图层与资产"
         aria-label="打开图层与资产"
@@ -168,7 +168,8 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
             flex: '0 0 auto',
             width: `clamp(200px, 19vw, 300px)`,
           } : {
-            top: outerGap,
+            // 顶栏浮在画布上，浮层从顶栏下沿开始（--topbar-h 由 AppShell 量出）
+            top: `calc(var(--topbar-h, 0px) + ${outerGap}px)`,
             left: outerGap,
             bottom: outerGap,
             width: `clamp(200px, 19vw, 300px)`,
