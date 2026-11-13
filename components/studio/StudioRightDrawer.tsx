@@ -1,4 +1,4 @@
-import { History, MessageSquare, PanelRightClose, PanelRightOpen, SlidersHorizontal } from 'lucide-react';
+import { History, MessageSquare, PanelRightClose, SlidersHorizontal } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { DrawerChromeContext } from './drawerChrome';
 
@@ -116,16 +116,7 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
 
   return (
     <>
-      <button
-        type="button"
-        className="isl-icon-btn theme-aware absolute h-10 w-10"
-        style={{ right: outerGap, top: outerGap, zIndex: 80, opacity: open ? 0 : 1, pointerEvents: open ? 'none' : 'auto' }}
-        onClick={() => onOpenChange(true)}
-        title="打开右侧面板"
-        aria-label="打开右侧面板"
-      >
-        <PanelRightOpen size={18} />
-      </button>
+      {/* No floating launcher: the canvas toolbar's Agent button opens this drawer. */}
 
       <aside
         ref={asideRef}
