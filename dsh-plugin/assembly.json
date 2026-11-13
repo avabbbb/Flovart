@@ -6,7 +6,7 @@
   "compatibleSets": [
     {
       "setId": "flovart-2026-08-rc8",
-      "deepseekHarness": "0.2.2-rc.1",
+      "deepseekHarness": ">=0.2.2-rc.1 <0.3.0-0",
       "deepseekHarnessCommit": "141eb6f",
       "node": "^22.19.0 || >=24.0.0",
       "flovartRuntime": ">=0.3.2",
