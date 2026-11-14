@@ -76,6 +76,8 @@ title: 后续待办
 - [ ] 大图性能（剩余）：缩略图按需生成与离屏播放器暂停继续按实际性能问题优化；不先增加可替换画布端口或语义 LOD 平台。
 - [ ] Config 节点删除、Scene Prediction 与音频生成继续留作后续需求，按具体任务分别验证，不阻塞原生效果。
 - [ ] 逆向演进为全能助手（[01 交互设计](../../../design/01-interaction.md) §11–§12）：prompt 首页、画布上可见的多 Agent 光标、docked 侧栏 trace / 计划 / 审批、预览与版本对比；Hypit 式拆解收为工具与面板。依赖 [16 号提案](../../../design/16-agent-video-pipeline.md) 的 run / trace。
+- [ ] 真实操作录制与剪辑 Hub（[计划草案](../../../plans/recordly-capture-hub.md)）：先做 Recordly 连接器，把导出的录屏导入当前 pipeline run；再定 Rust 录制 + Snipaste 式截图伴生工具走 AGPL 伴生还是净室自研。Recordly 源码不进主仓库。
+- [ ] 视频流水线剩余：逆向 docked 侧栏与 Agent 光标、DSH 投影、WhisperX 真机转写、三级镜头 / 设备样机 / 点击圈、配音正增益（Remotion 音量上限 1）。
 - [ ] 逆向与 Canvas 用同一组 `workflow.*` 命令与明确素材引用交接，保持单一 Workflow 权威；大文件需要进度、取消和内存限制。
 - [ ] Agent 空间中接入真实外部对话/任务/产物回执，保持外部 Agent 为主入口；内置 Assistant 继续保持可选，不新增重复控制面或第二套主记忆。
 - [ ] 保留现有 Production Skill、VOX、已批准参考图与局部重跑能力；后续只补实际用到的步骤，不以完整成片平台为本轮前置。

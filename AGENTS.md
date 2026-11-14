@@ -29,6 +29,7 @@
 - **Canvas Assistant drawer** 保留为轻量上下文入口（就地问答、单步操作）；多步制作“在逆向中继续”，进入同一个 run（同一 runId）。不复制到 Agent 页，不做 Host 连接管理。
 - **禁止只有聊天的整页**。逆向是 prompt 优先、以画布与可见产物为主体的工作区，对话只是侧栏中的输入与 run 卡片——这不属于聊天页。也不要引入 Tasks / Artifacts / Context 工作区、Production Crew / Director / Operator 必经层、Production Skill Marketplace 或第二套 Canvas / Workflow。
 - **Hypit 复刻边界**：以 gitignored `_ref/hypit` 为参照对齐分层、数据模型、术语与数据流，代码在 `services/reverse/` 自写；不复制 Hypit 源文件，不把 `@hypit/*` 打进 bundle（附加条件的 Apache-2.0 与本仓库 MIT 冲突）。WhisperX / ffmpeg / 渲染走本地 Runtime 或用户自装的 hypit CLI，结果作为 durable artifact 导回。
+- **Recordly / Snipaste 边界**：Recordly 是 AGPL-3.0 + 附加条款（UI 与仓库署名、禁用其名称），Snipaste 闭源。主仓库（MIT）不复制、不打包 Recordly 源码，移植成 Rust 仍算衍生作品；只通过连接器调用用户自装的 Recordly、导入其导出文件，Snipaste 只借鉴交互。路线与分期见 `docs/plans/recordly-capture-hub.md`（计划草案）。
 - 外部 Agent 默认走 **Skill + CLI**；MCP 是同一 operation contract 的可选投影。内置 Agent（逆向 / 抽屉）、宿主面板与外部 Agent 复用同一业务能力与权限边界。
 
 ## 3. 工程原则：短路径、单一权威
@@ -52,15 +53,15 @@ UI / Agent / Host entry → same generation/business function → Provider adapt
 
 ### 4.1 Agent 视频流水线（PROPOSAL，`docs/design/16-agent-video-pipeline.md`）
 
-被接受前，相关施工遵守：
+现状：P0 工具层、trace（migration 5，`flovart-state.db`）、Remotion 文字 / 字幕 / 音频轨、`capture.ui`、MCP 投影、CJK 字体、RunningHub 上的 MiniMax 配音已在 `main` 实现（16 §12）；逆向 docked 侧栏、Agent 光标、DSH 投影、直连 MiniMax 与 WhisperX 实测未完成。被接受前，相关施工遵守：
 
 - **trace 唯一权威**：run（durable `runId`）由本地 Runtime 保存 run → step → tool call → artifact → version → review round；Step 由命令边界自动记录，不让模型自己“写日志”。会话与画布节点只存引用。
-- **主场在逆向**：run 在逆向发起与驱动；画布写入以可见 Agent 光标呈现；Canvas 抽屉只交接到同一 run；外部 caller 写入同一条 trace。
+- **主场在逆向**：run 在逆向发起与驱动；画布写入以可见 Agent 光标呈现；Canvas 抽屉只交接到同一 run（当前已有抽屉 run 卡片与“放到画布”版本分组作为轻量入口）；外部 caller 写入同一条 trace。
 - **工具只投影已有业务函数**：`pipeline.run.*`、`asset.import`、`audio.tts`、`audio.transcribe`、`timeline.align`、`composition.patch`、`composition.render`、`media.probe`、`media.frames`、`review.submit`、`run.archive`、`capture.ui` 先有业务实现再登记 canonical registry；内置 Agent、CLI、MCP、DSH 同一 schema 与权限；只在 run 激活时加载，认证后才按 Support Matrix 升级。
-- **不开放任意执行**：内置 Agent 不得获得 shell、任意文件读写或任意 ffmpeg 参数；跑用户仓库、注入演示数据交给外部 Coding Agent，以 `asset.import` 带回同一 run；截图录屏只走 `capture.ui`（仅 localhost / 授权文件夹页面，需用户确认）。
+- **不开放任意执行**：内置 Agent 不得获得 shell、任意文件读写或任意 ffmpeg 参数；跑用户仓库、注入演示数据交给外部 Coding Agent，以 `asset.import` 带回同一 run；网页截图录屏只走 `capture.ui`（仅 localhost / 授权文件夹页面，需用户确认）；桌面级真实操作录制将来走 Recordly 连接器或自研伴生工具，产物同样以 artifact 进入同一 run（计划，未实现）。
 - **评审可审计**：findings 写明时间点 / 片段、层、问题、修法、结论；修补基于版本号，不改 locked 片段（除非显式解锁并留痕）；轮数受 run 预算约束。
 - **素材 durable**：截图、底片、干声、转写证据、静帧、每版渲染都是带 sha256 的 artifact；被否版本标 rejected 保留。
-- **本机执行**：Remotion 渲染、WhisperX / hypit 转写、ffmpeg / ffprobe 在本地 Runtime；云端只做 Provider 生成。依赖缺失返回 `CAPABILITY_UNAVAILABLE` 与诊断动作，不静默跳过。
+- **本机执行**：Remotion 渲染、WhisperX / hypit 转写、ffmpeg / ffprobe 在本地 Runtime；云端只做 Provider 生成（配音当前经 RunningHub 调 MiniMax speech，key 只走环境变量 / 安全存储）。依赖缺失返回 `CAPABILITY_UNAVAILABLE` 与诊断动作，不静默跳过。
 - **费用**：run 级预算（任务数 / 金额 / 最大评审轮数）一次确认，复用 spend mandate 与 Runtime gate；范围变化重新确认。
 
 ## 5. Creative host / native effect

@@ -1,7 +1,7 @@
 # 提案：Agent 驱动的产品宣传片流水线（Agent Video Pipeline）
 
 > 状态：**PROPOSAL**（2026-11-13；§6 放置同日修订为“逆向 = 全能助手主场”）。本文是提案，不是 current truth；被接受后按 AGENTS.md §9 蒸馏进 [00 总体设计](00-overview.md)、[12 Agent](12-agent.md)、[13 Generation & Runtime](13-generation-runtime.md)、[10 Canvas / Workflow](10-canvas-workflow.md)，再归档本文。
-> **实施进度（2026-11-14）**：P0 的工具层与 trace 已在 `main` 实现，并用 Fake TTS + fixture 转写 + 真实 ffmpeg 渲染端到端跑通（见 §12）；trace 表已迁入 Runtime 共用的 `flovart-state.db`（migration 5），Canvas 抽屉 run 卡片与画布版本分组已上线（按 §6 修订，抽屉卡片保留为轻量入口，逆向侧栏与 Agent 光标尚未实现）；真实 Provider 仍未完成，本文仍是提案。
+> **实施进度（2026-11-15）**：P0 的工具层与 trace 已在 `main` 实现并端到端跑通（见 §12）：trace 在 Runtime 共用的 `flovart-state.db`（migration 5）；Remotion 文字 / 字幕 / 音频轨、`capture.ui`、MCP 投影、CJK 字体已上线；配音经 RunningHub 调 MiniMax speech 已真实实测。Canvas 抽屉 run 卡片与画布版本分组是轻量入口，逆向 docked 侧栏与 Agent 光标、DSH 投影、直连 MiniMax 与 WhisperX 实测尚未完成，本文仍是提案。桌面级真实操作录制另见 [录制与剪辑 Hub 计划](../plans/recordly-capture-hub.md)。
 > 标注约定沿用总纲：**已实现** = 代码在主干；**已验证** = 有 Support Matrix 证据；**设计目标** = 尚未实现；**假设** = 待真实环境确认。本文“Flovart 今天”一列全部来自 2026-11-13 `main`（`b92e29b`）真实代码核对，不来自旧文档。
 
 ## 0. 一句话
@@ -69,6 +69,21 @@
 | C21 素材库与归档 | 可回溯、可交付 | **部分**：Runtime 内容寻址 artifact（`artifact.locate`、sha256）；浏览器 `services/studio/artifactRegistry.ts` 仅 30 分钟 TTL、最多 64 条；`projectTransfer.ts` 导出为 dataUrl JSON；Reverse 左侧库有 Tasks / Artifacts | run 内所有产物都进 Runtime artifact store；`run.archive` 输出归档清单（成片、spec、音轨、废片、评审）到用户目录 | P1（P0 先保证全部是 durable artifact） |
 | C22 费用与审批 | 控制花费 | **有（部分）**：`services/agentSpendMandate.ts`（自动模式任务数 / 金额上限）、`services/agentToolPolicy.ts`（沙箱 + 审批）、Runtime `production_gates` / `run_budgets` / `usage_ledger` | run 级预算（任务数、金额、最大评审轮数）一次授权，范围变化重新确认 | P0 |
 | C23 长流程编排 / trace | 多轮、可恢复 | **部分**：会话按项目存 localforage（`services/browserAgentKernel.ts`）；运行日志 `useAgentActivityStore.ts`（内存 200 条）；Runtime `runtime_events` / `production_runs` / `stage_runs` 持久；内置 Agent 工具只有 `AGENT_BROWSER_COMMANDS`（`tools/flovart/agent-surface.js`）+ 节点工具 + 搜索 / grep / ask / 看图 / todo，**调不到** `task.*`、`artifact.locate`、`asset.list`、`generate.*`、`production.*` | 新增 run → step → tool call → artifact → version → review round 的持久 trace（§4），由命令边界自动记录；内置 Agent 在 run 内按需加载 pipeline 工具集 | **P0** |
+
+### 2.1 2026-11-15 复核（上表“今天”列为 11-13 基线，以本节为准）
+
+| 能力 | 现状 | 依据 |
+| --- | --- | --- |
+| C5 真实 UI 采集 | **部分**：网页截图 / 录屏已实现；桌面 App、模拟器、真实光标与点击事件未覆盖 | `capture.ui`（§12.3）；桌面录制见 [Hub 计划](../plans/recordly-capture-hub.md) |
+| C8 显示稿 / 口播稿分离 | **有** | `audio.tts` 读 `speechText`，字幕读 `displayText` |
+| C10 TTS 配音 | **有**：fake / minimax / runninghub 路由，RunningHub 已真实实测 | `voice.js`、`npm run trial:runninghub-tts` |
+| C11 时长与词级时间戳 | **部分**：`audio.transcribe` + `timeline.align` 已实现，WhisperX / hypit 未实测 | §12.3 |
+| C12 字幕 / C14 代码合成 | **有**：ffmpeg 与 Remotion 两条引擎都画文字、字幕、音频 | `render.js`、`ProductionVideo.tsx` |
+| C13 音乐 / 闪避 | **部分**：音乐导入与固定 25% 闪避；无音乐生成、无可调包络 | §12.3 |
+| C15 屏幕跟踪合成 | **缺** | P1 / P2 |
+| C16–C21 | **有**：`media.probe`、`composition.render`、`media.frames`、`review.submit` + `composition.patch`、版本与画布分组、`run.archive` | §12.1 |
+| C23 trace | **有**：命令边界自动记 Step；逆向侧栏 UI 未做 | §12 |
+| 三级镜头 / 设备样机 / 点击圈 / 卡片展开 | **缺** | 与 Hub 计划 H1 同一组能力 |
 
 矩阵要点：
 
@@ -245,7 +260,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 
 ### P1：贴近参考文章的完整制作
 
-`capture.ui`（本机 Playwright 截图 / 录屏）；多音轨与 ducking、音乐导入；`run.archive`；Reverse → run 输入；手动四角关键帧的屏幕合成；声线 A/B 变体对比卡；从 15 秒小样扩成完整片（模板化复用已锁定的风格）；Skill 增加 pipeline 命令文档；Agent 页显示 pipeline 依赖就绪状态。
+~~`capture.ui`~~（已实现，见 §12.3；桌面级录制转入 [Hub 计划](../plans/recordly-capture-hub.md)）；多音轨与 ducking、音乐导入；`run.archive`；Reverse → run 输入；手动四角关键帧的屏幕合成；声线 A/B 变体对比卡；从 15 秒小样扩成完整片（模板化复用已锁定的风格）；Skill 增加 pipeline 命令文档；Agent 页显示 pipeline 依赖就绪状态。
 
 ### P2：进阶
 
@@ -323,5 +338,5 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 - **capture.ui 与 MCP（2026-11-14）**：`capture.ui`（`tools/flovart/pipeline/capture.js`）只开 localhost / 回环地址或授权文件夹内的 `file://`，每个 `goto` 步骤同样校验；启动浏览器前要 `confirmed: true`。浏览器依次取 `FLOVART_CAPTURE_BROWSER`、Playwright 自带 Chromium、Remotion 已下载的 headless shell。截图为 PNG；录屏用 CDP screencast 收带时间戳的帧，本机 ffmpeg 按真实间隔拼成 30fps H.264 MP4（不依赖 Playwright 自带 ffmpeg）。`npm run e2e:pipeline:capture` 14 项检查。stdio MCP（`tools/flovart/mcp-server.js`）把 14 条 pipeline 命令投影为 `flovart_<命令>` 工具，参数 schema 来自注册表，`agentIdentity` 记为 Step 的 caller；Skill 增加 `commands/pipeline.md`。
 - **CJK 字体（2026-11-14）**：`resolveFontInfo` 依次取 `FLOVART_FONT_FILE` → 已知中文字体路径（雅黑 / 苹方 / 冬青 / Noto CJK / 思源 / 文泉驿）→ `fc-list :lang=zh` 选无衬线常规体 → 拉丁兜底；要画的文字含中日韩字符却只剩拉丁兜底时报 `CAPABILITY_UNAVAILABLE`（capability `font`，附安装提示），不再渲染方框。Remotion 引擎把同一字体文件放进 publicDir 以 `FontFace` 嵌入（`delayRender` 等就绪，加载失败中止），两条引擎用同一字体、不依赖渲染机的浏览器字体。
 - **未做**：DSH 插件的 pipeline 投影。
-- **未实测**：MiniMax TTS 与真实 WhisperX / hypit（只按文档形状实现）；真实 Windows / macOS 渲染机上的字体选择只按路径表实现，未在真机验证。
+- **未实测**：直连 MiniMax TTS（RunningHub 路由已实测）与真实 WhisperX / hypit（只按文档形状实现）；真实 Windows / macOS 渲染机上的字体选择只按路径表实现，未在真机验证。
 - `cargo test --lib` 已在 Linux 沙箱运行（含 pipeline_trace 单测与 Node/Rust 一致性测试）。`rust-ini` 锁定到 0.21.1：0.21.3 给 `ParseOption` 加了字段，`tauri-plugin-deep-link` 2.6.2 会编译失败。
