@@ -756,7 +756,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     return (
         <div ref={rootRef} className={`theme-aware w-full ${className || ''}`.trim()}>
             <div
-                className={('relative overflow-visible border transition-all duration-300 ' + shellClass + ' prompt-libtv ' + (shellClassName || '') + ' ' + (isDragActive ? (isDark ? 'scale-[1.01] border-[#4B5B78]' : 'scale-[1.01] border-[#B2CCFF]') : '')).trim()}
+                className={('relative overflow-visible border transition-all duration-300 ' + shellClass + ' prompt-libtv ' + (compactMode ? 'prompt-glass ' : '') + (shellClassName || '') + ' ' + (isDragActive ? (isDark ? 'scale-[1.01] border-[#4B5B78]' : 'scale-[1.01] border-[#B2CCFF]') : '')).trim()}
                 onDragEnter={event => {
                     if (!Array.from(event.dataTransfer.items).some(item => isSupportedAttachment(item.type))) return;
                     event.preventDefault();
@@ -806,7 +806,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                 )}
 
                 <div
-                    className={`relative ${compactMode ? 'px-3 pt-2.5' : 'px-3.5 pt-3'}`}
+                    className={`relative ${compactMode ? 'prompt-glass-editor pl-11 pr-3 pt-2.5' : 'px-3.5 pt-3'}`}
                     style={{
                         '--prompt-editor-color': 'var(--isl-ink)',
                         '--prompt-editor-placeholder': 'var(--isl-ink-ghost)',
@@ -818,6 +818,16 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                         '--prompt-editor-line-height': compactMode ? '1.4' : '1.5',
                     } as React.CSSProperties}
                 >
+                    {compactMode && (
+                        <span
+                            className={'prompt-orb' + (isLoading ? ' is-loading' : '')}
+                            data-testid="prompt-orb"
+                            aria-hidden="true"
+                        >
+                            <span className="prompt-orb__sphere" />
+                            <span className="prompt-orb__dots"><i /><i /><i /><i /></span>
+                        </span>
+                    )}
                     {onToggleExpanded && (
                         <button
                             type="button"
