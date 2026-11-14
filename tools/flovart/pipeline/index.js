@@ -16,6 +16,7 @@ import { renderWithFfmpeg, renderWithRemotion, RENDER_PRESETS } from './render.j
 import { alignLines, readEvidenceWords, synthesizeLine, toHypitTranscript, transcribeFile, ttsRoutes } from './voice.js';
 import { findingsSignature, REVIEW_VERDICTS, validateFindings } from './review.js';
 import { PIPELINE_COMMAND_NAMES, PIPELINE_COMMANDS, PIPELINE_WRITE_COMMANDS } from './commands.js';
+import { normalizeCaptureArgs, runCapture } from './capture.js';
 
 export const PIPELINE_CALLERS = Object.freeze(['built-in', 'codex', 'claude-code', 'dsh', 'cli', 'mcp', 'user']);
 
@@ -59,6 +60,7 @@ export const PIPELINE_TOOL_DEFINITIONS = Object.freeze({
   'pipeline.run.start': { write: true, tracked: true, summary: '创建一次 Agent 视频制作 run：写入 brief artifact，并一次性确认 run 预算（任务数 / 金额 / 最大评审轮数）。' },
   'pipeline.run.get': { write: false, tracked: false, summary: '读取 run 的完整 trace：Step、版本、渲染、评审轮次、花费与卡点。' },
   'asset.import': { write: true, tracked: true, summary: '把授权本地文件（截图、录屏、外部 Agent 产物）导入 run，成为带 sha256 的 durable artifact。' },
+  'capture.ui': { write: true, tracked: true, summary: '本机 Playwright 打开 localhost / 授权文件夹内的页面，按步骤截图或录屏，产出 durable artifact；启动浏览器前需 confirmed: true。' },
   'asset.list': { write: false, tracked: false, summary: '按 run / kind / tag 列出 durable artifact。' },
   'audio.tts': { write: true, tracked: true, paid: true, summary: '按口播稿（speechText）逐行配音，输出实测时长与声线参数快照；displayText 只给字幕。' },
   'audio.transcribe': { write: true, tracked: true, summary: '对音频 artifact 做词级转写（whisperx / hypit / fixture），产出 hypit.transcript@1 证据 artifact。' },
@@ -352,6 +354,25 @@ export class Pipeline {
         imported.push(publicArtifact(artifact));
       }
       return { result: { artifacts: imported }, artifactIds: imported.map(item => item.artifactId) };
+    },
+
+    'capture.ui': async function captureUi(run, args, { step, signal }) {
+      const plan = normalizeCaptureArgs(args);
+      if (args.confirmed !== true) {
+        fail('CONFIRMATION_REQUIRED', `capture.ui 会在本机启动无头浏览器打开 ${plan.url}；用户确认后带 confirmed: true 重试`);
+      }
+      const outputs = await runCapture(plan, { scratchPath: name => this.store.scratchPath(name), signal });
+      const captured = [];
+      for (const output of outputs) {
+        let media = null;
+        try { media = await mediaInfo(output.path); } catch (error) { if (!(error instanceof CapabilityError)) throw error; }
+        const artifact = this.store.putFile(output.path, {
+          runId: run.id, stepId: step.id, kind: 'capture', tags: [...new Set(['capture', output.kind, output.label, ...(args.tags || [])])], media,
+          source: { type: 'capture.ui', caller: step.caller, url: plan.url, mode: plan.mode, label: output.label },
+        });
+        captured.push({ ...publicArtifact(artifact), label: output.label, captureKind: output.kind });
+      }
+      return { result: { url: plan.url, mode: plan.mode, artifacts: captured }, artifactIds: captured.map(item => item.artifactId) };
     },
 
     'audio.tts': async function tts(run, args, { step, signal }) {

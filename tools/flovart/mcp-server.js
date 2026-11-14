@@ -9,6 +9,14 @@ import { AGENT_OPERATION_DEFINITIONS, AGENT_PUBLIC_COMMANDS } from './agent-surf
 import { COMMAND_REGISTRY } from './core.js';
 import { createOperationGateway, MCP_TOOL_NAMES } from './operation-gateway.js';
 import { WORKFLOW_APPLY_GUIDE } from './workflow-operation-schema.js';
+import { PIPELINE_COMMAND_NAMES, PIPELINE_WRITE_COMMANDS } from './pipeline/commands.js';
+
+/** Agent 视频流水线命令的 MCP 工具名：flovart_ + 命令名（点换下划线），如 flovart_composition_render。 */
+export const PIPELINE_MCP_TOOL_NAMES = Object.freeze(Object.fromEntries(
+  PIPELINE_COMMAND_NAMES.map(command => [command, `flovart_${command.replace(/[.-]/g, '_')}`]),
+));
+
+const PIPELINE_GUIDE = 'Agent video pipeline: every call is recorded as a step in the run trace. Write tools need a stable mutationId so retries replay instead of re-running. Pass agentIdentity (codex, claude-code, ...) so the trace shows who called.';
 
 const CONTEXT_FIELDS = new Set(['agentIdentity', 'hostSessionId', 'idempotencyKey']);
 
@@ -127,6 +135,31 @@ export function createMcpServer(options = {}) {
         return failureResult(error);
       }
     });
+  }
+
+  if (options.includePipeline !== false) {
+    const executePipeline = options.pipelineExecute
+      || (async (command, args, context) => (await import('./pipeline/index.js')).executePipelineCommand(command, args, context));
+    for (const command of PIPELINE_COMMAND_NAMES) {
+      const definition = COMMAND_REGISTRY[command];
+      server.registerTool(PIPELINE_MCP_TOOL_NAMES[command], {
+        description: `${definition.summary} ${PIPELINE_GUIDE}`,
+        inputSchema: mcpInputShape(command),
+        annotations: { readOnlyHint: !PIPELINE_WRITE_COMMANDS.has(command), idempotentHint: true, openWorldHint: false },
+      }, async input => {
+        const { agentIdentity, hostSessionId: _hostSessionId, ...args } = input || {};
+        try {
+          const response = await executePipeline(command, args, {
+            caller: agentIdentity || 'mcp',
+            ...(args.mutationId ? { mutationId: String(args.mutationId) } : {}),
+          });
+          if (!response?.ok) return failureResult({ toJSON: () => response?.error || { code: 'PIPELINE_FAILED', message: 'pipeline command failed', retryable: false } });
+          return successResult({ ...response.result, ...(response.step ? { step: response.step } : {}) });
+        } catch (error) {
+          return failureResult(error);
+        }
+      });
+    }
   }
 
   if (options.includeResources !== false) {

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "dcc428e50a8676ea31e513c8e5c000843d54423f31ccf8edb1729bc1c7ffb4e0",
+  "registryHash": "24bdcc86ce81a0fdef9e99c10de6f7db1affe390ea36cc9d0a9692b10b234118",
   "commands": [
     {
       "name": "runtime.status",
@@ -676,6 +676,21 @@
         "paths": "string[]?",
         "kind": "string?",
         "tags": "string[]?",
+        "mutationId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "capture.ui",
+      "summary": "Open a localhost page (or a file in an authorized folder) in a local headless Chromium, run steps, and save screenshots or an MP4 recording as run artifacts. Requires confirmed: true.",
+      "args": {
+        "runId": "string",
+        "url": "string",
+        "steps": "array?",
+        "viewport": "object?",
+        "mode": "screenshot|video?",
+        "tags": "string[]?",
+        "confirmed": "boolean?",
         "mutationId": "string"
       },
       "availability": "available"

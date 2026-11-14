@@ -16,6 +16,7 @@
     "e2e:pipeline": "node scripts/e2e-pipeline-trace.mjs",
     "e2e:pipeline:parity": "node scripts/e2e-pipeline-parity.mjs",
     "e2e:pipeline:remotion": "node scripts/e2e-pipeline-remotion.mjs",
+    "e2e:pipeline:capture": "node scripts/e2e-pipeline-capture.mjs",
     "test:browser:chrome": "node scripts/chrome-browser-smoke.mjs",
     "test:browser:responsive": "node scripts/responsive-agent-link-smoke.mjs",
     "release:red-team": "node scripts/release-red-team.mjs",

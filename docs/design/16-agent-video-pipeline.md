@@ -91,7 +91,7 @@
 | `pipeline.run.get` | runId、since? | run 摘要、steps、versions、rounds、spend、blockers | Runtime store 读取 | 只读 | — | 设计目标 |
 | `asset.import` | source：授权文件夹引用 \| 浏览器导入项 \| Runtime 授权路径；tags | artifactId、sha256、媒体信息 | `ingestWorkflowMedia` / `services/browserImportArtifacts.ts` / Runtime artifact store | 无 | 内容哈希 | 部分（实现分散，需统一出口） |
 | `asset.list` | runId?、tags?、kind? | artifact 列表 | 现有 `asset.list` 扩展过滤 | 只读 | — | 部分 |
-| `capture.ui` | url（仅 localhost / 用户授权）、steps[]、viewport、mode: screenshot \| video | artifactIds | 新增 Runtime 执行器（本机 Playwright） | 启动本地进程前确认一次 | mutationId | 设计目标（P1） |
+| `capture.ui` | url（仅 localhost / 用户授权）、steps[]、viewport、mode: screenshot \| video | artifactIds | 新增 Runtime 执行器（本机 Playwright） | 启动本地进程前确认一次 | mutationId | 已实现（Node 边界） |
 | `workflow.*` / `workflow.node.run` / `workflow.node.tool` | 现有 | 现有 | 现有 | 现有 | 现有 | 已实现 |
 | `audio.tts` | lines[{speechText, displayText}]、voice{route, voiceId, speed, pitch}、variants? | 每条 artifactId、durationMs、参数快照 | 新 TTS provider 路由（`providerGenerationAdapter.ts`）+ Runtime `audio.tts` 分派 | 付费；按条数计入 mandate | 输入摘要（文本 + 声线参数） | 设计目标（P0） |
 | `audio.transcribe` | artifactId、engine: whisperx \| hypit、language | evidenceArtifactId（`hypit.transcript@1`） | 新 Runtime 执行器 + `services/reverse/evidence.ts` 解析 | 本地免费 | 文件哈希 + 引擎版本 | 设计目标（P0） |
@@ -305,6 +305,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 - **存储（已对齐 §4.2，2026-11-14）**：trace 表由 migration 5 建立，Rust Runtime 与 Node pipeline 执行同一份 SQL（`tools/flovart/contracts/runtime/migrations/0005_agent_pipeline.sql`）、共用 `runtime_migrations` 账本和 `flovart-state.db`。表名加 `pipeline_` 前缀，避免与 Runtime 的 `artifacts` 概念冲突；仍未复用 `production_*` / `usage_ledger`，预算走 `pipeline_usage_ledger`。写入只在 Node 命令边界，Rust 侧提供只读 `pipeline.run.get`，`npm run e2e:pipeline:parity` 校验两边输出逐字段一致。
 - **Canvas（2026-11-14）**：抽屉“运行日志”顶部新增“视频流水线”分区（`components/agent/AgentPipelineRunsSection.tsx`），每个 run 一张卡片：状态、head 版本、最近一轮评审、Step 数与失败数、blocker；展开看逐步 trace（tool / caller / 状态 / 错误码 / 重试次数）、各版本的锁定片段与结论、可继续的 Step。“放到画布”把每个版本最好的一份视频渲染（final 优先于 draft，跳过 rejected 与单帧 still）放进同一个自动批次 `pipeline-<runId>`（`batchIndex = 版本号 - 1`），叠放主图指向最新版本；已在画布上的 artifact 不重复插入。数据只读取本机 agent 的 `GET /pipeline/*`。
 - **Remotion 三轨（2026-11-14）**：ProductionSpec V1 增加可选 `texts` / `captions` / `audio`（帧为单位），`components/reverse/ProductionVideo.tsx` 绘制文字层（top 10% / center / bottom 底边 78%）、底部字幕（底边 88%、半透明底框）与音频（music 在 voice 出声帧闪避到 25%，增益封顶 0 dB）；字体栈中文优先（Noto CJK / 苹方 / 雅黑）。本地 artifact 链接进 bundle 的 `publicDir`，以 `static:<文件名>` 经 `staticFile` 供给。`npm run e2e:pipeline:remotion` 用真实 run 的 v2 spec 出 540×960 draft，检查音频流、时长与缩放并截字幕帧和文字帧。
-- **未做**：`capture.ui`、MCP 投影、Skill 命令文档。
+- **capture.ui 与 MCP（2026-11-14）**：`capture.ui`（`tools/flovart/pipeline/capture.js`）只开 localhost / 回环地址或授权文件夹内的 `file://`，每个 `goto` 步骤同样校验；启动浏览器前要 `confirmed: true`。浏览器依次取 `FLOVART_CAPTURE_BROWSER`、Playwright 自带 Chromium、Remotion 已下载的 headless shell。截图为 PNG；录屏用 CDP screencast 收带时间戳的帧，本机 ffmpeg 按真实间隔拼成 30fps H.264 MP4（不依赖 Playwright 自带 ffmpeg）。`npm run e2e:pipeline:capture` 14 项检查。stdio MCP（`tools/flovart/mcp-server.js`）把 14 条 pipeline 命令投影为 `flovart_<命令>` 工具，参数 schema 来自注册表，`agentIdentity` 记为 Step 的 caller；Skill 增加 `commands/pipeline.md`。
+- **未做**：DSH 插件的 pipeline 投影。
 - **未实测**：MiniMax TTS 与真实 WhisperX / hypit（只按文档形状实现）；没有 CJK 字体的 Linux 环境会回退到 DejaVu，中文字幕显示为方框，需设 `FLOVART_FONT_FILE`。
 - `cargo test --lib` 已在 Linux 沙箱运行（含 pipeline_trace 单测与 Node/Rust 一致性测试）。`rust-ini` 锁定到 0.21.1：0.21.3 给 `ParseOption` 加了字段，`tauri-plugin-deep-link` 2.6.2 会编译失败。

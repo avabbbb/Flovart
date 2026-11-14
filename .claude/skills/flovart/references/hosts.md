@@ -9,6 +9,9 @@ The five stable operations are also available through Iris's optional local
 stdio MCP projection, for MCP-capable hosts such as TeleAgent:
 `flovart_status`, `flovart_workflow_inspect`, `flovart_workflow_selection`,
 `flovart_workflow_apply` and `flovart_workflow_run`.
+The Agent video pipeline commands are projected there too, as
+`flovart_pipeline_run_start`, `flovart_capture_ui`, `flovart_composition_render`
+and so on (see `commands/pipeline.md`).
 
 It is a transport for the same Workflow, not a second runtime, and separate
 from any creative host's native MCP. Codex, Claude Code, OpenCode and

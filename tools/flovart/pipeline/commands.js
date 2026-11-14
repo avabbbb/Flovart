@@ -3,6 +3,7 @@ export const PIPELINE_COMMAND_NAMES = Object.freeze([
   'pipeline.run.start',
   'pipeline.run.get',
   'asset.import',
+  'capture.ui',
   'asset.list',
   'audio.tts',
   'audio.transcribe',
@@ -18,6 +19,7 @@ export const PIPELINE_COMMAND_NAMES = Object.freeze([
 export const PIPELINE_WRITE_COMMAND_NAMES = Object.freeze([
   'pipeline.run.start',
   'asset.import',
+  'capture.ui',
   'audio.tts',
   'audio.transcribe',
   'composition.patch',

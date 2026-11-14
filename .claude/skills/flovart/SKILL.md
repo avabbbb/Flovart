@@ -223,5 +223,7 @@ the user.
   they add it, and how to verify it.
 - `references/hosts.md`: the optional MCP projection and the DaVinci Resolve
   tracer.
+- `commands/pipeline.md`: the Agent video pipeline (runs, capture, voice,
+  render, review). Read it only when the task is to make or revise a video.
 - `commands/`: compatibility and diagnostic commands. Not needed for normal
   work.

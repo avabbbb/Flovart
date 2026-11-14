@@ -6,7 +6,8 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
 import { AGENT_PUBLIC_COMMANDS } from '../tools/flovart/agent-surface.js';
 import { AGENT_OPERATION_DEFINITIONS } from '../tools/flovart/agent-surface.js';
-import { createMcpServer } from '../tools/flovart/mcp-server.js';
+import { createMcpServer, PIPELINE_MCP_TOOL_NAMES } from '../tools/flovart/mcp-server.js';
+import { PIPELINE_COMMAND_NAMES } from '../tools/flovart/pipeline/commands.js';
 import { createOperationGateway } from '../tools/flovart/operation-gateway.js';
 
 async function connectProjection(gateway: (command: string, args: Record<string, unknown>, context: Record<string, unknown>) => Promise<unknown>) {
@@ -44,8 +45,9 @@ describe('Flovart MCP projection', () => {
       'flovart_workflow_focus',
       'flovart_workflow_apply',
       'flovart_workflow_run',
+      ...PIPELINE_COMMAND_NAMES.map(command => PIPELINE_MCP_TOOL_NAMES[command]),
     ]);
-    expect(result.tools).toHaveLength(AGENT_PUBLIC_COMMANDS.length);
+    expect(result.tools).toHaveLength(AGENT_PUBLIC_COMMANDS.length + PIPELINE_COMMAND_NAMES.length);
     expect(result.tools.map(tool => tool.name).join(' ')).not.toMatch(/command\.list|command\.schema|node\.create/);
   });
 
@@ -172,5 +174,43 @@ describe('Flovart MCP projection', () => {
     const current = await client.readResource({ uri: 'flovart://workflow/current' });
     expect(calls).toContain('workflow.inspect');
     expect(JSON.stringify(current)).not.toContain('private');
+  });
+
+  it('projects the agent video pipeline as flovart_* tools that write into the same trace', async () => {
+    const calls: Array<{ command: string; args: Record<string, unknown>; context: Record<string, unknown> }> = [];
+    const server = createMcpServer({
+      gateway: async () => ({ ok: true }),
+      includeResources: false,
+      pipelineExecute: async (command: string, args: Record<string, unknown>, context: Record<string, unknown>) => {
+        calls.push({ command, args, context });
+        if (command === 'capture.ui') return { ok: false, error: { code: 'CONFIRMATION_REQUIRED', message: 'confirm first', retryable: false } };
+        return { ok: true, result: { runId: 'run_1', status: 'active', token: 'never-leaks' }, step: { seq: 1, tool: command, caller: context.caller } };
+      },
+    });
+    const client = new Client({ name: 'flovart-pipeline-test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    const tools = (await client.listTools()).tools;
+    const render = tools.find(tool => tool.name === 'flovart_composition_render');
+    expect(render?.inputSchema.required).toEqual(expect.arrayContaining(['runId', 'preset', 'mutationId']));
+    expect(render?.annotations?.readOnlyHint).toBe(false);
+    expect(tools.find(tool => tool.name === 'flovart_pipeline_run_get')?.annotations?.readOnlyHint).toBe(true);
+    expect(tools.map(tool => tool.name)).toContain('flovart_capture_ui');
+
+    const started = await client.callTool({ name: 'flovart_pipeline_run_start', arguments: { projectId: 'p', brief: { keyLine: 'x' }, budget: { maxTasks: 3 }, budgetConfirmed: true, mutationId: 'm-1', agentIdentity: 'codex', hostSessionId: 'h' } });
+    expect(started.isError, JSON.stringify(started.content)).toBeFalsy();
+    expect(calls[0]).toEqual({
+      command: 'pipeline.run.start',
+      args: { projectId: 'p', brief: { keyLine: 'x' }, budget: { maxTasks: 3 }, budgetConfirmed: true, mutationId: 'm-1' },
+      context: { caller: 'codex', mutationId: 'm-1' },
+    });
+    expect(started.structuredContent).toMatchObject({ runId: 'run_1', token: '[REDACTED]', step: { caller: 'codex' } });
+
+    const capture = await client.callTool({ name: 'flovart_capture_ui', arguments: { runId: 'run_1', url: 'http://localhost:5173', mutationId: 'm-2' } });
+    expect(capture.isError).toBe(true);
+    expect(capture.structuredContent).toMatchObject({ ok: false, error: { code: 'CONFIRMATION_REQUIRED' } });
+    expect(calls[1].context).toEqual({ caller: 'mcp', mutationId: 'm-2' });
   });
 });
