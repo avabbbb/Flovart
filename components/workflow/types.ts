@@ -284,6 +284,8 @@ export interface WorkflowNodeMetadata {
     sourceTitle?: string;
   };
   artifactRef?: WorkflowArtifactRef;
+  /** Agent 视频流水线某个版本的渲染（只读来源标记）；画布按 run 把各版本收进一个批次。 */
+  pipelineRender?: { runId: string; version: number; artifactId: string; preset: string };
   /** 由 Creative Host 注入的 provider-neutral 资源定位信息。 */
   resourceLocator?: WorkflowResourceLocator;
   hostSend?: WorkflowHostSendRequest;

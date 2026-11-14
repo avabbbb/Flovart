@@ -23,7 +23,8 @@ import { discardWorkflowMediaRecord, fitWorkflowMediaSize, ingestWorkflowMedia, 
 import { localFolderHref, readLocalFolderFile, type LocalFolderEntry } from '../../services/localFolderSource';
 import type { AssetItem, AssetLibrary } from '../../types';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import type { WorkflowNodeMetadata, WorkflowProject } from './types';
+import type { WorkflowNode, WorkflowNodeMetadata, WorkflowProject } from './types';
+import { planPipelineVersionNodes, type PipelineVersionRender } from '../../services/pipelineRuns';
 import type { PromptIntent } from './promptIntent';
 import { createWorkflowHostSourceNode, findWorkflowNodeForHandoff, parseWorkflowHostHandoff, stripWorkflowHostHandoff, type WorkflowHostHandoff } from './hostLink';
 import { parseWorkflowDeliveryLink, stripWorkflowDeliveryLink } from './deliveryLink';
@@ -117,6 +118,65 @@ export async function insertSharedMediaIntoProject(media: WorkflowSharedMedia): 
   } catch (error) {
     if (record) await discardWorkflowMediaRecord(record.storageKey);
     return { ok: false, error: displayError(error, '共享素材导入失败') };
+  }
+}
+
+/**
+ * Agent 视频流水线：把一个 run 各版本的渲染放到当前画布，并收进同一个批次（版本分组），叠放主图为最新版本。
+ * 已在画布上的版本（按 artifactId）跳过；返回新插入的节点数。
+ */
+export async function insertPipelineVersionsIntoProject(
+  run: { runId: string; title: string },
+  renders: PipelineVersionRender[],
+  loadBlob: (artifactId: string) => Promise<Blob>,
+): Promise<WorkflowPatchResult & { inserted?: number }> {
+  const store = useWorkflowStore.getState();
+  const activeProject = store.projects.find(project => project.id === store.activeProjectId) || null;
+  if (!activeProject) return { ok: false, error: '没有可用的 Workflow 项目。' };
+  const expectedProjectId = activeProject.id;
+  const { batchId, missing, latestVersion } = planPipelineVersionNodes(activeProject.nodes, run.runId, renders);
+  if (!missing.length) return { ok: true, inserted: 0 };
+  const records: Array<{ render: PipelineVersionRender; record: WorkflowMediaRecord }> = [];
+  const discardAll = () => Promise.all(records.map(item => discardWorkflowMediaRecord(item.record.storageKey)));
+  try {
+    for (const render of missing) {
+      const blob = await loadBlob(render.artifactId);
+      const name = `${run.title || run.runId} v${render.version}.mp4`;
+      records.push({ render, record: await ingestWorkflowMedia(new File([blob], name, { type: blob.type || 'video/mp4' })) });
+    }
+    const current = useWorkflowStore.getState().projects.find(project => project.id === expectedProjectId);
+    if (!current) {
+      await discardAll();
+      return { ok: false };
+    }
+    const laidOut = layoutMediaNodes(records.map(({ render, record }) => {
+      const { type: _type, ...metadata } = record;
+      return {
+        type: record.type,
+        naturalWidth: record.naturalWidth,
+        naturalHeight: record.naturalHeight,
+        title: `${run.title || run.runId} · v${render.version}`,
+        metadata: { ...metadata, pipelineRender: { runId: run.runId, version: render.version, artifactId: render.artifactId, preset: render.preset } } as WorkflowNodeMetadata,
+      };
+    }), current);
+    const added = laidOut.map((node, index) => ({ ...node, batchId, batchIndex: records[index].render.version - 1, batchGroupSource: 'auto' as const }));
+    const group = [...current.nodes.filter(node => node.batchId === batchId), ...added];
+    const latest = group.find(node => node.metadata.pipelineRender?.version === latestVersion);
+    const root = group.find(node => node.batchIndex === 0) || group[0];
+    const withPrimary = (node: WorkflowNode) => (latest && root && node.id === root.id ? { ...node, metadata: { ...node.metadata, primaryImageId: latest.id } } : node);
+    const committed = commitWorkflowProjectPatch(current.id, {
+      nodes: [...current.nodes.map(withPrimary), ...added.map(withPrimary)],
+      selectedNodeIds: latest ? [latest.id] : added.map(node => node.id),
+    }, '放入流水线版本渲染');
+    if (!committed.ok) {
+      await discardAll();
+      return committed;
+    }
+    records.forEach(item => releaseWorkflowMediaRecord(item.record.storageKey));
+    return { ok: true, inserted: added.length };
+  } catch (error) {
+    await discardAll();
+    return { ok: false, error: displayError(error, '流水线渲染导入失败') };
   }
 }
 

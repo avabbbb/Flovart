@@ -423,13 +423,13 @@ export class Pipeline {
       if (!Array.isArray(lines) || !lines.length) fail('INVALID_ARGUMENT', 'lines 不能为空');
       let segments;
       if (Array.isArray(args.segments)) {
-        segments = args.segments.map(segment => this.#segment(segment.evidenceArtifactId, segment.lineId, segment.offsetMs || 0));
+        segments = args.segments.map(segment => this._segment(segment.evidenceArtifactId, segment.lineId, segment.offsetMs || 0));
       } else if (Array.isArray(args.evidenceArtifactIds)) {
         if (args.evidenceArtifactIds.length !== lines.length) fail('INVALID_ARGUMENT', 'evidenceArtifactIds 需要与 lines 一一对应');
         // 每行一段干声：按顺序铺到时间线上，行间留 gapMs。
         let cursor = args.startMs || 0;
         segments = lines.map((line, index) => {
-          const segment = this.#segment(args.evidenceArtifactIds[index], line.id, cursor);
+          const segment = this._segment(args.evidenceArtifactIds[index], line.id, cursor);
           cursor += (segment.durationMs ?? 0) + (args.gapMs ?? 250);
           return segment;
         });
@@ -536,11 +536,11 @@ export class Pipeline {
     },
 
     'media.frames': async function frames(run, args, { step }) {
-      const target = this.#renderTarget(run, args.artifactId, args.version);
+      const target = this._renderTarget(run, args.artifactId, args.version);
       const times = args.times;
       if (!Array.isArray(times) || !times.length || times.some(time => !Number.isFinite(time))) fail('INVALID_ARGUMENT', 'times 必须是秒数数组');
       if (times.length > 6) fail('INVALID_ARGUMENT', '单次最多 6 帧');
-      const compare = args.compareWith ? this.#renderTarget(run, args.compareWith.artifactId, args.compareWith.version) : null;
+      const compare = args.compareWith ? this._renderTarget(run, args.compareWith.artifactId, args.compareWith.version) : null;
       const out = [];
       const artifactIds = [];
       for (const atSec of times) {
@@ -672,13 +672,13 @@ export class Pipeline {
     },
   };
 
-  #segment(evidenceArtifactId, lineId, offsetMs) {
+  _segment(evidenceArtifactId, lineId, offsetMs) {
     const evidence = this.store.requireArtifact(requireString(evidenceArtifactId, 'evidenceArtifactId'));
     if (evidence.kind !== 'evidence') fail('INVALID_ARGUMENT', `${evidenceArtifactId} 不是转写证据`);
     return { lineId, offsetMs, durationMs: evidence.media?.durationMs ?? null, words: readEvidenceWords(evidence.path) };
   }
 
-  #renderTarget(run, artifactId, version) {
+  _renderTarget(run, artifactId, version) {
     if (artifactId) {
       const artifact = this.store.requireArtifact(artifactId);
       return { ...artifact, version: artifact.version };

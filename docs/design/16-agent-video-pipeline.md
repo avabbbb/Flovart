@@ -1,7 +1,7 @@
 # 提案：Agent 驱动的产品宣传片流水线（Agent Video Pipeline）
 
 > 状态：**PROPOSAL**（2026-11-13）。本文是提案，不是 current truth；被接受后按 AGENTS.md §9 蒸馏进 [00 总体设计](00-overview.md)、[12 Agent](12-agent.md)、[13 Generation & Runtime](13-generation-runtime.md)、[10 Canvas / Workflow](10-canvas-workflow.md)，再归档本文。
-> **实施进度（2026-11-14）**：P0 的工具层与 trace 已在 `main` 实现，并用 Fake TTS + fixture 转写 + 真实 ffmpeg 渲染端到端跑通（见 §12）；trace 表已迁入 Runtime 共用的 `flovart-state.db`（migration 5）；Canvas 抽屉 UI 与真实 Provider 仍未完成，本文仍是提案。
+> **实施进度（2026-11-14）**：P0 的工具层与 trace 已在 `main` 实现，并用 Fake TTS + fixture 转写 + 真实 ffmpeg 渲染端到端跑通（见 §12）；trace 表已迁入 Runtime 共用的 `flovart-state.db`（migration 5），Canvas 抽屉 run 卡片与画布版本分组已上线；真实 Provider 仍未完成，本文仍是提案。
 > 标注约定沿用总纲：**已实现** = 代码在主干；**已验证** = 有 Support Matrix 证据；**设计目标** = 尚未实现；**假设** = 待真实环境确认。本文“Flovart 今天”一列全部来自 2026-11-13 `main`（`b92e29b`）真实代码核对，不来自旧文档。
 
 ## 0. 一句话
@@ -303,6 +303,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 ### 12.3 与提案的偏离和未完成项
 
 - **存储（已对齐 §4.2，2026-11-14）**：trace 表由 migration 5 建立，Rust Runtime 与 Node pipeline 执行同一份 SQL（`tools/flovart/contracts/runtime/migrations/0005_agent_pipeline.sql`）、共用 `runtime_migrations` 账本和 `flovart-state.db`。表名加 `pipeline_` 前缀，避免与 Runtime 的 `artifacts` 概念冲突；仍未复用 `production_*` / `usage_ledger`，预算走 `pipeline_usage_ledger`。写入只在 Node 命令边界，Rust 侧提供只读 `pipeline.run.get`，`npm run e2e:pipeline:parity` 校验两边输出逐字段一致。
-- **未做**：Canvas 抽屉 run 卡片与运行日志分组（§9 第 8 条）、画布版本分组、Remotion 文字 / 字幕 / 音频轨、`capture.ui`、MCP 投影、Skill 命令文档。
+- **Canvas（2026-11-14）**：抽屉“运行日志”顶部新增“视频流水线”分区（`components/agent/AgentPipelineRunsSection.tsx`），每个 run 一张卡片：状态、head 版本、最近一轮评审、Step 数与失败数、blocker；展开看逐步 trace（tool / caller / 状态 / 错误码 / 重试次数）、各版本的锁定片段与结论、可继续的 Step。“放到画布”把每个版本最好的一份视频渲染（final 优先于 draft，跳过 rejected 与单帧 still）放进同一个自动批次 `pipeline-<runId>`（`batchIndex = 版本号 - 1`），叠放主图指向最新版本；已在画布上的 artifact 不重复插入。数据只读取本机 agent 的 `GET /pipeline/*`。
+- **未做**：Remotion 文字 / 字幕 / 音频轨、`capture.ui`、MCP 投影、Skill 命令文档。
 - **未实测**：MiniMax TTS 与真实 WhisperX / hypit（只按文档形状实现）；没有 CJK 字体的 Linux 环境会回退到 DejaVu，中文字幕显示为方框，需设 `FLOVART_FONT_FILE`。
 - `cargo test --lib` 已在 Linux 沙箱运行（含 pipeline_trace 单测与 Node/Rust 一致性测试）。`rust-ini` 锁定到 0.21.1：0.21.3 给 `ParseOption` 加了字段，`tauri-plugin-deep-link` 2.6.2 会编译失败。

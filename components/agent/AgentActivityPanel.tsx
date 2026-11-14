@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AgentReceiptsSection } from './AgentReceiptsSection';
+import { AgentPipelineRunsSection } from './AgentPipelineRunsSection';
 import { Activity, CheckCircle2, CircleDashed, MonitorSmartphone, RefreshCw, XCircle } from 'lucide-react';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
 import { hydrateAgentActivity } from '../../services/agentActivity';
@@ -134,6 +135,8 @@ export function AgentActivityPanel({ language = 'zho', view = 'all' }: { languag
           </ol>
         </div>
       </div>)}
+
+      {view !== 'status' && <AgentPipelineRunsSection language={language} />}
 
       {view !== 'status' && (<div className="flex flex-col gap-2">
         <div className="flex items-center gap-2 text-xs">
