@@ -81,7 +81,7 @@ npm run flovart:cli -- workflow.inspect --json
 | 角色一致性 | Higgsfield 角色 ID 类（待复核） | ✓ 已批准锚点自动接入，未批准则阻断 |
 | 本地优先执行、内容寻址素材 | 多为云端 | ✓ Flovart 特有 |
 
-**覆盖度（诚实口径）**：按[复刻方案](../design/30-competitive-replication.zh-CN.md)的 14 项机制，14 项均已实现。用量一项的精度取决于服务商是否在流中返回 usage，缺失时只计次数；托管 Agent 的服务端 usage 不在本机。另有一处已知取舍：不内置时间线（交给 Resolve）。竞品一栏仍待对照官方手册复核。
+**覆盖度（诚实口径）**：按[复刻方案](../archive/2026-11-13-design-refresh/30-competitive-replication.zh-CN.md)（已归档，现行结论见 [Canvas / Workflow](../design/10-canvas-workflow.md) §5.1）的 14 项机制，14 项均已实现。用量一项的精度取决于服务商是否在流中返回 usage，缺失时只计次数；托管 Agent 的服务端 usage 不在本机。另有一处已知取舍：不内置时间线（交给 Resolve）。竞品一栏仍待对照官方手册复核。
 
 **稳定性与时延**：ffmpeg 任务串行避免冲突；自动派生防递归；文本请求固定低温、格式失败仅重试一次；每次请求记录首字节时延（ttfb）；批量生成失败只重跑失败节点。
 

@@ -40,6 +40,7 @@ running → unknown_submit（查询原任务，不重提）
 - 保存实际发给 Provider 的非秘密规范化输入，不只存 hash。
 - UI 关闭不取消任务；重启先恢复原任务。首版单机顺序队列，不引入 Redis / 消息总线。
 - 费用确认由执行代码校验；调用方传 `confirmed` 不等于已批准。
+- 生成计划卡（已实现，`components/GenerationPlanCard.tsx` + `services/uiConfirm.ts` + `services/generationGate.ts`）：付费提交前显示服务 / 线路、模型、规格、任务数、预估额度与“不退款”提示；人、内置 Agent（`AgentConfirmCard`）共用同一计划数据。原设计稿见 [archive](../archive/2026-11-13-design-refresh/2026-11-07-plan-card-design.md)。
 
 ## 5. 素材版本
 
@@ -58,6 +59,20 @@ running → unknown_submit（查询原任务，不重提）
 
 - 本地文件夹：引用语义（见 Canvas 模块）；使用云端模型时界面需说明原文件会发给供应商。
 - 浏览器扩展导入：复制字节到内容寻址 Artifact Store（见 [15](15-web-community-extension.md)）。两者共用下游任务与素材能力。
+
+## 6.1 用量统计（流式与媒体）
+
+> 2026-11-13 由原 `32-stream-usage.zh-CN.md` 蒸馏（原文见 [archive/2026-11-13-design-refresh](../archive/2026-11-13-design-refresh/32-stream-usage.zh-CN.md)）。
+
+| 层 | 实现 | 状态 |
+| --- | --- | --- |
+| 协议解析 | `services/streamUsage.ts` `createStreamUsageAccumulator('gemini' \| 'anthropic' \| 'openai')`：Gemini 取最后一次 `usageMetadata`；Anthropic 输入取 `message_start`、输出取最后一次 `message_delta`；OpenAI 取末尾 usage chunk | 已实现 |
+| 传输 | `services/sse.ts` `readSseEvents`：兼容 `\n\n` / `\r\n\r\n`、跨 read 拼接、`data:` 无空格、`[DONE]` | 已实现；内置 Assistant（`browserAgentKernel.ts`）已迁入 |
+| 记账 | `commitStreamUsage`：完成 / 取消 / 出错各结算一次，带 `outcome`；全程无 usage 只调用 `recordUsageMissing` 计次数，**不按字符数估算** | 已实现 |
+| 策略 | `services/streamUsageOptIn.ts`：Key 级 `passive`（默认，不改请求）/ `request`（加 `stream_options.include_usage`）；400 且报错指向该字段时去掉字段重试一次，并在本会话回退 passive | 已实现 |
+| 媒体费用 | `services/mediaUsage.ts` 只读汇总 `utils/usageMonitor.ts` 的预估 / 实际费用 | 已实现 |
+| 展示 | 设置「用量」页：来源筛选、“N 次流式调用未返回 usage” | 已实现 |
+| 托管 Agent | 用量在服务端；客户端只预留 `usage` 事件解析 | 缺口 |
 
 ## 7. 不做
 

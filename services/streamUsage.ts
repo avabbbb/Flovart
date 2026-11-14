@@ -1,5 +1,5 @@
 // 流式用量统计（L1 协议解析 + L3 提交）。纯被动：只读取流里已有的 usage，不估算。
-// 见 docs/design/32-stream-usage.zh-CN.md。
+// 见 docs/design/13-generation-runtime.md §6.1。
 import { extractTokenUsage, recordTokenUsage, recordUsageMissing, type TokenUsage, type UsageOutcome } from './tokenUsage';
 
 export type StreamUsageProtocol = 'gemini' | 'anthropic' | 'openai';

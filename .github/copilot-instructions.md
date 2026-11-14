@@ -5,10 +5,11 @@ Read [AGENTS.md](../AGENTS.md) first. The canonical document map is [docs/index.
 ## Current product truth
 
 - Top-level surfaces: Canvas | Reverse (逆向) | Agent. The old Table view has been removed.
-- Canvas is the spatial Workflow. A Reverse project can be converted into a Canvas subgraph node (type subgraph); double-clicking the subgraph returns to Reverse.
-- Reverse is reference reverse-engineering (video / game assets); it writes to Canvas only through workflow.apply.
-- Agent is the local/external coding-agent connection hub: discovery, preparation, status and switching.
-- Built-in Assistant / Context / History is a contextual right drawer beside Canvas/Reverse. Do not embed it inside Agent and do not put Host connection management in the Assistant drawer.
+- Canvas owns GenAI generation and the base Workflow: nodes, generation tasks, assets, versions.
+- Reverse is the all-in-one assistant: a prompt-first workspace where a strong model operates the computer and the canvas as tools, with labeled multi-agent cursors, a docked trace/plan/approval panel, and review rounds as versions. The Hypit-style reverse breakdown is one of its tools/panels. It writes to Canvas only through the same `workflow.*` commands. It is not a chat-only page.
+- Agent manages agent connections and state: runtimes, models/providers, external agents (Codex, Claude Code, DSH), health and per-agent status. It supplies the agents and models Reverse runs; no chat, no run editing.
+- The Canvas Assistant drawer is a lightweight contextual entry that hands multi-step work off to the same run in Reverse. Do not embed it inside Agent and do not put Host connection management in it.
+- Visual tokens live in [DESIGN.md](../docs/design/DESIGN.md); interaction behavior in [01-interaction.md](../docs/design/01-interaction.md). Glass only on floating chrome. Check references (Inspora, Awwwards, GSAP Showcase, Refero) before UI/motion work and cite them in the PR.
 - Do not restore Production Crew / Director / Operator, Production Skill Marketplace, old Canvas/Art dual state, or enterprise org/credits/approval as mandatory product layers.
 
 ## Code boundaries

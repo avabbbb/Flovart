@@ -42,17 +42,23 @@
 
 ## 4. 文档治理
 
-### 4.1 结构（上限 10 份设计文档）
+### 4.1 结构（上限 12 份设计文档）
 
 ~~~text
 docs/
 ├─ index.md                  入口
-├─ design/                   设计（≤ 10 份）
+├─ design/                   设计（≤ 12 份，含提案）
 │  ├─ 00-overview.md         总体设计
-│  ├─ 01-interaction.md      交互设计
+│  ├─ 01-interaction.md      交互与行为（产品地图、逆向工作区、状态、流程、参考先行）
+│  ├─ DESIGN.md              视觉与动效 token（Refero 式 DESIGN.md 分层）
 │  ├─ 10–15 模块文档          每个模块一份
-│  └─ 20-quality-and-governance.md
-├─ overview/                 用户指南（快速开始、安装、Skill）
+│  ├─ 16+ 提案               PROPOSAL，同时最多 2 份，接受后蒸馏并归档
+│  ├─ 20-quality-and-governance.md
+│  └─ prototypes/            01 引用的单文件 HTML 原型（不计入份数，不进构建）
+├─ overview/                 用户指南（快速开始、安装、Skill、用户手册）
+├─ plans/                    进行中的计划（完成或作废即归档）
+├─ quality/                  迭代 / 评测记录
+├─ blog/                     开发日志
 ├─ content/docs/             对外页面：features、todo、pending-test、backend 参考
 ├─ archive/                  历史，只读
 └─ 法律文本                   PRIVACY / TERMS
@@ -60,8 +66,8 @@ docs/
 
 ### 4.2 规则
 
-- 产品变化改 `00-overview`；交互变化改 `01-interaction`；模块变化改对应模块文档。不新增并列的 CURRENT / TARGET / AUDIT / GOAL / HANDOFF 文档。
-- 新模块出现时新增一份模块文档；设计文档总数超过 10 份时先合并。
+- 产品变化改 `00-overview`；交互变化改 `01-interaction`；视觉 / 动效 token 改 `DESIGN.md`；模块变化改对应模块文档。不新增并列的 CURRENT / TARGET / AUDIT / GOAL / HANDOFF 文档。
+- 新模块出现时新增一份模块文档；设计文档总数超过 12 份（含提案）时先合并或归档。
 - 提案标注 **PROPOSAL**，接受后蒸馏进设计文档，再归档提案。
 - `todo` 只放未完成；已实现待验证移到 `pending-test`；验证后更新 features 与 Support Matrix。
 - 历史文档、旧报告、Git 历史只解释“当时为什么”，不能推翻当前设计。
@@ -70,4 +76,4 @@ docs/
 
 ### 4.3 归档
 
-2026-10-07 重构归档的原文在 [archive/2026-10-07](../archive/2026-10-07/)：旧主设计、Agent Integration、Adaptive Layout、产品叙事提案、ADR、开发契约、品牌迁移、维护资料、RC 证据。其中仍有效的内容已蒸馏进本目录。
+2026-11-13 设计语言重构把 30 / 31 / 32 三份并列文档归档到 [archive/2026-11-13-design-refresh](../archive/2026-11-13-design-refresh/)，结论已蒸馏进 10 / DESIGN.md / 13；同次又归档了 docs 根目录与 plans / interview 下的一次性文档（清单见该目录 README）。2026-10-07 重构归档的原文在 [archive/2026-10-07](../archive/2026-10-07/)：旧主设计、Agent Integration、Adaptive Layout、产品叙事提案、ADR、开发契约、品牌迁移、维护资料、RC 证据。其中仍有效的内容已蒸馏进本目录。

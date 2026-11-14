@@ -179,7 +179,7 @@ title: 待测试确认
 
 - 当前 CLI/Skill 提供 ensure、status、workflow.inspect、workflow.selection.get、workflow.apply、workflow.node.run 的稳定操作面；连接准备、一次性 Browser bootstrap 和当前项目绑定已有代码。
 - CLI 与 MCP 现在共用同一 Operation Gateway；请验证 stdio 握手、工具参数、错误结构、Browser authority 绑定和 CLI/MCP normalized result parity。
-- 本轮新增 `tests/flovartProjectionParity.test.ts`：四个 Workflow operation 的 CLI/MCP normalized 参数与受控 Workflow state hash parity 已通过；测量口径见[跨投影评估](../../../design/ecosystem/CROSS_PROJECTION_EVAL.md)。
+- 本轮新增 `tests/flovartProjectionParity.test.ts`：四个 Workflow operation 的 CLI/MCP normalized 参数与受控 Workflow state hash parity 已通过；测量口径见跨投影评估（原 `docs/design/ecosystem/CROSS_PROJECTION_EVAL.md`，已不在 active tree，见 Git 历史）。
 - `ProductionTask` 复用现有 `ProductionRun` ID，不建立第二份 Workflow 图；请验证 Runtime 重启、scheduler lease 回收、`task.inspect` checkpoint 和 `task.resume` 不重复提交已完成 Stage。未开始的 Run 会明确拒绝 resume，不会静默启动。
 - Agent picker、四态提示、响应式布局与高级诊断折叠已有实现；请确认首次连接、默认选择、重扫、断线、换项目和重新激活不会显示假成功。
 - Agent Link 的窄屏高度分配已修复：Agent 列表按内容撑开，Advanced 连接区不再覆盖卡片；新增真实浏览器断点检查覆盖 640/480/390px 及动态调整宽度，仍需用户在目标设备确认滚动手感。

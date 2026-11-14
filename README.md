@@ -40,7 +40,7 @@
 
 [![Watch Flovart: Your footage. Plus one layer.](pic/readme/vision/Flovart_Promo_60s_v4-poster.jpg)](https://github.com/avabbbb/Flovart/raw/refs/heads/main/pic/readme/vision/Flovart_Promo_60s_v4.mp4)
 
-**Keep the original. Describe the change. Compare candidates.** Flovart brings your coding Agent and a visible creative Workflow together. Canvas handles multi-step work, Table handles batches, and Agent connects your preferred assistant.
+**Keep the original. Describe the change. Compare candidates.** Flovart brings your coding Agent and a visible creative Workflow together. Canvas handles generation and the visible Workflow, Reverse breaks down reference videos, and Agent connects your preferred assistant.
 
 The film shows the Resolve-first design target: point at a frame, generate creative layers, compare takes, and return an approved result. **Concept film, recorded before the Flovart name was restored; its closing card still says Iris.** Native host integration and alpha-layer/new-track output remain experimental or planned. Resolve P0 targets explicit **Add to Media Pool**.
 
@@ -123,7 +123,7 @@ The canvas is still a power surface for multi-shot work, complex references and 
 | Automation | Explicit inspect/apply/run operations with revision and approval boundaries |
 | Data | Local-first storage with documented browser and runtime boundaries |
 
-Compose image, text, video, audio and configuration nodes, keep projects and references close to your workspace, and extend providers, hosts and node operations through explicit contracts. The top-level product surfaces are **Canvas** (the spatial Workflow), **Table** (structured media processing), and **Agent** (the local/external coding-agent connection hub). The built-in **Assistant / Context / History** stays in a contextual drawer beside Canvas/Table and is not duplicated inside Agent — see [Features](docs/content/docs/overview/features.en.mdx).
+Compose image, text, video, audio and configuration nodes, keep projects and references close to your workspace, and extend providers, hosts and node operations through explicit contracts. The top-level product surfaces are **Canvas** (the spatial Workflow), **Reverse** (reference-video reverse engineering), and **Agent** (the local/external coding-agent connection hub). The built-in **Assistant / Context / History** stays in a contextual drawer beside Canvas and is not duplicated inside Agent — see [Features](docs/content/docs/overview/features.en.mdx).
 
 ## One workflow, human + agent
 
@@ -175,7 +175,7 @@ flowchart LR
   L --> W
   W --> P["Provider adapters"]
   W --> R["Local assets + artifacts"]
-  T["Table workspace"] -. separate surface .-> W
+  RV["Reverse workspace"] -->|"workflow.apply"| W
 ```
 
 The existing `flovart` CLI name is a compatibility surface during the Flovart rebrand. CLI and the experimental stdio MCP share operation semantics and the current Browser Workflow binding. Deterministic operations do not require a second AI to reinterpret them.

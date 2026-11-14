@@ -1,7 +1,7 @@
 # Iris × DaVinci Resolve Studio 21.1 — Orchestration Contract
 
 Status: **CONTRACT DRAFT** — grounded in repo code + published 21.1 evidence; every real-host assumption is tagged `UNVERIFIED` until the R0–R3 tracer lands.
-Authority: subordinate to [PRODUCT_UI_SPEC.md](PRODUCT_UI_SPEC.md) → [docs/design/flovart-native-effects.md](../../../docs/design/flovart-native-effects.md) §4/§9.
+Authority: subordinate to [PRODUCT_UI_SPEC.md](PRODUCT_UI_SPEC.md) → [docs/design/flovart-native-effects.md](../../../docs/archive/2026-10-07/design/flovart-native-effects.md) §4/§9.
 Hard rule: Iris does **not** ship a Resolve MCP server (`PRODUCT_UI_SPEC.md` §1, §15). Resolve's native MCP is the Agent control plane; Iris owns generation, identity and durable artifacts.
 Updated: 2026-09-27
 

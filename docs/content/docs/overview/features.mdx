@@ -8,11 +8,11 @@ Flovart 当前是 local-first、agent-native 的视觉制作工作台。人和 C
 
 | Surface | 当前职责 | 当前边界 |
 | --- | --- | --- |
-| **Canvas** | 空间化 Workflow：节点、素材、连线、生成与结果编辑 | 当前主要创作面 |
-| **Table** | 结构化媒体处理：选择输入、局部处理、把结果送回 Workflow/素材库 | 不是第二份 Workflow 权威 |
-| **Agent** | Codex、WorkBuddy 等本地/外部 Coding Agent 的发现、准备、状态与切换 | **不是聊天页**，不嵌内置 Assistant |
+| **画布 Canvas** | GenAI 生成与 Workflow 基本盘：节点、素材、连线、生成与版本 | 当前主要创作面 |
+| **逆向 Reverse** | 参考视频逆向拆解（Script、转写证据、对齐、Timeline），经 `workflow.apply` 显式“转为画布”。规划中（设计目标，尚不可用）：演进为全能助手工作区，Agent 在画布上可见地工作 | 不是第二份 Workflow 权威；不是只有聊天的页面 |
+| **Agent** | Agent 连接与状态：Codex、WorkBuddy 等本地/外部 Coding Agent 的发现、准备、状态与切换 | **不是聊天页**，不嵌内置 Assistant |
 
-Canvas / Reverse 旁边共享右侧 contextual drawer：**Assistant / Context / History**。Assistant 是 Flovart 内置助手；它不拥有比外部 Agent 更高的工具权限，也不承担 Host 连接管理。
+Canvas 旁边有右侧 contextual drawer：**Assistant / Context / History**。Assistant 是 Flovart 内置助手；它不拥有比外部 Agent 更高的工具权限，也不承担 Host 连接管理。
 
 这套 IA 以当前顶栏和运行代码为准。旧的“Agent full-page chat workspace”与“Agent 只剩 global drawer”都已归档。
 
@@ -34,7 +34,7 @@ Codex、Claude Code、OpenCode、WorkBuddy、TeleAgent 的真实支持级别分�
 
 Canvas 支持图片、视频、音频、文本与配置等 Workflow 节点，以及引用、连线、局部媒体工具和可见结果。
 
-Table 提供结构化媒体处理视图；其结果通过明确 commit 回到 Workflow 或素材库。Table 不与 Canvas 隐式双写状态。
+逆向只通过一次明确的 `workflow.apply`（子画布节点）写入 Canvas，不与 Canvas 隐式双写状态。
 
 ## Provider 与本地数据
 

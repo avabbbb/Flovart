@@ -1,6 +1,6 @@
 // 统一的 SSE 读取（L2 传输层）：按空行分块（兼容 \n\n 与 \r\n\r\n）、跨 read 拼接、容忍 `data:` 无空格、
 // 跳过注释行与 [DONE]。只负责切分事件，不认识任何供应商字段。
-// 见 docs/design/32-stream-usage.zh-CN.md。
+// 见 docs/design/13-generation-runtime.md §6.1。
 
 export interface SseEvent {
     event?: string;

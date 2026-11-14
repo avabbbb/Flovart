@@ -60,7 +60,7 @@ title: 后续待办
 - [ ] session-capture runner（M4）：本轮未实现（子代理网络失败，无残留代码）。照 real-provider capture 导入真实会话并产出 `flovartClaim`，注册到 `RUNNER_NAMES` 后再加回 schema 的 `allowedSurfaces` / `runnerScope` 枚举。
 - [ ] `eval/tasks/native-effects/` 与 `eval/graders/nativeEffects/` 保持预留：接入真实 AE/PR 宿主后可断言保存/重开/导出前的持久化，不做无宿主也能通过的占位任务。
 - [ ] 用真实付费 Provider 跑 provider suite 的已批准路径，替换 Fake Provider 语义；真实验证扣费、429、提交未知与取消。
-- [ ] 媒体与 Table：按实际需求推进，不因 benchmark 建设而扩充范围。
+- [ ] 媒体与逆向：按实际需求推进，不因 benchmark 建设而扩充范围。
 
 ## 精简实现
 
@@ -75,8 +75,8 @@ title: 后续待办
 - [ ] 现有媒体操作：补齐图片处理等尚未贯通的实际入口，统一来源与版本；减少重复 Prompt、引用数组和多处 Provider 参数处理。
 - [ ] 大图性能（剩余）：缩略图按需生成与离屏播放器暂停继续按实际性能问题优化；不先增加可替换画布端口或语义 LOD 平台。
 - [ ] Config 节点删除、Scene Prediction 与音频生成继续留作后续需求，按具体任务分别验证，不阻塞原生效果。
-- [ ] Table 主体仍待实现：先输入→处理→输出最小节点图；人物抠图、深度/结构参考、风格化、视频批处理和故事版按真实需求逐项推进，不一次建全套算法链。
-- [ ] Table 与 Workflow 用明确素材引用和导入交接，保持各自图与历史；大文件需要进度、取消和内存限制。
+- [ ] 逆向演进为全能助手（[01 交互设计](../../../design/01-interaction.md) §11–§12）：prompt 首页、画布上可见的多 Agent 光标、docked 侧栏 trace / 计划 / 审批、预览与版本对比；Hypit 式拆解收为工具与面板。依赖 [16 号提案](../../../design/16-agent-video-pipeline.md) 的 run / trace。
+- [ ] 逆向与 Canvas 用同一组 `workflow.*` 命令与明确素材引用交接，保持单一 Workflow 权威；大文件需要进度、取消和内存限制。
 - [ ] Agent 空间中接入真实外部对话/任务/产物回执，保持外部 Agent 为主入口；内置 Assistant 继续保持可选，不新增重复控制面或第二套主记忆。
 - [ ] 保留现有 Production Skill、VOX、已批准参考图与局部重跑能力；后续只补实际用到的步骤，不以完整成片平台为本轮前置。
 - [ ] ProductionTask 继续补齐跨会话 checkpoint、恢复后的真实 scheduler tracer 与任务中心，不复制 Workflow 状态。

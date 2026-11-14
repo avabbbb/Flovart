@@ -1,7 +1,7 @@
 # 提案：Agent 驱动的产品宣传片流水线（Agent Video Pipeline）
 
-> 状态：**PROPOSAL**（2026-11-13）。本文是提案，不是 current truth；被接受后按 AGENTS.md §9 蒸馏进 [00 总体设计](00-overview.md)、[12 Agent](12-agent.md)、[13 Generation & Runtime](13-generation-runtime.md)、[10 Canvas / Workflow](10-canvas-workflow.md)，再归档本文。
-> **实施进度（2026-11-14）**：P0 的工具层与 trace 已在 `main` 实现，并用 Fake TTS + fixture 转写 + 真实 ffmpeg 渲染端到端跑通（见 §12）；trace 表已迁入 Runtime 共用的 `flovart-state.db`（migration 5），Canvas 抽屉 run 卡片与画布版本分组已上线；真实 Provider 仍未完成，本文仍是提案。
+> 状态：**PROPOSAL**（2026-11-13；§6 放置同日修订为“逆向 = 全能助手主场”）。本文是提案，不是 current truth；被接受后按 AGENTS.md §9 蒸馏进 [00 总体设计](00-overview.md)、[12 Agent](12-agent.md)、[13 Generation & Runtime](13-generation-runtime.md)、[10 Canvas / Workflow](10-canvas-workflow.md)，再归档本文。
+> **实施进度（2026-11-14）**：P0 的工具层与 trace 已在 `main` 实现，并用 Fake TTS + fixture 转写 + 真实 ffmpeg 渲染端到端跑通（见 §12）；trace 表已迁入 Runtime 共用的 `flovart-state.db`（migration 5），Canvas 抽屉 run 卡片与画布版本分组已上线（按 §6 修订，抽屉卡片保留为轻量入口，逆向侧栏与 Agent 光标尚未实现）；真实 Provider 仍未完成，本文仍是提案。
 > 标注约定沿用总纲：**已实现** = 代码在主干；**已验证** = 有 Support Matrix 证据；**设计目标** = 尚未实现；**假设** = 待真实环境确认。本文“Flovart 今天”一列全部来自 2026-11-13 `main`（`b92e29b`）真实代码核对，不来自旧文档。
 
 ## 0. 一句话
@@ -151,7 +151,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 ### 4.4 重试与恢复
 
 - Runtime 任务沿用现有语义：UI 关闭不取消；重启先恢复；`unknown_submit` 先查询不重提。
-- 页面刷新后：Assistant 读取 `pipeline.run.get`，从最后一个未完成 Step 继续；已完成 Step 不重放（幂等键命中返回原结果）。
+- 页面刷新后：逆向读取 `pipeline.run.get`，从最后一个未完成 Step 继续；已完成 Step 不重放（幂等键命中返回原结果）。
 - 晚到结果作为新产物挂在原 Step 上，不覆盖用户已选版本。
 
 ## 5. 素材管理与归档
@@ -163,34 +163,49 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 - **归档**（`run.archive`）：在用户选定目录生成 `<run 名>/final/`、`spec/`（各版合成 spec JSON）、`stems/`（voice / music / sfx）、`rejected/`、`reviews.md`、`manifest.json`（sha256 清单）。归档复制字节；画布与 Runtime 只存引用。
 - 用户授权文件夹仍是引用语义（`local-folder:<folderId>/<相对路径>`），进入 run 时由 `asset.import` 生成指纹，文件变化时提示重新定位。
 
-## 6. 放在哪里：对话、Agent 页还是 Reverse
+## 6. 放在哪里：逆向（全能助手）是主场
+
+> **2026-11-13 修订**：本节原结论“在 Canvas 的 Assistant 抽屉里发起和驱动 run”已被 2026-11-13 的产品放置决定取代。下文为现行方案；原结论与代码依据保留在 §6.4 作为历史，不再生效。产品地图见 [00](00-overview.md) §3.1，交互见 [01](01-interaction.md) §11–§12。
 
 ### 6.1 结论
 
-**在 Canvas 的 Assistant 抽屉里发起和驱动 run**；Agent 页保持连接 / Runtime / 模型中心；Reverse 保持参考片拆解，并能把拆解结果交给 run 作为输入。代码证据支持这个结论，没有发现更强的反向证据。
+- **逆向 Reverse（顶栏中间，全能助手）是 run 的主场**：prompt 首页发起（可拖入参考视频）；run 开始后主体是画布（与 Canvas 同一 Workflow），画布本身是 Agent 的工具之一——`workflow.inspect / apply / node.run / viewport.set` 以带标签的 Agent 光标可见地执行；trace、计划 / 待办与审批在右侧 docked 侧栏；评审修补以版本 v1…vN 呈现。
+- **画布 Canvas**：GenAI 生成与 Workflow 基本盘；被 run 调用；节点上带 `runId` / `version` 与 `origin=agent`。
+- **Agent 页**：供应 run 使用的 Agent、模型 / Provider 路由与 Runtime 健康；不放对话、不放 run 编辑。
+- **Canvas Assistant 抽屉**：保留为轻量上下文入口（就地问答、单步操作）；多步请求或已有 run 时显示 run 条与“在逆向中继续”，切换后进入**同一个 run**（同一 runId，不复制会话）。
+- **逆向拆解**（Hypit 式转写 / 对齐 / timeline）是 run 的一组工具和侧栏中的一个面板，不再是独立工作台；“用作宣传片参考”即把参考视频拖入 prompt 首页。
 
-### 6.2 代码依据
+### 6.2 为何改变（相对原抽屉方案）
 
-| 证据 | 位置 | 说明 |
-| --- | --- | --- |
-| 抽屉只在 Canvas / Reverse 打开 | `App.tsx`：`open={canvasView !== 'agent' && rightOpen}`，内含 `FlovartAgentPanel` | Assistant 本来就挂在可见工作面旁边 |
-| 抽屉已有“对话 / 连接指引 / 连接状态 / 运行日志”四个分区 | `components/agent/AgentDrawerSections.tsx` | run trace 自然落在“运行日志”分区，按 run 分组即可，不需新页面 |
-| 内置 Agent 内核按项目持有 | `services/browserAgentRuntime.ts` | run 与项目同生命周期；`agent.turn` 委派也走这里 |
-| Agent 页明确不含内置助手 | `components/agent/AgentWorkspace.tsx` 注释与 `AgentConnectionsPage`（DSH 连接步骤） | Agent 页是连接中心，放对话会违反 AGENTS.md 的全页聊天禁令 |
-| Reverse 已有 Script → 证据 → 对齐 → 字幕 → 合成的纯函数，以及“转为画布” | `services/reverse/*`、`services/reverse/canvas.ts` | 适合做参考片输入，不适合做第二个编排面 |
-| 生成结果、节点工具、看帧都以画布节点为单位 | `browserAgentKernel.ts` 工具定义 | 编排在画布上发生，用户随时能看到、能手改 |
+| 原方案的局限 | 新方案 |
+| --- | --- |
+| 抽屉宽度有限，trace + 计划 + 审批 + 对话 + 待处理卡挤在一列（见 01 §19.4 D10） | docked 侧栏可加宽、分区可见；画布占主体 |
+| run 的过程只在列表里，画布上的写入“突然出现” | 每次写入都是可见光标动作，trace 与元素双向高亮 |
+| 多 Agent / 外部 caller 无法区分谁在做什么 | 每个子 Agent / caller 一个带标签的光标与 trace 徽标 |
+| 与“全页聊天禁令”的边界不清 | 逆向是 prompt 优先的画布工作区（主体是画布与产物），不是只有对话的页面；AGENTS.md 规则相应改为“禁止只有聊天的整页” |
 
 ### 6.3 各面的职责
 
-- **Canvas + Assistant 抽屉（主场）**：对话发起 run；对话流里显示 run 卡片（当前步骤、第几轮、已花费、下一步待确认项）；“运行日志”分区按 run 显示 trace（Step 列表、版本、评审轮次，可点开对应节点 / 帧）；画布上是同一份可见生产状态（素材节点、各版成片分组）。外部 Agent 驱动时，抽屉只显示活动条与待确认项（交互设计 §6.2），对话留在外部 Agent。
-- **Agent 页（连接中心）**：Runtime 是否在线、ffmpeg / Node / Remotion 浏览器 / WhisperX 是否就绪、TTS / 视频 Provider 路由就绪、外部 Agent（Codex / Claude Code / DSH）连接。可选：只读的“最近 run”跳转列表（跳回对应 Canvas），**不放对话、不放 run 编辑**，P0 不做。
-- **Reverse**：拆解参考片；新增入口“用作宣传片参考”→ `pipeline.run.start(reference.reverseProjectId)`；拆出的镜头节奏、字幕密度、关键帧作为 brief 附件。
+- **逆向（主场）**：首页发起 run；侧栏“计划”显示 Step 清单与审批（预算一次确认）；“运行”显示 trace（Step、caller、版本、评审轮，点开定位到画布元素 / 帧）；“对话”是输入与 run 卡片；“逆向拆解”面板。外部 Agent 驱动时，其写入作为带 caller 徽标的 Step 与光标出现在逆向。
+- **Canvas**：同一份可见生产状态（素材节点、各版成片分组）；抽屉显示 run 条与跳转。
+- **Agent 页**：Runtime 是否在线、ffmpeg / Node / Remotion 浏览器 / WhisperX 是否就绪、TTS / 视频 Provider 路由就绪、外部 Agent（Codex / Claude Code / DSH）连接；可选只读“最近 run”跳转（跳到逆向）。
+
+### 6.4 历史：原抽屉方案的代码依据（已被 6.1 取代）
+
+| 证据 | 位置 | 说明 |
+| --- | --- | --- |
+| 抽屉只在 Canvas / Reverse 打开 | `App.tsx`：`open={canvasView !== 'agent' && rightOpen}`，内含 `FlovartAgentPanel` | 新方案中该组件在逆向里以 docked 侧栏形态复用，在 Canvas 里保留轻量模式 |
+| 抽屉已有“对话 / 连接指引 / 连接状态 / 运行日志”四个分区 | `components/agent/AgentDrawerSections.tsx` | 新方案收为“计划 / 运行 / 对话 / 逆向拆解”，连接类分区移到 Agent 页 |
+| 内置 Agent 内核按项目持有 | `services/browserAgentRuntime.ts` | 不变：run 与项目同生命周期 |
+| Agent 页明确不含内置助手 | `components/agent/AgentWorkspace.tsx` | 不变 |
+| Reverse 已有 Script → 证据 → 对齐 → 字幕 → 合成的纯函数，以及“转为画布” | `services/reverse/*`、`services/reverse/canvas.ts` | 新方案中作为 run 的工具复用 |
+| 生成结果、节点工具、看帧都以画布节点为单位 | `browserAgentKernel.ts` 工具定义 | 不变：编排在画布上发生，用户随时能看到、能手改 |
 
 ## 7. Runtime：本机执行，云端只做生成
 
 ```text
 用户 PC
-├─ Flovart Web / Tauri 窗口：Canvas + Assistant 抽屉（内置 Agent 内核，LLM 走用户配置的文本路由）
+├─ Flovart Web / Tauri 窗口：逆向（全能助手）+ Canvas（内置 Agent 内核，LLM 走用户配置的文本路由）
 ├─ Local Runtime（Rust，src-tauri/src/runtime/）
 │   ├─ SQLite：tasks / events / production_* / run_steps / review_rounds / usage_ledger
 │   ├─ Artifact store（内容寻址）
@@ -209,14 +224,14 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 
 - pipeline 工具登记在同一注册表后，自动出现在 CLI（`tools/flovart/cli.js`）、stdio MCP（`tools/flovart/mcp-server.js`）与 DSH 插件（`dsh-plugin/src/tools.ts` 的 `flovart_*` 映射）中，参数与权限一致。
 - 推荐分工（对应参考文章）：**Codex / Claude Code** 在用户产品仓库里跑项目、注入演示数据、截图录屏、导出原生动画，然后 `asset.import` 到当前 run；**内置 Agent 或外部 Agent** 负责编排（脚本、配音、合成、评审、修补）。两者都写同一个 runId，trace 里 `caller` 区分是谁做的。
-- `agent.turn`：外部 Agent 可把“评审这一版”委派给内置 Assistant 跑一轮（现有：默认只读、只回摘要、同一 mutationId 幂等）。
+- `agent.turn`：外部 Agent 可把“评审这一版”委派给内置 Agent 跑一轮（现有：默认只读、只回摘要、同一 mutationId 幂等）。
 - Skill（`skills/flovart/`）新增一个 pipeline 命令文档，只写已登记、已验证的命令；`.agents/`、`.claude/` 投影随 canonical 同步，不手改。
 
 ## 9. 分阶段实施
 
 ### P0：本机最小端到端 trace（不依赖付费也能跑通）
 
-目标：内置 Agent 在 Canvas 抽屉里，从 brief + 两张授权文件夹里的真实截图出发，跑出 15–20 秒小样，并完成至少一轮“评审 → 定向修补 → 重渲染”。
+目标：内置 Agent 在逆向（全能助手）里，从 brief + 两张授权文件夹里的真实截图出发，跑出 15–20 秒小样，并完成至少一轮“评审 → 定向修补 → 重渲染”。
 
 1. **Trace 存储**：Runtime 新增 `run_steps`、`review_rounds` 迁移；命令边界自动记 Step；`pipeline.run.start` / `pipeline.run.get`。
 2. **内置 Agent 工具集**：run 激活时追加 pipeline 工具与 `task.get` / `task.cancel`、`asset.list`；系统提示词增加评审循环规则（findings 必须带时间点、锁不可越权、轮数上限）。
@@ -225,7 +240,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 5. **TTS**：MiniMax speech 路由 + Fake Provider fixture；输出时长与参数快照；`speechText` / `displayText` 分离。
 6. **时间戳**：`audio.transcribe`（WhisperX / hypit；测试用 fixture 证据）+ `timeline.align` 暴露。
 7. **评审工具**：`media.probe`（时长、黑帧、静音）、`media.frames`（支持 artifact 与两版对比）、`review.submit`。
-8. **抽屉 UI**：对话中的 run 卡片；“运行日志”分区按 run 分组显示 Step / 版本 / 评审轮；成片版本以节点分组出现在画布。
+8. **逆向 UI**：prompt 首页发起；docked 侧栏“计划 / 运行”按 run 显示 Step / 版本 / 评审轮；画布上以带标签光标执行写入；成片版本以节点分组出现在画布。
 9. **预算**：run 级预算一次确认（任务数 / 金额 / 最大轮数），复用 spend mandate 与 `run_budgets`。
 
 ### P1：贴近参考文章的完整制作
@@ -242,7 +257,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 
 前置：本机 Runtime 在线；Fake Provider 提供图像 / 视频 / TTS fixture；授权文件夹内有 2 张产品截图；转写用 fixture 证据（另做一次真实 WhisperX 冒烟）。
 
-1. 在 Canvas 抽屉输入 brief → 出现 run 卡片，预算确认一次，`pipeline.run.get` 返回 runId 与 brief artifact。
+1. 在逆向首页输入 brief（可拖入参考）→ 进入画布并出现计划卡，预算确认一次，`pipeline.run.get` 返回 runId 与 brief artifact。
 2. Agent 自主完成：`asset.import`（2 张截图）→ 三栏脚本（含 `speechText` / `displayText`）→ `audio.tts` → `audio.transcribe` → `timeline.align` → `composition.patch`（v1）→ `composition.render(still)` → `composition.render(draft)`。
 3. Agent 调用 `media.probe` 与 `media.frames` 后提交 `review.submit(v1, verdict=revise)`，至少一条 finding 带具体时间点（例如“第 8 秒结果停留不足 0.8 秒”）。
 4. Agent 调用 `composition.patch(baseVersion=v1)` 生成 v2：**只有** findings 涉及的片段变化，locked 片段的 spec 与 v1 字节一致。
@@ -250,7 +265,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 6. trace 中 Step 顺序完整、每步有 status 与产物；v1、v2 两版渲染都是带 sha256 的 durable artifact，都可在画布分组中打开；Fake 路径费用为 0 且 `usage_ledger` 记录与 Step 一致。
 7. **恢复**：在第 2 步渲染进行中刷新页面，run 从未完成 Step 继续，不重复提交已完成任务；对 `composition.render` 用同一 mutationId 重放返回同一 taskId。
 8. **边界**：缺 ffmpeg / Node / Remotion 浏览器时返回 `CAPABILITY_UNAVAILABLE`，run 进入 block 并提示诊断；超出 `maxRounds` 自动停下并说明。
-9. **同一操作外部可用**：用 CLI 对同一 runId 读取 `pipeline.run.get`、提交一条 `review.submit(reviewer=user)`，抽屉 trace 实时出现该条（caller=cli）。
+9. **同一操作外部可用**：用 CLI 对同一 runId 读取 `pipeline.run.get`、提交一条 `review.submit(reviewer=user)`，逆向 trace 实时出现该条（caller=cli）。
 
 ### 10.2 测试分层
 
@@ -259,7 +274,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 | 纯函数 | spec V2 修订与锁、diff、对齐映射、字幕定时 | 现有 Vitest 套件旁新增用例 |
 | Runtime | 迁移、Step 记录、幂等、恢复、`remotion` 引擎调用、probe | `cargo test --manifest-path src-tauri/Cargo.toml` |
 | 注册表 / 文档 | 新命令 schema、Skill 投影一致 | `npm run docs:check` |
-| 浏览器 | 抽屉 run 卡片、运行日志分组、画布版本分组，0 console error | Chrome for Testing + Playwright |
+| 浏览器 | 逆向首页 → 画布转场、侧栏 trace 分组、光标写入、画布版本分组，0 console error | Chrome for Testing + Playwright |
 | 端到端 | §10.1 全流程（Fake Provider） | 新增 e2e 脚本，产物放 `.tmp/` / `artifacts/` |
 | 真实 Provider | 一次 MiniMax TTS + 一次 Seedance 小样，用户批准的预算内；记录扣费、429、取消、unknown-submit | 人工 trial，证据进 Support Matrix |
 
@@ -272,7 +287,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 
 ## 11. 与现有规则的关系
 
-- 不新增顶级 surface，不引入 Agent 全页聊天、Tasks / Artifacts 工作区、Production Crew / Director / Operator 必经层；run 是一个可选的长流程容器，单步生成照旧不需要 run。
+- 不新增顶级 surface（复用顶栏中间的逆向），不引入只有聊天的整页、Tasks / Artifacts 工作区、Production Crew / Director / Operator 必经层；run 是一个可选的长流程容器，单步生成照旧不需要 run。
 - 不复制 Hypit 代码；转写走用户自装的 WhisperX / hypit CLI，结果作为 artifact 导回（Reverse 许可边界不变）。
 - 单一权威：trace 在 Runtime，Workflow 图在 Browser Workflow，会话在各自 Agent；彼此只存引用。
 - 对外口径：P0 完成前不宣传“一键成片”或“自动做完宣传片”；完成后也只能说“Agent 协助迭代制作”，并跟随 Support Matrix。
@@ -303,7 +318,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 ### 12.3 与提案的偏离和未完成项
 
 - **存储（已对齐 §4.2，2026-11-14）**：trace 表由 migration 5 建立，Rust Runtime 与 Node pipeline 执行同一份 SQL（`tools/flovart/contracts/runtime/migrations/0005_agent_pipeline.sql`）、共用 `runtime_migrations` 账本和 `flovart-state.db`。表名加 `pipeline_` 前缀，避免与 Runtime 的 `artifacts` 概念冲突；仍未复用 `production_*` / `usage_ledger`，预算走 `pipeline_usage_ledger`。写入只在 Node 命令边界，Rust 侧提供只读 `pipeline.run.get`，`npm run e2e:pipeline:parity` 校验两边输出逐字段一致。
-- **Canvas（2026-11-14）**：抽屉“运行日志”顶部新增“视频流水线”分区（`components/agent/AgentPipelineRunsSection.tsx`），每个 run 一张卡片：状态、head 版本、最近一轮评审、Step 数与失败数、blocker；展开看逐步 trace（tool / caller / 状态 / 错误码 / 重试次数）、各版本的锁定片段与结论、可继续的 Step。“放到画布”把每个版本最好的一份视频渲染（final 优先于 draft，跳过 rejected 与单帧 still）放进同一个自动批次 `pipeline-<runId>`（`batchIndex = 版本号 - 1`），叠放主图指向最新版本；已在画布上的 artifact 不重复插入。数据只读取本机 agent 的 `GET /pipeline/*`。
+- **Canvas（2026-11-14）**：抽屉“运行日志”顶部新增“视频流水线”分区（`components/agent/AgentPipelineRunsSection.tsx`），每个 run 一张卡片：状态、head 版本、最近一轮评审、Step 数与失败数、blocker；展开看逐步 trace（tool / caller / 状态 / 错误码 / 重试次数）、各版本的锁定片段与结论、可继续的 Step。“放到画布”把每个版本最好的一份视频渲染（final 优先于 draft，跳过 rejected 与单帧 still）放进同一个自动批次 `pipeline-<runId>`（`batchIndex = 版本号 - 1`），叠放主图指向最新版本；已在画布上的 artifact 不重复插入。数据只读取本机 agent 的 `GET /pipeline/*`。按 §6 修订，这里是 Canvas 侧的轻量入口；“在逆向中继续”与逆向 docked 侧栏尚未实现。
 - **Remotion 三轨（2026-11-14）**：ProductionSpec V1 增加可选 `texts` / `captions` / `audio`（帧为单位），`components/reverse/ProductionVideo.tsx` 绘制文字层（top 10% / center / bottom 底边 78%）、底部字幕（底边 88%、半透明底框）与音频（music 在 voice 出声帧闪避到 25%，增益封顶 0 dB）；字体栈中文优先（Noto CJK / 苹方 / 雅黑）。本地 artifact 链接进 bundle 的 `publicDir`，以 `static:<文件名>` 经 `staticFile` 供给。`npm run e2e:pipeline:remotion` 用真实 run 的 v2 spec 出 540×960 draft，检查音频流、时长与缩放并截字幕帧和文字帧。
 - **capture.ui 与 MCP（2026-11-14）**：`capture.ui`（`tools/flovart/pipeline/capture.js`）只开 localhost / 回环地址或授权文件夹内的 `file://`，每个 `goto` 步骤同样校验；启动浏览器前要 `confirmed: true`。浏览器依次取 `FLOVART_CAPTURE_BROWSER`、Playwright 自带 Chromium、Remotion 已下载的 headless shell。截图为 PNG；录屏用 CDP screencast 收带时间戳的帧，本机 ffmpeg 按真实间隔拼成 30fps H.264 MP4（不依赖 Playwright 自带 ffmpeg）。`npm run e2e:pipeline:capture` 14 项检查。stdio MCP（`tools/flovart/mcp-server.js`）把 14 条 pipeline 命令投影为 `flovart_<命令>` 工具，参数 schema 来自注册表，`agentIdentity` 记为 Step 的 caller；Skill 增加 `commands/pipeline.md`。
 - **CJK 字体（2026-11-14）**：`resolveFontInfo` 依次取 `FLOVART_FONT_FILE` → 已知中文字体路径（雅黑 / 苹方 / 冬青 / Noto CJK / 思源 / 文泉驿）→ `fc-list :lang=zh` 选无衬线常规体 → 拉丁兜底；要画的文字含中日韩字符却只剩拉丁兜底时报 `CAPABILITY_UNAVAILABLE`（capability `font`，附安装提示），不再渲染方框。Remotion 引擎把同一字体文件放进 publicDir 以 `FontFace` 嵌入（`delayRender` 等就绪，加载失败中止），两条引擎用同一字体、不依赖渲染机的浏览器字体。

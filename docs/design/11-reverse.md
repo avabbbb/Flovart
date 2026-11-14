@@ -1,10 +1,20 @@
 # 模块：Reverse（逆向）
 
-> 状态：**Current truth**（2026-11-05 由 Table 改为 Reverse；主体为设计目标，已实现部分逐项标注）。总纲见[总体设计](00-overview.md)，交互规则见[交互设计](01-interaction.md)。
+> 状态：**Current truth**（2026-11-05 由 Table 改为 Reverse；2026-11-13 定位改为“全能助手”，逆向拆解降为其工具与面板；主体为设计目标，已实现部分逐项标注）。总纲见[总体设计](00-overview.md)，交互规则见[交互设计](01-interaction.md)。
 
-## 1. 职责
+## 0. 定位（2026-11-13 定案）
 
-Reverse 占据原 Table 的顶栏位置，是**按 Hypit 代码架构与功能复刻**的视频逆向工作台：把一条参考（爆款）视频拆成 Script → 转写证据 → 对齐 → Timeline → 字幕 / 视觉 / 音频轨，再用用户自己的数字人角色与素材批量生成变体。
+顶栏中间的 **逆向 Reverse** 是**全能助手**：强模型（如 Opus 级）把电脑与画布当工具来用的多 Agent 工作区。首页是 prompt 优先入口（“今天想做点什么？”，可拖入参考视频）；run 开始后主体是画布（与 Canvas 同一 Workflow），每次 `workflow.*` 调用都以带标签的 Agent 光标可见地执行；trace、计划 / 待办与审批在右侧 docked 侧栏；评审修补以版本 v1…vN 呈现。完整交互见 [01 交互设计](01-interaction.md) §11–§12，视觉见 [DESIGN.md](DESIGN.md)，run / trace 数据模型见 [16（PROPOSAL）](16-agent-video-pipeline.md)。
+
+下面 §1–§5 描述的 Hypit 式逆向拆解**保留为全能助手的一组工具和侧栏中的一个面板**，不再是独立工作台：
+- 工具：转写 → 对齐 → Timeline → 字幕 / 视觉 / 音频轨，各自作为 run 的 Step 出现在 trace；“转为 / 同步到画布”是其中一个写入工具（仍是一次 `workflow.apply`）。
+- 面板：侧栏“逆向拆解”分区显示 Script、转写证据、对齐与 Timeline；点击片段高亮画布上对应元素。
+- 现状：代码仍是独立工作台 `components/reverse/ReverseWorkbench.tsx`（Script、对齐、预览）；迁移为“首页 + 画布 + 侧栏面板”是设计目标，迁移期间工作台可作为面板内容复用，不新增第二套数据模型。
+- 名称：顶栏保持 **逆向 / Reverse**（不改名；如需改名另行提案）。
+
+## 1. 逆向拆解职责
+
+逆向拆解是**按 Hypit 代码架构与功能复刻**的视频逆向能力（原 Table 的位置）：把一条参考（爆款）视频拆成 Script → 转写证据 → 对齐 → Timeline → 字幕 / 视觉 / 音频轨，再用用户自己的数字人角色与素材批量生成变体。
 
 在 Hypit 之上的二次开发：**一个逆向工程可一键转成 Canvas 上的子画布节点**。子画布里是镜头、台词、参考帧与生成节点；双击子画布回到 Reverse 视图。Reverse 与 Canvas 通过同一 `workflow.apply` mutation 边界联动，不形成第二份 Workflow 权威。
 
@@ -30,13 +40,13 @@ Reverse 占据原 Table 的顶栏位置，是**按 Hypit 代码架构与功能�
 
 纯函数层不依赖 React / store；UI 只消费这些函数的结果。
 
-## 4. 界面（对齐 Hypit Studio）
+## 4. 拆解面板（对齐 Hypit Studio；在全能助手侧栏中呈现）
 
 - 左：库（Source 参考视频与脚本 / Tasks 生成任务 / Artifacts 产物网格）。
 - 中：参考视频预览 + 帧对齐播放头。
 - 下：时间线 lane：每个 Projection 一条（Segment 行 + 词证据行）、公共 Instants 行、字幕 / 视觉 / 音频轨。
 - 右：Inspector，编辑字段回写 Script / 工程状态并重新对齐。
-- 顶部主 CTA：**转为画布**（已转过则为**同步到画布** / **在画布中打开**）。
+- 顶部主 CTA：**转为画布**（已转过则为**同步到画布** / **在画布中打开**）。在全能助手中，上述布局收进侧栏“逆向拆解”分区（库与 Inspector 折叠为抽屉），预览复用画布上的预览播放器（01 §12.6）。
 
 ## 5. 与 Canvas 联动
 

@@ -51,6 +51,6 @@ TeleAgent 等 MCP Host 只有完成真实客户端导入与 tracer 后才能升�
 
 顶栏 Agent 页负责 Host discovery / prepare / status / switch。
 
-Canvas/Table 右侧 Assistant 是 Iris 内置助手。二者不复制 Host picker、会话或 Context/History。
+Canvas 右侧 Assistant 是 Flovart 内置助手。Agent 页与 Assistant 不互相复制 Host picker、会话或 Context/History。
 
 切换 Agent 只交接显式目标、素材与 operation result，不迁移账号、隐藏上下文或假装会话完全相同。
