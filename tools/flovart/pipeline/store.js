@@ -5,7 +5,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { extname, join } from 'node:path';
+import { dirname, extname, join } from 'node:path';
+import { PIPELINE_MIGRATION_SQL as MIGRATION_SQL, PIPELINE_MIGRATION_VERSION } from './schema.js';
 
 // node:sqlite 在 Node 22 仍打印 ExperimentalWarning；只吞这一条，其它警告照常输出。
 const originalEmitWarning = process.emitWarning;
@@ -17,118 +18,35 @@ process.emitWarning = function emitWarning(warning, ...rest) {
 const { DatabaseSync } = await import('node:sqlite');
 process.emitWarning = originalEmitWarning;
 
-export function defaultPipelineHome() {
-  if (process.env.FLOVART_PIPELINE_HOME) return process.env.FLOVART_PIPELINE_HOME;
-  const base = process.env.LOCALAPPDATA || join(homedir(), '.flovart');
-  return join(base, 'Flovart', 'pipeline');
+/** Tauri app_data_dir（identifier com.flovart.desktop）：与桌面 Runtime 共用 flovart-state.db。 */
+export function runtimeAppDataDir() {
+  const identifier = 'com.flovart.desktop';
+  if (process.platform === 'win32') return join(process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'), identifier);
+  if (process.platform === 'darwin') return join(homedir(), 'Library', 'Application Support', identifier);
+  return join(process.env.XDG_DATA_HOME || join(homedir(), '.local', 'share'), identifier);
 }
 
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS pipeline_runs (
-  id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL,
-  title TEXT NOT NULL,
-  status TEXT NOT NULL CHECK(status IN ('active', 'blocked', 'passed', 'archived', 'stopped')),
-  brief_json TEXT NOT NULL,
-  brief_artifact_id TEXT,
-  budget_json TEXT NOT NULL,
-  reference_json TEXT,
-  blocker_json TEXT,
-  head_version INTEGER NOT NULL DEFAULT 0,
-  created_by TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS run_steps (
-  id TEXT PRIMARY KEY,
-  run_id TEXT NOT NULL REFERENCES pipeline_runs(id),
-  seq INTEGER NOT NULL,
-  tool TEXT NOT NULL,
-  caller TEXT NOT NULL,
-  mutation_id TEXT,
-  args_digest TEXT NOT NULL,
-  args_json TEXT NOT NULL,
-  status TEXT NOT NULL CHECK(status IN ('queued', 'running', 'succeeded', 'failed', 'canceled', 'unknown_submit')),
-  paid INTEGER NOT NULL DEFAULT 0,
-  cost_micros INTEGER NOT NULL DEFAULT 0,
-  artifact_ids_json TEXT NOT NULL DEFAULT '[]',
-  result_json TEXT,
-  error_json TEXT,
-  attempts INTEGER NOT NULL DEFAULT 1,
-  started_at INTEGER NOT NULL,
-  finished_at INTEGER,
-  UNIQUE(run_id, seq)
-);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_run_steps_mutation ON run_steps(run_id, tool, mutation_id) WHERE mutation_id IS NOT NULL;
-CREATE TABLE IF NOT EXISTS artifacts (
-  id TEXT PRIMARY KEY,
-  sha256 TEXT NOT NULL,
-  run_id TEXT,
-  step_id TEXT,
-  version INTEGER,
-  kind TEXT NOT NULL,
-  mime TEXT,
-  ext TEXT NOT NULL,
-  bytes INTEGER NOT NULL,
-  path TEXT NOT NULL,
-  tags_json TEXT NOT NULL DEFAULT '[]',
-  media_json TEXT,
-  source_json TEXT,
-  params_json TEXT,
-  rejected INTEGER NOT NULL DEFAULT 0,
-  rejected_reason TEXT,
-  created_at INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_artifacts_run ON artifacts(run_id, created_at);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_artifacts_run_sha ON artifacts(IFNULL(run_id, ''), sha256, kind);
-CREATE TABLE IF NOT EXISTS spec_versions (
-  run_id TEXT NOT NULL REFERENCES pipeline_runs(id),
-  version INTEGER NOT NULL,
-  parent_version INTEGER,
-  spec_json TEXT NOT NULL,
-  spec_sha256 TEXT NOT NULL,
-  diff_json TEXT NOT NULL,
-  step_id TEXT,
-  created_at INTEGER NOT NULL,
-  PRIMARY KEY(run_id, version)
-);
-CREATE TABLE IF NOT EXISTS renders (
-  id TEXT PRIMARY KEY,
-  run_id TEXT NOT NULL REFERENCES pipeline_runs(id),
-  version INTEGER NOT NULL,
-  preset TEXT NOT NULL,
-  at_sec REAL,
-  engine TEXT NOT NULL,
-  artifact_id TEXT NOT NULL,
-  probe_json TEXT,
-  step_id TEXT,
-  created_at INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS review_rounds (
-  id TEXT PRIMARY KEY,
-  run_id TEXT NOT NULL REFERENCES pipeline_runs(id),
-  round INTEGER NOT NULL,
-  version INTEGER NOT NULL,
-  reviewer TEXT NOT NULL,
-  caller TEXT NOT NULL,
-  verdict TEXT NOT NULL CHECK(verdict IN ('pass', 'revise', 'block')),
-  findings_json TEXT NOT NULL,
-  fixed_by_version INTEGER,
-  step_id TEXT,
-  created_at INTEGER NOT NULL,
-  UNIQUE(run_id, round)
-);
-CREATE TABLE IF NOT EXISTS run_usage_ledger (
-  entry_id INTEGER PRIMARY KEY AUTOINCREMENT,
-  run_id TEXT NOT NULL REFERENCES pipeline_runs(id),
-  step_id TEXT NOT NULL,
-  entry_kind TEXT NOT NULL CHECK(entry_kind IN ('reserve', 'confirm', 'release')),
-  amount_micros INTEGER NOT NULL,
-  tasks INTEGER NOT NULL DEFAULT 0,
-  note TEXT,
-  created_at INTEGER NOT NULL
-);
-`;
+/**
+ * 默认与桌面 Runtime 共用数据库：<app_data_dir>/flovart-state.db，artifact 放 <app_data_dir>/pipeline/。
+ * FLOVART_PIPELINE_HOME 用于测试或隔离：数据库与 artifact 都放进该目录。
+ */
+export function defaultPipelinePaths() {
+  if (process.env.FLOVART_PIPELINE_HOME) return pipelinePathsForHome(process.env.FLOVART_PIPELINE_HOME);
+  const appData = runtimeAppDataDir();
+  return { home: join(appData, 'pipeline'), databasePath: join(appData, 'flovart-state.db') };
+}
+
+export function pipelinePathsForHome(home) {
+  return { home, databasePath: join(home, 'flovart-state.db') };
+}
+
+export function defaultPipelineHome() {
+  return defaultPipelinePaths().home;
+}
+
+// 表结构只有一份：contracts/runtime/migrations/0005_agent_pipeline.sql，Rust Runtime 用同一份做 migration 5；
+// schema.js 是它的逐字副本（sidecar 单文件打包不能读相对路径）。
+export { PIPELINE_MIGRATION_VERSION };
 
 const json = value => (value === undefined ? null : JSON.stringify(value));
 const parse = (value, fallback = null) => {
@@ -162,15 +80,31 @@ const MIME_BY_EXT = {
 };
 
 export class PipelineStore {
-  constructor({ home = defaultPipelineHome() } = {}) {
+  constructor({ home, databasePath } = {}) {
+    const paths = home ? { ...pipelinePathsForHome(home), ...(databasePath ? { databasePath } : {}) } : defaultPipelinePaths();
+    home = paths.home;
     this.home = home;
+    this.databasePath = paths.databasePath;
     this.artifactRoot = join(home, 'artifacts');
     this.scratchRoot = join(home, 'scratch');
     mkdirSync(this.artifactRoot, { recursive: true });
     mkdirSync(this.scratchRoot, { recursive: true });
-    this.db = new DatabaseSync(join(home, 'pipeline.sqlite'));
+    mkdirSync(dirname(this.databasePath), { recursive: true });
+    this.db = new DatabaseSync(this.databasePath);
     this.db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
-    this.db.exec(SCHEMA);
+    this.migrate();
+  }
+
+  /** 与 Rust RuntimeStore 相同的迁移账本：runtime_migrations(version, applied_at)。 */
+  migrate() {
+    this.db.exec('CREATE TABLE IF NOT EXISTS runtime_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)');
+    const applied = this.db.prepare('SELECT 1 FROM runtime_migrations WHERE version = ?').get(PIPELINE_MIGRATION_VERSION);
+    if (applied) return;
+    this.transaction(() => {
+      if (this.db.prepare('SELECT 1 FROM runtime_migrations WHERE version = ?').get(PIPELINE_MIGRATION_VERSION)) return;
+      this.db.exec(MIGRATION_SQL);
+      this.db.prepare('INSERT INTO runtime_migrations (version, applied_at) VALUES (?, ?)').run(PIPELINE_MIGRATION_VERSION, Date.now());
+    });
   }
 
   close() { this.db.close(); }
@@ -222,6 +156,15 @@ export class PipelineStore {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
+  }
+
+  /** 最近的 run（UI 运行日志分组用）；projectId 可选。 */
+  listRuns({ projectId, limit = 20 } = {}) {
+    const capped = Math.min(Math.max(Number(limit) || 20, 1), 100);
+    const rows = projectId
+      ? this.db.prepare('SELECT id FROM pipeline_runs WHERE project_id = ? ORDER BY updated_at DESC LIMIT ?').all(projectId, capped)
+      : this.db.prepare('SELECT id FROM pipeline_runs ORDER BY updated_at DESC LIMIT ?').all(capped);
+    return rows.map(row => this.getRun(row.id));
   }
 
   updateRun(runId, patch) {
@@ -318,7 +261,7 @@ export class PipelineStore {
   putFile(sourcePath, { runId = null, stepId = null, version = null, kind, tags = [], media = null, source = null, params = null, move = false, ext } = {}) {
     if (!existsSync(sourcePath)) throw Object.assign(new Error(`文件不存在：${sourcePath}`), { code: 'ASSET_MISSING' });
     const sha256 = sha256File(sourcePath);
-    const existing = this.db.prepare(`SELECT id FROM artifacts WHERE IFNULL(run_id, '') = ? AND sha256 = ? AND kind = ?`).get(runId ?? '', sha256, kind);
+    const existing = this.db.prepare(`SELECT id FROM pipeline_artifacts WHERE IFNULL(run_id, '') = ? AND sha256 = ? AND kind = ?`).get(runId ?? '', sha256, kind);
     if (existing) return { ...this.getArtifact(existing.id), deduplicated: true };
     const extension = (ext || extname(sourcePath) || '.bin').toLowerCase();
     const dir = join(this.artifactRoot, sha256.slice(0, 2));
@@ -330,7 +273,7 @@ export class PipelineStore {
       } else copyFileSync(sourcePath, target);
     }
     const id = `art_${sha256.slice(0, 12)}_${randomUUID().slice(0, 8)}`;
-    this.db.prepare(`INSERT INTO artifacts
+    this.db.prepare(`INSERT INTO pipeline_artifacts
       (id, sha256, run_id, step_id, version, kind, mime, ext, bytes, path, tags_json, media_json, source_json, params_json, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(id, sha256, runId, stepId, version, kind, MIME_BY_EXT[extension] || 'application/octet-stream', extension,
@@ -345,7 +288,7 @@ export class PipelineStore {
   }
 
   getArtifact(artifactId) {
-    const row = this.db.prepare('SELECT * FROM artifacts WHERE id = ?').get(artifactId);
+    const row = this.db.prepare('SELECT * FROM pipeline_artifacts WHERE id = ?').get(artifactId);
     return row ? this.#artifact(row) : null;
   }
 
@@ -362,16 +305,16 @@ export class PipelineStore {
     if (runId) { clauses.push('run_id = ?'); values.push(runId); }
     if (kind) { clauses.push('kind = ?'); values.push(kind); }
     if (!includeRejected) clauses.push('rejected = 0');
-    const rows = this.db.prepare(`SELECT * FROM artifacts ${clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''} ORDER BY created_at`).all(...values);
+    const rows = this.db.prepare(`SELECT * FROM pipeline_artifacts ${clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''} ORDER BY created_at`).all(...values);
     return rows.map(row => this.#artifact(row)).filter(item => tags.every(tag => item.tags.includes(tag)));
   }
 
   updateArtifactMedia(artifactId, media) {
-    this.db.prepare('UPDATE artifacts SET media_json = ? WHERE id = ?').run(json(media), artifactId);
+    this.db.prepare('UPDATE pipeline_artifacts SET media_json = ? WHERE id = ?').run(json(media), artifactId);
   }
 
   rejectArtifacts(artifactIds, reason) {
-    const statement = this.db.prepare('UPDATE artifacts SET rejected = 1, rejected_reason = ? WHERE id = ?');
+    const statement = this.db.prepare('UPDATE pipeline_artifacts SET rejected = 1, rejected_reason = ? WHERE id = ?');
     for (const id of artifactIds) statement.run(reason, id);
   }
 
@@ -399,14 +342,14 @@ export class PipelineStore {
   // ---------- spec versions ----------
   insertVersion({ runId, version, parentVersion, spec, diff, stepId }) {
     const specJson = canonicalJson(spec);
-    this.db.prepare(`INSERT INTO spec_versions (run_id, version, parent_version, spec_json, spec_sha256, diff_json, step_id, created_at)
+    this.db.prepare(`INSERT INTO pipeline_spec_versions (run_id, version, parent_version, spec_json, spec_sha256, diff_json, step_id, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(runId, version, parentVersion ?? null, specJson, sha256Text(specJson), json(diff), stepId ?? null, Date.now());
     return this.getVersion(runId, version);
   }
 
   getVersion(runId, version) {
-    const row = this.db.prepare('SELECT * FROM spec_versions WHERE run_id = ? AND version = ?').get(runId, version);
+    const row = this.db.prepare('SELECT * FROM pipeline_spec_versions WHERE run_id = ? AND version = ?').get(runId, version);
     if (!row) return null;
     return {
       runId: row.run_id,
@@ -421,21 +364,21 @@ export class PipelineStore {
   }
 
   listVersions(runId) {
-    return this.db.prepare('SELECT version FROM spec_versions WHERE run_id = ? ORDER BY version').all(runId)
+    return this.db.prepare('SELECT version FROM pipeline_spec_versions WHERE run_id = ? ORDER BY version').all(runId)
       .map(row => this.getVersion(runId, row.version));
   }
 
   // ---------- renders ----------
   insertRender({ runId, version, preset, atSec, engine, artifactId, probe, stepId }) {
     const id = `render_${randomUUID()}`;
-    this.db.prepare(`INSERT INTO renders (id, run_id, version, preset, at_sec, engine, artifact_id, probe_json, step_id, created_at)
+    this.db.prepare(`INSERT INTO pipeline_renders (id, run_id, version, preset, at_sec, engine, artifact_id, probe_json, step_id, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(id, runId, version, preset, atSec ?? null, engine, artifactId, json(probe ?? null), stepId ?? null, Date.now());
     return id;
   }
 
   listRenders(runId) {
-    return this.db.prepare('SELECT * FROM renders WHERE run_id = ? ORDER BY created_at').all(runId).map(row => ({
+    return this.db.prepare('SELECT * FROM pipeline_renders WHERE run_id = ? ORDER BY created_at').all(runId).map(row => ({
       id: row.id,
       version: row.version,
       preset: row.preset,
@@ -486,12 +429,12 @@ export class PipelineStore {
 
   // ---------- usage ----------
   ledger(runId, { stepId, kind, amountMicros = 0, tasks = 0, note = null }) {
-    this.db.prepare(`INSERT INTO run_usage_ledger (run_id, step_id, entry_kind, amount_micros, tasks, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    this.db.prepare(`INSERT INTO pipeline_usage_ledger (run_id, step_id, entry_kind, amount_micros, tasks, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
       .run(runId, stepId, kind, amountMicros, tasks, note, Date.now());
   }
 
   spend(runId) {
-    const rows = this.db.prepare('SELECT entry_kind, SUM(amount_micros) AS amount, SUM(tasks) AS tasks FROM run_usage_ledger WHERE run_id = ? GROUP BY entry_kind').all(runId);
+    const rows = this.db.prepare('SELECT entry_kind, SUM(amount_micros) AS amount, SUM(tasks) AS tasks FROM pipeline_usage_ledger WHERE run_id = ? GROUP BY entry_kind').all(runId);
     const total = { reserve: { amount: 0, tasks: 0 }, confirm: { amount: 0, tasks: 0 }, release: { amount: 0, tasks: 0 } };
     for (const row of rows) total[row.entry_kind] = { amount: row.amount || 0, tasks: row.tasks || 0 };
     return {
@@ -500,7 +443,7 @@ export class PipelineStore {
       // 已预留但未确认/释放的部分（进行中的付费调用）。
       pendingMicros: Math.max(0, total.reserve.amount - total.confirm.amount - total.release.amount),
       pendingTasks: Math.max(0, total.reserve.tasks - total.confirm.tasks - total.release.tasks),
-      entries: this.db.prepare('SELECT * FROM run_usage_ledger WHERE run_id = ? ORDER BY entry_id').all(runId),
+      entries: this.db.prepare('SELECT * FROM pipeline_usage_ledger WHERE run_id = ? ORDER BY entry_id').all(runId),
     };
   }
 }

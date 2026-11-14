@@ -15,6 +15,9 @@ const MIGRATION_0001: &str = include_str!("migrations/0001_runtime_ledger.sql");
 const MIGRATION_0002: &str = include_str!("migrations/0002_production_plan.sql");
 const MIGRATION_0003: &str = include_str!("migrations/0003_production_execution.sql");
 const MIGRATION_0004: &str = include_str!("migrations/0004_agent_text_routes.sql");
+// Agent 视频流水线表与 Node `tools/flovart/pipeline/store.js` 共用同一份 SQL 与 runtime_migrations 账本。
+const MIGRATION_0005: &str =
+    include_str!("../../../tools/flovart/contracts/runtime/migrations/0005_agent_pipeline.sql");
 
 pub struct RuntimeStore {
     connection: Mutex<Connection>,
@@ -78,6 +81,7 @@ impl RuntimeStore {
             (2, MIGRATION_0002),
             (3, MIGRATION_0003),
             (4, MIGRATION_0004),
+            (5, MIGRATION_0005),
         ] {
             let applied = connection.query_row(
                 "SELECT EXISTS(SELECT 1 FROM runtime_migrations WHERE version = ?1)",
@@ -2033,6 +2037,11 @@ impl RuntimeStore {
             &task,
             &serde_json::to_value(runtime_task).map_err(store_unavailable)?,
         ))
+    }
+
+    pub fn get_pipeline_run(&self, run_id: &str, since: i64) -> Result<Value, RuntimeError> {
+        let connection = self.connection.lock();
+        super::pipeline_trace::read_trace(&connection, run_id, since)
     }
 
     pub fn get_workflow_projection(&self, project_id: &str) -> Result<Value, RuntimeError> {

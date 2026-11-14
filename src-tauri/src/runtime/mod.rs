@@ -7,6 +7,7 @@ mod discovery;
 mod error;
 mod events;
 mod google_veo;
+mod pipeline_trace;
 mod production;
 mod production_task;
 mod registry;
@@ -769,6 +770,27 @@ impl ProductionRuntime {
                         &normalized_args,
                     )
                     .and_then(to_value)
+            }
+            "pipeline.run.get" => {
+                let args = &envelope["args"];
+                validate_exact_args(args, &["runId", "since"])?;
+                let run_id = args
+                    .get("runId")
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.trim().is_empty())
+                    .ok_or_else(|| {
+                        RuntimeError::new("INVALID_ARGUMENT", "pipeline.run.get requires runId")
+                    })?;
+                let since = match args.get("since") {
+                    None | Some(Value::Null) => 0,
+                    Some(value) => value.as_i64().filter(|n| *n >= 0).ok_or_else(|| {
+                        RuntimeError::new(
+                            "INVALID_ARGUMENT",
+                            "pipeline.run.get since must be a non-negative integer",
+                        )
+                    })?,
+                };
+                self.store.get_pipeline_run(run_id, since)
             }
             "workflow.projection.get" => {
                 let args = &envelope["args"];

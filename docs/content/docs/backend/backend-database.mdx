@@ -71,14 +71,14 @@ Flovart Hub（`backend/` 目录）使用 PostgreSQL，GORM AutoMigrate 自动建
 
 ## 本机 Agent 视频流水线存储（不属于 Hub）
 
-`tools/flovart/pipeline/store.js` 在用户本机用 SQLite（`node:sqlite`）保存 Agent 视频流水线的 trace，和 Hub 的 PostgreSQL 无关，也不同步到云端。默认位置：Windows `%LOCALAPPDATA%/Flovart/pipeline`，其他系统 `~/.flovart/Flovart/pipeline`；`FLOVART_PIPELINE_HOME` 可覆盖。表在打开时 `CREATE TABLE IF NOT EXISTS` 建立。
+Agent 视频流水线的 trace 存在用户本机，和 Hub 的 PostgreSQL 无关，也不同步到云端。它与桌面 Production Runtime 共用同一个 `flovart-state.db`（`<app_data_dir>/flovart-state.db`，identifier `com.flovart.desktop`），表由 migration 5（`tools/flovart/contracts/runtime/migrations/0005_agent_pipeline.sql`）建立：Rust `RuntimeStore` 和 Node `tools/flovart/pipeline/store.js` 执行同一份 SQL，并共用 `runtime_migrations` 账本。Node pipeline 边界是唯一写入方；Rust Runtime 只通过 `pipeline.run.get` 读取，返回与 Node `Pipeline.trace()` 相同的 JSON（`npm run e2e:pipeline:parity` 校验）。产物文件放在 `<app_data_dir>/pipeline/`；`FLOVART_PIPELINE_HOME` 可把数据库和产物一起改到指定目录（测试与隔离用）。
 
 | 表 | 用途 | 关键字段 |
 | --- | --- | --- |
 | `pipeline_runs` | 一次制作 run | `id`、`project_id`、`status`（active / blocked / passed / archived / stopped）、`budget_json`、`blocker_json`、`head_version` |
 | `run_steps` | 命令边界自动记录的 Step | `run_id` + `seq` 唯一；`tool`、`caller`、`mutation_id`（`run_id, tool, mutation_id` 唯一）、`args_digest`、`status`、`attempts`、`artifact_ids_json` |
-| `artifacts` | 内容寻址产物 | `sha256`、`kind`、`path`、`media_json`、`params_json`、`rejected` |
-| `spec_versions` | 合成 spec 修订 | 主键 `run_id, version`；`parent_version`、`spec_sha256`、`diff_json` |
-| `renders` | 每个版本的渲染 | `version`、`preset`（still / draft / final）、`engine`、`artifact_id`、`probe_json` |
+| `pipeline_artifacts` | 内容寻址产物 | `sha256`、`kind`、`path`、`media_json`、`params_json`、`rejected` |
+| `pipeline_spec_versions` | 合成 spec 修订 | 主键 `run_id, version`；`parent_version`、`spec_sha256`、`diff_json` |
+| `pipeline_renders` | 每个版本的渲染 | `version`、`preset`（still / draft / final）、`engine`、`artifact_id`、`probe_json` |
 | `review_rounds` | 评审轮 | `run_id, round` 唯一；`reviewer`、`caller`、`verdict`、`findings_json`、`fixed_by_version` |
-| `run_usage_ledger` | run 级预算账本 | `entry_kind`（reserve / confirm / release）、`amount_micros`、`tasks` |
+| `pipeline_usage_ledger` | run 级预算账本 | `entry_kind`（reserve / confirm / release）、`amount_micros`、`tasks` |

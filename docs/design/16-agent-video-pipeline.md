@@ -1,7 +1,7 @@
 # 提案：Agent 驱动的产品宣传片流水线（Agent Video Pipeline）
 
 > 状态：**PROPOSAL**（2026-11-13）。本文是提案，不是 current truth；被接受后按 AGENTS.md §9 蒸馏进 [00 总体设计](00-overview.md)、[12 Agent](12-agent.md)、[13 Generation & Runtime](13-generation-runtime.md)、[10 Canvas / Workflow](10-canvas-workflow.md)，再归档本文。
-> **实施进度（2026-11-14）**：P0 的工具层与 trace 已在 `main` 实现，并用 Fake TTS + fixture 转写 + 真实 ffmpeg 渲染端到端跑通（见 §12）；Canvas 抽屉 UI、Rust Runtime 迁移与真实 Provider 仍未完成，本文仍是提案。
+> **实施进度（2026-11-14）**：P0 的工具层与 trace 已在 `main` 实现，并用 Fake TTS + fixture 转写 + 真实 ffmpeg 渲染端到端跑通（见 §12）；trace 表已迁入 Runtime 共用的 `flovart-state.db`（migration 5）；Canvas 抽屉 UI 与真实 Provider 仍未完成，本文仍是提案。
 > 标注约定沿用总纲：**已实现** = 代码在主干；**已验证** = 有 Support Matrix 证据；**设计目标** = 尚未实现；**假设** = 待真实环境确认。本文“Flovart 今天”一列全部来自 2026-11-13 `main`（`b92e29b`）真实代码核对，不来自旧文档。
 
 ## 0. 一句话
@@ -286,7 +286,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 | 部分 | 位置 | 说明 |
 | --- | --- | --- |
 | 命令边界与 trace | `tools/flovart/pipeline/index.js` | 每次命令自动写 Step（caller、argsDigest、mutationId、status、attempts、产物）；同 mutationId 同载荷重放原结果、不同载荷拒绝；进程中断后的 `running` / `unknown_submit` Step 由同一 mutationId 续跑，`pipeline.run.get` 返回 `resumeFrom` |
-| 持久层 | `tools/flovart/pipeline/store.js` | 本机 SQLite（`node:sqlite`）+ 内容寻址 artifact 目录（sha256） |
+| 持久层 | `tools/flovart/pipeline/store.js`、`src-tauri/src/runtime/pipeline_trace.rs` | 与 Runtime 共用 `flovart-state.db`（migration 5，`pipeline_*` 表）+ 内容寻址 artifact 目录（sha256）；Node 写，Rust `pipeline.run.get` 只读 |
 | 合成 spec V2 | `tools/flovart/pipeline/spec.js` | visual / text / captions / audio 四轨；`locked` 片段修改须显式 `unlock` + reason；修订绑定评审轮时只允许改 findings 涉及的片段（`PATCH_OUT_OF_SCOPE`）；`baseVersion` 过期返回 `VERSION_CONFLICT` |
 | 渲染 | `tools/flovart/pipeline/render.js` | 受控 ffmpeg filtergraph（镜头、文字、字幕、旁白、音乐 sidechain 闪避），preset still / draft / final；`final` 需要该版本已有 pass 评审；Remotion 引擎只画镜头，含文字 / 字幕 / 音频轨时返回 `CAPABILITY_UNAVAILABLE` |
 | 评审工具 | `media.js`、`review.js` | `media.probe`（时长、黑帧、静音、LUFS）、`media.frames`（≤6 帧，可与上一版并排）；`review.submit` 拒绝没有时间点 / 修法的 finding，Agent 评审前必须看过该版本的帧，重复 findings 返回 `REPEATED_FINDINGS`，超过 `maxRounds` 自动 block |
@@ -302,7 +302,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 
 ### 12.3 与提案的偏离和未完成项
 
-- **存储位置偏离 §4.2**：trace 存在 Node 侧 SQLite（`tools/flovart/pipeline/store.js`，Windows 默认 `%LOCALAPPDATA%/Flovart/pipeline`，其他系统 `~/.flovart/Flovart/pipeline`，可用 `FLOVART_PIPELINE_HOME` 改），不是 `src-tauri/src/runtime/migrations/` 下的 Rust 迁移，也没有复用 `production_*` / `usage_ledger` 表。接受提案时需要决定：迁入 Rust Runtime，或把 Node 侧定为 CLI / Agent 共用的本机权威。
+- **存储（已对齐 §4.2，2026-11-14）**：trace 表由 migration 5 建立，Rust Runtime 与 Node pipeline 执行同一份 SQL（`tools/flovart/contracts/runtime/migrations/0005_agent_pipeline.sql`）、共用 `runtime_migrations` 账本和 `flovart-state.db`。表名加 `pipeline_` 前缀，避免与 Runtime 的 `artifacts` 概念冲突；仍未复用 `production_*` / `usage_ledger`，预算走 `pipeline_usage_ledger`。写入只在 Node 命令边界，Rust 侧提供只读 `pipeline.run.get`，`npm run e2e:pipeline:parity` 校验两边输出逐字段一致。
 - **未做**：Canvas 抽屉 run 卡片与运行日志分组（§9 第 8 条）、画布版本分组、Remotion 文字 / 字幕 / 音频轨、`capture.ui`、MCP 投影、Skill 命令文档。
 - **未实测**：MiniMax TTS 与真实 WhisperX / hypit（只按文档形状实现）；没有 CJK 字体的 Linux 环境会回退到 DejaVu，中文字幕显示为方框，需设 `FLOVART_FONT_FILE`。
-- Rust 工具链未在本次环境运行，`cargo test` 未验证；Rust 端注册表只校验文档内 hash 自洽。
+- `cargo test --lib` 已在 Linux 沙箱运行（含 pipeline_trace 单测与 Node/Rust 一致性测试）。`rust-ini` 锁定到 0.21.1：0.21.3 给 `ParseOption` 加了字段，`tauri-plugin-deep-link` 2.6.2 会编译失败。

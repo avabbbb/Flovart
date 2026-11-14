@@ -275,7 +275,11 @@ export async function runPipelineTraceScenario({ outDir = join(ROOT, '.tmp', 'pi
   mkdirSync(outDir, { recursive: true });
   writeFileSync(join(outDir, 'trace.json'), JSON.stringify(trace, null, 2));
   writeFileSync(join(outDir, 'summary.json'), JSON.stringify(summary, null, 2));
+  // Rust Runtime 一致性检查（scripts/e2e-pipeline-parity.mjs）读取这两份文件。
+  const parity = { dbPath: join(home, 'flovart-state.db'), tracePath: join(outDir, 'trace.parity.json') };
+  writeFileSync(parity.tracePath, JSON.stringify(pipeline.trace(runId), null, 2));
   pipeline.close();
+  Object.assign(summary, parity);
   return summary;
 }
 

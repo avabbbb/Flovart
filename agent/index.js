@@ -1,4 +1,5 @@
 import http from 'node:http';
+import fs from 'node:fs';
 import { BootstrapCredentialError, BootstrapCredentialStore } from './bootstrap-credentials.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +10,7 @@ import { createFlovartAgentTools, createFlovartPipelineTools } from './tools.js'
 import { SkillRegistry, BUNDLED_SKILL_IDS } from './skill-registry.js';
 import { WorkflowAgentSession, WorkflowAgentSessionError } from './session.js';
 import { prepareAgentHostProjection } from './host-projection.js';
-import { importFlovartModule } from './flovart-modules.js';
+import { importFlovartModule, importFlovartPipelineModule } from './flovart-modules.js';
 import { ReceiptError, ReceiptStore } from './receipts.js';
 import { AgentCredentialStore, CredentialError } from './credentials.js';
 
@@ -329,6 +330,28 @@ export function startHttpServer() {
             return json(response, error.code === 'INVALID_INPUT' ? 400 : 503, { ok: false, error: error.toJSON() });
           }
           throw error;
+        }
+      }
+      // Agent 视频流水线：抽屉“运行日志”按 run 分组读取 trace；只读，写操作仍只走命令边界。
+      if (request.method === 'GET' && url.pathname.startsWith('/pipeline/')) {
+        const { getPipeline } = await importFlovartPipelineModule('index');
+        const pipeline = getPipeline();
+        try {
+          if (url.pathname === '/pipeline/runs') {
+            return json(response, 200, { ok: true, runs: pipeline.listRuns({ projectId: url.searchParams.get('projectId') || undefined, limit: url.searchParams.get('limit') }) });
+          }
+          const runMatch = /^\/pipeline\/runs\/([A-Za-z0-9_-]{1,80})$/.exec(url.pathname);
+          if (runMatch) return json(response, 200, { ok: true, trace: pipeline.trace(runMatch[1], Number(url.searchParams.get('since')) || 0) });
+          const artifactMatch = /^\/pipeline\/artifacts\/([A-Za-z0-9_:-]{1,120})$/.exec(url.pathname);
+          if (artifactMatch) {
+            const file = pipeline.artifactFile(artifactMatch[1]);
+            response.writeHead(200, { 'content-type': file.mime, 'content-length': file.bytes, 'cache-control': 'private, max-age=31536000, immutable' });
+            return fs.createReadStream(file.path).pipe(response);
+          }
+          return json(response, 404, { ok: false, error: 'not found' });
+        } catch (error) {
+          const code = error?.code || 'PIPELINE_ERROR';
+          return json(response, code === 'RUN_NOT_FOUND' || code === 'ARTIFACT_NOT_FOUND' ? 404 : 500, { ok: false, error: { code, message: error?.message || String(error) } });
         }
       }
       if (request.method === 'GET' && url.pathname === '/activity') {

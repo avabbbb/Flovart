@@ -259,6 +259,27 @@ export class Pipeline {
   }
 
   // ---------------- trace ----------------
+  /** run 摘要列表：最新版本、最新评审结论、Step 数，供 UI 分组。 */
+  listRuns({ projectId, limit } = {}) {
+    return this.store.listRuns({ projectId, limit }).map(run => {
+      const reviews = this.store.listReviews(run.id);
+      const last = reviews.at(-1);
+      const steps = this.store.listSteps(run.id);
+      return {
+        runId: run.id, projectId: run.projectId, title: run.title, status: run.status, headVersion: run.headVersion,
+        blocker: run.blocker, stepCount: steps.length, failedSteps: steps.filter(step => step.status === 'failed').length,
+        lastVerdict: last ? { round: last.round, version: last.version, verdict: last.verdict, reviewer: last.reviewer } : null,
+        createdAt: run.createdAt, updatedAt: run.updatedAt,
+      };
+    });
+  }
+
+  /** 只读取本 run 产物的文件（UI 预览）；不接受任意路径。 */
+  artifactFile(artifactId) {
+    const artifact = this.store.requireArtifact(artifactId);
+    return { path: artifact.path, mime: artifact.mime || 'application/octet-stream', bytes: artifact.bytes, runId: artifact.runId };
+  }
+
   trace(runId, since = 0) {
     const run = this.store.getRun(runId);
     if (!run) fail('RUN_NOT_FOUND', `找不到 run：${runId}`);
