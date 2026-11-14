@@ -1,6 +1,6 @@
 // 受控的本机媒体能力：ffprobe 探测、黑帧 / 静音 / 响度、抽帧、并排对比。
 // 不开放任意 ffmpeg 参数（docs/design/16-agent-video-pipeline.md C16）；缺依赖返回 CAPABILITY_UNAVAILABLE。
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 
 export class CapabilityError extends Error {
@@ -137,23 +137,100 @@ export async function sideBySide(leftPath, rightPath, outPath) {
 }
 
 /** drawtext 需要字体文件；按平台找一个能显示中文的字体，找不到再退到通用字体。 */
-export function resolveFontFile() {
-  const candidates = [
-    process.env.FLOVART_FONT_FILE,
-    'C:/Windows/Fonts/msyh.ttc',
-    'C:/Windows/Fonts/simhei.ttf',
-    '/System/Library/Fonts/PingFang.ttc',
-    '/System/Library/Fonts/STHeiti Medium.ttc',
-    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
-    '/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc',
-    '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
-    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-    'C:/Windows/Fonts/arial.ttf',
-    '/System/Library/Fonts/Helvetica.ttc',
-  ].filter(Boolean);
-  const found = candidates.find(candidate => existsSync(candidate));
-  if (!found) throw new CapabilityError('font', '找不到可用于字幕的字体文件', '设置 FLOVART_FONT_FILE 指向一个 .ttf / .ttc 字体');
-  return found;
+// 中日韩文字：CJK 统一表意文字（含扩展 A）、标点、假名、谚文、全角字符。
+const CJK_RE = /[\u3000-\u303f\u3040-\u30ff\u3100-\u312f\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff\uff00-\uffef]/u;
+
+export function containsCjk(text) {
+  return CJK_RE.test(String(text || ''));
+}
+
+// 已知带中文字形的系统字体（按平台常见程度）。顺序即优先级：无衬线常规体在前。
+export const CJK_FONT_CANDIDATES = Object.freeze([
+  'C:/Windows/Fonts/msyh.ttc',
+  'C:/Windows/Fonts/msyh.ttf',
+  'C:/Windows/Fonts/Deng.ttf',
+  'C:/Windows/Fonts/simhei.ttf',
+  '/System/Library/Fonts/PingFang.ttc',
+  '/System/Library/Fonts/Hiragino Sans GB.ttc',
+  '/System/Library/Fonts/STHeiti Medium.ttc',
+  '/System/Library/Fonts/Supplemental/Songti.ttc',
+  '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+  '/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc',
+  '/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc',
+  '/usr/share/fonts/opentype/source-han-sans/SourceHanSans-Regular.ttc',
+  '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
+  '/usr/share/fonts/wenquanyi/wqy-microhei/wqy-microhei.ttc',
+  '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+]);
+
+// 只含拉丁字形的兜底：纯英文文字可用，遇到中文会画成方框。
+export const LATIN_FONT_FALLBACKS = Object.freeze([
+  '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+  'C:/Windows/Fonts/arial.ttf',
+  '/System/Library/Fonts/Helvetica.ttc',
+]);
+
+/** Linux 等有 fontconfig 的系统：问 fc-list 哪些字体支持中文，优先无衬线常规体。 */
+export function fontconfigCjkFont(run = spawnSync) {
+  let result;
+  try {
+    result = run('fc-list', [':lang=zh', 'file', 'family', 'style'], { encoding: 'utf8', timeout: 5000 });
+  } catch {
+    return null;
+  }
+  if (!result || result.status !== 0 || !result.stdout) return null;
+  const fonts = String(result.stdout).split('\n').map(line => {
+    const path = line.split(':')[0].trim();
+    return { path, line };
+  }).filter(font => /\.(ttf|ttc|otf|otc)$/i.test(font.path));
+  if (!fonts.length) return null;
+  const score = ({ path, line }) => {
+    let value = 0;
+    if (/serif/i.test(line) && !/sans/i.test(line)) value -= 4;
+    if (/sans|hei|黑/i.test(line)) value += 3;
+    if (/style=(Regular|Normal|Book|Medium)\b/i.test(line)) value += 2;
+    if (/bold|black|heavy|thin|light/i.test(line) && !/style=[^,]*(Regular|Medium)/i.test(line)) value -= 1;
+    if (/\b(SC|CN|GB)\b|Simplified|简/i.test(line)) value += 1;
+    if (/mono/i.test(line)) value -= 2;
+    return value - path.length / 1000;
+  };
+  return fonts.sort((a, b) => score(b) - score(a))[0].path;
+}
+
+/**
+ * 选文字 / 字幕用的字体文件，返回 { path, cjk, source }。
+ * 顺序：FLOVART_FONT_FILE（用户指定，视为可显示中文）→ 已知中文字体 → fontconfig 查到的中文字体 → 拉丁兜底。
+ * requireCjk=true（要画的文字里有中日韩字符）却只剩拉丁兜底时，直接报 CAPABILITY_UNAVAILABLE，不渲染一堆方框。
+ */
+export function resolveFontInfo({ requireCjk = false, exists = existsSync, fontconfig = fontconfigCjkFont } = {}) {
+  const custom = process.env.FLOVART_FONT_FILE;
+  if (custom) {
+    if (!exists(custom)) throw new CapabilityError('font', `FLOVART_FONT_FILE 指向的字体不存在：${custom}`, '改成一个存在的 .ttf / .ttc / .otf 文件');
+    return { path: custom, cjk: true, source: 'env' };
+  }
+  const known = CJK_FONT_CANDIDATES.find(candidate => exists(candidate));
+  if (known) return { path: known, cjk: true, source: 'system' };
+  const discovered = fontconfig();
+  if (discovered && exists(discovered)) return { path: discovered, cjk: true, source: 'fontconfig' };
+  const latin = LATIN_FONT_FALLBACKS.find(candidate => exists(candidate));
+  if (requireCjk) {
+    throw new CapabilityError('font', '本机没有能显示中文的字体，字幕会变成方框',
+      process.platform === 'linux'
+        ? '安装 fonts-noto-cjk（Debian/Ubuntu）或 google-noto-sans-cjk-fonts（Fedora），或设置 FLOVART_FONT_FILE'
+        : '设置 FLOVART_FONT_FILE 指向一个含中文字形的 .ttf / .ttc 字体');
+  }
+  if (!latin) throw new CapabilityError('font', '找不到可用于字幕的字体文件', '设置 FLOVART_FONT_FILE 指向一个 .ttf / .ttc 字体');
+  return { path: latin, cjk: false, source: 'fallback' };
+}
+
+/** 兼容旧调用：只要路径。 */
+export function resolveFontFile(options) {
+  return resolveFontInfo(options).path;
+}
+
+/** spec 里要画的全部文字（文字层 + 字幕）是否含中日韩字符。 */
+export function specNeedsCjk(spec) {
+  return [...(spec?.tracks?.text || []).map(clip => clip.text), ...(spec?.tracks?.captions || []).map(clip => clip.displayText)].some(containsCjk);
 }
 
 /** ffmpeg 滤镜参数里的路径转义（Windows 盘符冒号、反斜杠、单引号）。 */

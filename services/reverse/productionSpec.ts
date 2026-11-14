@@ -63,6 +63,8 @@ export interface ProductionSpecV1 {
   texts?: ProductionTextV1[];
   captions?: ProductionCaptionV1[];
   audio?: ProductionAudioV1[];
+  /** 文字 / 字幕要嵌入的字体（`static:` 引用或 URL），让渲染结果不依赖渲染机系统字体。 */
+  font?: { src: string };
   renderer: 'remotion';
 }
 
@@ -148,6 +150,7 @@ export function validateProductionSpec(spec: ProductionSpecV1): string[] {
     timed('caption', caption, true);
     if (!caption.text) errors.push(`caption ${caption.id}: text 不能为空`);
   }
+  if (spec.font !== undefined && (typeof spec.font?.src !== 'string' || !spec.font.src)) errors.push('font.src 不能为空');
   for (const clip of spec.audio ?? []) {
     timed('audio', clip, false);
     if (!clip.src) errors.push(`audio ${clip.id}: src 不能为空`);

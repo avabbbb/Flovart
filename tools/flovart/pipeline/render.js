@@ -3,9 +3,9 @@
 // - remotion：调用 scripts/render-production.mjs，画面 / 文字 / 字幕 / 音频轨由 components/reverse/ProductionVideo.tsx 绘制；缺依赖时返回 CAPABILITY_UNAVAILABLE。
 import { copyFileSync, existsSync, linkSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CapabilityError, ffmpegBin, filterPath, resolveFontFile, runTool } from './media.js';
+import { CapabilityError, ffmpegBin, filterPath, resolveFontInfo, runTool, specNeedsCjk } from './media.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
@@ -142,7 +142,7 @@ export function buildFfmpegCommand(spec, { preset, atSec, outPath, resolveArtifa
 }
 
 export async function renderWithFfmpeg(spec, { preset, atSec, outPath, resolveArtifact, scratchPath, signal }) {
-  const fontFile = (spec.tracks.text.length || spec.tracks.captions.length) ? resolveFontFile() : '';
+  const fontFile = (spec.tracks.text.length || spec.tracks.captions.length) ? resolveFontInfo({ requireCjk: specNeedsCjk(spec) }).path : '';
   let counter = 0;
   const writeText = text => {
     const path = scratchPath(`text-${counter += 1}.txt`);
@@ -221,8 +221,19 @@ export async function renderWithRemotion(spec, { runId, preset, outPath, resolve
     }
     return `static:${name}`;
   };
+  const productionSpec = toProductionSpecV1(spec, runId, assetRef);
+  // 文字 / 字幕：把选中的字体文件放进 publicDir 嵌入，渲染机没装中文字体也不会出方框。
+  if (spec.tracks.text.length || spec.tracks.captions.length) {
+    const font = resolveFontInfo({ requireCjk: specNeedsCjk(spec) });
+    const name = `flovart-font${extname(font.path).toLowerCase() || '.ttf'}`;
+    const target = join(publicDir, name);
+    if (!existsSync(target)) {
+      try { linkSync(font.path, target); } catch { copyFileSync(font.path, target); }
+    }
+    productionSpec.font = { src: `static:${name}` };
+  }
   const specPath = scratchPath('production-spec.v1.json');
-  writeFileSync(specPath, JSON.stringify(toProductionSpecV1(spec, runId, assetRef)), 'utf8');
+  writeFileSync(specPath, JSON.stringify(productionSpec), 'utf8');
   const scale = RENDER_PRESETS[preset].scale;
   await runTool(process.execPath, [join(REPO_ROOT, 'scripts/render-production.mjs'), '--spec', specPath, '--out', outPath,
     '--entry', join(REPO_ROOT, 'remotion/index.ts'), '--public-dir', publicDir, '--scale', String(scale)],
