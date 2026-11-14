@@ -7,6 +7,7 @@ import {
 } from '@earendil-works/pi-storage-sqlite-node';
 import { resolveProductionSkillAttachment } from './production-skills.js';
 import { createTodoTool, TODO_TOOL_NAME } from './todo.js';
+import { PIPELINE_SYSTEM_RULES } from './pipeline-rules.js';
 
 const DEFAULT_SYSTEM_PROMPT = `你是 Iris Agent，负责把用户的创作目标整理为可审查的制作计划。
 你只能使用已注册的 Iris 制作工具，不得访问 Shell、任意文件或 Provider Secret。
@@ -83,6 +84,11 @@ export class FlovartAgentKernel {
     this.streamFn = streamFn;
     // 任务清单是内核自带的只读工具，不走 callCommand、不计费；调用方已提供同名工具时不重复注册。
     this.tools = tools.some(tool => tool.name === TODO_TOOL_NAME) ? tools : [...tools, createTodoTool()];
+    // 有 pipeline 工具时追加评审循环规则；非入口 pipeline 工具只在本会话有活动 run 时放行。
+    if (this.tools.some(tool => tool.pipeline) && !this.systemPrompt.includes('pipeline 工具')) {
+      this.systemPrompt = `${this.systemPrompt}\n\n${PIPELINE_SYSTEM_RULES}`;
+    }
+    this.activePipelineRunId = null;
     this.systemPrompt = systemPrompt;
     this.resolveProductionSkill = resolveProductionSkill;
     this.listeners = new Set();
@@ -120,10 +126,12 @@ export class FlovartAgentKernel {
       const context = await this.session.buildContext();
       const wrappedTools = this.tools.map(tool => tool.execute ? {
         ...tool,
-        execute: (toolCallId, input, signal, onUpdate) => tool.execute(toolCallId, {
-          ...input,
-          ...(this.activeChangeSetId ? { changeSetId: this.activeChangeSetId } : {}),
-        }, signal, onUpdate),
+        execute: tool.pipeline
+          ? (toolCallId, input, signal, onUpdate) => this.executePipelineTool(tool, toolCallId, input, signal, onUpdate)
+          : (toolCallId, input, signal, onUpdate) => tool.execute(toolCallId, {
+            ...input,
+            ...(this.activeChangeSetId ? { changeSetId: this.activeChangeSetId } : {}),
+          }, signal, onUpdate),
       } : tool);
       this.agent = new Agent({
         initialState: {
@@ -156,6 +164,29 @@ export class FlovartAgentKernel {
       this.session = undefined;
       throw error;
     }
+  }
+
+  // pipeline 门禁：run.start / run.get 之外的工具必须针对本会话的活动 run。
+  async executePipelineTool(tool, toolCallId, input, signal, onUpdate) {
+    if (!tool.pipeline.entry && (!this.activePipelineRunId || input?.runId !== this.activePipelineRunId)) {
+      const failure = {
+        ok: false,
+        error: {
+          code: 'PIPELINE_RUN_INACTIVE',
+          message: this.activePipelineRunId
+            ? `本会话的活动 run 是 ${this.activePipelineRunId}；先 flovart_pipeline_run_get 切换到 ${input?.runId}`
+            : '先用 flovart_pipeline_run_start 建 run，或用 flovart_pipeline_run_get 恢复已有 run',
+        },
+      };
+      return { content: [{ type: 'text', text: JSON.stringify(failure) }], details: { command: tool.pipeline.command, isError: true } };
+    }
+    const result = await tool.execute(toolCallId, input, signal, onUpdate);
+    const payload = result?.details?.result;
+    if (!result?.details?.isError && payload?.ok !== false) {
+      const runId = payload?.result?.runId || payload?.result?.run?.id;
+      if (runId) this.activePipelineRunId = runId;
+    }
+    return result;
   }
 
   subscribe(listener) {

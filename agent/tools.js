@@ -1,10 +1,12 @@
 import { Type } from 'typebox';
-import { importFlovartModule } from './flovart-modules.js';
+import { importFlovartModule, importFlovartPipelineModule } from './flovart-modules.js';
 
-const [{ AGENT_PUBLIC_COMMAND_SET }, core] = await Promise.all([
+const [{ AGENT_PUBLIC_COMMAND_SET }, core, pipelineCommands] = await Promise.all([
   importFlovartModule('agent-surface'),
   importFlovartModule('core'),
+  importFlovartPipelineModule('commands'),
 ]);
+const { PIPELINE_COMMAND_NAMES, PIPELINE_WRITE_COMMANDS } = pipelineCommands;
 const { COMMAND_ALIASES, COMMAND_REGISTRY } = core;
 const AGENT_WRITE_COMMANDS = new Set([
   'workflow.apply',
@@ -72,6 +74,42 @@ export function createFlovartAgentTools(callCommand) {
           content: [{ type: 'text', text: JSON.stringify(result) }],
           details: { command, result },
         };
+      },
+    };
+  });
+}
+
+// ---------------- Agent 视频流水线工具集（docs/design/16-agent-video-pipeline.md §3） ----------------
+// 不进入稳定 baseline：pipeline.run.start / pipeline.run.get 是入口，其余工具只在本会话有活动 run 时放行（kernel 负责门禁）。
+export const PIPELINE_ENTRY_COMMANDS = new Set(['pipeline.run.start', 'pipeline.run.get']);
+
+export { PIPELINE_SYSTEM_RULES } from './pipeline-rules.js';
+
+export function createFlovartPipelineTools(callCommand) {
+  return PIPELINE_COMMAND_NAMES.map(command => {
+    const metadata = COMMAND_REGISTRY[command];
+    const write = PIPELINE_WRITE_COMMANDS.has(command);
+    const { mutationId: _mutation, ...args } = metadata.args;
+    return {
+      name: toolName(command),
+      label: metadata.summary,
+      description: metadata.summary,
+      parameters: Type.Object({
+        ...agentParameters(args, false).properties,
+        ...(write ? { mutationId: Type.String({ minLength: 1 }) } : {}),
+      }, { additionalProperties: false }),
+      executionMode: 'sequential',
+      pipeline: { command, entry: PIPELINE_ENTRY_COMMANDS.has(command) },
+      async execute(_toolCallId, input, signal, onUpdate) {
+        if (signal?.aborted) throw new Error('pipeline 操作已取消');
+        const { mutationId, changeSetId: _changeSet, ...commandArgs } = input;
+        onUpdate?.({ content: [{ type: 'text', text: JSON.stringify({ command, status: 'running' }) }], details: { command, status: 'running' } });
+        const result = await callCommand(command, commandArgs, 'agent', mutationId, signal);
+        if (result?.ok === false) {
+          const failure = { ok: false, error: { code: result.error?.code || 'PIPELINE_FAILED', message: result.error?.message || 'pipeline 操作失败', ...(result.error?.details ? { details: result.error.details } : {}) } };
+          return { content: [{ type: 'text', text: JSON.stringify(failure) }], details: { command, result, isError: true } };
+        }
+        return { content: [{ type: 'text', text: JSON.stringify(result) }], details: { command, result } };
       },
     };
   });

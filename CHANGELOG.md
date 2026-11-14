@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Agent 视频流水线 P0（实验性）：13 条 pipeline 命令（run / 素材 / TTS / 转写 / 对齐 / 合成修订 / 渲染 / 探测 / 抽帧 / 评审 / 归档），命令边界自动记 trace，评审 → 定向修补（locked 片段不变）→ 重渲染可端到端跑通（`npm run e2e:pipeline`）。
 - 本地文件夹重新授权后自动重读画布节点，并通过 BroadcastChannel 同步其他标签页；权限失效节点提供“重新连接文件夹”。
 
 ## 0.3.0 — Closed beta / 内测版 (2026-11-06)

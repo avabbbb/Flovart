@@ -1,6 +1,7 @@
 # 提案：Agent 驱动的产品宣传片流水线（Agent Video Pipeline）
 
 > 状态：**PROPOSAL**（2026-11-13）。本文是提案，不是 current truth；被接受后按 AGENTS.md §9 蒸馏进 [00 总体设计](00-overview.md)、[12 Agent](12-agent.md)、[13 Generation & Runtime](13-generation-runtime.md)、[10 Canvas / Workflow](10-canvas-workflow.md)，再归档本文。
+> **实施进度（2026-11-14）**：P0 的工具层与 trace 已在 `main` 实现，并用 Fake TTS + fixture 转写 + 真实 ffmpeg 渲染端到端跑通（见 §12）；Canvas 抽屉 UI、Rust Runtime 迁移与真实 Provider 仍未完成，本文仍是提案。
 > 标注约定沿用总纲：**已实现** = 代码在主干；**已验证** = 有 Support Matrix 证据；**设计目标** = 尚未实现；**假设** = 待真实环境确认。本文“Flovart 今天”一列全部来自 2026-11-13 `main`（`b92e29b`）真实代码核对，不来自旧文档。
 
 ## 0. 一句话
@@ -275,3 +276,33 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 - 不复制 Hypit 代码；转写走用户自装的 WhisperX / hypit CLI，结果作为 artifact 导回（Reverse 许可边界不变）。
 - 单一权威：trace 在 Runtime，Workflow 图在 Browser Workflow，会话在各自 Agent；彼此只存引用。
 - 对外口径：P0 完成前不宣传“一键成片”或“自动做完宣传片”；完成后也只能说“Agent 协助迭代制作”，并跟随 Support Matrix。
+
+## 12. P0 实施状态（2026-11-14）
+
+本节记录已落到 `main` 的 P0 切片，以及与 §4.2 / §9 的偏离。**已实现** ≠ **已验证**：支持状态只看 `SUPPORT_MATRIX.md`。
+
+### 12.1 已实现
+
+| 部分 | 位置 | 说明 |
+| --- | --- | --- |
+| 命令边界与 trace | `tools/flovart/pipeline/index.js` | 每次命令自动写 Step（caller、argsDigest、mutationId、status、attempts、产物）；同 mutationId 同载荷重放原结果、不同载荷拒绝；进程中断后的 `running` / `unknown_submit` Step 由同一 mutationId 续跑，`pipeline.run.get` 返回 `resumeFrom` |
+| 持久层 | `tools/flovart/pipeline/store.js` | 本机 SQLite（`node:sqlite`）+ 内容寻址 artifact 目录（sha256） |
+| 合成 spec V2 | `tools/flovart/pipeline/spec.js` | visual / text / captions / audio 四轨；`locked` 片段修改须显式 `unlock` + reason；修订绑定评审轮时只允许改 findings 涉及的片段（`PATCH_OUT_OF_SCOPE`）；`baseVersion` 过期返回 `VERSION_CONFLICT` |
+| 渲染 | `tools/flovart/pipeline/render.js` | 受控 ffmpeg filtergraph（镜头、文字、字幕、旁白、音乐 sidechain 闪避），preset still / draft / final；`final` 需要该版本已有 pass 评审；Remotion 引擎只画镜头，含文字 / 字幕 / 音频轨时返回 `CAPABILITY_UNAVAILABLE` |
+| 评审工具 | `media.js`、`review.js` | `media.probe`（时长、黑帧、静音、LUFS）、`media.frames`（≤6 帧，可与上一版并排）；`review.submit` 拒绝没有时间点 / 修法的 finding，Agent 评审前必须看过该版本的帧，重复 findings 返回 `REPEATED_FINDINGS`，超过 `maxRounds` 自动 block |
+| 声音 | `voice.js` | `audio.tts` 路由 fake / minimax（`speechText` 与 `displayText` 分离，输出时长与参数快照）；`audio.transcribe` 引擎 whisperx / hypit / fixture；`timeline.align` 用 LCS 对齐 + 插值 |
+| 预算与门禁 | `index.js` | run 级预算（maxTasks / maxCost / maxRounds）在创建时一次确认；付费步 reserve → confirm / release 写入 run 账本 |
+| 注册表 / CLI | `command-registry.v1.json`、`tools/flovart/cli.js` | 13 条命令登记为 available；写命令强制 `--mutation-id`；结构化参数用 `--args-json` 或 `--file` |
+| 内置 Agent | `agent/tools.js`、`agent/kernel.js`、`agent/pipeline-rules.js`、`agent/session.js` | pipeline 工具不经浏览器租约；非入口工具只能作用于本会话的活动 run；注册了 pipeline 工具时追加评审循环规则 |
+
+### 12.2 验证
+
+- `node scripts/e2e-pipeline-trace.mjs`（`npm run e2e:pipeline`）：brief + 2 张授权文件夹截图 → TTS → 转写 → 对齐 → v1 → still / draft → probe + frames → revise（finding：第 10.1 秒结果卡片只停留 0.5 秒）→ 定向修补 v2（只有 `shot-result-card` 变化，locked 片段与 v1 字节一致）→ draft → pass → final → CLI 以 `reviewer=user` 写入同一 runId → archive。35 项检查，含恢复（中断后续跑原 Step、mutationId 重放同一结果）、缺依赖 blocked → 恢复、轮数上限、预算超限、越权修补被拒。产物在 `.tmp/pipeline-trace/`。
+- Vitest：`tests/pipelineSpec.test.js`（spec / 锁 / diff / 对齐）与 `tests/pipelineTrace.test.js`（上面的全流程）。
+
+### 12.3 与提案的偏离和未完成项
+
+- **存储位置偏离 §4.2**：trace 存在 Node 侧 SQLite（`tools/flovart/pipeline/store.js`，Windows 默认 `%LOCALAPPDATA%/Flovart/pipeline`，其他系统 `~/.flovart/Flovart/pipeline`，可用 `FLOVART_PIPELINE_HOME` 改），不是 `src-tauri/src/runtime/migrations/` 下的 Rust 迁移，也没有复用 `production_*` / `usage_ledger` 表。接受提案时需要决定：迁入 Rust Runtime，或把 Node 侧定为 CLI / Agent 共用的本机权威。
+- **未做**：Canvas 抽屉 run 卡片与运行日志分组（§9 第 8 条）、画布版本分组、Remotion 文字 / 字幕 / 音频轨、`capture.ui`、MCP 投影、Skill 命令文档。
+- **未实测**：MiniMax TTS 与真实 WhisperX / hypit（只按文档形状实现）；没有 CJK 字体的 Linux 环境会回退到 DejaVu，中文字幕显示为方框，需设 `FLOVART_FONT_FILE`。
+- Rust 工具链未在本次环境运行，`cargo test` 未验证；Rust 端注册表只校验文档内 hash 自洽。

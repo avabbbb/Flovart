@@ -3,6 +3,9 @@ import { WorkspaceLeaseError, WorkspaceLeaseManager } from './workspace-lease.js
 import { buildDelivery, collectNodeIds } from './delivery.js';
 import { buildPlanCard, PAID_COMMANDS, SESSION_CONTROL_COMMANDS, SessionBudget } from './session-budget.js';
 import { planBatchPick } from './batch-pick.js';
+import { importFlovartPipelineModule } from './flovart-modules.js';
+
+const { PIPELINE_COMMANDS } = await importFlovartPipelineModule('commands');
 
 const sendEvent = (response, type, payload) => response.write(`event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`);
 
@@ -414,6 +417,7 @@ export class WorkflowAgentSession {
 
   async callCommand(command, args = {}, source = 'mcp', idempotencyKey, signal, caller) {
     if (command === 'status') return this.dispatchCommand(command, args, source, idempotencyKey, signal, caller);
+    if (PIPELINE_COMMANDS.has(command)) return this.callPipeline(command, args, source, idempotencyKey, signal, caller);
     if (command === 'workflow.batch.pick') return this.batchPick(args, source, idempotencyKey, signal, caller);
     if (SESSION_CONTROL_COMMANDS.has(command)) {
       const control = this.budget.handleControl(command, args, caller);
@@ -437,6 +441,21 @@ export class WorkflowAgentSession {
       if (delivery && delivery.nodeIds.length) entry.nodeIds = delivery.nodeIds;
       this.finishActivity(entry, failed ? { ok: false, error: result.error } : { ok: true });
       return delivery ? { ...result, delivery } : result;
+    } catch (error) {
+      this.finishActivity(entry, { ok: false, error });
+      throw error;
+    }
+  }
+
+  // Agent 视频流水线：run 有自己的持久 trace 与预算（tools/flovart/pipeline/），不经浏览器租约；会话只记活动并保存 runId 引用。
+  async callPipeline(command, args = {}, source = 'mcp', idempotencyKey, signal, caller) {
+    const entry = this.recordActivity({ command, source, caller, args });
+    const pipelineCaller = source === 'agent' ? 'built-in' : (caller?.agentIdentity || source);
+    try {
+      const { executePipelineCommand } = await importFlovartPipelineModule('index');
+      const result = await executePipelineCommand(command, args, { caller: pipelineCaller, mutationId: idempotencyKey, signal });
+      this.finishActivity(entry, result.ok ? { ok: true } : { ok: false, error: result.error });
+      return result;
     } catch (error) {
       this.finishActivity(entry, { ok: false, error });
       throw error;

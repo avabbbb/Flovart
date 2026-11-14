@@ -121,6 +121,16 @@ export async function importFlovartModule(name) {
   if (!loader) throw new Error('Invalid Flovart module name.');
   return loader();
 }
+const PIPELINE_MODULES = {
+  'commands': () => import('flovart-module:pipeline/commands'),
+  'index': () => import('flovart-module:pipeline/index'),
+};
+export async function importFlovartPipelineModule(name) {
+  const moduleName = String(name || '').trim();
+  const loader = PIPELINE_MODULES[moduleName];
+  if (!loader) throw new Error('Invalid Flovart pipeline module name.');
+  return loader();
+}
 `;
 
 /**

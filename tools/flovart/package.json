@@ -12,6 +12,7 @@
     "cli.js",
     "contracts.js",
     "contracts",
+    "pipeline",
     "core.js",
     "bundle-manager.js",
     "bootstrap-coordinator.js",

@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:critical": "node scripts/run-critical-suite.mjs",
+    "e2e:pipeline": "node scripts/e2e-pipeline-trace.mjs",
     "test:browser:chrome": "node scripts/chrome-browser-smoke.mjs",
     "test:browser:responsive": "node scripts/responsive-agent-link-smoke.mjs",
     "release:red-team": "node scripts/release-red-team.mjs",

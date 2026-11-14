@@ -54,6 +54,7 @@ Provider 一律 `Experimental` / unverified，不得写进 Beta 发布口径。
 | Browser-bound Workflow authority | Stable contract | 无 Browser workspace 时结构化返回 `WORKSPACE_UNAVAILABLE`，不回退随机项目或 last-focused project |
 | Workspace Lease | Experimental | acquire/validate/renew/release/expire、cross-project、close、revision 和 idempotency focused tests；未完成 20x chaos/持久化压力证据 |
 | ProductionTask v1 projection | Experimental | `task.inspect` / safe `task.resume` over durable ProductionRun/StageRun and scheduler lease；真实 Agent 跨会话、429/提交未知恢复与 Task Center 未认证 |
+| Agent video pipeline P0（`pipeline.run.*`、`composition.*`、`review.submit` 等 13 条） | Experimental | Fake TTS + fixture 转写 + 本机 ffmpeg 的 e2e trace（`npm run e2e:pipeline`，35 项检查）与 Vitest；Node 侧 SQLite trace，非 Rust Runtime；Canvas 抽屉 UI、真实 MiniMax / WhisperX、`cargo test` 未验证 |
 | Local Fake Provider HTTP fixture | Stable test fixture | Provider resilience 与 wire tests；不代表第三方账号/账单行为 |
 | RunningHub image + video routes | Beta (pending certification) | 唯一进入认证流程的 Provider path：Schema 驱动 Route Catalog（18 条认证候选线路）+ 真实付费 trial capture（seedream t2i、seedance i2v、restart-after-submit）；真实账号、扣费与恢复语义的认证 gate 见下文 External Gate |
 | OpenAI-compatible BYOK | Experimental / unverified | 本地 Fake Provider + Browser/Workflow path；真实供应商、价格、取消语义待认证，Closed Beta 不作发布承诺 |

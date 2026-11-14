@@ -27,6 +27,7 @@ import {
   RESEARCH_COMMAND_NAMES,
   RESEARCH_WRITE_COMMAND_NAMES,
 } from '../tools/flovart/research-command-surface.js';
+import { PIPELINE_COMMAND_NAMES } from '../tools/flovart/pipeline/commands.js';
 
 describe('Production Runtime canonical registry', () => {
   it('publishes the S1.1 durable-task contract without restoring removed surfaces', () => {
@@ -34,7 +35,7 @@ describe('Production Runtime canonical registry', () => {
     const commandNames = Object.keys(registry.commands);
 
     expect(registry.protocolVersion).toBe('1');
-    expect(registry.registryHash).toBe('95ccf0baad2aa4f305627405b4b5330a8bd80c1261ce87cd067a47384b1fdce3');
+    expect(registry.registryHash).toBe('dcc428e50a8676ea31e513c8e5c000843d54423f31ccf8edb1729bc1c7ffb4e0');
     expect(hashCanonicalRegistryDocument(registryDocument)).toBe(registry.registryHash);
     expect(Object.isFrozen(registry.commands)).toBe(true);
     expect(Object.isFrozen(registry.commands['runtime.status'].args)).toBe(true);
@@ -108,6 +109,7 @@ describe('Production Runtime canonical registry', () => {
       ...RUNTIME_COMMAND_NAMES,
       ...WORKSPACE_COMMAND_NAMES,
       ...RESEARCH_COMMAND_NAMES,
+      ...PIPELINE_COMMAND_NAMES, // Agent 视频流水线本机边界
       'status', // CLI local-system adapter
       'host.list', // CLI local Host discovery adapter
       'init', // CLI Distribution Target installer

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { DEFAULT_AGENT_PORT, loadAgentConfig } from './config.js';
 import { persistAgentConfig } from './persist-config.js';
 import { FlovartAgentService } from './flovart.js';
-import { createFlovartAgentTools } from './tools.js';
+import { createFlovartAgentTools, createFlovartPipelineTools } from './tools.js';
 import { SkillRegistry, BUNDLED_SKILL_IDS } from './skill-registry.js';
 import { WorkflowAgentSession, WorkflowAgentSessionError } from './session.js';
 import { prepareAgentHostProjection } from './host-projection.js';
@@ -204,7 +204,10 @@ export function startHttpServer() {
   });
   const skillRegistry = new SkillRegistry({ repoRoot: PROJECT_ROOT });
   const flovart = WORKSPACE_ONLY ? null : new FlovartAgentService({
-    tools: createFlovartAgentTools((...args) => session.callCommand(...args)),
+    tools: [
+      ...createFlovartAgentTools((...args) => session.callCommand(...args)),
+      ...createFlovartPipelineTools((...args) => session.callCommand(...args)),
+    ],
   });
 
   const activeSse = new Set();

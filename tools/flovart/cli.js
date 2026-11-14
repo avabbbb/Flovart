@@ -7,6 +7,7 @@ import { RUNTIME_COMMANDS, RUNTIME_WRITE_COMMANDS } from './runtime-command-surf
 import { WORKSPACE_COMMANDS, WORKSPACE_WRITE_COMMANDS } from './workspace-command-surface.js';
 import { RESEARCH_COMMANDS, RESEARCH_WRITE_COMMANDS } from './research-command-surface.js';
 import { collectTopicResearch } from './topic-research.js';
+import { PIPELINE_COMMANDS, PIPELINE_WRITE_COMMANDS } from './pipeline/commands.js';
 import { runSkillCommand, SKILL_COMMAND_NAMES } from './skill-commands.js';
 import { getLocalStatus } from './local-status.js';
 import { ProviderVaultError, readVaultProviderStatus } from './provider-vault.js';
@@ -21,6 +22,25 @@ import {
 import { AGENT_SESSION_CONTROL_COMMANDS } from './agent-surface.js';
 
 const argv = process.argv.slice(2);
+
+/** pipeline 命令的 CLI 参数：--args-json '<json>' 或 --file payload.json 给结构化参数，其余 --key value 按注册表类型转换。 */
+async function pipelineCliArgs(command, args) {
+  const definition = COMMAND_REGISTRY[command];
+  const out = {};
+  if (args.file) Object.assign(out, JSON.parse(await readFile(args.file, 'utf8')));
+  if (args.argsJson || args['args-json']) Object.assign(out, JSON.parse(args.argsJson || args['args-json']));
+  for (const [name, descriptor] of Object.entries(definition?.args || {})) {
+    if (args[name] === undefined || out[name] !== undefined) continue;
+    const type = String(descriptor).replace(/\?$/, '');
+    const raw = args[name];
+    if (type === 'number') out[name] = Number(raw);
+    else if (type === 'boolean') out[name] = raw === true || raw === 'true';
+    else if (['object', 'array', 'string[]'].includes(type)) out[name] = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    else out[name] = raw;
+  }
+  delete out.mutationId;
+  return out;
+}
 
 function isResultOk(result) {
   return !(result && typeof result === 'object' && result.ok === false);
@@ -184,6 +204,36 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
     else {
       console.log(formatValue(result));
       if (!ok) process.exitCode = 1;
+    }
+    return;
+  }
+
+  // Agent 视频流水线：本机 pipeline 边界（tools/flovart/pipeline/）。asset.list 不带 runId 时仍是旧的本地生成历史。
+  if (PIPELINE_COMMANDS.has(routingCommand) && !(routingCommand === 'asset.list' && !args.runId)) {
+    try {
+      const pipelineArgs = await pipelineCliArgs(routingCommand, args);
+      const mutationId = args.mutationId || args['mutation-id'] || args.idempotencyKey || args['idempotency-key'];
+      if (PIPELINE_WRITE_COMMANDS.has(routingCommand) && !mutationId && !pipelineArgs.mutationId) {
+        printCliResponse(false, command, null, {
+          code: 'INVALID_ARGUMENT',
+          message: `${routingCommand} requires --mutation-id so retries replay the same pipeline step.`,
+          retryable: false,
+        }, { runtime: 'pipeline' });
+        return;
+      }
+      const { executePipelineCommand } = await import('./pipeline/index.js');
+      const result = await executePipelineCommand(routingCommand, pipelineArgs, {
+        caller: args.caller || 'cli',
+        ...(mutationId ? { mutationId: String(mutationId) } : {}),
+        confirmResubmit: args.confirmResubmit === true || args['confirm-resubmit'] === true,
+      });
+      printCliResponse(result.ok, command, result.ok ? { ...result.result, ...(result.step ? { step: result.step } : {}) } : null, result.ok ? null : result.error, { runtime: 'pipeline' });
+    } catch (error) {
+      printCliResponse(false, command, null, {
+        code: error?.code || 'PIPELINE_FAILED',
+        message: error instanceof Error ? error.message : String(error),
+        retryable: false,
+      }, { runtime: 'pipeline' });
     }
     return;
   }

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "95ccf0baad2aa4f305627405b4b5330a8bd80c1261ce87cd067a47384b1fdce3",
+  "registryHash": "dcc428e50a8676ea31e513c8e5c000843d54423f31ccf8edb1729bc1c7ffb4e0",
   "commands": [
     {
       "name": "runtime.status",
@@ -577,9 +577,13 @@
     },
     {
       "name": "asset.list",
-      "summary": "List local generated media assets/history.",
-      "args": {},
-      "availability": "legacy-only"
+      "summary": "List durable artifacts of a pipeline run by kind / tags (with runId); without runId lists legacy local generated media history.",
+      "args": {
+        "runId": "string?",
+        "kind": "string?",
+        "tags": "string[]?"
+      },
+      "availability": "available"
     },
     {
       "name": "generate.image",
@@ -639,6 +643,153 @@
         "format": "json?"
       },
       "availability": "legacy-only"
+    },
+    {
+      "name": "pipeline.run.start",
+      "summary": "Start one Agent Video Pipeline run (brief artifact + one-time run budget confirmation: maxTasks, maxCostMicros, maxRounds). Every later pipeline tool call is recorded as a Step of this run.",
+      "args": {
+        "projectId": "string",
+        "title": "string?",
+        "brief": "object",
+        "budget": "object",
+        "budgetConfirmed": "boolean",
+        "reference": "object?",
+        "mutationId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "pipeline.run.get",
+      "summary": "Read one pipeline run trace: steps, spec versions with renders, review rounds, spend, blocker and the step to resume from.",
+      "args": {
+        "runId": "string",
+        "since": "number?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "asset.import",
+      "summary": "Import authorized local files (screenshots, recordings, external Coding Agent output) into a pipeline run as sha256 durable artifacts.",
+      "args": {
+        "runId": "string",
+        "path": "string?",
+        "paths": "string[]?",
+        "kind": "string?",
+        "tags": "string[]?",
+        "mutationId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "audio.tts",
+      "summary": "Voice script lines from speechText only (displayText stays for captions); returns measured duration and a voice parameter snapshot per line. Counts against the run task budget.",
+      "args": {
+        "runId": "string",
+        "lines": "array",
+        "voice": "object",
+        "variant": "string?",
+        "mutationId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "audio.transcribe",
+      "summary": "Word-level transcription of an audio artifact (whisperx | hypit | fixture) into a hypit.transcript@1 evidence artifact.",
+      "args": {
+        "runId": "string",
+        "artifactId": "string",
+        "engine": "whisperx|hypit|fixture",
+        "language": "string?",
+        "mutationId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "timeline.align",
+      "summary": "Align script lines to word-level evidence; returns timeline milliseconds per line and per action word.",
+      "args": {
+        "runId": "string",
+        "lines": "array",
+        "evidenceArtifactIds": "string[]?",
+        "segments": "array?",
+        "gapMs": "number?",
+        "startMs": "number?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "composition.patch",
+      "summary": "Revise the composition spec V2 (visual / text / captions / audio tracks) from baseVersion; locked clips need an explicit unlock with reason; with reviewRoundId only clips the findings point at may change.",
+      "args": {
+        "runId": "string",
+        "baseVersion": "number",
+        "ops": "array",
+        "locks": "string[]?",
+        "reviewRoundId": "string?",
+        "note": "string?",
+        "mutationId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "composition.render",
+      "summary": "Render one spec version locally: still (keyframe at atSec), draft, or final (requires a passing review of that version).",
+      "args": {
+        "runId": "string",
+        "version": "number?",
+        "preset": "still|draft|final",
+        "atSec": "number?",
+        "engine": "ffmpeg|remotion?",
+        "mutationId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "media.probe",
+      "summary": "Probe an artifact: duration, codecs, resolution, black-frame and silence intervals, loudness, plus automatic issues against its spec.",
+      "args": {
+        "runId": "string",
+        "artifactId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "media.frames",
+      "summary": "Extract up to 6 real frames from a render by seconds, optionally side by side with another version and zoomed.",
+      "args": {
+        "runId": "string",
+        "artifactId": "string?",
+        "version": "number?",
+        "times": "array",
+        "compareWith": "object?",
+        "zoom": "object?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "review.submit",
+      "summary": "Submit one structured review round on a version: findings with atSec/range/clipId, layer, severity, issue, fix; verdict pass | revise | block.",
+      "args": {
+        "runId": "string",
+        "version": "number?",
+        "findings": "array",
+        "verdict": "pass|revise|block",
+        "reviewer": "agent|user?",
+        "mutationId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "run.archive",
+      "summary": "Archive final render, every spec version, voice/music/sfx stems, rejected takes and reviews into a user folder with a sha256 manifest.",
+      "args": {
+        "runId": "string",
+        "outputDir": "string",
+        "include": "string[]?",
+        "confirmed": "boolean",
+        "mutationId": "string"
+      },
+      "availability": "available"
     }
   ]
 }

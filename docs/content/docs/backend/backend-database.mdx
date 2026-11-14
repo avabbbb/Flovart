@@ -68,3 +68,17 @@ Flovart Hub（`backend/` 目录）使用 PostgreSQL，GORM AutoMigrate 自动建
 ## 待扩展（工作流生态阶段）
 
 `workflow_packs` / `workflow_items` / `workflow_likes` 表将在工作流生态阶段加入，结构参考 prompt 系列；工作流包不会保存模型配置或 API Key。
+
+## 本机 Agent 视频流水线存储（不属于 Hub）
+
+`tools/flovart/pipeline/store.js` 在用户本机用 SQLite（`node:sqlite`）保存 Agent 视频流水线的 trace，和 Hub 的 PostgreSQL 无关，也不同步到云端。默认位置：Windows `%LOCALAPPDATA%/Flovart/pipeline`，其他系统 `~/.flovart/Flovart/pipeline`；`FLOVART_PIPELINE_HOME` 可覆盖。表在打开时 `CREATE TABLE IF NOT EXISTS` 建立。
+
+| 表 | 用途 | 关键字段 |
+| --- | --- | --- |
+| `pipeline_runs` | 一次制作 run | `id`、`project_id`、`status`（active / blocked / passed / archived / stopped）、`budget_json`、`blocker_json`、`head_version` |
+| `run_steps` | 命令边界自动记录的 Step | `run_id` + `seq` 唯一；`tool`、`caller`、`mutation_id`（`run_id, tool, mutation_id` 唯一）、`args_digest`、`status`、`attempts`、`artifact_ids_json` |
+| `artifacts` | 内容寻址产物 | `sha256`、`kind`、`path`、`media_json`、`params_json`、`rejected` |
+| `spec_versions` | 合成 spec 修订 | 主键 `run_id, version`；`parent_version`、`spec_sha256`、`diff_json` |
+| `renders` | 每个版本的渲染 | `version`、`preset`（still / draft / final）、`engine`、`artifact_id`、`probe_json` |
+| `review_rounds` | 评审轮 | `run_id, round` 唯一；`reviewer`、`caller`、`verdict`、`findings_json`、`fixed_by_version` |
+| `run_usage_ledger` | run 级预算账本 | `entry_kind`（reserve / confirm / release）、`amount_micros`、`tasks` |
