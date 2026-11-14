@@ -26,7 +26,7 @@
 | 文档 | 内容 |
 | --- | --- |
 | [16 Agent 视频流水线](design/16-agent-video-pipeline.md) | 宣传片流水线能力矩阵、工具集、run / trace 模型、素材归档、放置（2026-11-13 改为逆向 = 全能助手主场）、P0–P2 计划与验收；P0 已在 main 实现（§12） |
-| [真实操作录制与剪辑 Hub 计划](plans/recordly-capture-hub.md) | Recordly 连接器 → Rust 录制 + Snipaste 式截图伴生工具 → 视频制作 Hub；许可证边界（Recordly AGPL）与分期 H0–H3（草案） |
+| [真实操作录制与剪辑 Hub 计划](plans/recordly-capture-hub.md) | Recordly 连接器 → Rust 录制 + Snipaste 式截图伴生工具 → 视频制作 Hub；录制截图为本体、反推 / 发送到画布 / Agent 为可插拔模块；许可证边界（Recordly AGPL）与分期 H0–H3（草案） |
 | [DSH 工作台计划](plans/dsh-workbench.md) | Flovart 作为 DeepSeek Harness 工作台、DSH Agent 通过工具操作画布（草案） |
 
 ## 3. 指南与记录
