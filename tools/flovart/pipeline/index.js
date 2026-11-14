@@ -399,7 +399,7 @@ export class Pipeline {
         costMicros += synth.costMicros;
         const params = {
           lineId: line.id, speechText: line.speechText, displayText: line.displayText,
-          route: voice.route, voiceId: voice.voiceId, speed: voice.speed, pitch: voice.pitch, model: voice.model || null, variant,
+          route: voice.route, voiceId: voice.voiceId, speed: voice.speed, pitch: voice.pitch, model: voice.model || null, emotion: voice.emotion || null, variant,
         };
         const artifact = this.store.putFile(synth.path, {
           runId: run.id, stepId: step.id, kind: 'voice', move: true, media,

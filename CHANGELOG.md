@@ -4,6 +4,7 @@
 
 - Agent 视频流水线 P0（实验性）：13 条 pipeline 命令（run / 素材 / TTS / 转写 / 对齐 / 合成修订 / 渲染 / 探测 / 抽帧 / 评审 / 归档），命令边界自动记 trace，评审 → 定向修补（locked 片段不变）→ 重渲染可端到端跑通（`npm run e2e:pipeline`）。
 - 流水线 trace 迁入桌面 Runtime 共用的 `flovart-state.db`（migration 5，表名 `pipeline_*`）；Rust Runtime 新增只读 `pipeline.run.get`，与 Node 输出逐字段一致（`npm run e2e:pipeline:parity`）；agent 新增只读 `GET /pipeline/runs`、`/pipeline/runs/:id`、`/pipeline/artifacts/:id`。
+- 流水线配音新增 RunningHub 路由（MiniMax speech，通过 RunningHub Key 调用），附真实 trial 脚本。
 - 流水线中文字体：自动找系统中文字体（含 fontconfig），找不到时明确报错而不是渲染方框；Remotion 引擎嵌入同一字体文件。
 - 流水线新增 `capture.ui`：本机无头浏览器打开 localhost 页面按步骤截图或录屏，产物直接进 run；pipeline 命令同时投影为 MCP 工具（`flovart_capture_ui` 等），Skill 增加流水线命令文档。
 - 流水线 Remotion 引擎支持文字层、底部字幕与音频轨（音乐随人声闪避），中文字体优先；`npm run e2e:pipeline:remotion` 端到端验证。

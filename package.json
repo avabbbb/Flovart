@@ -50,7 +50,8 @@
     "eval:report": "node eval/run.mjs report",
     "eval:redteam": "node eval/red-team.mjs",
     "session:browser": "node scripts/codex-session-browser.mjs",
-    "dsh:desktop": "node scripts/dsh-desktop.mjs"
+    "dsh:desktop": "node scripts/dsh-desktop.mjs",
+    "trial:runninghub-tts": "node scripts/trial-runninghub-tts.mjs"
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",

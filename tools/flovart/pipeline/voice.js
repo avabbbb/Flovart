@@ -32,7 +32,7 @@ export function tokenize(text) {
 }
 
 // ---------------- TTS ----------------
-const TTS_ROUTES = new Set(['fake', 'minimax']);
+const TTS_ROUTES = new Set(['fake', 'minimax', 'runninghub']);
 
 export function ttsRoutes() {
   return [...TTS_ROUTES];
@@ -92,12 +92,80 @@ async function minimaxTts({ speechText, voice, outPath, signal }) {
   return { costMicros: Math.round([...speechText].length * microsPerChar), providerRequestId: body?.trace_id || null };
 }
 
-export async function synthesizeLine({ speechText, voice, outDir, signal }) {
+const RUNNINGHUB_TTS_MODELS = new Set(['speech-2.8-turbo', 'speech-2.8-hd', 'speech-2.6-turbo', 'speech-2.6-hd', 'speech-02-turbo', 'speech-02-hd']);
+const RUNNINGHUB_DONE = new Set(['SUCCESS', 'SUCCEEDED', 'COMPLETED', 'FINISHED']);
+const RUNNINGHUB_FAILED = new Set(['FAILED', 'FAIL', 'ERROR', 'CANCELLED', 'CANCELED']);
+const sleep = (ms, signal) => new Promise((resolve, reject) => {
+  const timer = setTimeout(resolve, ms);
+  signal?.addEventListener?.('abort', () => { clearTimeout(timer); reject(Object.assign(new Error('已取消'), { code: 'CANCELLED' })); }, { once: true });
+});
+
+/** RunningHub 的金额字段（元）换成微单位；拿不到就记 0，由 trial 校对。 */
+function runningHubCostMicros(usage) {
+  const money = Number(usage?.consumeMoney ?? usage?.thirdPartyConsumeMoney);
+  return Number.isFinite(money) && money > 0 ? Math.round(money * 1_000_000) : 0;
+}
+
+/**
+ * RunningHub 标准模型 API 上的 MiniMax speech：提交拿 taskId，再轮询 /openapi/v2/query 取音频 URL。
+ * Key 只从本机环境 / 密钥库进程注入（RUNNINGHUB_API_KEY），不进入 trace、artifact 元数据或日志。
+ * 提交后网络中断时返回 PROVIDER_UNKNOWN_SUBMIT（带 taskId 时可查询），不自动重提。
+ */
+async function runningHubTts({ speechText, voice, outPath, signal, fetchImpl = fetch, pollMs = 1500, timeoutMs = 180_000 }) {
+  const apiKey = process.env.RUNNINGHUB_API_KEY;
+  if (!apiKey) throw new CapabilityError('runninghub-speech', '未配置 RunningHub API Key', '在 Flovart 设置里保存 RunningHub Key，或设置 RUNNINGHUB_API_KEY');
+  const baseUrl = (process.env.FLOVART_RUNNINGHUB_BASE_URL || 'https://www.runninghub.cn').replace(/\/$/, '');
+  const model = voice.model || 'speech-2.8-turbo';
+  if (!RUNNINGHUB_TTS_MODELS.has(model)) throw Object.assign(new Error(`RunningHub 不支持的配音模型：${model}`), { code: 'INVALID_ARGUMENT' });
+  const headers = { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' };
+  const call = async (path, payload) => {
+    const response = await fetchImpl(`${baseUrl}${path}`, { method: 'POST', signal, headers, body: JSON.stringify(payload) });
+    const body = await response.json().catch(() => ({}));
+    if (response.status === 429) throw Object.assign(new Error('RunningHub 限流（429）'), { code: 'PROVIDER_RATE_LIMITED', retryable: true });
+    if (response.status === 401 || response.status === 403) throw Object.assign(new Error('RunningHub Key 无效或无权限'), { code: 'PROVIDER_AUTH_FAILED' });
+    if (!response.ok) throw Object.assign(new Error(`RunningHub 请求失败：${body?.errorMessage || body?.msg || response.status}`), { code: 'PROVIDER_FAILED' });
+    return body;
+  };
+  const submitted = await call(`/openapi/v2/rhart-audio/text-to-audio/${model}`, {
+    text: speechText,
+    voice_id: voice.voiceId,
+    speed: voice.speed ?? 1,
+    volume: 1,
+    pitch: voice.pitch ?? 0,
+    ...(voice.emotion ? { emotion: voice.emotion } : {}),
+    enable_base64_output: false,
+  });
+  const taskId = submitted?.taskId;
+  if (!taskId) throw Object.assign(new Error(`RunningHub 没有返回任务：${submitted?.errorMessage || submitted?.msg || '未知原因'}`), { code: 'PROVIDER_FAILED' });
+  const deadline = Date.now() + timeoutMs;
+  let state = submitted;
+  for (;;) {
+    const status = String(state?.status || '').toUpperCase();
+    if (RUNNINGHUB_FAILED.has(status) || state?.errorCode) {
+      throw Object.assign(new Error(`RunningHub 配音失败：${state?.errorMessage || state?.errorCode || status}`), { code: 'PROVIDER_FAILED', providerRequestId: taskId });
+    }
+    const audio = (state?.results || []).find(item => item?.url);
+    if (RUNNINGHUB_DONE.has(status) && audio) {
+      const download = await fetchImpl(audio.url, { signal });
+      if (!download.ok) throw Object.assign(new Error(`RunningHub 音频下载失败：${download.status}`), { code: 'PROVIDER_FAILED', providerRequestId: taskId });
+      writeFileSync(outPath, Buffer.from(await download.arrayBuffer()));
+      return { costMicros: runningHubCostMicros(state.usage), providerRequestId: taskId };
+    }
+    if (RUNNINGHUB_DONE.has(status)) throw Object.assign(new Error('RunningHub 任务完成但没有音频'), { code: 'PROVIDER_FAILED', providerRequestId: taskId });
+    if (Date.now() > deadline) throw Object.assign(new Error('RunningHub 配音超时，任务可能仍在进行'), { code: 'PROVIDER_UNKNOWN_SUBMIT', providerRequestId: taskId, retryable: false });
+    await sleep(pollMs, signal);
+    state = await call('/openapi/v2/query', { taskId });
+  }
+}
+
+export async function synthesizeLine({ speechText, voice, outDir, signal, fetchImpl, pollMs }) {
   if (!TTS_ROUTES.has(voice.route)) throw Object.assign(new Error(`未知 TTS 路由：${voice.route}`), { code: 'INVALID_ARGUMENT' });
-  const outPath = join(outDir, voice.route === 'minimax' ? 'voice.mp3' : 'voice.wav');
+  const outPath = join(outDir, voice.route === 'fake' ? 'voice.wav' : 'voice.mp3');
   const result = voice.route === 'minimax'
     ? await minimaxTts({ speechText, voice, outPath, signal })
-    : await fakeTts({ speechText, voice, outPath });
+    : voice.route === 'runninghub'
+      ? await runningHubTts({ speechText, voice, outPath, signal, ...(fetchImpl ? { fetchImpl } : {}), ...(pollMs != null ? { pollMs } : {}) })
+      : await fakeTts({ speechText, voice, outPath });
   return { path: outPath, ...result };
 }
 
