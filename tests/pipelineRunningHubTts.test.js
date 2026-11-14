@@ -48,7 +48,7 @@ describe('RunningHub TTS route', () => {
     expect(result.path.endsWith('voice.mp3')).toBe(true);
     expect([...readFileSync(result.path)]).toEqual([1, 2, 3]);
     expect(calls[0].url).toBe('https://rh.test/openapi/v2/rhart-audio/text-to-audio/speech-2.8-turbo');
-    expect(calls[0].body).toMatchObject({ text: '做完 App', voice_id: 'Elegant_Man', speed: 1.1, enable_base64_output: false });
+    expect(calls[0].body).toMatchObject({ text: '做完 App', voice_id: 'Elegant_Man', speed: 1.1, enable_base64_output: false, english_normalization: false });
     expect(calls[0].auth).toBe('Bearer test-key');
     expect(calls[1]).toMatchObject({ url: 'https://rh.test/openapi/v2/query', body: { taskId: '42' } });
   });

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // 真实 Provider trial：用 RunningHub 上的 MiniMax speech 合成一句配音，走同一条 pipeline 命令边界，
 // 再出一版带字幕的 draft。需要 RUNNINGHUB_API_KEY（不会打印）；会产生少量真实扣费。
+// 走 HTTP(S)_PROXY 注入 Key 的环境里需加 NODE_USE_ENV_PROXY=1（Node 22 的 fetch 默认不读代理变量）。
 // 用法：node scripts/trial-runninghub-tts.mjs [--model speech-2.8-turbo] [--voice Wise_Woman]
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';

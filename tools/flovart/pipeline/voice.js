@@ -134,6 +134,7 @@ async function runningHubTts({ speechText, voice, outPath, signal, fetchImpl = f
     pitch: voice.pitch ?? 0,
     ...(voice.emotion ? { emotion: voice.emotion } : {}),
     enable_base64_output: false,
+    english_normalization: Boolean(voice.englishNormalization),
   });
   const taskId = submitted?.taskId;
   if (!taskId) throw Object.assign(new Error(`RunningHub 没有返回任务：${submitted?.errorMessage || submitted?.msg || '未知原因'}`), { code: 'PROVIDER_FAILED' });
