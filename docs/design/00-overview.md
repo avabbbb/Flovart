@@ -31,6 +31,8 @@ Flovart是 local-first、agent-native、BYOK 的创作工作台。用户的模�
 
 顶级产品 surface 固定为 **Canvas | Reverse | Agent**；Assistant / Context / History 只在 Canvas、Reverse 旁的 contextual drawer 中出现。
 
+提案中：Agent 驱动的产品宣传片流水线（run / trace、评审循环、素材归档）见 [16-agent-video-pipeline（PROPOSAL）](16-agent-video-pipeline.md)，接受后蒸馏进本表各模块。
+
 ## 4. 设计原则
 
 1. **原素材不被破坏**：默认新增结果（候选 → Media Pool → 新轨道）；替换必须显式确认、可恢复。
