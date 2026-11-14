@@ -38,3 +38,31 @@ export function toPreviewSequences(
     ...(labels[shot.shotId] ? { label: labels[shot.shotId] } : {}),
   }));
 }
+
+/** Node 渲染时本地素材被链接进 bundle 的 publicDir，引用写成 `static:<文件名>`；组件用 staticFile 解析。 */
+export const STATIC_ASSET_PREFIX = 'static:';
+
+export function isStaticAssetRef(src: string) {
+  return src.startsWith(STATIC_ASSET_PREFIX);
+}
+
+export function dbToLinearVolume(gainDb: number) {
+  // Remotion 的音量上限是 1：正增益在这里封顶，需要放大的素材请走 ffmpeg 引擎。
+  return Math.min(1, Math.max(0, 10 ** (gainDb / 20)));
+}
+
+/** music 在任意 voice 出声的帧闪避到 25%（与 ffmpeg sidechain 的方向一致，力度是固定值）。 */
+export const MUSIC_DUCK_FACTOR = 0.25;
+
+export function voiceActiveAt(frame: number, audio: ReadonlyArray<{ role: string; startFrame: number; durationFrames?: number }>, totalFrames: number) {
+  return audio.some(clip => clip.role === 'voice'
+    && frame >= clip.startFrame
+    && frame < clip.startFrame + (clip.durationFrames ?? totalFrames - clip.startFrame));
+}
+
+/** 文字层与字幕的版式：与 ffmpeg 引擎同一套比例（top 10%、bottom 底边 78%、字幕底边 88%）。 */
+export function overlayLayout(position: 'top' | 'center' | 'bottom', height: number) {
+  if (position === 'top') return { top: Math.round(height * 0.10) };
+  if (position === 'bottom') return { bottom: Math.round(height * 0.22) };
+  return { top: '50%', transform: 'translateY(-50%)' } as const;
+}

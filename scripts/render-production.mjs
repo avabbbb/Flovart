@@ -2,6 +2,8 @@
 // ProductionSpec V1 → MP4。Node 侧渲染入口：Agent / Workflow 节点 / 本地 Worker 共用。
 // 用法：
 //   node scripts/render-production.mjs --spec spec.json --out out.mp4 [--entry remotion/index.ts] [--id Production]
+//     [--public-dir dir]  spec 里 `static:<文件名>` 的素材从这个目录供给（staticFile）
+//     [--scale 0.5]       输出按比例缩放（draft 用）
 // 输出一行 JSON：{ ok, output, frames, fps, width, height, durationMs }。失败时退出码非 0。
 import { mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -40,7 +42,10 @@ if (spec?.schemaVersion !== 1 || !Array.isArray(spec.shots)) {
 await mkdir(path.dirname(output), { recursive: true });
 
 const inputProps = { spec };
-const serveUrl = await bundle({ entryPoint });
+const publicDir = args['public-dir'] ? path.resolve(args['public-dir']) : undefined;
+const scale = args.scale ? Number(args.scale) : 1;
+if (!(scale > 0 && scale <= 1)) throw new Error('--scale 必须在 (0, 1] 之间');
+const serveUrl = await bundle({ entryPoint, ...(publicDir ? { publicDir } : {}) });
 const composition = await selectComposition({ serveUrl, id: compositionId, inputProps });
 await renderMedia({
   composition,
@@ -49,6 +54,7 @@ await renderMedia({
   outputLocation: output,
   inputProps,
   concurrency: 1,
+  scale,
 });
 
 process.stdout.write(JSON.stringify({
@@ -56,7 +62,7 @@ process.stdout.write(JSON.stringify({
   output,
   frames: composition.durationInFrames,
   fps: composition.fps,
-  width: composition.width,
-  height: composition.height,
+  width: Math.round(composition.width * scale),
+  height: Math.round(composition.height * scale),
   durationMs: Math.round((composition.durationInFrames / composition.fps) * 1000),
 }) + '\n');

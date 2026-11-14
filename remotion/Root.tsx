@@ -19,7 +19,7 @@ const EMPTY_SPEC: ProductionSpecV1 = {
 };
 
 function ProductionComposition({ spec, labels = {}, language = 'zho' }: ProductionCompositionProps) {
-  return <ProductionVideo shots={toPreviewSequences(spec, labels)} language={language} />;
+  return <ProductionVideo shots={toPreviewSequences(spec, labels)} texts={spec.texts} captions={spec.captions} audio={spec.audio} language={language} />;
 }
 
 export function RemotionRoot() {

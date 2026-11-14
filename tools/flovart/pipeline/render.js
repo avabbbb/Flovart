@@ -1,9 +1,9 @@
 // composition.render 的本机渲染引擎（docs/design/16-agent-video-pipeline.md C12 / C13 / C14 / C17）。
 // - ffmpeg：spec V2 全轨道（画面 / 推镜 / 文字 / 字幕安全区 / 人声 + 音乐 + 音效、人声闪避音乐）。
-// - remotion：调用 scripts/render-production.mjs；只在 spec 能被现有组件完整表达时可用，否则如实返回 CAPABILITY_UNAVAILABLE。
-import { existsSync, writeFileSync } from 'node:fs';
+// - remotion：调用 scripts/render-production.mjs，画面 / 文字 / 字幕 / 音频轨由 components/reverse/ProductionVideo.tsx 绘制；缺依赖时返回 CAPABILITY_UNAVAILABLE。
+import { copyFileSync, existsSync, linkSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CapabilityError, ffmpegBin, filterPath, resolveFontFile, runTool } from './media.js';
 
@@ -155,8 +155,8 @@ export async function renderWithFfmpeg(spec, { preset, atSec, outPath, resolveAr
   return { engine: 'ffmpeg', width, height };
 }
 
-/** Remotion 只在依赖齐全、且 spec 不含现有 ProductionVideo 画不出来的轨道时可用。 */
-export function remotionAvailability(spec) {
+/** Remotion 需要 @remotion/renderer 与 @remotion/bundler；spec V2 的画面 / 文字 / 字幕 / 音频轨都能表达。 */
+export function remotionAvailability() {
   const require = createRequire(join(REPO_ROOT, 'package.json'));
   try {
     require.resolve('@remotion/renderer');
@@ -164,49 +164,68 @@ export function remotionAvailability(spec) {
   } catch {
     return { ok: false, reason: '本机缺少 @remotion/renderer / @remotion/bundler', diagnose: '在仓库根目录运行 npm install' };
   }
-  const unsupported = [];
-  if (spec.tracks.text.length) unsupported.push('text');
-  if (spec.tracks.captions.length) unsupported.push('captions');
-  if (spec.tracks.audio.length) unsupported.push('audio');
-  if (unsupported.length) {
-    return {
-      ok: false,
-      reason: `components/reverse/ProductionVideo.tsx 还不渲染 ${unsupported.join(' / ')} 轨`,
-      diagnose: '改用 engine=ffmpeg，或先给 ProductionVideo 增加对应轨道',
-    };
-  }
   return { ok: true };
 }
 
-/** spec V2（仅画面轨）→ ProductionSpec V1，交给现有 Remotion 入口。 */
-export function toProductionSpecV1(spec, runId, resolveArtifact) {
+/**
+ * spec V2 → ProductionSpec V1（含可选 texts / captions / audio），交给 Remotion 入口。
+ * assetRef(artifactId) 返回组件可加载的引用（Node 渲染时为 `static:<文件名>`）。
+ */
+export function toProductionSpecV1(spec, runId, assetRef) {
   const fps = spec.output.fps;
   const frame = ms => Math.round((ms / 1000) * fps);
+  const span = ms => Math.max(1, frame(ms));
   return {
     schemaVersion: 1,
     projectId: runId,
     sourceRevision: 0,
-    output: { width: spec.output.width, height: spec.output.height, fps, durationFrames: Math.max(1, frame(spec.output.durationMs)) },
+    output: { width: spec.output.width, height: spec.output.height, fps, durationFrames: span(spec.output.durationMs) },
     shots: [...spec.tracks.visual].sort((a, b) => a.startMs - b.startMs).map((clip, index) => ({
       shotId: clip.id,
       index: index + 1,
       startFrame: frame(clip.startMs),
-      durationFrames: Math.max(1, frame(clip.durationMs)),
+      durationFrames: span(clip.durationMs),
       sourceType: 'imported',
-      ...(clip.artifactId ? { assetRef: resolveArtifact(clip.artifactId).path } : {}),
+      ...(clip.artifactId ? { assetRef: assetRef(clip.artifactId) } : {}),
       locked: clip.locked,
+    })),
+    texts: spec.tracks.text.map(clip => ({
+      id: clip.id, text: clip.text, startFrame: frame(clip.startMs), durationFrames: span(clip.durationMs),
+      position: clip.position || 'center', ...(clip.size ? { size: clip.size } : {}), ...(clip.color ? { color: clip.color } : {}),
+    })),
+    captions: spec.tracks.captions.map(clip => ({
+      id: clip.id, text: clip.displayText, startFrame: frame(clip.startMs), durationFrames: span(clip.durationMs),
+    })),
+    audio: spec.tracks.audio.map(clip => ({
+      id: clip.id, role: clip.role, src: assetRef(clip.artifactId), startFrame: frame(clip.startMs),
+      ...(clip.durationMs ? { durationFrames: span(clip.durationMs) } : {}), gainDb: clip.gainDb ?? 0,
+      ...(clip.role === 'music' ? { duck: clip.duck !== false } : {}),
     })),
     renderer: 'remotion',
   };
 }
 
 export async function renderWithRemotion(spec, { runId, preset, outPath, resolveArtifact, scratchPath, signal }) {
-  const availability = remotionAvailability(spec);
+  const availability = remotionAvailability();
   if (!availability.ok) throw new CapabilityError('remotion', availability.reason, availability.diagnose);
   if (preset === 'still') throw new CapabilityError('remotion', 'Remotion 入口暂不支持单帧 still', '改用 engine=ffmpeg 出静态关键帧');
+  // 无头浏览器读不了任意本地路径：把用到的 artifact 链接进 bundle 的 publicDir，用 staticFile 供给。
+  const publicDir = scratchPath('remotion-public');
+  mkdirSync(publicDir, { recursive: true });
+  const assetRef = artifactId => {
+    const source = resolveArtifact(artifactId).path;
+    const name = basename(source);
+    const target = join(publicDir, name);
+    if (!existsSync(target)) {
+      try { linkSync(source, target); } catch { copyFileSync(source, target); }
+    }
+    return `static:${name}`;
+  };
   const specPath = scratchPath('production-spec.v1.json');
-  writeFileSync(specPath, JSON.stringify(toProductionSpecV1(spec, runId, resolveArtifact)), 'utf8');
+  writeFileSync(specPath, JSON.stringify(toProductionSpecV1(spec, runId, assetRef)), 'utf8');
+  const scale = RENDER_PRESETS[preset].scale;
   await runTool(process.execPath, [join(REPO_ROOT, 'scripts/render-production.mjs'), '--spec', specPath, '--out', outPath,
-    '--entry', join(REPO_ROOT, 'remotion/index.ts')], { capability: 'remotion', signal, timeoutMs: 30 * 60 * 1000 });
-  return { engine: 'remotion', width: spec.output.width, height: spec.output.height };
+    '--entry', join(REPO_ROOT, 'remotion/index.ts'), '--public-dir', publicDir, '--scale', String(scale)],
+  { capability: 'remotion', signal, timeoutMs: 30 * 60 * 1000 });
+  return { engine: 'remotion', width: even(spec.output.width * scale), height: even(spec.output.height * scale) };
 }

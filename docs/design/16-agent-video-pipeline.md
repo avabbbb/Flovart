@@ -288,7 +288,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 | 命令边界与 trace | `tools/flovart/pipeline/index.js` | 每次命令自动写 Step（caller、argsDigest、mutationId、status、attempts、产物）；同 mutationId 同载荷重放原结果、不同载荷拒绝；进程中断后的 `running` / `unknown_submit` Step 由同一 mutationId 续跑，`pipeline.run.get` 返回 `resumeFrom` |
 | 持久层 | `tools/flovart/pipeline/store.js`、`src-tauri/src/runtime/pipeline_trace.rs` | 与 Runtime 共用 `flovart-state.db`（migration 5，`pipeline_*` 表）+ 内容寻址 artifact 目录（sha256）；Node 写，Rust `pipeline.run.get` 只读 |
 | 合成 spec V2 | `tools/flovart/pipeline/spec.js` | visual / text / captions / audio 四轨；`locked` 片段修改须显式 `unlock` + reason；修订绑定评审轮时只允许改 findings 涉及的片段（`PATCH_OUT_OF_SCOPE`）；`baseVersion` 过期返回 `VERSION_CONFLICT` |
-| 渲染 | `tools/flovart/pipeline/render.js` | 受控 ffmpeg filtergraph（镜头、文字、字幕、旁白、音乐 sidechain 闪避），preset still / draft / final；`final` 需要该版本已有 pass 评审；Remotion 引擎只画镜头，含文字 / 字幕 / 音频轨时返回 `CAPABILITY_UNAVAILABLE` |
+| 渲染 | `tools/flovart/pipeline/render.js` | 受控 ffmpeg filtergraph（镜头、文字、字幕、旁白、音乐 sidechain 闪避），preset still / draft / final；`final` 需要该版本已有 pass 评审；Remotion 引擎（`engine: remotion`）画面 / 文字 / 字幕 / 音频轨齐全，draft 按 0.5 缩放，still 仍走 ffmpeg |
 | 评审工具 | `media.js`、`review.js` | `media.probe`（时长、黑帧、静音、LUFS）、`media.frames`（≤6 帧，可与上一版并排）；`review.submit` 拒绝没有时间点 / 修法的 finding，Agent 评审前必须看过该版本的帧，重复 findings 返回 `REPEATED_FINDINGS`，超过 `maxRounds` 自动 block |
 | 声音 | `voice.js` | `audio.tts` 路由 fake / minimax（`speechText` 与 `displayText` 分离，输出时长与参数快照）；`audio.transcribe` 引擎 whisperx / hypit / fixture；`timeline.align` 用 LCS 对齐 + 插值 |
 | 预算与门禁 | `index.js` | run 级预算（maxTasks / maxCost / maxRounds）在创建时一次确认；付费步 reserve → confirm / release 写入 run 账本 |
@@ -304,6 +304,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 
 - **存储（已对齐 §4.2，2026-11-14）**：trace 表由 migration 5 建立，Rust Runtime 与 Node pipeline 执行同一份 SQL（`tools/flovart/contracts/runtime/migrations/0005_agent_pipeline.sql`）、共用 `runtime_migrations` 账本和 `flovart-state.db`。表名加 `pipeline_` 前缀，避免与 Runtime 的 `artifacts` 概念冲突；仍未复用 `production_*` / `usage_ledger`，预算走 `pipeline_usage_ledger`。写入只在 Node 命令边界，Rust 侧提供只读 `pipeline.run.get`，`npm run e2e:pipeline:parity` 校验两边输出逐字段一致。
 - **Canvas（2026-11-14）**：抽屉“运行日志”顶部新增“视频流水线”分区（`components/agent/AgentPipelineRunsSection.tsx`），每个 run 一张卡片：状态、head 版本、最近一轮评审、Step 数与失败数、blocker；展开看逐步 trace（tool / caller / 状态 / 错误码 / 重试次数）、各版本的锁定片段与结论、可继续的 Step。“放到画布”把每个版本最好的一份视频渲染（final 优先于 draft，跳过 rejected 与单帧 still）放进同一个自动批次 `pipeline-<runId>`（`batchIndex = 版本号 - 1`），叠放主图指向最新版本；已在画布上的 artifact 不重复插入。数据只读取本机 agent 的 `GET /pipeline/*`。
-- **未做**：Remotion 文字 / 字幕 / 音频轨、`capture.ui`、MCP 投影、Skill 命令文档。
+- **Remotion 三轨（2026-11-14）**：ProductionSpec V1 增加可选 `texts` / `captions` / `audio`（帧为单位），`components/reverse/ProductionVideo.tsx` 绘制文字层（top 10% / center / bottom 底边 78%）、底部字幕（底边 88%、半透明底框）与音频（music 在 voice 出声帧闪避到 25%，增益封顶 0 dB）；字体栈中文优先（Noto CJK / 苹方 / 雅黑）。本地 artifact 链接进 bundle 的 `publicDir`，以 `static:<文件名>` 经 `staticFile` 供给。`npm run e2e:pipeline:remotion` 用真实 run 的 v2 spec 出 540×960 draft，检查音频流、时长与缩放并截字幕帧和文字帧。
+- **未做**：`capture.ui`、MCP 投影、Skill 命令文档。
 - **未实测**：MiniMax TTS 与真实 WhisperX / hypit（只按文档形状实现）；没有 CJK 字体的 Linux 环境会回退到 DejaVu，中文字幕显示为方框，需设 `FLOVART_FONT_FILE`。
 - `cargo test --lib` 已在 Linux 沙箱运行（含 pipeline_trace 单测与 Node/Rust 一致性测试）。`rust-ini` 锁定到 0.21.1：0.21.3 给 `ParseOption` 加了字段，`tauri-plugin-deep-link` 2.6.2 会编译失败。

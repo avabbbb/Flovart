@@ -4,6 +4,7 @@
 
 - Agent 视频流水线 P0（实验性）：13 条 pipeline 命令（run / 素材 / TTS / 转写 / 对齐 / 合成修订 / 渲染 / 探测 / 抽帧 / 评审 / 归档），命令边界自动记 trace，评审 → 定向修补（locked 片段不变）→ 重渲染可端到端跑通（`npm run e2e:pipeline`）。
 - 流水线 trace 迁入桌面 Runtime 共用的 `flovart-state.db`（migration 5，表名 `pipeline_*`）；Rust Runtime 新增只读 `pipeline.run.get`，与 Node 输出逐字段一致（`npm run e2e:pipeline:parity`）；agent 新增只读 `GET /pipeline/runs`、`/pipeline/runs/:id`、`/pipeline/artifacts/:id`。
+- 流水线 Remotion 引擎支持文字层、底部字幕与音频轨（音乐随人声闪避），中文字体优先；`npm run e2e:pipeline:remotion` 端到端验证。
 - Canvas 抽屉“运行日志”新增视频流水线 run 卡片（状态、版本、评审结论、逐步 trace）；“放到画布”把各版本渲染收进同一组叠放，最新版本在最上面。
 - 修复 Linux 构建：`rust-ini` 锁定 0.21.1（0.21.3 与 `tauri-plugin-deep-link` 2.6.2 不兼容）。
 - 本地文件夹重新授权后自动重读画布节点，并通过 BroadcastChannel 同步其他标签页；权限失效节点提供“重新连接文件夹”。

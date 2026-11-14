@@ -21,6 +21,37 @@ export interface ProductionShotV1 {
   locked: boolean;
 }
 
+/** 文字层（标题、卡片字）。字号按 1080p 画面像素计，渲染按 output 高度等比缩放。 */
+export interface ProductionTextV1 {
+  id: string;
+  text: string;
+  startFrame: number;
+  durationFrames: number;
+  position: 'top' | 'center' | 'bottom';
+  size?: number;
+  color?: string;
+}
+
+/** 底部字幕：固定走安全区（底边在画高 88%），带底框。 */
+export interface ProductionCaptionV1 {
+  id: string;
+  text: string;
+  startFrame: number;
+  durationFrames: number;
+}
+
+/** 音频轨：voice / music / sfx。music 默认在 voice 出声时闪避（duck）。 */
+export interface ProductionAudioV1 {
+  id: string;
+  role: 'voice' | 'music' | 'sfx';
+  src: string;
+  startFrame: number;
+  /** 缺省表示播到素材结束或成片结束。 */
+  durationFrames?: number;
+  gainDb: number;
+  duck?: boolean;
+}
+
 export interface ProductionSpecV1 {
   schemaVersion: typeof PRODUCTION_SPEC_SCHEMA_VERSION;
   projectId: string;
@@ -28,6 +59,10 @@ export interface ProductionSpecV1 {
   sourceRevision: number;
   output: { width: number; height: number; fps: number; durationFrames: number };
   shots: ProductionShotV1[];
+  /** 以下三轨可选：Reverse 派生的 spec 不带；Agent 视频流水线的合成 spec 会带。 */
+  texts?: ProductionTextV1[];
+  captions?: ProductionCaptionV1[];
+  audio?: ProductionAudioV1[];
   renderer: 'remotion';
 }
 
@@ -98,6 +133,26 @@ export function validateProductionSpec(spec: ProductionSpecV1): string[] {
     if (shot.startFrame < previousEnd) errors.push(`${shot.shotId}: 镜头重叠或顺序错误`);
     if (!['recorded', 'generated', 'imported'].includes(shot.sourceType)) errors.push(`${shot.shotId}: sourceType 无效`);
     previousEnd = shot.startFrame + shot.durationFrames;
+  }
+  const timed = (kind: string, item: { id?: string; startFrame?: number; durationFrames?: number }, durationRequired: boolean) => {
+    if (!item.id) errors.push(`${kind}: id 不能为空`);
+    if (!Number.isInteger(item.startFrame) || (item.startFrame as number) < 0) errors.push(`${kind} ${item.id}: startFrame 必须是非负整数`);
+    if ((durationRequired || item.durationFrames !== undefined) && (!Number.isInteger(item.durationFrames) || (item.durationFrames as number) <= 0)) errors.push(`${kind} ${item.id}: durationFrames 必须是正整数`);
+  };
+  for (const text of spec.texts ?? []) {
+    timed('text', text, true);
+    if (!text.text) errors.push(`text ${text.id}: text 不能为空`);
+    if (!['top', 'center', 'bottom'].includes(text.position)) errors.push(`text ${text.id}: position 无效`);
+  }
+  for (const caption of spec.captions ?? []) {
+    timed('caption', caption, true);
+    if (!caption.text) errors.push(`caption ${caption.id}: text 不能为空`);
+  }
+  for (const clip of spec.audio ?? []) {
+    timed('audio', clip, false);
+    if (!clip.src) errors.push(`audio ${clip.id}: src 不能为空`);
+    if (!['voice', 'music', 'sfx'].includes(clip.role)) errors.push(`audio ${clip.id}: role 无效`);
+    if (!Number.isFinite(clip.gainDb)) errors.push(`audio ${clip.id}: gainDb 必须是数字`);
   }
   return errors;
 }
