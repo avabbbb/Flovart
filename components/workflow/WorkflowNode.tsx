@@ -4,7 +4,7 @@ import { ArrowLeftRight, AudioLines, Bot, Camera, Check, ChevronsDown, Clapperbo
 import { WorkflowNodeLasso } from './WorkflowNodeLasso';
 import type { LassoPoint } from './lasso';
 import { Component, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import { getWorkflowOperationCapability } from './operationRegistry';
 import { buildCssFilter } from '../ImageFilterPanel';
 import { useWorkflowMediaUrl } from './media';
@@ -107,6 +107,7 @@ function resetWorkflowHandle(event: ReactPointerEvent<HTMLDivElement>) {
 export function WorkflowNode({
   node,
   selected,
+  lifted = false,
   mediaActive,
   onPointerDown,
   onConnectStart,
@@ -153,6 +154,8 @@ export function WorkflowNode({
 }: {
   node: WorkflowNodeData;
   selected: boolean;
+  /** 正被拖拽：抬起（放大、微倾、加深投影），松手后弹簧落地。 */
+  lifted?: boolean;
   mediaActive?: boolean;
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onConnectStart: (event: ReactPointerEvent<HTMLButtonElement>) => void;
@@ -332,6 +335,7 @@ export function WorkflowNode({
   ) : null;
   const isLoading = status === 'loading' || uploading;
   const [isDropTarget, setDropTarget] = useState(false);
+  const reduceMotion = useReducedMotion();
   const [isEditingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(node.title);
   const plugin = getWorkflowNodePlugin(node.type);
@@ -407,21 +411,27 @@ export function WorkflowNode({
       <input ref={mediaInput} hidden type="file" accept={accept} onChange={event => { const file = event.target.files?.[0]; if (file) onReplaceMedia(file); event.currentTarget.value = ''; }} />
     </div>
   );
+  const liftMotion = !reduceMotion && lifted;
   return (
     <motion.div
       data-workflow-node-id={node.id}
-      className={`workflow-node workflow-node--${node.type}${selected ? ' is-selected' : ''}${isDropTarget ? ' is-drop-target' : ''}`}
+      data-lifted={lifted ? 'true' : undefined}
+      className={`workflow-node workflow-node--${node.type}${selected ? ' is-selected' : ''}${isDropTarget ? ' is-drop-target' : ''}${lifted ? ' is-lifted' : ''}`}
       role="group"
       aria-label={language === 'en' ? `${node.title} workflow node` : `${node.title} 工作流节点`}
       tabIndex={0}
       style={{ x: node.position.x, y: node.position.y, width: node.width, height: node.height }}
       initial={{ scale: 0.85, opacity: 0 }}
-      animate={{ scale: isLoading ? [1, 1.015, 1] : 1, opacity: 1 }}
+      animate={{ scale: liftMotion ? 1.04 : isLoading ? [1, 1.015, 1] : 1, rotate: liftMotion ? -1.5 : 0, opacity: 1 }}
       exit={{ scale: 0.85, opacity: 0 }}
       transition={{
-        scale: isLoading
-          ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut' }
-          : { type: 'spring', stiffness: 420, damping: 20, mass: 0.7 },
+        scale: liftMotion
+          ? { type: 'spring', stiffness: 520, damping: 26, mass: 0.6 }
+          : isLoading
+            ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut' }
+            // 落地：阻尼偏低，略压过 1 再回弹，像纸片放回桌面。
+            : { type: 'spring', stiffness: 460, damping: 15, mass: 0.7 },
+        rotate: { type: 'spring', stiffness: 380, damping: 18 },
         opacity: { duration: 0.2 },
         default: { type: 'spring', stiffness: 400, damping: 22 },
       }}

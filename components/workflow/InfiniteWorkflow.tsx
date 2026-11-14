@@ -497,6 +497,8 @@ export function InfiniteWorkflow({
   const [notice, setNotice] = useState<string | null>(null);
   const [focusBadge, setFocusBadge] = useState(false);
   const [overlayHidden, setOverlayHidden] = useState(false);
+  // 拿起 / 放下：真正进入拖拽时标记被拖节点，松手清空，节点据此做抬起与落地动画。
+  const [liftedNodeIds, setLiftedNodeIds] = useState<Set<string> | null>(null);
   const [promptFocusSignal, setPromptFocusSignal] = useState(0);
   const { tool: imageTool, busy: imageToolBusy, error: imageToolError, active: imageToolActive, controls: imageControls } = useToolSession<WorkflowImageToolState, Frame>();
   const [lassoNodeId, setLassoNodeId] = useState<string | null>(null);
@@ -1963,6 +1965,7 @@ export function InfiniteWorkflow({
       // Hide the selection overlay only once this press has turned into a real
       // drag — a click without movement keeps the toolbar visible.
       if (interaction.moved) setOverlayHidden(true);
+      if (interaction.moved) setLiftedNodeIds(current => current ?? new Set(interaction.positions.keys()));
       let snapGuidesState: { x?: number[]; y?: number[] } | null = null;
       if (snapEnabledRef.current && interaction.positions.size > 0) {
         const SNAP_THRESHOLD = 8;
@@ -2098,6 +2101,7 @@ export function InfiniteWorkflow({
     updateInteraction(clientX, clientY, pointerId);
     interactionRef.current = null;
     setOverlayHidden(false);
+    setLiftedNodeIds(null);
     setSnapGuides(null);
     if (interaction.type === 'node' || interaction.type === 'resize') {
       setInteractionPreview(null);
@@ -2149,6 +2153,7 @@ export function InfiniteWorkflow({
     pendingMoveRef.current = null;
     interactionRef.current = null;
     setOverlayHidden(false);
+    setLiftedNodeIds(null);
     // 拖拽期间的改动只存在于预览状态，取消时直接丢弃，无需写回存储。
     setInteractionPreview(null);
     if (interaction?.type === 'pan') patchProject({ viewport: interaction.viewport });
@@ -2705,6 +2710,7 @@ export function InfiniteWorkflow({
     // selected but never moved.
     if (target?.closest('video[controls],audio[controls]')) {
       setOverlayHidden(false);
+    setLiftedNodeIds(null);
       return;
     }
     const frame = currentFrame();
@@ -3240,6 +3246,7 @@ export function InfiniteWorkflow({
             node={node}
             language={language}
             selected={selectedNodes.has(node.id)}
+            lifted={Boolean(liftedNodeIds?.has(node.id))}
             mediaActive={activeMedia?.projectId === project.id && activeMedia.nodeId === node.id}
             uploadStage={ingestStages[node.id]}
             onCancelUpload={ingestAbortRef.current.has(node.id) ? () => ingestAbortRef.current.get(node.id)?.abort() : undefined}
