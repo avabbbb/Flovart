@@ -16,6 +16,7 @@ import {
 } from '../services/runningHubService';
 import { modelRefModelId } from '../utils/modelRefs';
 import { getProductModels } from '../services/productModelCatalog';
+import { getRunningHubRoutesVersion, subscribeRunningHubRoutes } from '../services/runningHubDynamicRoutes';
 import {
     deleteRuntimeCredential,
     reportRuntimeCredentialVault,
@@ -160,14 +161,18 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
     const [clearKeysOnExit, setClearKeysOnExit] = useState<boolean>(() => {
         try { return localStorage.getItem('security.clearKeysOnExit') === 'true'; } catch { return false; }
     });
-    // PromptBar 只展示稳定 Product Model；文本执行模型由 Runtime Capability 映射决定。
+    // RunningHub 动态线路（官方文档解析）更新时刷新产品卡列表与自动映射。
+    const [runningHubRoutesVersion, setRunningHubRoutesVersion] = useState(getRunningHubRoutesVersion);
+    useEffect(() => subscribeRunningHubRoutes(() => setRunningHubRoutesVersion(getRunningHubRoutesVersion())), []);
+
+    // PromptBar 展示 Product Model（静态产品卡 + RunningHub 动态家族卡）；文本执行模型由 Runtime Capability 映射决定。
     const dynamicModelOptions = useMemo(() => {
         return {
             text: [],
             image: getProductModels('image').map(model => model.id),
             video: getProductModels('video').map(model => model.id),
         };
-    }, []);
+    }, [runningHubRoutesVersion]);
 
     const [usageSummaryMap, setUsageSummaryMap] = useState<Awaited<ReturnType<typeof getUsageSummary>> | undefined>();
     useEffect(() => {
@@ -235,6 +240,20 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
         if (!apiKeysLoaded) return;
         void extensionKeySyncRef.current?.update(clearKeysOnExit ? [] : userApiKeys);
     }, [userApiKeys, apiKeysLoaded, clearKeysOnExit]);
+
+    // 启动时、以及 RunningHub 官方文档解析出新线路后，补齐自动映射（每个家族 + 模式 → 对应 endpoint），不覆盖用户已选的映射。
+    useEffect(() => {
+        if (!apiKeysLoaded || userApiKeys.length === 0) return;
+        setUserApiKeys(prev => {
+            let changed = false;
+            const next = prev.map(k => {
+                const merged = mergeSuggestedProductRouteMappings(k);
+                if (merged !== k) changed = true;
+                return merged;
+            });
+            return changed ? next : prev;
+        });
+    }, [apiKeysLoaded, userApiKeys.length, runningHubRoutesVersion]);
 
     // 启动时后台自动刷新所有 Provider 的模型列表（带缓存 TTL）
     const autoRefreshRan = useRef(false);

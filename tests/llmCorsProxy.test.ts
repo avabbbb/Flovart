@@ -73,3 +73,40 @@ describe('handleLlmProxy', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 });
+
+describe('handleLlmProxy — RunningHub public docs', () => {
+  const DOC_CN = `${ORIGIN}/api/llm-proxy/www.runninghub.cn/runninghub-api-doc-cn/api-519905081.md`;
+  const LLMS_EN = `${ORIGIN}/api/llm-proxy/www.runninghub.ai/runninghub-api-doc-en/llms.txt`;
+  const docReq = (url: string, init: RequestInit & { headers?: Record<string, string> } = {}) => new Request(url, {
+    method: 'GET',
+    ...init,
+    headers: { origin: ORIGIN, ...(init.headers || {}) },
+  });
+
+  it('allows key-less GET of doc markdown and llms.txt, without forwarding credentials', async () => {
+    const fetchImpl = vi.fn(async (_url: string, init: RequestInit) => {
+      const h = init.headers as Headers;
+      expect(h.get('authorization')).toBeNull();
+      expect(h.get('cookie')).toBeNull();
+      return new Response('# doc', { status: 200, headers: { 'content-type': 'text/markdown' } });
+    });
+    const opts = { fetchImpl: fetchImpl as unknown as typeof fetch };
+    const res = await handleLlmProxy(docReq(DOC_CN, { headers: { authorization: 'Bearer sk-should-not-leak', cookie: 'a=b' } }), opts);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe('# doc');
+    expect((await handleLlmProxy(docReq(LLMS_EN), opts)).status).toBe(200);
+    expect(fetchImpl).toHaveBeenCalledWith('https://www.runninghub.cn/runninghub-api-doc-cn/api-519905081.md', expect.anything());
+    expect(fetchImpl).toHaveBeenCalledWith('https://www.runninghub.ai/runninghub-api-doc-en/llms.txt', expect.anything());
+  });
+
+  it('rejects POST, non-doc resources, other doc prefixes and cross-origin callers', async () => {
+    const fetchImpl = vi.fn();
+    const opts = { fetchImpl: fetchImpl as unknown as typeof fetch };
+    expect((await handleLlmProxy(docReq(DOC_CN, { method: 'POST', body: '{}', headers: { authorization: 'Bearer x' } }), opts)).status).toBe(400);
+    expect((await handleLlmProxy(docReq(`${ORIGIN}/api/llm-proxy/www.runninghub.cn/runninghub-api-doc-cn/index.html`), opts)).status).toBe(400);
+    expect((await handleLlmProxy(docReq(`${ORIGIN}/api/llm-proxy/www.runninghub.cn/openapi/v2/seedream-v5-flash/text-to-image`), opts)).status).toBe(400);
+    expect((await handleLlmProxy(docReq(`${ORIGIN}/api/llm-proxy/www.runninghub.cn/runninghub-api-doc-en/llms.txt`), opts)).status).toBe(400);
+    expect((await handleLlmProxy(docReq(DOC_CN, { headers: { origin: 'https://evil.com' } }), opts)).status).toBe(403);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});

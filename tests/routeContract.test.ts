@@ -9,6 +9,7 @@ import {
     getRouteSchema,
     isVerifiedRoute,
     getRouteDurations,
+    getFallbackRouteSeed,
     resolveRouteIdByDocId,
     type RouteCapabilitySchema,
 } from '../services/runningHubRouteCatalog';
@@ -46,8 +47,12 @@ describe('Route Catalog — structural integrity', () => {
         }
     });
 
-    it('contains exactly 22 routes', () => {
-        expect(CATALOG).toHaveLength(22);
+    it('is only the offline fallback seed (23 routes) until RunningHub docs are parsed', () => {
+        // RunningHub 线路以官方文档动态解析为准（见 runningHubDynamicRoutes.test.ts）；
+        // 干净会话里没有文档缓存，目录 = 离线兜底种子。
+        expect(getFallbackRouteSeed()).toHaveLength(23);
+        expect(CATALOG.map(r => r.routeId)).toEqual(getFallbackRouteSeed().map(r => r.routeId));
+        expect(CATALOG.every(r => r.source === 'fallback')).toBe(true);
     });
 
     it('every routeId is unique', () => {
@@ -61,8 +66,8 @@ describe('Route Catalog — structural integrity', () => {
         }
     });
 
-    it('contains 8 image routes and 14 video routes', () => {
-        expect(IMAGE_ROUTES).toHaveLength(8);
+    it('fallback seed holds 9 image routes (incl. Seedream 5 Flash text+image) and 14 video routes', () => {
+        expect(IMAGE_ROUTES).toHaveLength(9);
         expect(VIDEO_ROUTES).toHaveLength(14);
     });
 

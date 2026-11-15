@@ -6,7 +6,8 @@ import type {
   UserApiKey,
 } from '../types';
 import type { VideoAspectRatio } from './aiGateway';
-import { getRouteCatalog, getRouteDurations, getRouteSchema } from './runningHubRouteCatalog';
+import { getRouteCatalog, getRouteDurations, getRouteSchema, type RouteCapabilitySchema } from './runningHubRouteCatalog';
+import { familyDisplayName, getRunningHubRoutesVersion, modeFromEndpoint, runningHubDocSite } from './runningHubDynamicRoutes';
 import { PRODUCT_MODEL_ENTRIES } from '../tools/flovart/product-models.js';
 import { resolveRouteMapping } from './routeMapping';
 
@@ -116,6 +117,7 @@ const CAPABILITY_BY_ID: Record<string, ProductModelCapability> = {
   'flovart:gemini-3.1-flash-lite-image': { ...baseImage, aspectRatios: ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4'], resolutions: ['512', '1K', '2K'], supportsWebSearch: true, maxImageReferences: 14 },
   'flovart:imagen-4': { ...baseImage, modes: ['text-to-image'], aspectRatios: ['1:1', '16:9', '9:16', '4:3', '3:4'], resolutions: ['1K', '2K', '4K'], maxImageReferences: 0 },
   'flovart:seedream-5-pro': { ...baseImage, supportsWebSearch: true, supportsRealPersonCheck: true },
+  // 模式与参考图上限不在此硬编码：由 RunningHub 官方文档解析出的 seedream-v5-flash 家族线路（文生图 + 图生图，最多 10 张）合并而来。
   'flovart:seedream-5-flash': { ...baseImage, modes: ['text-to-image'], aspectRatios: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9'], resolutions: ['1K', '2K'], maxImageReferences: 0 },
   'flovart:seedream-4.5': { ...baseImage, modes: ['text-to-image'], resolutions: ['2K', '4K'], maxImageReferences: 0 },
   'flovart:midjourney-v8-1': { ...baseImage, modes: ['text-to-image'], qualities: ['low', 'medium', 'high'], maxImageReferences: 1 },
@@ -139,19 +141,130 @@ export const PRODUCT_MODEL_CATALOG: ProductModelDefinition[] = PRODUCT_MODEL_ENT
   capabilities: CAPABILITY_BY_ID[entry.id],
 }));
 
-const byId = new Map(PRODUCT_MODEL_CATALOG.map(model => [model.id, model]));
 const normalize = (value?: string) => value?.trim().toLowerCase() || '';
+
+// ── RunningHub 动态产品卡 ─────────────────────────────────────────────────────
+// RunningHub 模型的能力不在前端硬编码：每个模型家族（去掉模式后缀的 endpoint）由官方文档解析出的
+// 兄弟线路组成一张产品卡，能力（模式 / 比例 / 分辨率 / 时长 / 参考上限）取线路并集；
+// 兜底种子已绑定到静态产品卡的家族（Seedream 5 Flash、Seedance、Veo …）则把线路模式合并进该静态卡。
+
+const KNOWN_RATIOS: VideoAspectRatio[] = ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4', '4:5', '5:4', '1:4', '4:1', '1:8', '8:1', '21:9', '9:21', 'adaptive'];
+const MODE_ORDER: ProductModelMode[] = ['text-to-image', 'image-to-image', 'text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame', 'video-extension'];
+const MEDIA_MODES = new Set<ProductModelMode>(['image-to-image', 'image-to-video', 'reference-to-video', 'first-last-frame', 'video-extension']);
+
+function routeMediaMax(routes: RouteCapabilitySchema[], kind: 'image' | 'video' | 'audio'): number {
+  return routes
+    .filter(route => route.modes.some(mode => MEDIA_MODES.has(mode)))
+    .reduce((max, route) => Math.max(max, route.media.filter(spec => spec.kind === kind).reduce((sum, spec) => sum + spec.max, 0)), 0);
+}
+
+function capabilitiesFromRoutes(capability: 'image' | 'video', routes: RouteCapabilitySchema[]): ProductModelCapability {
+  const modes = MODE_ORDER.filter(mode => routes.some(route => route.modes.includes(mode)));
+  const ratios = new Set<VideoAspectRatio>();
+  for (const route of routes) {
+    const sizedByWidthHeight = route.params.some(param => param.field === 'width') && route.params.some(param => param.field === 'height');
+    if (route.aspectRatioField && route.aspectRatioValues?.length) {
+      route.aspectRatioValues.forEach(value => { if (KNOWN_RATIOS.includes(value as VideoAspectRatio)) ratios.add(value as VideoAspectRatio); });
+    } else if (route.aspectRatioField || (capability === 'image' && sizedByWidthHeight)) {
+      (capability === 'image' ? IMAGE_RATIOS : VIDEO_RATIOS).forEach(value => ratios.add(value));
+    }
+  }
+  const resolutions: string[] = [];
+  for (const route of routes) {
+    for (const value of route.resolutionValues || (route.resolutionDefault ? [route.resolutionDefault] : [])) {
+      if (!resolutions.some(existing => normalize(existing) === normalize(value))) resolutions.push(value);
+    }
+  }
+  const durations = [...new Set(routes.flatMap(route => getRouteDurations(route.routeId) || []))].sort((a, b) => a - b);
+  const fields = new Set(routes.flatMap(route => route.params.map(param => param.field)));
+  return {
+    modes,
+    aspectRatios: [...ratios],
+    resolutions,
+    durations,
+    qualities: [],
+    counts: [1],
+    audioControl: capability === 'video' && fields.has('generateAudio') ? 'optional' : 'none',
+    supportsWebSearch: fields.has('webSearch'),
+    supportsRealPersonCheck: fields.has('realPersonMode'),
+    supportsSeed: fields.has('seed'),
+    maxImageReferences: routeMediaMax(routes, 'image'),
+    maxVideoReferences: routeMediaMax(routes, 'video'),
+    maxAudioReferences: routeMediaMax(routes, 'audio'),
+  };
+}
+
+function shortLabel(name: string): string {
+  return name.length <= 16 ? name : `${name.slice(0, 15)}…`;
+}
+
+type ProductRegistry = { version: number; dynamic: ProductModelDefinition[]; byId: Map<string, ProductModelDefinition>; all: ProductModelDefinition[] };
+let registryMemo: ProductRegistry | null = null;
+
+function productRegistry(): ProductRegistry {
+  const version = getRunningHubRoutesVersion();
+  if (registryMemo?.version === version) return registryMemo;
+  const routesByProduct = new Map<string, RouteCapabilitySchema[]>();
+  for (const route of getRouteCatalog()) {
+    routesByProduct.set(route.productModelId, [...(routesByProduct.get(route.productModelId) || []), route]);
+  }
+  // 静态卡：合并家族线路的模式与参考上限（不改动比例 / 分辨率等产品级选项，线路级限制由 getEffectiveProductModelCapabilities 收窄）。
+  const statics = PRODUCT_MODEL_CATALOG.map(model => {
+    const routes = routesByProduct.get(model.id);
+    if (!routes?.length) return model;
+    const modes = MODE_ORDER.filter(mode => model.capabilities.modes.includes(mode) || routes.some(route => route.modes.includes(mode) && (MODE_ORDER.indexOf(mode) < 2) === (model.capability === 'image')));
+    const maxImageReferences = Math.max(model.capabilities.maxImageReferences, routeMediaMax(routes, 'image'));
+    const maxVideoReferences = Math.max(model.capabilities.maxVideoReferences, routeMediaMax(routes, 'video'));
+    const maxAudioReferences = Math.max(model.capabilities.maxAudioReferences, routeMediaMax(routes, 'audio'));
+    const unchanged = modes.length === model.capabilities.modes.length
+      && maxImageReferences === model.capabilities.maxImageReferences
+      && maxVideoReferences === model.capabilities.maxVideoReferences
+      && maxAudioReferences === model.capabilities.maxAudioReferences;
+    return unchanged ? model : { ...model, capabilities: { ...model.capabilities, modes, maxImageReferences, maxVideoReferences, maxAudioReferences } };
+  });
+  const dynamic: ProductModelDefinition[] = [];
+  for (const [productModelId, routes] of routesByProduct) {
+    if (!productModelId.startsWith('rh:')) continue;
+    const capability = routes[0].capability || (routes[0].modes.some(mode => mode === 'text-to-image' || mode === 'image-to-image') ? 'image' : 'video');
+    const family = routes[0].family || productModelId.slice(3).replace(/@(image|video)$/, '');
+    const name = familyDisplayName(routes.map(route => route.title || ''), family);
+    dynamic.push({
+      id: productModelId,
+      name,
+      shortName: shortLabel(name),
+      company: routes.find(route => route.vendor)?.vendor || 'RunningHub',
+      capability,
+      provider: 'runningHub',
+      officialModelIds: [],
+      aliases: [family, ...routes.map(route => route.routeId)],
+      badge: 'RunningHub',
+      status: 'available',
+      description: routes.find(route => route.description)?.description || `RunningHub ${family}`,
+      capabilities: capabilitiesFromRoutes(capability, routes),
+    });
+  }
+  const all = [...statics, ...dynamic];
+  registryMemo = { version, dynamic, byId: new Map(all.map(model => [model.id, model])), all };
+  return registryMemo;
+}
+
+/** 从 RunningHub 官方文档动态生成的产品卡（rh:<family>）。 */
+export function getDynamicProductModels(capability?: 'image' | 'video'): ProductModelDefinition[] {
+  const { dynamic } = productRegistry();
+  return capability ? dynamic.filter(model => model.capability === capability) : dynamic;
+}
 
 export function getProductModel(value?: string | null): ProductModelDefinition | undefined {
   if (!value) return undefined;
-  const direct = byId.get(value);
+  const registry = productRegistry();
+  const direct = registry.byId.get(value);
   if (direct) return direct;
   const normalized = normalize(value);
-  return PRODUCT_MODEL_CATALOG.find(model => [...model.officialModelIds, ...model.aliases].some(id => normalize(id) === normalized));
+  return registry.all.find(model => [...model.officialModelIds, ...model.aliases].some(id => normalize(id) === normalized));
 }
 
 export function getProductModels(capability: 'image' | 'video'): ProductModelDefinition[] {
-  return PRODUCT_MODEL_CATALOG.filter(model => model.capability === capability);
+  return productRegistry().all.filter(model => model.capability === capability);
 }
 
 export function getProductModelsByCompany(capability: 'image' | 'video'): { company: string; models: ProductModelDefinition[] }[] {
@@ -182,6 +295,8 @@ export function getRoutedVideoModes(productModelId: string, provider?: AIProvide
     if (provider === 'xai') return ['text-to-video', 'image-to-video', 'video-extension'];
     if (provider === 'keling' || provider === 'minimax' || provider === 'custom' || provider === 'openai_compatible') return ['text-to-video', 'image-to-video'];
     if (provider === 'runningHub') {
+      const schema = getRouteSchema(routeId);
+      if (schema) return schema.modes;
       const endpoint = routeId.toLowerCase();
       if (/reference-to-video|multimodal-video|omni-reference/.test(endpoint)) return ['reference-to-video'];
       if (/start-end-to-video|first-last-frame/.test(endpoint)) return ['first-last-frame'];
@@ -203,6 +318,8 @@ export function getRoutedImageModes(productModelId: string, provider?: AIProvide
     if (provider === 'openai_compatible' || provider === 'openai' || provider === 'custom') return ['text-to-image', 'image-to-image'];
     if (provider === 'google') return ['text-to-image', 'image-to-image'];
     if (provider === 'runningHub') {
+      const schema = getRouteSchema(routeId);
+      if (schema) return schema.modes;
       const endpoint = routeId.toLowerCase();
       if (/image-to-image/.test(endpoint)) return ['image-to-image'];
       if (/text-to-image/.test(endpoint)) return ['text-to-image'];
@@ -259,9 +376,13 @@ export function getEffectiveProductModelCapabilities(
       : (schema.aspectRatioValues?.filter((value): value is VideoAspectRatio => base.aspectRatios.includes(value as VideoAspectRatio)) || base.aspectRatios);
     const routeDurations = getRouteDurations(schema.routeId);
     const routeFields = new Set(schema.params.map(param => param.field));
+    const routeResolutions = schema.resolutionValues?.length
+      ? base.resolutions.filter(value => schema.resolutionValues!.some(option => normalize(option) === normalize(value)))
+      : [];
     return {
       ...base,
       aspectRatios: [...routeRatios],
+      resolutions: routeResolutions.length ? routeResolutions : [...base.resolutions],
       durations: routeDurations?.length ? routeDurations : [...base.durations],
       audioControl: base.audioControl === 'always' ? 'always' : routeFields.has('generateAudio') ? base.audioControl : 'none',
       supportsWebSearch: base.supportsWebSearch && routeFields.has('webSearch'),
@@ -368,21 +489,36 @@ function keyStillExposesRoute(key: UserApiKey, routeId: string): boolean {
   return models.length === 0 || models.some(candidate => normalize(candidate) === normalize(routeId));
 }
 
-/** 第一阶段 RunningHub Route 注册表：从 runningHubRouteCatalog 派生，保证 seed 与完整 Route Capability Schema 同源。 */
-type RunningHubRouteSeed = { productModelId: string; mode: ProductModelMode; routeId: string };
-const RUNNINGHUB_ROUTE_SEED: RunningHubRouteSeed[] = getRouteCatalog().flatMap(schema =>
-    schema.modes.map(mode => ({ productModelId: schema.productModelId, mode, routeId: schema.routeId })),
-);
+/** RunningHub 线路排序：模式词与 endpoint 一致、且该模式是线路主模式的优先（避免多模式线路抢占专用线路）。 */
+function runningHubRouteRank(route: RouteCapabilitySchema, mode: ProductModelMode): number {
+  return (route.modes[0] === mode ? 0 : 2) + (modeFromEndpoint(route.routeId) ? 0 : 1);
+}
 
 export function suggestProductRouteMappings(key: UserApiKey): RouteMappingBinding[] {
   if (keyModels(key).length === 0) return [];
   if (key.provider === 'runningHub') {
-    const filter = keyModels(key).map(normalize);
-    const filterSet = filter.length ? new Set(filter) : null;
-    return RUNNINGHUB_ROUTE_SEED
-      .filter(seed => !filterSet || filterSet.has(normalize(seed.routeId)))
-      .filter(seed => keySupportsProduct(key, byId.get(seed.productModelId)!))
-      .map(seed => ({ target: { kind: 'product-mode', productModelId: seed.productModelId, mode: seed.mode }, routeId: seed.routeId, order: 0 }));
+    const filterSet = new Set(keyModels(key).map(normalize));
+    const site = runningHubDocSite(key.baseUrl);
+    const catalog = getRouteCatalog();
+    // 兜底种子线路沿用旧规则（出现在服务模型列表里，或同一产品的兄弟线路）；
+    // 官方文档解析出的线路随「获取模型」同步，同站点全部自动映射，用户无需逐条配置。
+    const exposedProducts = new Set(catalog.filter(route => filterSet.has(normalize(route.routeId))).map(route => route.productModelId));
+    const eligible = catalog.filter(route => route.source === 'docs'
+      ? !route.site || route.site === site
+      : filterSet.has(normalize(route.routeId)) || exposedProducts.has(route.productModelId));
+    const best = new Map<string, { route: RouteCapabilitySchema; rank: number; mode: ProductModelMode }>();
+    for (const route of eligible) {
+      const product = getProductModel(route.productModelId);
+      if (!product || product.id !== route.productModelId || !keySupportsProduct(key, product)) continue;
+      for (const mode of route.modes) {
+        if (!product.capabilities.modes.includes(mode)) continue;
+        const target = `${route.productModelId}|${mode}`;
+        const rank = runningHubRouteRank(route, mode);
+        const current = best.get(target);
+        if (!current || rank < current.rank) best.set(target, { route, rank, mode });
+      }
+    }
+    return [...best.values()].map(({ route, mode }) => ({ target: { kind: 'product-mode', productModelId: route.productModelId, mode }, routeId: route.routeId, order: 0 }));
   }
   const candidates = keyModels(key);
   return PRODUCT_MODEL_CATALOG.filter(model => keySupportsProduct(key, model)).flatMap(model => {
@@ -399,8 +535,8 @@ export function resolveProductModelRoute(
   mode: ProductModelMode,
   keys: UserApiKey[],
 ): { model: ProductModelDefinition; routeId: string; key: UserApiKey } | null {
-  const model = byId.get(productModelId);
-  if (!model) return null;
+  const model = getProductModel(productModelId);
+  if (!model || model.id !== productModelId) return null;
   const route = resolveRouteMapping({ kind: 'product-mode', productModelId, mode }, keys);
   return route ? { model, routeId: route.routeId, key: route.key } : null;
 }
@@ -409,8 +545,8 @@ export function resolveAnyProductRoute(
   productModelId: string,
   keys: UserApiKey[],
 ): { model: ProductModelDefinition; routeId: string; key: UserApiKey; mode: ProductModelMode } | null {
-  const model = byId.get(productModelId);
-  if (!model) return null;
+  const model = getProductModel(productModelId);
+  if (!model || model.id !== productModelId) return null;
   for (const mode of model.capabilities.modes) {
     const route = resolveProductModelRoute(productModelId, mode, keys);
     if (route) return { ...route, mode };

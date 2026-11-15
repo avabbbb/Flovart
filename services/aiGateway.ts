@@ -1436,16 +1436,24 @@ function buildRouteMediaFields(
         } else if (spec.mapping === 'first_last_frame') {
             const first = references.find(ref => ref.slotRole === 'first_frame') || references[0];
             const last = references.find(ref => ref.slotRole === 'last_frame') || references[1];
-            if (spec.field === 'firstFrameUrl') {
+            // 动态文档线路的首尾帧字段名各异（firstImageUrl / endImageUrl …），由 spec.role 指明。
+            const role = spec.role ?? (spec.field === 'firstFrameUrl' ? 'first' : spec.field === 'lastFrameUrl' ? 'last' : undefined);
+            if (role === 'first') {
                 if (spec.required && !first?.href) {
                     throw new Error(`RunningHub ${schema.routeId} 需要首帧图片。`);
                 }
                 if (first?.href) output[spec.field] = assertRunningHubPublicUrl(first.href, spec.field);
-            } else if (spec.field === 'lastFrameUrl') {
+            } else if (role === 'last') {
+                if (spec.required && !last?.href) {
+                    throw new Error(`RunningHub ${schema.routeId} 需要尾帧图片。`);
+                }
                 if (last?.href) output[spec.field] = assertRunningHubPublicUrl(last.href, spec.field);
             }
         } else if (spec.mapping === 'first_frame_only') {
             const first = references[0];
+            if (spec.required && !first?.href) {
+                throw new Error(`RunningHub ${schema.routeId} 需要一张参考图（${spec.field}）。`);
+            }
             if (first?.href) {
                 output[spec.field] = assertRunningHubPublicUrl(first.href, spec.field);
             }
@@ -1463,9 +1471,13 @@ function buildRouteMediaFields(
             ].map((href, i) => assertRunningHubPublicUrl(href, `${spec.field}[${i}]`));
             const videoUrls = slots.filter(slot => slot.kind === 'video').map((slot, i) => assertRunningHubPublicUrl(slot.href, `${spec.field}[${i}]`));
             const audioUrls = slots.filter(slot => slot.kind === 'audio').map((slot, i) => assertRunningHubPublicUrl(slot.href, `${spec.field}[${i}]`));
-            if (spec.kind === 'image' && imageUrls.length > 0) output[spec.field] = uniqueLimitedUrls(imageUrls, spec.max);
-            if (spec.kind === 'video' && videoUrls.length > 0) output[spec.field] = uniqueLimitedUrls(videoUrls, spec.max);
-            if (spec.kind === 'audio' && audioUrls.length > 0) output[spec.field] = uniqueLimitedUrls(audioUrls, spec.max);
+            const urls = spec.kind === 'image' ? imageUrls : spec.kind === 'video' ? videoUrls : audioUrls;
+            if (urls.length > 0) {
+                // 单值字段（如可灵 o1 的 videoUrl）只收第一条。
+                output[spec.field] = spec.serialization === 'single' ? urls[0] : uniqueLimitedUrls(urls, spec.max);
+            } else if (spec.required) {
+                throw new Error(`RunningHub ${schema.routeId} 需要至少一个${spec.kind === 'image' ? '图片' : spec.kind === 'video' ? '视频' : '音频'}参考（${spec.field}）。`);
+            }
         }
     }
     return output;
@@ -1636,7 +1648,7 @@ function buildRunningHubStandardPayload(
     if (routeSchema) {
         return buildRunningHubRoutePayload(prompt, routeSchema, key, options || {});
     }
-    throw new Error(`RunningHub 路由 ${modelEndpoint} 未通过验证（未在 Route Catalog 中登记），暂不可执行。请先在 Route Catalog 中补齐该路由的 Capability Schema 后再使用。`);
+    throw new Error(`RunningHub 路由 ${modelEndpoint} 未通过验证（未在 Route Catalog 中登记），暂不可执行。请在设置里对该 RunningHub 服务点「获取模型」，从官方文档同步线路能力后再使用。`);
 }
 
 function extractRunningHubMediaUrl(

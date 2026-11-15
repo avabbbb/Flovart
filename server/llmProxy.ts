@@ -25,7 +25,29 @@ export const LLM_PROXY_PREFIX = '/api/llm-proxy/';
 /** host → allowed path prefixes. Keep this list short and explicit. */
 export const LLM_PROXY_UPSTREAMS: Record<string, readonly string[]> = {
   'opencode.ai': ['/inference/', '/zen/'],
+  'www.runninghub.cn': ['/runninghub-api-doc-cn/'],
+  'www.runninghub.ai': ['/runninghub-api-doc-en/'],
 };
+
+/**
+ * Public, key-less documentation upstreams (RunningHub API docs: llms.txt + per-API markdown).
+ * These are GET-only, need no API key, and only `.md` / `llms.txt` resources are reachable.
+ * Flovart reads them to build RunningHub route schemas dynamically (the docs are not CORS-enabled).
+ */
+export const LLM_PROXY_PUBLIC_DOC_UPSTREAMS: Record<string, readonly string[]> = {
+  'www.runninghub.cn': ['/runninghub-api-doc-cn/'],
+  'www.runninghub.ai': ['/runninghub-api-doc-en/'],
+};
+
+/** True when the upstream is a public doc resource that may be fetched without an API key. */
+export function isPublicDocUpstream(upstream: URL): boolean {
+  const prefixes = LLM_PROXY_PUBLIC_DOC_UPSTREAMS[upstream.hostname.toLowerCase()];
+  if (!prefixes) return false;
+  const path = upstream.pathname;
+  if (!prefixes.some((p) => path.startsWith(p))) return false;
+  const leaf = path.slice(path.lastIndexOf('/') + 1);
+  return leaf === 'llms.txt' || /^[A-Za-z0-9_-]+\.md$/.test(leaf);
+}
 
 const FORWARDED_REQUEST_HEADERS = [
   'authorization',
@@ -116,12 +138,21 @@ export async function handleLlmProxy(request: Request, options: LlmProxyOptions 
     return jsonError(400, 'Upstream is not on the Flovart LLM proxy allowlist', 'upstream_not_allowed');
   }
 
+  // Doc hosts are only reachable for their public .md / llms.txt resources, and only via GET.
+  const publicDoc = isPublicDocUpstream(upstream);
+  if (LLM_PROXY_PUBLIC_DOC_UPSTREAMS[upstream.hostname] && (!publicDoc || method !== 'GET')) {
+    return jsonError(400, 'Upstream is not on the Flovart LLM proxy allowlist', 'upstream_not_allowed');
+  }
+
   const headers = new Headers();
-  for (const name of FORWARDED_REQUEST_HEADERS) {
+  if (publicDoc) {
+    // Never forward credentials to the public doc host.
+    headers.set('accept', 'text/markdown, text/plain, */*');
+  } else for (const name of FORWARDED_REQUEST_HEADERS) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
-  if (!headers.has('authorization') && !headers.has('x-api-key') && !headers.has('x-goog-api-key')) {
+  if (!publicDoc && !headers.has('authorization') && !headers.has('x-api-key') && !headers.has('x-goog-api-key')) {
     return jsonError(401, 'Missing API key', 'missing_api_key');
   }
   headers.set('user-agent', LLM_PROXY_USER_AGENT);

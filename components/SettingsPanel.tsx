@@ -437,10 +437,13 @@ export function buildRunningHubPresetModelItems(): ModelItem[] {
     };
     for (const schema of getRouteCatalog()) {
         const isImage = schema.modes.some(mode => mode === 'text-to-image' || mode === 'image-to-image');
-        push({ id: schema.routeId, name: schema.routeId, capability: isImage ? 'image' : 'video' });
+        push({ id: schema.routeId, name: schema.title || schema.routeId, capability: isImage ? 'image' : 'video' });
     }
-    for (const model of BUILTIN_RUNNINGHUB_MODELS) {
-        push({ id: model.id, name: stripRunningHubVersionName(model.description) || model.id, capability: model.capability });
+    // 内置模型表只在还没有官方文档解析结果时作离线兜底（文档线路才是 RunningHub 模型的来源）。
+    if (!getRouteCatalog().some(schema => schema.source === 'docs')) {
+        for (const model of BUILTIN_RUNNINGHUB_MODELS) {
+            push({ id: model.id, name: stripRunningHubVersionName(model.description) || model.id, capability: model.capability });
+        }
     }
     return items;
 }

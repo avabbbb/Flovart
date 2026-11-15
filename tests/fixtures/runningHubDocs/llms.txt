@@ -1,0 +1,14 @@
+# RunningHub-API
+
+## Docs
+- [开始](https://www.runninghub.cn/runninghub-api-doc-cn/doc-8287334.md): 
+
+## API Docs
+- AI 应用 [发起AI应用任务](https://www.runninghub.cn/runninghub-api-doc-cn/api-425749010.md): 在AI应用详情页中可查看示例nodeInfoList
+- 模型API > 视频生成与处理 > image-to-video > Vidu [Vidu-首尾帧生视频-q2-pro](https://www.runninghub.cn/runninghub-api-doc-cn/api-448183060.md): 核心主打“首尾帧双向锚定”技术。通过输入起始帧与结束帧，模型能智能推导并补全两者
+- 模型API > 视频生成与处理 > image-to-video > Vidu [Vidu-图生视频-q2-pro](https://www.runninghub.cn/runninghub-api-doc-cn/api-448183061.md): Vidu Q2 Pro 是一款顶级的 AI 图生视频工具，致力于将静态瞬间转化为
+- 模型API > 视频生成与处理 > reference-to-video [seedance2.0/多模态视频](https://www.runninghub.cn/runninghub-api-doc-cn/api-448183127.md): seedance 2.0 多模态视频生成，追求最高生成品质。支持多模态参考、视频
+- 标准模型API > 其他 [seedream-v5-flash-图层拆分](https://www.runninghub.cn/runninghub-api-doc-cn/api-519905080.md): Seedream 5.0 Flash 图层拆分把单张图片拆成 1 张底图和最多 
+- 标准模型API > 其他 [seedream-v5-flash-文生图](https://www.runninghub.cn/runninghub-api-doc-cn/api-519905082.md): Seedream 5.0 Flash 文生图面向需要快速出稿的设计生产。只提交提
+- 标准模型API > 其他 [seedream-v5-flash-图生图](https://www.runninghub.cn/runninghub-api-doc-cn/api-519905081.md): Seedream 5.0 Flash 图生图支持最多 10 张参考图，可做主体保
+- 模型API > 音频生成与处理 > text-to-audio [示例音频](https://www.runninghub.cn/runninghub-api-doc-cn/api-400000001.md): 音频

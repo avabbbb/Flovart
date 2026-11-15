@@ -10,6 +10,13 @@ import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
 import type { AIProvider, AICapability } from '../types';
 import { getOpenAICompatibleBaseUrlCandidates, normalizeProviderBaseUrl } from './baseUrl';
 import { isLikelyRunningHubModelEndpoint, normalizeRunningHubModelEndpoint, rhProbeApiKey, BUILTIN_RUNNINGHUB_MODELS, stripRunningHubVersionName } from './runningHubService';
+import {
+    hasDynamicRoutesForSite,
+    listDynamicRouteSchemas,
+    refreshRunningHubDocRoutes,
+    registerInferredRunningHubRoutes,
+    runningHubDocSite,
+} from './runningHubDynamicRoutes';
 
 export interface FetchedModel {
     id: string;
@@ -417,7 +424,7 @@ async function fetchOpenAICompatibleModels(
 }
 
 // ── RunningHub 标准模型 ─────────────────────────────
-async function fetchRunningHubModels(apiKey: string, baseUrl?: string): Promise<FetchModelsResult> {
+async function fetchRunningHubModels(apiKey: string, baseUrl?: string, options?: { forceDocs?: boolean }): Promise<FetchModelsResult> {
     const effectiveBaseUrl = normalizeProviderBaseUrl('runningHub', baseUrl || 'https://www.runninghub.cn/openapi/v2');
     const probe = await rhProbeApiKey(apiKey, effectiveBaseUrl);
     if (probe === 'unreachable') {
@@ -427,6 +434,8 @@ async function fetchRunningHubModels(apiKey: string, baseUrl?: string): Promise<
         return { ok: false, models: [], error: 'RunningHub API Key 无效或权限不足' };
     }
 
+    // 官方文档（llms.txt + api-NNN.md 的 OpenAPI schema）是 RunningHub 模型与线路能力的唯一来源：
+    // 解析结果按站点缓存 24h；文档较多时首次解析可能较慢，超出等待预算后在后台继续，完成后通知订阅者。
     let pageModels: FetchedModel[] = [];
     try {
         const response = await fetchWithModelDiscoveryTimeout(runningHubDocsModelUrl(effectiveBaseUrl));
@@ -437,30 +446,55 @@ async function fetchRunningHubModels(apiKey: string, baseUrl?: string): Promise<
         // Public page fetch can fail behind strict networks; the user can still add model IDs manually.
         console.warn('[ModelFetcher] RunningHub 文档页模型列表拉取失败。', error);
     }
+    const docsRefresh = refreshRunningHubDocRoutes({ baseUrl: effectiveBaseUrl, force: options?.forceDocs })
+        .catch(error => { console.warn('[ModelFetcher] RunningHub 官方文档解析失败。', error); return null; });
+    let waitTimer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([docsRefresh, new Promise(resolve => { waitTimer = setTimeout(resolve, RUNNINGHUB_DOCS_WAIT_MS); })]);
+    if (waitTimer) clearTimeout(waitTimer);
 
-    const builtinModels: FetchedModel[] = BUILTIN_RUNNINGHUB_MODELS.map(item => ({
+    const models = runningHubModelList(effectiveBaseUrl, pageModels);
+    return {
+        ok: true,
+        models,
+        capabilitySummary: summarizeCapabilities(models),
+        effectiveBaseUrl,
+    };
+}
+
+/** 「获取模型」最多等待官方文档解析这么久；其余在后台完成（结果写入动态线路注册表并通知订阅者）。 */
+const RUNNINGHUB_DOCS_WAIT_MS = 8_000;
+
+/**
+ * RunningHub 模型列表 = 官方文档解析出的线路（按站点）∪ page-api 列表。
+ * 只有文档一条都拿不到时才回落到内置模型表（离线兜底）；无文档的 endpoint 登记为推断线路（仅展示、不核验）。
+ */
+export function runningHubModelList(baseUrl: string | undefined, extraModels: FetchedModel[] = []): FetchedModel[] {
+    const site = runningHubDocSite(baseUrl);
+    const docModels: FetchedModel[] = listDynamicRouteSchemas(site).map(schema => ({
+        id: schema.routeId,
+        name: schema.title || schema.routeId,
+        capability: schema.capability,
+        description: schema.description?.slice(0, 160) || 'RunningHub 标准模型',
+    }));
+    const fallbackModels: FetchedModel[] = hasDynamicRoutesForSite(site) ? [] : BUILTIN_RUNNINGHUB_MODELS.map(item => ({
         id: item.id,
         name: stripRunningHubVersionName(item.description) || item.id,
         capability: item.capability,
         description: item.description,
     }));
-
-    const models = mergeModelLists(builtinModels, pageModels);
-    // 展示去重：同能力 + 同去版本名 只保留一条（官方更新版本时列表不膨胀）
-    const uniqueModels: FetchedModel[] = [];
+    const docIds = new Set(docModels.map(model => model.id));
+    const others = mergeModelLists(fallbackModels, extraModels).filter(model => !docIds.has(model.id));
+    registerInferredRunningHubRoutes(others.map(model => ({ id: model.id, categoryName: model.capability === 'video' ? 'image-to-video' : '' })));
+    // 展示去重（仅非文档条目）：同能力 + 同去版本名只保留一条，官方更新版本时列表不膨胀。
+    const uniqueOthers: FetchedModel[] = [];
     const seen = new Set<string>();
-    for (const model of models) {
+    for (const model of others) {
         const key = `${model.capability}|${stripRunningHubVersionName(model.name || model.id).toLowerCase()}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        uniqueModels.push({ ...model, name: stripRunningHubVersionName(model.name || model.id) || model.id });
+        uniqueOthers.push({ ...model, name: stripRunningHubVersionName(model.name || model.id) || model.id });
     }
-    return {
-        ok: true,
-        models: uniqueModels,
-        capabilitySummary: summarizeCapabilities(uniqueModels),
-        effectiveBaseUrl,
-    };
+    return mergeModelLists(docModels, uniqueOthers);
 }
 
 // ── Provider 默认 Base URL ──────────────────────────
@@ -479,14 +513,15 @@ const PROVIDER_BASE_URLS: Partial<Record<AIProvider, string>> = {
 export async function fetchModelsForProvider(
     provider: AIProvider,
     apiKey: string,
-    baseUrl?: string
+    baseUrl?: string,
+    options?: { forceDocs?: boolean },
 ): Promise<FetchModelsResult> {
     if (provider === 'google') {
         return fetchGoogleModels(apiKey, baseUrl);
     }
 
     if (provider === 'runningHub') {
-        return fetchRunningHubModels(apiKey, baseUrl);
+        return fetchRunningHubModels(apiKey, baseUrl, options);
     }
 
     // OpenAI 兼容类
@@ -584,23 +619,10 @@ export async function fetchModelsWithCache(
         if (cached) {
             let models = cached.models;
             if (provider === 'runningHub') {
-                const builtinModels: FetchedModel[] = BUILTIN_RUNNINGHUB_MODELS.map(item => ({
-                    id: item.id,
-                    name: stripRunningHubVersionName(item.description) || item.id,
-                    capability: item.capability,
-                    description: item.description,
-                }));
-                models = mergeModelLists(builtinModels, models).map(model => ({
-                    ...model,
-                    name: stripRunningHubVersionName(model.name || model.id) || model.id,
-                }));
-                const seenCache = new Set<string>();
-                models = models.filter(model => {
-                    const key = `${model.capability}|${stripRunningHubVersionName(model.name || model.id).toLowerCase()}`;
-                    if (seenCache.has(key)) return false;
-                    seenCache.add(key);
-                    return true;
-                });
+                // 缓存命中也在后台按 TTL 刷新官方文档解析；列表以当前已解析的文档线路为准。
+                void refreshRunningHubDocRoutes({ baseUrl }).catch(() => undefined);
+                const docIds = new Set(listDynamicRouteSchemas(runningHubDocSite(baseUrl)).map(schema => schema.routeId));
+                models = runningHubModelList(baseUrl, models.filter(model => !docIds.has(model.id)));
             }
             return {
                 ok: true,
@@ -610,7 +632,8 @@ export async function fetchModelsWithCache(
             };
         }
     }
-    const result = await fetchModelsForProvider(provider, apiKey, baseUrl);
+    // 显式「获取模型」（forceRefresh）同时强制重新解析 RunningHub 官方文档。
+    const result = await fetchModelsForProvider(provider, apiKey, baseUrl, provider === 'runningHub' && forceRefresh ? { forceDocs: true } : undefined);
     if (result.ok && result.models.length > 0) {
         await setCachedModels(cacheKey, result.models, result.endpointFlavor);
     }
