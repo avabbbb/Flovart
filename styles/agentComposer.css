@@ -232,28 +232,112 @@
   .agent-conversation .agent-composer .agent-composer__tools .agent-mode-control > button > span + svg { display: none; }
 }
 
-/* ── Agent 输入卡 · 玻璃面 + 虹彩球（原先误加在节点 Prompt Bar 上，移到这里）──
-   磨砂半透明 + 顶部高光 + 长投影；左侧虹彩球缓慢变色，聚焦时轻轻放大，运行中收成 2×2 变形点；
-   发送那一下卡片轻压回弹。prefers-reduced-motion 下全部静止。 */
+/* ── Agent 输入卡 · 对齐 inspora「AI prompt bar」（Alex Socoloff）──
+   暖色半透明玻璃面 + 左上偏移的橙粉「回声」层；左侧较大的立体虹彩球（内部渐变缓慢旋转），
+   与文字同一行垂直居中；工具钮为透明描边胶囊；运行中球收成 2×2 黑点旋转。不用薄荷聚焦环。 */
 :root .agent-conversation .workflow-agent__composer.agent-composer.agent-composer--glass {
-  border-color: color-mix(in srgb, var(--wf-border) 40%, transparent) !important;
-  background: color-mix(in srgb, var(--wf-strong) 80%, transparent) !important;
-  backdrop-filter: blur(22px) saturate(1.35);
-  -webkit-backdrop-filter: blur(22px) saturate(1.35);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 18px 40px -18px rgba(120,60,30,.28), 0 2px 6px -2px rgba(0,0,0,.08), var(--card-on-shell-shadow);
+  position: relative !important;
+  isolation: isolate;
+  margin: 8px 0 0 8px !important;
+  border: 0 !important;
+  border-radius: 24px !important;
+  padding: 12px 12px 10px !important;
+  background: linear-gradient(135deg, rgba(255,246,238,.9), rgba(252,235,230,.86)) !important;
+  backdrop-filter: blur(36px) saturate(1.25);
+  -webkit-backdrop-filter: blur(36px) saturate(1.25);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.65), 0 30px 60px -20px rgba(190,120,80,.35), 0 8px 20px -6px rgba(190,120,80,.18) !important;
 }
 :root[data-theme='dark'] .agent-conversation .workflow-agent__composer.agent-composer.agent-composer--glass {
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 0 0 1px rgba(255,255,255,.06), 0 18px 44px -18px rgba(0,0,0,.6), var(--card-on-shell-shadow);
+  background: linear-gradient(135deg, rgba(44,38,35,.92), rgba(36,32,31,.9)) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 30px 60px -20px rgba(0,0,0,.7), 0 8px 24px -8px rgba(238,134,63,.18) !important;
 }
-.agent-composer .agent-composer__input-row { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
-.agent-composer .agent-composer__input-row > textarea { flex: 1; min-width: 0; }
-.agent-composer .agent-composer__orb { margin: 4px 0 0 4px; }
-.agent-composer:focus-within .agent-composer__orb:not(.is-loading) .prompt-orb__sphere { transform: scale(1.12); }
+/* 橙色回声层：同尺寸，向左上偏移，圆角略大 */
+.agent-composer.agent-composer--glass::before {
+  content: ''; position: absolute; inset: -7px 7px 7px -7px; z-index: -1;
+  border-radius: 26px;
+  background: linear-gradient(90deg, #ee863f, #f6b98c 70%, #f5b6d8);
+  pointer-events: none;
+}
+:root[data-theme='dark'] .agent-composer.agent-composer--glass::before { opacity: .72; }
+/* 聚焦：不加描边环，只让暖光变亮一点 */
+:root .agent-conversation .workflow-agent__composer.agent-composer.agent-composer--glass:focus-within {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.75), 0 30px 64px -18px rgba(238,134,63,.45), 0 8px 20px -6px rgba(190,120,80,.22) !important;
+}
+:root[data-theme='dark'] .agent-conversation .workflow-agent__composer.agent-composer.agent-composer--glass:focus-within {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 30px 64px -18px rgba(238,134,63,.32), 0 8px 24px -8px rgba(238,134,63,.28) !important;
+}
+:root[data-theme='dark'] .agent-composer.agent-composer--glass:focus-within::before { opacity: .9; }
+
+.agent-composer .agent-composer__input-row { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 2px 2px 4px; }
+:root .agent-conversation .workflow-agent__composer.agent-composer .agent-composer__input-row > textarea {
+  flex: 1; min-width: 0; min-height: 44px !important; max-height: 180px; resize: none;
+  border: 0 !important; border-radius: 0 !important; outline: 0 !important; box-shadow: none !important;
+  padding: 11px 2px !important; background: transparent !important;
+  color: #3a332e !important; font-size: 15px !important; line-height: 22px !important; font-weight: 400;
+}
+:root[data-theme='dark'] .agent-conversation .workflow-agent__composer.agent-composer .agent-composer__input-row > textarea { color: #f1e9e2 !important; }
+.agent-composer .agent-composer__input-row > textarea::placeholder { color: #8a7f76; opacity: 1; transition: opacity .3s ease, filter .3s ease; }
+:root[data-theme='dark'] .agent-composer .agent-composer__input-row > textarea::placeholder { color: #9b9089; }
+.agent-composer .agent-composer__input-row > textarea:focus::placeholder { opacity: .6; }
+
+/* 虹彩球：40px 立体球，内部 conic 渐变旋转、高光固定 */
+.agent-composer .agent-composer__orb { width: 40px; height: 40px; }
+.agent-composer .agent-composer__orb .prompt-orb__sphere {
+  overflow: hidden; animation: none;
+  background: #f6c3a6;
+  box-shadow: 0 6px 12px rgba(150,90,60,.28), inset 0 -3px 6px rgba(120,70,130,.22), inset 0 2px 3px rgba(255,255,255,.5);
+}
+.agent-composer .agent-composer__orb .prompt-orb__sphere::before {
+  content: ''; position: absolute; inset: -30%;
+  background: conic-gradient(from 0deg, #b9aee8, #f5b6d8, #f5954b, #fce3cf, #b9aee8);
+  filter: blur(4px);
+  animation: agent-orb-swirl 5s linear infinite;
+}
+.agent-composer .agent-composer__orb .prompt-orb__sphere::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  background: radial-gradient(circle at 34% 26%, rgba(255,255,255,.85) 0 10%, rgba(255,255,255,0) 38%),
+              radial-gradient(circle at 50% 50%, transparent 58%, rgba(110,60,90,.22) 100%);
+}
+@keyframes agent-orb-swirl { to { transform: rotate(360deg); } }
+.agent-composer:focus-within .agent-composer__orb:not(.is-loading) .prompt-orb__sphere { transform: scale(1.06); }
+/* 加载：2×2 黑点（暗色下为浅色），旋转 */
+.agent-composer .agent-composer__orb .prompt-orb__dots i { width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; background: #111; }
+:root[data-theme='dark'] .agent-composer .agent-composer__orb .prompt-orb__dots i { background: #f1e9e2; }
+.agent-composer .agent-composer__orb.is-loading .prompt-orb__dots i:nth-child(1) { animation-name: agent-dot-a; }
+.agent-composer .agent-composer__orb.is-loading .prompt-orb__dots i:nth-child(2) { animation-name: agent-dot-b; }
+.agent-composer .agent-composer__orb.is-loading .prompt-orb__dots i:nth-child(3) { animation-name: agent-dot-c; }
+.agent-composer .agent-composer__orb.is-loading .prompt-orb__dots i:nth-child(4) { animation-name: agent-dot-d; }
+.agent-composer .agent-composer__orb.is-loading .prompt-orb__dots { animation: agent-dots-spin .9s linear infinite; }
+@keyframes agent-dot-a { 0%,100% { transform: translate(-7px,-7px); opacity: 1; } 50% { transform: translate(-6px,-6px); opacity: .35; } }
+@keyframes agent-dot-b { 0%,100% { transform: translate(7px,-7px); opacity: .35; } 50% { transform: translate(6px,-6px); opacity: 1; } }
+@keyframes agent-dot-c { 0%,100% { transform: translate(7px,7px); opacity: 1; } 50% { transform: translate(6px,6px); opacity: .35; } }
+@keyframes agent-dot-d { 0%,100% { transform: translate(-7px,7px); opacity: .35; } 50% { transform: translate(-6px,6px); opacity: 1; } }
+@keyframes agent-dots-spin { to { transform: rotate(360deg); } }
+
+/* 工具钮：透明 + 发丝描边胶囊 */
+:root .agent-conversation .agent-composer.agent-composer--glass .agent-attachment-control > button,
+:root .agent-conversation .agent-composer.agent-composer--glass .agent-composer__tools .agent-mode-control > button,
+:root .agent-conversation .agent-composer.agent-composer--glass .agent-composer__tools .agent-model-trigger,
+:root .agent-conversation .agent-composer.agent-composer--glass .agent-composer__tools > div > button[aria-haspopup],
+:root .agent-conversation .agent-composer.agent-composer--glass .agent-composer__tools > div > button {
+  border: 1px solid rgba(0,0,0,.14) !important; border-radius: 999px !important;
+  background: transparent !important; color: #1a1613 !important; box-shadow: none !important;
+}
+:root[data-theme='dark'] .agent-conversation .agent-composer.agent-composer--glass .agent-attachment-control > button,
+:root[data-theme='dark'] .agent-conversation .agent-composer.agent-composer--glass .agent-composer__tools .agent-mode-control > button,
+:root[data-theme='dark'] .agent-conversation .agent-composer.agent-composer--glass .agent-composer__tools .agent-model-trigger,
+:root[data-theme='dark'] .agent-conversation .agent-composer.agent-composer--glass .agent-composer__tools > div > button {
+  border-color: rgba(255,255,255,.16) !important; color: #efe7e0 !important;
+}
+:root .agent-conversation .agent-composer.agent-composer--glass .agent-composer__tools button:hover { background: rgba(0,0,0,.05) !important; }
+:root[data-theme='dark'] .agent-conversation .agent-composer.agent-composer--glass .agent-composer__tools button:hover { background: rgba(255,255,255,.06) !important; }
+
 .agent-composer.is-sending { animation: agent-composer-press .42s cubic-bezier(.34,1.56,.64,1); }
 @keyframes agent-composer-press { 30% { transform: scale(.985); } 100% { transform: none; } }
-.agent-composer .agent-composer__input-row > textarea::placeholder { transition: opacity .3s ease; }
-.agent-composer .agent-composer__input-row > textarea:focus::placeholder { opacity: .55; }
 @media (prefers-reduced-motion: reduce) {
-  .agent-composer.is-sending { animation: none; }
+  .agent-composer.is-sending,
+  .agent-composer .agent-composer__orb .prompt-orb__sphere::before,
+  .agent-composer .agent-composer__orb.is-loading .prompt-orb__dots,
+  .agent-composer .agent-composer__orb.is-loading .prompt-orb__dots i { animation: none; }
   .agent-composer .agent-composer__orb .prompt-orb__sphere { transition: none; }
 }
