@@ -53,6 +53,11 @@ import '../../styles/agentComposer.css';
 import { parseAgentAskHtml, type AgentAskForm } from './agentAskForm';
 import { confirmGrantKey, confirmScopesFor, type AgentConfirmScope } from './agentConfirmCopy';
 import { displayUserTurnText, agentToolLabel } from './agentTurnText';
+import { applyThinkingDelta, applyTextDelta, carryLiveState, finishThinking } from './agentStreamMessages';
+import { agentWorkingMeta, agentWorkingPhase } from './agentWorkingPhase';
+import { AgentOrbIcon } from './AgentWorkingOrb';
+import { AgentMediaTiles } from './AgentMediaTiles';
+import { referenceLineLabels, userTurnReferences } from './agentMessageRefs';
 import { activityAfterConfirmation, agentLayerReducer, blockerAfterCredentialSignal, closedLayers, needsCredential, replacePendingConfirmation, useAgentTurn } from './agentPanelState';
 
 interface FlovartAgentPanelProps {
@@ -113,18 +118,29 @@ function snapshotNeedsConfiguration(snapshot: FlovartAgentSnapshot) {
 }
 
 function displayMessages(snapshot: {
-  messages: Array<{ id: string; role: string; text: string; thinking?: string; toolName?: string; isError?: boolean; timestamp?: number; error?: string }>;
+  messages: Array<{ id: string; role: string; text: string; thinking?: string; toolName?: string; toolCallId?: string; isError?: boolean; timestamp?: number; error?: string }>;
   boundProductionSkill?: ProductionSkillAttachment | null;
 }, language: 'en' | 'zho'): WorkflowAgentDisplayMessage[] {
   return snapshot.messages.map(message => ({
     id: message.id,
     role: (message.error ? 'error' : message.role) as WorkflowAgentDisplayMessage['role'],
     text: message.error ? agentMessageText(message.error, language) : message.role === 'user' ? displayUserTurnText(message.text) : message.text,
-    ...(message.role === 'assistant' && !message.error && message.thinking ? { thinking: message.thinking } : {}),
+    // 快照里的思考都已结束：收起显示（thinkingDone）。
+    ...(message.role === 'assistant' && !message.error && message.thinking ? { thinking: message.thinking, thinkingDone: true } : {}),
     title: message.role === 'tool' ? agentToolLabel(message.toolName, language) : undefined,
     status: message.role === 'tool' ? message.isError ? 'error' : 'success' : undefined,
     createdAt: message.timestamp ? new Date(message.timestamp).toISOString() : undefined,
+    ...(message.role === 'tool' ? { toolName: message.toolName, toolCallId: message.toolCallId } : {}),
+    ...(message.role === 'user' ? userReferences(message.text) : {}),
   }));
+}
+
+/** 用户消息里的画布引用：优先读带 nodeId 的「引用上下文」，旧消息只剩「引用：@…」时按名字。 */
+function userReferences(storedText: string): Pick<WorkflowAgentDisplayMessage, 'references'> {
+  const withIds = userTurnReferences(storedText);
+  if (withIds.length) return { references: withIds };
+  const labels = referenceLineLabels(displayUserTurnText(storedText));
+  return labels.length ? { references: labels.map(label => ({ kind: 'node' as const, label })) } : {};
 }
 
 function errorMessage(error: unknown) {
@@ -192,6 +208,7 @@ const userApiKeysRef = useRef(userApiKeys);
   // 一轮对话的显式状态：idle | sending | awaitingConfirmation | stopping；sending 只是派生值。
   const { turn, turnRef, dispatchTurn } = useAgentTurn();
   const sending = turn.phase !== 'idle';
+  const [turnStartedAt, setTurnStartedAt] = useState<number>();
   const [confirmation, setConfirmation] = useState<PendingConfirmation>();
   const [pendingAsk, setPendingAsk] = useState<PendingAsk>();
   const [mandate, setMandate] = useState<AgentSpendMandate | null>(null);
@@ -713,37 +730,44 @@ const userApiKeysRef = useRef(userApiKeys);
 
   useEffect(() => { handleEventRef.current = handleEvent; });
 
-  const handleEvent = (event: FlovartAgentTurnEvent, assistantId: string) => {    if (event.type === 'text-delta') {
+  const handleEvent = (event: FlovartAgentTurnEvent, assistantId: string) => {
+    if (event.type === 'text-delta') {
       setSetupBlocker(current => blockerAfterCredentialSignal(current, false));
-      setMessages(items => items.some(item => item.id === assistantId)
-        ? items.map(item => item.id === assistantId ? { ...item, text: item.text + event.delta } : item)
-        : [...items, { id: assistantId, role: 'assistant', text: event.delta }]);
+      const now = Date.now();
+      setMessages(items => applyTextDelta(items, assistantId, event.delta, now));
     } else if (event.type === 'thinking-delta') {
-      setMessages(items => items.some(item => item.id === assistantId)
-        ? items.map(item => item.id === assistantId ? { ...item, thinking: (item.thinking || '') + event.delta } : item)
-        : [...items, { id: assistantId, role: 'assistant', text: '', thinking: event.delta }]);
+      const now = Date.now();
+      setMessages(items => applyThinkingDelta(items, assistantId, event.delta, now));
     } else if (event.type === 'snapshot') {
       setSetupBlocker(current => blockerAfterCredentialSignal(current, snapshotNeedsConfiguration(event.snapshot)));
-      setMessages(displayMessages(event.snapshot, language));
+      const next = displayMessages(event.snapshot, language);
+      setMessages(items => carryLiveState(items, next));
       setTodoItems(latestTodoFromMessages(event.snapshot.messages) || []);
       skillAttachmentDirty.current = false;
       setSkillAttachment(event.snapshot.boundProductionSkill);
     } else if (event.type === 'tool-start') {
       const needsApproval = /production_(?:approve|run)|task_cancel/.test(event.name);
       const productionTool = /production_|workflow_projection|provider_status|task_get/.test(event.name);
-      setMessages(items => [...items, {
+      const now = Date.now();
+      // 转去调工具 = 这一段思考结束：定格用时并收起。
+      setMessages(items => [...items.map(item => finishThinking(item, now)), {
         id: `tool-${event.id}`,
         role: 'tool',
+        toolName: event.name,
+        args: event.args,
+        startedAt: now,
         title: agentToolLabel(event.name, language === 'zho' ? 'zho' : 'en'),
         text: needsApproval ? translations[language].agentPanel.toolWaitingApproval : productionTool ? translations[language].agentPanel.toolPreparingPlan : translations[language].agentPanel.toolUpdatingDraft,
         detail: event.args,
         status: 'pending',
       }]);
     } else if (event.type === 'tool-end') {
+      const endedAt = Date.now();
       setMessages(items => items.map(item => item.id === `tool-${event.id}` ? {
         ...item,
         text: toolResultText(event.result, language),
         detail: event.result,
+        endedAt,
         status: event.isError ? 'error' : 'success',
       } : item));
       if (event.name === AGENT_TODO_TOOL_NAME && !event.isError) {
@@ -815,7 +839,10 @@ const userApiKeysRef = useRef(userApiKeys);
     ].filter(Boolean).join('\n\n');
     const assistantId = `stream-${crypto.randomUUID()}`;
     stickToBottom.current = true;
-    setMessages(items => [...items, { id: crypto.randomUUID(), role: 'user', text: displayText }]);
+    const messageReferences = references.map(reference => ({ id: reference.id, kind: reference.type, label: reference.label }));
+    setMessages(items => [...items, { id: crypto.randomUUID(), role: 'user', text: displayText, ...(messageReferences.length ? { references: messageReferences } : {}) }]);
+    // 单个节点的「已加入上下文」提示随这一轮发出而结束；分组提示保留（还能保存为 Skill）。
+    setGroupBanner(current => (current && current.nodeIds.length <= 1 ? null : current));
     setPrompt('');
     setReferences([]);
     turnAttachments.forEach(releaseComposerAttachment);
@@ -823,6 +850,7 @@ const userApiKeysRef = useRef(userApiKeys);
     setAttachments([]);
     dispatchLayer({ type: 'close', layer: 'mention' });
     const { turnId } = dispatchTurn({ type: 'send' });
+    setTurnStartedAt(Date.now());
     setSetupBlocker(null);
     activity.current('running');
     const controller = new AbortController();
@@ -1045,6 +1073,16 @@ const userApiKeysRef = useRef(userApiKeys);
         <div ref={messagesRef} className="agent-conversation__messages"><WorkflowAgentMessages
           messages={transcriptMessages}
           running={sending}
+          working={sending ? agentWorkingPhase({
+            turnPhase: turn.phase,
+            awaitingAsk: Boolean(pendingAsk),
+            awaitingConfirmation: Boolean(confirmation),
+            messages: transcriptMessages,
+            language: language === 'zho' ? 'zho' : 'en',
+          }) : undefined}
+          turnStartedAt={sending ? turnStartedAt : undefined}
+          nodes={project.nodes}
+          onOpenReference={reference => { if (reference.kind === 'node' && reference.id) onFocusNode?.(reference.id); }}
           language={language}
           onCopyMessage={copyMessage}
           onBranchMessage={kernelRef.current ? branchFromMessage : undefined}
@@ -1064,19 +1102,36 @@ const userApiKeysRef = useRef(userApiKeys);
           onAction={runQuickAction}
           onStoryText={text => { setPrompt(`${language === 'zho' ? '请把以下故事改编为分镜脚本：' : 'Adapt the following story into a shot-by-shot script:'}\n${text}`); setCreationMode('storyboard'); focusComposer(); }}
         />}
-        {groupBanner && <div className="agent-group-banner" role="status">
-          <LayoutGrid size={14} />
-          <span>{groupBanner.nodeIds.length === 1
-            ? (language === 'zho' ? `已加入上下文「${groupBanner.label}」` : `Added "${groupBanner.label}" to context`)
-            : (language === 'zho' ? `已添加分组「${groupBanner.label}」（${groupBanner.nodeIds.length} 个节点）` : `Added group "${groupBanner.label}" (${groupBanner.nodeIds.length} nodes)`)}</span>
-          {groupBanner.nodeIds.length <= 1 ? null : groupBanner.saved
-            ? <small title={groupBanner.evaluationNote}>{groupBanner.installed
-              ? (language === 'zho' ? '已保存，并装入本机 Skill 注册表' : 'Saved and installed as a local Skill')
-              : groupBanner.evaluationNote
-                ? (language === 'zho' ? `已保存到「我的」；未装入注册表：${groupBanner.evaluationNote}` : `Saved to My Skills; not installed: ${groupBanner.evaluationNote}`)
-                : (language === 'zho' ? '已保存到「我的」Skill' : 'Saved to My Skills')}</small>
-            : <button type="button" onClick={() => void saveGroupAsSkill()}>{language === 'zho' ? '保存为 Skill' : 'Save as Skill'}</button>}
-          <button type="button" aria-label={language === 'zho' ? '关闭' : 'Dismiss'} onClick={() => setGroupBanner(null)}><X size={12} /></button>
+        {groupBanner && <div className="agent-group-tiles" role="status">
+          <div className="agent-group-tiles__head">
+            <LayoutGrid size={14} />
+            <span>{groupBanner.nodeIds.length === 1
+              ? (language === 'zho' ? '已加入上下文' : 'Added to context')
+              : (language === 'zho' ? `已添加分组「${groupBanner.label}」（${groupBanner.nodeIds.length} 个节点）` : `Added group "${groupBanner.label}" (${groupBanner.nodeIds.length} nodes)`)}</span>
+            {groupBanner.nodeIds.length <= 1 ? null : groupBanner.saved
+              ? <small title={groupBanner.evaluationNote}>{groupBanner.installed
+                ? (language === 'zho' ? '已保存，并装入本机 Skill 注册表' : 'Saved and installed as a local Skill')
+                : groupBanner.evaluationNote
+                  ? (language === 'zho' ? `已保存到「我的」；未装入注册表：${groupBanner.evaluationNote}` : `Saved to My Skills; not installed: ${groupBanner.evaluationNote}`)
+                  : (language === 'zho' ? '已保存到「我的」Skill' : 'Saved to My Skills')}</small>
+              : <button type="button" onClick={() => void saveGroupAsSkill()}>{language === 'zho' ? '保存为 Skill' : 'Save as Skill'}</button>}
+            <button type="button" aria-label={language === 'zho' ? '关闭' : 'Dismiss'} onClick={() => setGroupBanner(null)}><X size={12} /></button>
+          </div>
+          <AgentMediaTiles
+            refs={groupBanner.nodeIds.map(id => ({ id, kind: 'node' as const, label: project.nodes.find(node => node.id === id)?.title || id }))}
+            nodes={project.nodes}
+            max={8}
+            language={language === 'zho' ? 'zho' : 'en'}
+            onOpen={reference => { if (reference.id) onFocusNode?.(reference.id); }}
+            onRemove={reference => {
+              setReferences(current => current.filter(item => !(item.type === 'node' && item.id === reference.id)));
+              setGroupBanner(current => {
+                if (!current) return current;
+                const nodeIds = current.nodeIds.filter(id => id !== reference.id);
+                return nodeIds.length ? { ...current, nodeIds } : null;
+              });
+            }}
+          />
         </div>}
         {pendingAsk && <AgentAskCard
           key={pendingAsk.id}
@@ -1207,7 +1262,7 @@ const userApiKeysRef = useRef(userApiKeys);
               <CreationModeControl value={creationMode} onChange={setCreationMode} open={creationModeOpen} onOpenChange={open => dispatchLayer(open ? { type: 'open', layer: 'creationMode' } : { type: 'close', layer: 'creationMode' })} language={language} />
               <AgentModelPicker userApiKeys={userApiKeys} onAddApiKey={onAddApiKey} onUpdateApiKey={onUpdateApiKey} open={modelPickerOpen} onOpenChange={open => dispatchLayer(open ? { type: 'open', layer: 'modelPicker' } : { type: 'close', layer: 'modelPicker' })} language={language} />
               <div className="agent-mode-control">
-                <button type="button" aria-label={t('agentPanel.approvalMode')} title={t(APPROVAL_MODE_COPY[mode].hint)} aria-expanded={modeOpen} onClick={() => dispatchLayer({ type: 'toggle', layer: 'mode' })}>{(() => { const Icon = APPROVAL_MODE_COPY[mode].icon; return <Icon size={15} />; })()}<span>{t(APPROVAL_MODE_COPY[mode].label)}</span></button>
+                <button type="button" className="agent-approval-trigger" aria-label={t('agentPanel.approvalMode')} title={t(APPROVAL_MODE_COPY[mode].hint)} aria-expanded={modeOpen} onClick={() => dispatchLayer({ type: 'toggle', layer: 'mode' })}>{(() => { const Icon = APPROVAL_MODE_COPY[mode].icon; return <Icon size={15} />; })()}<span>{t(APPROVAL_MODE_COPY[mode].label)}</span></button>
                 {modeOpen && <div className="agent-mode-menu" role="menu" aria-label={t('agentPanel.approvalMode')}>
                   {APPROVAL_MODE_ORDER.map(item => {
                     const copy = APPROVAL_MODE_COPY[item];
@@ -1247,7 +1302,7 @@ const userApiKeysRef = useRef(userApiKeys);
             </div>
             {sending
               ? <span className="agent-composer__running">
-                  <span className="agent-composer__running-label" role="status">{language === 'zho' ? '运行中' : 'Working'}<i aria-hidden="true" /><i aria-hidden="true" /><i aria-hidden="true" /></span>
+                  <span className="agent-composer__running-label" role="status" title={language === 'zho' ? '运行中' : 'Working'}><AgentOrbIcon state="working" size={20} /><span>{language === 'zho' ? '运行中' : 'Working'}</span></span>
                   <span className="agent-composer__stop">
                     <span className="agent-composer__send-ring" aria-hidden="true" />
                     <button type="button" className="agent-composer__send" aria-label="停止" onClick={stop}><Square size={13} /></button>

@@ -36,6 +36,9 @@ const TOOL_LABELS: Record<string, { zho: string; en: string }> = {
   flovart_web_search: { zho: '联网搜索', en: 'Web search' },
   flovart_grep: { zho: '搜索本地文件', en: 'Search local files' },
   flovart_todo: { zho: '任务清单', en: 'To-do list' },
+  flovart_ask: { zho: '向你提问', en: 'Question for you' },
+  flovart_pipeline_run_start: { zho: '创建制作 run', en: 'Start run' },
+  flovart_pipeline_run_get: { zho: '读取制作 run', en: 'Read run' },
 };
 
 /** 工具卡标题用人话；未登记的工具（插件等）保持原名。 */

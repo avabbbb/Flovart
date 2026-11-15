@@ -8,6 +8,8 @@ export interface FlovartAgentMessage {
   /** 模型的思考过程（reasoning_content），与正文分开展示。 */
   thinking?: string;
   toolName?: string;
+  /** 工具结果对应的调用 id（与流式 tool-start 的 id 相同），用于把实时卡片的参数 / 用时接到快照上。 */
+  toolCallId?: string;
   isError?: boolean;
   timestamp?: number;
   error?: string;
@@ -98,6 +100,7 @@ export class ManagedFlovartAgentClient {
         const event = parseSseBlock(block);
         if (!event) continue;
         if (event.type === 'text-delta') emit({ type: 'text-delta', delta: String(event.data?.delta || '') });
+        else if (event.type === 'thinking-delta') emit({ type: 'thinking-delta', delta: String(event.data?.delta || '') });
         else if (event.type === 'snapshot') emit({ type: 'snapshot', snapshot: event.data });
         else if (event.type === 'status') emit({ type: 'status', running: Boolean(event.data?.running) });
         else if (event.type === 'tool-start') emit({

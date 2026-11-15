@@ -58,3 +58,18 @@ describe('agent ask form', () => {
     expect(parseAgentAskHtml('<p>no form</p>')).toMatchObject({ ok: false });
   });
 });
+
+describe('agent ask labels', () => {
+  it('prefers legend, then aria-label/title, then <label for>, and falls back to the name', async () => {
+    const { isFallbackLabel } = await import('../components/agent/agentAskForm');
+    const parsed = parseAgentAskHtml(`<form>
+      <fieldset><legend>背景</legend><label><input type="radio" name="bg" value="a">A</label></fieldset>
+      <fieldset aria-label="组合"><label><input type="radio" name="pair" value="1">1</label></fieldset>
+      <label for="note">备注</label><textarea id="note" name="note"></textarea>
+      <label><input type="radio" name="raw" value="x">X</label>
+    </form>`);
+    if ('error' in parsed) throw new Error(parsed.error);
+    expect(parsed.form.fields.map(field => field.label)).toEqual(['背景', '组合', '备注', 'raw']);
+    expect(parsed.form.fields.map(field => isFallbackLabel(field))).toEqual([false, false, false, true]);
+  });
+});

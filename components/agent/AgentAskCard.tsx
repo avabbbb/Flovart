@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { collectAgentAskAnswers, type AgentAskField, type AgentAskForm } from './agentAskForm';
+import { MessageCircleQuestion } from 'lucide-react';
+import { collectAgentAskAnswers, isFallbackLabel, type AgentAskField, type AgentAskForm } from './agentAskForm';
+import '../../styles/agentWorking.css';
 
 interface AgentAskCardProps {
   form: AgentAskForm;
@@ -47,6 +49,7 @@ export function AgentAskCard({ form, language, onSubmit, onCancel }: AgentAskCar
 
   const renderChoices = (field: Extract<AgentAskField, { kind: 'radio' | 'checkbox' }>) => {
     const selected = values[field.name];
+    const otherId = 'agent-ask-other-' + field.name;
     return (
       <div className="agent-ask__options" role={field.kind === 'radio' ? 'radiogroup' : 'group'} aria-label={field.label}>
         {field.options.map(option => {
@@ -54,7 +57,7 @@ export function AgentAskCard({ form, language, onSubmit, onCancel }: AgentAskCar
             ? Array.isArray(selected) && selected.includes(option.value)
             : selected === option.value;
           return (
-            <label key={option.value} className="agent-ask__option">
+            <label key={option.value} className="agent-ask__option" data-checked={checked ? '' : undefined}>
               <input
                 type={field.kind}
                 name={field.name}
@@ -68,22 +71,25 @@ export function AgentAskCard({ form, language, onSubmit, onCancel }: AgentAskCar
                   }
                 }}
               />
-              <span>{option.label}</span>
+              <span className="agent-ask__option-text">{option.label}</span>
             </label>
           );
         })}
-        <label className="agent-ask__option agent-ask__other">
-          <span>{L('其他', 'Other')}</span>
+        <div className="agent-ask__other" data-filled={other[field.name]?.trim() ? '' : undefined}>
+          <label htmlFor={otherId}>{L('其他', 'Other')}</label>
           <input
+            id={otherId}
             type="text"
             value={other[field.name] || ''}
             placeholder={L('直接输入你的答案', 'Type your own answer')}
             onChange={event => setOther(current => ({ ...current, [field.name]: event.target.value }))}
           />
-        </label>
+        </div>
       </div>
     );
   };
+
+  const [title, ...context] = form.context;
 
   return (
     <section
@@ -99,14 +105,18 @@ export function AgentAskCard({ form, language, onSubmit, onCancel }: AgentAskCar
         onCancel();
       }}
     >
-      {form.context.length > 0 && (
-        <div className="agent-ask__context">
-          {form.context.map((text, index) => <p key={index}>{text}</p>)}
-        </div>
-      )}
+      <header className="agent-ask__head">
+        <span className="agent-ask__eyebrow"><MessageCircleQuestion size={13} aria-hidden="true" />{L('Agent 需要你决定', 'Agent needs your input')}</span>
+        {title && <h3 className="agent-ask__title">{title}</h3>}
+        {context.length > 0 && (
+          <div className="agent-ask__context">
+            {context.map((text, index) => <p key={index}>{text}</p>)}
+          </div>
+        )}
+      </header>
       {form.fields.map(field => (
         <div key={field.name} className="agent-ask__field">
-          <span className="agent-ask__label">{field.label}{field.required ? ' *' : ''}</span>
+          <span className="agent-ask__label" data-fallback={isFallbackLabel(field) ? '' : undefined}>{field.label}{field.required ? <span className="agent-ask__required" aria-label={L('必填', 'required')}> *</span> : null}</span>
           {field.kind === 'radio' || field.kind === 'checkbox'
             ? renderChoices(field)
             : field.kind === 'select'
@@ -158,10 +168,10 @@ export function AgentAskCard({ form, language, onSubmit, onCancel }: AgentAskCar
         </div>
       ))}
       {error && <p className="agent-ask__error" role="alert">{error}</p>}
-      <div className="agent-ask__actions">
+      <footer className="agent-ask__actions">
         <button type="button" className="agent-ask__cancel" onClick={onCancel}>{L('取消', 'Cancel')}</button>
         <button type="button" className="agent-ask__submit" onClick={submit}>{L('提交', 'Submit')}</button>
-      </div>
+      </footer>
     </section>
   );
 }

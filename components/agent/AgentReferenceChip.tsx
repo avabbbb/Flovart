@@ -1,8 +1,9 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { RotateCw, X } from 'lucide-react';
+import { Play, RotateCw, X } from 'lucide-react';
 import { useWorkflowMediaUrl } from '../workflow/media';
 import type { WorkflowNode } from '../workflow/types';
+import '../../styles/agentWorking.css';
 
 const PREVIEW_WIDTH = 240;
 
@@ -41,7 +42,7 @@ export function AgentReferenceChip({ node, icon, label, targetLabel, onTarget, o
     <span ref={chipRef} className="agent-reference-chip" onMouseEnter={showPreview} onMouseLeave={hidePreview}>
       <button type="button" className="agent-reference-chip__target" aria-label={targetLabel} onClick={onTarget}>
         {thumbUrl
-          ? <img className="agent-reference-thumb" src={thumbUrl} alt="" draggable={false} />
+          ? <span className="agent-reference-thumb-wrap" data-video={isVideo ? '' : undefined}><img className="agent-reference-thumb" src={thumbUrl} alt="" draggable={false} />{isVideo && <Play size={7} fill="currentColor" aria-hidden="true" />}</span>
           : icon}
         <span>{label}</span>
       </button>

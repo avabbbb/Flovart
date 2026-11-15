@@ -366,28 +366,7 @@
 .agent-confirm__actions .agent-confirm__allow:disabled { opacity: .4; cursor: not-allowed; }
 .agent-confirm__actions .agent-confirm__allow--session { height: auto; min-height: 28px; padding: 4px 10px; border-color: var(--c-border); background: transparent; color: var(--c-text); white-space: normal; text-align: center; }
 .agent-confirm__actions .agent-confirm__allow--session:hover { background: color-mix(in srgb, var(--c-text) 8%, transparent); }
-.agent-ask { --c-bg: var(--wf-strong, var(--panel-strong, #1f1f22)); --c-field: var(--wf-panel, var(--panel-bg, #18181b)); --c-border: var(--wf-border, var(--border-color, rgba(255,255,255,.12))); --c-text: var(--wf-text, var(--text-primary, #f4f4f5)); --c-muted: var(--wf-muted, var(--text-muted, #a1a1aa)); flex: none; display: grid; gap: 8px; margin: 0 0 8px; max-height: 60%; overflow: auto; padding: 12px; border: 1px solid var(--c-border); border-radius: 10px; background: var(--c-bg); color: var(--c-text); font-size: 12px; line-height: 1.5; outline: none; }
-.agent-ask:focus-visible { border-color: color-mix(in srgb, var(--c-text) 35%, var(--c-border)); }
-.agent-ask__context { display: grid; gap: 3px; color: var(--c-muted); font-size: 11px; }
-.agent-ask__context p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.agent-ask__field { display: grid; gap: 4px; }
-.agent-ask__label { color: var(--c-text); font-size: 11px; font-weight: 600; overflow-wrap: anywhere; }
-.agent-ask__control { width: 100%; min-height: 28px; box-sizing: border-box; padding: 4px 8px; border: 1px solid var(--c-border); border-radius: 7px; color: var(--c-text); background: var(--c-field); font: inherit; font-size: 12px; }
-.agent-ask__control:focus-visible { outline: 2px solid color-mix(in srgb, var(--c-text) 30%, transparent); outline-offset: 1px; }
-textarea.agent-ask__control { resize: vertical; min-height: 56px; }
-.agent-ask__options { display: grid; gap: 4px; }
-.agent-ask__option { display: flex; align-items: flex-start; gap: 6px; color: var(--c-text); font-size: 12px; }
-.agent-ask__option input[type=radio], .agent-ask__option input[type=checkbox] { margin-top: 2px; }
-.agent-ask__other { flex-wrap: wrap; color: var(--c-muted); font-size: 11px; }
-.agent-ask__other input { flex: 1 1 120px; min-width: 0; height: 24px; padding: 0 7px; border: 1px solid var(--c-border); border-radius: 6px; color: var(--c-text); background: var(--c-field); font: inherit; font-size: 11px; }
-.agent-ask__error { margin: 0; color: #e5484d; font-size: 11px; }
-.agent-ask__actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px; }
-.agent-ask__actions button { height: 28px; padding: 0 12px; border: 1px solid var(--c-border); border-radius: 7px; color: var(--c-text); background: transparent; font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; }
-.agent-ask__actions button:hover { background: color-mix(in srgb, var(--c-text) 8%, transparent); }
-.agent-ask__submit { border-color: transparent !important; background: var(--c-text) !important; color: var(--c-bg) !important; }
 .workflow-agent__mode { display: inline-flex; border: 1px solid var(--wf-border); border-radius: 6px; padding: 2px; } .workflow-agent__mode button { border-radius: 4px; padding: 3px 6px; font-size: 10px; } .workflow-agent__mode button.is-active { color: var(--wf-text); background: color-mix(in srgb,var(--wf-accent) 16%,transparent); }
-.workflow-agent__working { display: flex; align-items: center; gap: 6px; padding: 5px 0; color: var(--wf-muted); font-size: 11px; }
-.workflow-agent__tool { margin-bottom: 9px; border: 1px solid var(--wf-border); border-radius: 8px; padding: 8px; background: color-mix(in srgb,var(--wf-strong) 72%,transparent); } .workflow-agent__tool summary { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; } .workflow-agent__tool summary div { min-width: 0; display: flex; flex: 1; align-items: center; justify-content: space-between; gap: 8px; } .workflow-agent__tool summary strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; } .workflow-agent__tool summary span { flex: 0 0 auto; color: var(--wf-muted); font-size: 9px; } .workflow-agent__tool p { margin: 7px 0 0; color: var(--wf-muted); font-size: 10px; } .workflow-agent__tool pre { max-height: 180px; margin: 7px 0 0; padding: 7px; overflow: auto; border-radius: 6px; color: var(--wf-muted); background: var(--wf-panel); font: 9px/1.45 ui-monospace,monospace; white-space: pre-wrap; } .workflow-agent__tool.is-success { border-color: color-mix(in srgb,var(--wf-accent) 42%,var(--wf-border)); } .workflow-agent__tool.is-error,.workflow-agent__tool.is-denied { border-color: color-mix(in srgb,#dc4f4f 45%,var(--wf-border)); }
 .workflow-agent__message-attachments { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 5px; margin-top: 5px; } .workflow-agent__message-attachments img { width: 100%; aspect-ratio: 1; border-radius: 6px; object-fit: cover; }
 .workflow-agent__attachments { display: flex; gap: 6px; padding: 7px 9px 0; overflow-x: auto; } .workflow-agent__attachments > div { position: relative; flex: 0 0 48px; height: 48px; } .workflow-agent__attachments img { width: 100%; height: 100%; border-radius: 6px; object-fit: cover; } .workflow-agent__attachments button { position: absolute; top: 2px; right: 2px; display: grid; place-content: center; width: 18px; height: 18px; border: 0; border-radius: 50%; color: white; background: rgba(0,0,0,.58); cursor: pointer; }
 .workflow-agent__attachments video { width: 100%; height: 100%; border-radius: 6px; object-fit: cover; background: #000; }
@@ -962,10 +941,3 @@ textarea.agent-ask__control { resize: vertical; min-height: 56px; }
 @media (prefers-reduced-motion: reduce) {
   .prompt-orb__sphere, .prompt-orb.is-loading .prompt-orb__dots, .prompt-orb.is-loading .prompt-orb__dots i, .prompt-glass-editor [data-placeholder]::before, .prompt-glass-editor .is-editor-empty::before { animation: none; }
 }
-/* 打字浮现：新键入的字符由模糊、半透明、轻微下沉过渡到清晰 */
-.prompt-glass-editor .pm-fresh { display: inline-block; animation: prompt-char-in .45s cubic-bezier(.2,.7,.2,1) both; }
-@keyframes prompt-char-in { from { opacity: .15; filter: blur(5px); transform: translateY(2px); } to { opacity: 1; filter: blur(0); transform: none; } }
-@media (prefers-reduced-motion: reduce) { .prompt-glass-editor .pm-fresh { animation: none; } }
-.workflow-agent__thinking{margin:3px 0 6px;color:var(--wf-muted);font-size:11px}
-.workflow-agent__thinking>summary{cursor:pointer;user-select:none}
-.workflow-agent__message .workflow-agent__thinking p{margin:4px 0 0;padding:6px 8px;background:none;border-left:2px solid var(--wf-border,rgba(127,127,127,.3));border-radius:0;color:var(--wf-muted);font-size:11px;max-height:240px;overflow:auto}

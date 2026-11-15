@@ -1,5 +1,4 @@
 import { buildReferenceHintExtension, REFERENCE_HINT_STYLES } from './promptReferenceHint';
-import { buildFreshTextExtension } from './promptFreshText';
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -387,7 +386,6 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
                 MediaMentionNode,
                 buildSuggestionExtension(getFilteredItems, assetFoldersRef, assetItemsRef, onSelectAssetRef, suppressSuggestionRef),
                 buildReferenceHintExtension(() => referenceItemsRef.current),
-                buildFreshTextExtension(),
             ],
             content: normalizeDocument(initialText, initialDocument),
             editable: !disabled,
