@@ -1,4 +1,6 @@
 import { Wrench } from 'lucide-react';
+import type { AgentConnectionStatus } from '../../stores/useAgentConnectionStore';
+import { linkStatusLabel } from './AgentLinkStatus';
 
 interface AgentHostDiagnosticsProps {
   scanning: boolean;
@@ -19,7 +21,7 @@ export function AgentHostDiagnostics({ scanning, diagnostic, selectedLabel, conn
       <summary><Wrench size={12} /> {copy.title}</summary>
       <div>
         <p>{scanning ? copy.scanning : diagnostic || copy.missing}</p>
-        <p>{copy.selection}: {selectedLabel}; {copy.service}: {connectionStatus}; {copy.project}: {projectId || copy.none}.</p>
+        <p>{copy.selection}: {selectedLabel}; {copy.service}: {linkStatusLabel(connectionStatus as AgentConnectionStatus, false, language)}; {copy.project}: {projectId || copy.none}.</p>
       </div>
     </details>
   );

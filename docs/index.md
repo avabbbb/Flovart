@@ -28,7 +28,7 @@
 | [16 Agent 视频流水线](design/16-agent-video-pipeline.md) | 宣传片流水线能力矩阵、工具集、run / trace 模型、素材归档、放置（2026-11-13 改为逆向 = 全能助手主场）、P0–P2 计划与验收；P0 已在 main 实现（§12） |
 | [远景：三条产品线](plans/vision-three-tracks.md) | 截图 + 录制（A）、视频逆向 + Agent 辅助制作（B）、创作者 UXP 插件（C，AE / PS 内读取工程上下文、直接操作图层与时间线，首个场景静止系 MAD）；方向探索，不改现行优先级 |
 | [真实操作录制与剪辑 Hub 计划](plans/recordly-capture-hub.md) | Recordly 连接器 → Rust 录制 + Snipaste 式截图伴生工具 → 视频制作 Hub；录制截图为本体、反推 / 发送到画布 / Agent 为可插拔模块；许可证边界（Recordly AGPL）与分期 H0–H3（草案） |
-| [DSH 工作台计划](plans/dsh-workbench.md) | Flovart 作为 DeepSeek Harness 工作台、DSH Agent 通过工具操作画布（草案） |
+| [DSH 工作台计划](plans/dsh-workbench.md) | Flovart 作为 DeepSeek Harness 工作台、DSH Agent 通过工具操作画布（进行中：主仓库 dsh-plugin 已可用，独立仓库 / 市场未开始） |
 
 ## 3. 指南与记录
 
@@ -45,6 +45,7 @@
 
 质量与开发日志：
 - [真实 API 验收步骤](quality/real-api-acceptance.md)：导入 → 计划卡 → 提交 → 查询 → 保存 → 播放 → 导出 → 刷新重读
+- [2026-11-15 DSH 链接错误与连接面板 UI](quality/2026-11-15-dsh-connection-ui.md)：链接错误分类、状态卡死、连接指引 / 状态 / 运行日志弹性布局
 - [2026-11-15 基础功能评测](quality/2026-11-15-basic-function-eval.md)：Agent 经 CLI 驱动画布，trace、定位与修复记录
 - [2026-11-12 Agent / 工具链迭代 · 第二份](quality/2026-11-12-agent-tool-eval-2.md)
 - [2026-11-11 Agent / 工具链迭代](quality/2026-11-11-agent-tool-eval.md)

@@ -71,7 +71,7 @@ const EXTERNAL_PACKAGE_HOSTS: Record<string, { fileName: string; installed: stri
   },
   'deepseek-harness': {
     fileName: '',
-    installed: 'DeepSeek Harness 插件尚未在当前环境就绪，请先完成插件安装。',
+    installed: 'DeepSeek Harness 插件尚未就绪：按「DeepSeek Harness 接入步骤」运行 npm run dsh:profile:install，再用 npm run dsh:start 启动。',
   },
 };
 

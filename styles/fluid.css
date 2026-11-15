@@ -64,3 +64,45 @@
 @container workflow-canvas (width <= 480px) {
   .workflow-toolbar .workflow-toolbar__zoom-wrap { display: none !important; }
 }
+
+/* ── Agent 抽屉 · 连接指引（agentpicker）── */
+/* ≤620px：当前 Agent 与其他 Agent 从两列变成上下一列 */
+@container agentpicker (max-width: 620px) {
+  .agent-picker__layout { grid-template-columns: minmax(0, 1fr); }
+}
+/* ≤300px：说明文字收起，其他 Agent 的状态只留圆点 + 名称 */
+@container agentpicker (max-width: 300px) {
+  .agent-picker__header p,
+  .agent-picker__section-heading p { display: none; }
+  .agent-card__state { display: none; }
+}
+
+/* ── 连接状态（agentlink）── */
+/* ≤420px：信息格变一列；“重新连接”变 28px 图标按钮（文字留在 title / aria-label） */
+@container agentlink (max-width: 420px) {
+  .agent-linkstatus__facts { grid-template-columns: minmax(0, 1fr); }
+  .agent-linkstatus__reconnect { width: 28px; padding: 0; justify-content: center; }
+  .agent-linkstatus__reconnect > span { display: none; }
+}
+/* ≤280px：标题收起，只留状态徽标 */
+@container agentlink (max-width: 280px) {
+  .agent-linkstatus__title { display: none; }
+}
+
+/* ── 运行日志（agentlog）── */
+/* ≤460px：“筛选”文字与计数收起 */
+@container agentlog (max-width: 460px) {
+  .agent-runlog__filter-label,
+  .agent-runlog__count { display: none; }
+}
+/* ≤340px：日志行改两行——时间 + 级别在上，消息整行在下 */
+@container agentlog (max-width: 340px) {
+  .agent-runlog__line { grid-template-columns: max-content minmax(0, 1fr); }
+  .agent-runlog__msg { grid-column: 1 / -1; }
+  .agent-runlog__filter select { max-width: 96px; }
+}
+
+/* ── 运行日志页分区（agentsection）≤360px：分区说明收起，只留标题 + 操作 ── */
+@container agentsection (max-width: 360px) {
+  .agent-section-head__hint { display: none; }
+}

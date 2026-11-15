@@ -1,13 +1,13 @@
 # Flovart × DeepSeek Harness（DSH）工作台计划
 
-状态：草案（2026-11-06）。目标：Flovart UI 不变，作为 DSH Desktop 工作台出现；DSH 主对话 Agent 通过工具操作 Flovart 画布。
+状态：进行中（2026-11-15 更新；初稿 2026-11-06）。目标：Flovart UI 不变，作为 DSH Desktop 工作台出现；DSH 主对话 Agent 通过工具操作 Flovart 画布。
 
 ## 1. 现状
 
-- 旧实现 dsh-plugin/（@flovart/dsh-plugin 0.1.0，面向 DSH 0.1.0-rc.8）已在 350b1c8（2026-10-29）整体删除，可用 git show 350b1c8^:dsh-plugin/... 取回。
-- 旧实现可复用的部分：src/tools.ts（五个稳定工具 status / workflow.inspect / workflow.selection.get / workflow.apply / workflow.node.run）、src/workspaceProxy.ts（只放行 127.0.0.1 显式端口、路由白名单、token 不进浏览器）、scripts/workspace-supervisor.mjs、对应单测。
-- 不可直接复用：RC8 的 conversation.view / shell.overlay 客户端、profile.mjs（自建 flovart profile）。当前 DSH 已是 0.2.x，桌面端用「工作台」协议，并由插件市场安装到 desktop / web profile。
-- 旧版未通过的门槛：真实登录态下重载后仍能操作画布、升级回滚。这次仍是首要验收项。
+- 主仓库 `dsh-plugin/`（@flovart/dsh-plugin 0.1.0）已恢复并在用：peer 范围 `@deepseek-ai/dsh-* >=0.2.2-rc.1 <0.3.0-0`（已验证 0.2.2-rc.1 / rc.2）；同源 iframe 嵌入可见画布（`/flovart-app/?embed=dsh`），一次性 bootstrap token 经 postMessage 交给画布，持久 token 只在 Host；随包注册 canonical Skill；DSH Desktop `dsh-app://` 来源的 bootstrap 已固定。350b1c8 的“整体删除”已被之后的提交取代。
+- 链接健壮性（2026-11-15，见 [quality/2026-11-15-dsh-connection-ui.md](../quality/2026-11-15-dsh-connection-ui.md)）：链接错误按未运行 / 不可达 / 超时 / CORS / 凭证失效 / 版本不匹配分类并给下一步；嵌入页凭证失效时自动向宿主重新申请 token；DSH 头部显示画布回传的真实链接状态；Agent 抽屉「连接指引 / 连接状态 / 运行日志」重做为容器自适应布局。
+- 本地开发与 CI 一样需要先 `npm --prefix dsh-plugin ci`，否则根 tsc 与 `tests/dshService.test.ts` 缺 `@deepseek-ai/*`。
+- 仍未通过的门槛：真实登录态下重载后仍能操作画布、升级回滚；独立仓库、npm 发布与工作台市场（§3.1、§4）未开始。
 
 ## 2. 参考：dsh-media-desk（woniuniuniu，v2.6.1，MIT）
 

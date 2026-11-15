@@ -61,13 +61,29 @@ describe('Link 2.0 agent selection', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('安装包已下载');
   });
 
-  it('surfaces a retry action while the local service is offline', async () => {
-    useAgentConnectionStore.getState().setStatus('offline');
+  it('offers Reconnect while the local link is down and explains the classified cause', async () => {
+    useAgentConnectionStore.getState().setStatus('auth_failed', { issue: { kind: 'auth', at: new Date().toISOString(), url: 'http://127.0.0.1:17372' } });
     vi.mocked(discoverAgentHosts).mockResolvedValue({ ok: false, state: 'offline', agents: [] });
     render(<AgentHostPicker />);
-    const retry = await screen.findAllByRole('button', { name: '重试' });
-    fireEvent.click(retry[0]);
-    await waitFor(() => expect(prepareAgent).toHaveBeenCalled());
+    const reconnect = await screen.findAllByRole('button', { name: '重新连接' });
+    expect(screen.getByText(/连接凭证已失效/)).toBeInTheDocument();
+    expect(screen.getByTestId('agent-link-badge')).toHaveTextContent('凭证失效');
+    const before = useAgentConnectionStore.getState().reconnectNonce;
+    fireEvent.click(reconnect[0]);
+    expect(useAgentConnectionStore.getState().reconnectNonce).toBe(before + 1);
+    // Preparing a host cannot work without the link; it must not be attempted.
+    expect(prepareAgent).not.toHaveBeenCalled();
+  });
+
+  it('shows numbered DSH steps with copyable commands when DeepSeek Harness is selected', async () => {
+    localStorage.setItem('flovart.agent.selectedHost', 'deepseek-harness');
+    render(<AgentHostPicker />);
+    const guide = await screen.findByTestId('agent-setup-guide');
+    expect(within(guide).getByRole('heading', { name: 'DeepSeek Harness 接入步骤' })).toBeInTheDocument();
+    expect(within(guide).getAllByRole('listitem').length).toBeGreaterThanOrEqual(4);
+    expect(guide).toHaveTextContent('npm run dsh:profile:install');
+    expect(guide).toHaveTextContent('npm run dsh:start');
+    expect(within(guide).getAllByRole('button', { name: '复制命令' }).length).toBeGreaterThanOrEqual(3);
   });
 
   it('refreshes changed availability when the host count stays the same', async () => {

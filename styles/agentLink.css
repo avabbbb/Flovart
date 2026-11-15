@@ -1,0 +1,170 @@
+/* Agent drawer · 连接指引 / 连接状态 / 运行日志
+   Container-driven: every block sizes to its own width (breakpoints in fluid.css).
+   Tokens only (DESIGN.md §2/§4/§10); no glass — these are content, not floating chrome. */
+
+/* ── shared ── */
+.agent-activity { display: flex; min-width: 0; flex-direction: column; gap: 12px; }
+.agent-activity__section { min-width: 0; padding: 10px 12px; border: 1px solid var(--isl-border); border-radius: var(--isl-r); background: var(--isl-card); }
+
+.agent-copy-btn {
+  display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 4px;
+  min-width: 26px; height: 26px; padding: 0 6px;
+  border: 1px solid transparent; border-radius: var(--isl-r-sm);
+  color: var(--isl-ink-soft); background: transparent; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
+}
+.agent-copy-btn:hover:not(:disabled) { color: var(--isl-ink); background: var(--isl-surface-2); }
+.agent-copy-btn:disabled { cursor: default; opacity: .45; }
+.agent-copy-btn.is-copied { color: var(--isl-mint-deep); }
+.agent-copy-btn:focus-visible,
+.agent-linkstatus__reconnect:focus-visible,
+.agent-runlog__jump:focus-visible,
+.agent-runlog__filter select:focus-visible { outline: 2px solid var(--isl-mint); outline-offset: 1px; }
+
+/* ── status badge: dot + text, the dot never carries meaning alone ── */
+.agent-linkbadge {
+  display: inline-flex; min-width: 0; max-width: 100%; flex: 0 1 auto; align-items: center; gap: 6px;
+  height: 22px; padding: 0 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; line-height: 1; white-space: nowrap;
+  color: var(--isl-ink-soft); background: var(--isl-surface-2);
+}
+.agent-linkbadge__dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 999px; background: var(--isl-ink-ghost); }
+.agent-linkbadge__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.agent-linkbadge.is-ok { color: var(--isl-mint-deep); background: var(--isl-mint-bg); }
+.agent-linkbadge.is-ok .agent-linkbadge__dot { background: var(--isl-mint); }
+.agent-linkbadge.is-busy { color: var(--isl-ink); background: color-mix(in srgb, var(--isl-sun) 18%, transparent); }
+.agent-linkbadge.is-busy .agent-linkbadge__dot { background: var(--isl-sun); animation: agent-link-pulse 1.2s ease-in-out infinite; }
+.agent-linkbadge.is-bad { color: var(--isl-coral-deep); background: color-mix(in srgb, var(--isl-coral) 14%, transparent); }
+.agent-linkbadge.is-bad .agent-linkbadge__dot { background: var(--isl-coral); }
+@keyframes agent-link-pulse { 50% { opacity: .35; } }
+
+/* ── 连接状态 ── */
+.agent-linkstatus {
+  container-type: inline-size; container-name: agentlink;
+  display: flex; min-width: 0; flex-direction: column; gap: 10px;
+  padding: 12px; border: 1px solid var(--isl-border); border-radius: var(--isl-r); background: var(--isl-card);
+}
+.agent-linkstatus__head { display: flex; min-width: 0; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 8px; }
+.agent-linkstatus__heading { display: flex; min-width: 0; flex: 1 1 auto; align-items: center; gap: 8px; }
+.agent-linkstatus__title { margin: 0; flex: 0 0 auto; font-size: 13px; font-weight: 600; line-height: 20px; white-space: nowrap; }
+.agent-linkstatus__actions { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 2px; }
+.agent-linkstatus__reconnect {
+  display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px;
+  border: 0; border-radius: var(--isl-r-sm); color: var(--isl-surface-sunk); background: var(--isl-mint);
+  font: inherit; font-size: 11px; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+.agent-linkstatus__reconnect.is-quiet { border: 1px solid var(--isl-border); color: var(--isl-ink); background: transparent; }
+.agent-linkstatus__reconnect:disabled { cursor: default; opacity: .5; }
+.agent-linkstatus__since { margin: -4px 0 0; color: var(--isl-ink-ghost); font-size: 10px; font-variant-numeric: tabular-nums; }
+.agent-linkstatus__issue {
+  display: flex; min-width: 0; flex-direction: column; gap: 4px;
+  padding: 10px 12px; border-radius: var(--isl-r-sm);
+  border-left: 3px solid var(--isl-coral); background: color-mix(in srgb, var(--isl-coral) 8%, var(--isl-card));
+  font-size: 12px; line-height: 18px;
+}
+.agent-linkstatus__issue.is-busy { border-left-color: var(--isl-sun); background: color-mix(in srgb, var(--isl-sun) 10%, var(--isl-card)); }
+.agent-linkstatus__issue.is-idle { border-left-color: var(--isl-border-strong); background: var(--isl-surface-2); }
+.agent-linkstatus__issue strong { font-size: 12px; font-weight: 600; }
+.agent-linkstatus__issue p { margin: 0; color: var(--isl-ink-soft); overflow-wrap: anywhere; }
+.agent-linkstatus__next { color: var(--isl-ink) !important; }
+.agent-linkstatus__next > span { margin-right: 6px; color: var(--isl-ink-soft); font-size: 11px; font-weight: 600; }
+.agent-linkstatus__ok { margin: 0; color: var(--isl-ink-soft); font-size: 12px; line-height: 18px; }
+.agent-linkstatus__facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.agent-linkstatus__fact { display: flex; min-width: 0; flex-direction: column; gap: 3px; padding: 8px 10px; border-radius: var(--isl-r-sm); background: var(--isl-surface-2); }
+.agent-linkstatus__fact dt { color: var(--isl-ink-ghost); font-size: 10px; font-weight: 500; }
+.agent-linkstatus__fact dd { display: flex; min-width: 0; margin: 0; font-size: 12px; }
+.agent-linkstatus__url { display: flex; min-width: 0; flex: 1; align-items: center; gap: 4px; }
+.agent-linkstatus__url code,
+.agent-linkstatus__ellipsis { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-linkstatus__url code { font-family: var(--font-machine, ui-monospace, monospace); font-size: 11px; }
+.agent-linkstatus__url .agent-copy-btn { height: 20px; min-width: 20px; padding: 0 3px; }
+.agent-linkstatus__muted { color: var(--isl-ink-ghost); font-size: 11px; }
+.agent-linkstatus__windows h3 { margin: 0 0 6px; color: var(--isl-ink-soft); font-size: 11px; font-weight: 600; }
+.agent-linkstatus__windows p { margin: 0; }
+.agent-linkstatus__windows ul { display: flex; min-width: 0; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.agent-linkstatus__windows li { display: flex; min-width: 0; align-items: center; gap: 6px; font-size: 12px; }
+.agent-linkstatus__windows li > svg { flex: 0 0 auto; color: var(--isl-ink-soft); }
+.agent-linkstatus__windows li > .agent-linkstatus__ellipsis { flex: 1 1 auto; }
+.agent-linkstatus__chip { flex: 0 0 auto; padding: 1px 6px; border-radius: var(--isl-r-sm); color: var(--isl-mint-deep); background: var(--isl-mint-bg); font-size: 10px; font-weight: 600; white-space: nowrap; }
+
+/* ── 接入步骤 ── */
+.agent-steps { container-type: inline-size; container-name: agentsteps; min-width: 0; margin-top: 12px; padding: 12px; border: 1px solid var(--isl-border); border-radius: var(--isl-r); background: var(--isl-card); }
+.agent-steps__title { margin: 0 0 8px; font-size: 13px; font-weight: 600; line-height: 20px; }
+.agent-steps__list { display: flex; min-width: 0; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.agent-steps__item { display: grid; min-width: 0; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; align-items: start; }
+.agent-steps__index {
+  display: grid; width: 20px; height: 20px; place-items: center; border-radius: 999px;
+  color: var(--isl-mint-deep); background: var(--isl-mint-bg); font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.agent-steps__body { display: flex; min-width: 0; flex-direction: column; gap: 5px; }
+.agent-steps__text { margin: 0; font-size: 12px; line-height: 20px; overflow-wrap: anywhere; }
+.agent-steps__command {
+  display: flex; min-width: 0; align-items: center; gap: 4px;
+  padding: 3px 3px 3px 8px; border: 1px solid var(--isl-border); border-radius: var(--isl-r-sm); background: var(--isl-surface-sunk);
+}
+.agent-steps__command code {
+  min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--isl-ink); font-family: var(--font-machine, ui-monospace, monospace); font-size: 11px; line-height: 20px;
+}
+.agent-steps__command .agent-copy-btn { height: 22px; min-width: 22px; }
+
+/* ── 运行日志 ── */
+.agent-runlog {
+  container-type: inline-size; container-name: agentlog;
+  display: flex; min-width: 0; flex-direction: column;
+  border: 1px solid var(--isl-border); border-radius: var(--isl-r); background: var(--isl-card); overflow: hidden;
+}
+.agent-runlog__bar { display: flex; min-width: 0; flex-wrap: nowrap; align-items: center; gap: 8px; padding: 6px 6px 6px 12px; border-bottom: 1px solid var(--isl-border); }
+.agent-runlog__title { margin: 0; flex: 0 0 auto; font-size: 13px; font-weight: 600; line-height: 20px; white-space: nowrap; }
+.agent-runlog__count { flex: 0 1 auto; min-width: 0; overflow: hidden; color: var(--isl-ink-ghost); font-size: 10px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.agent-runlog__filter { display: inline-flex; min-width: 0; flex: 0 1 auto; align-items: center; gap: 4px; color: var(--isl-ink-soft); font-size: 11px; }
+.agent-runlog__filter-label { flex: 0 0 auto; white-space: nowrap; }
+.agent-runlog__filter select {
+  min-width: 0; max-width: 140px; height: 26px; padding: 0 4px;
+  border: 1px solid var(--isl-border); border-radius: var(--isl-r-sm); color: var(--isl-ink); background: var(--isl-surface); font: inherit; font-size: 11px;
+}
+.agent-runlog__actions { display: inline-flex; flex: 0 0 auto; align-items: center; margin-left: auto; }
+.agent-runlog__viewport { position: relative; min-width: 0; }
+.agent-runlog__lines {
+  min-height: 96px; max-height: clamp(220px, 50vh, 520px); margin: 0; padding: 6px 0; overflow-y: auto; overflow-x: hidden; list-style: none;
+  background: var(--isl-surface-sunk); font-family: var(--font-machine, ui-monospace, monospace); font-size: 11px; line-height: 17px;
+  overscroll-behavior: contain;
+}
+.agent-runlog__line { display: grid; min-width: 0; grid-template-columns: max-content 4.5ch minmax(0, 1fr); column-gap: 8px; padding: 2px 12px; }
+.agent-runlog__line:hover { background: var(--isl-surface-2); }
+.agent-runlog__line time { color: var(--isl-ink-ghost); font-variant-numeric: tabular-nums; }
+.agent-runlog__level { font-weight: 600; }
+.agent-runlog__msg { min-width: 0; color: var(--isl-ink); overflow-wrap: anywhere; white-space: pre-wrap; }
+.agent-runlog__who { color: var(--isl-ink-soft); }
+.agent-runlog__line.is-ok .agent-runlog__level { color: var(--isl-mint-deep); }
+.agent-runlog__line.is-run .agent-runlog__level,
+.agent-runlog__line.is-info .agent-runlog__level { color: var(--isl-ink-soft); }
+.agent-runlog__line.is-warn .agent-runlog__level { color: color-mix(in srgb, var(--isl-sun) 70%, var(--isl-ink)); }
+.agent-runlog__line.is-error .agent-runlog__level,
+.agent-runlog__line.is-error .agent-runlog__msg { color: var(--isl-coral-deep); }
+.agent-runlog__empty { margin: 0; padding: 24px 16px; color: var(--isl-ink-soft); background: var(--isl-surface-sunk); font-size: 12px; line-height: 18px; text-align: center; }
+.agent-runlog__jump {
+  position: absolute; right: 12px; bottom: 10px; display: inline-flex; max-width: calc(100% - 24px); align-items: center; gap: 4px;
+  height: 26px; padding: 0 10px; border: 1px solid var(--isl-border); border-radius: 999px;
+  color: var(--isl-ink); background: var(--isl-card); box-shadow: var(--isl-shadow-sm);
+  font: inherit; font-size: 11px; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+.agent-runlog__jump span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-linkbadge.is-busy .agent-linkbadge__dot { animation: none; }
+}
+
+/* ── 运行日志页下方的流水线 / 回执分区头 ── */
+.agent-activity__section { container-type: inline-size; container-name: agentsection; }
+.agent-section-head { display: flex; min-width: 0; flex-wrap: nowrap; align-items: center; gap: 6px; font-size: 12px; }
+.agent-section-head > svg { flex: 0 0 auto; color: var(--isl-ink-soft); }
+.agent-section-head > strong { flex: 0 0 auto; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.agent-section-head__hint { min-width: 0; flex: 1 1 auto; overflow: hidden; color: var(--isl-ink-ghost); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.agent-section-head__action { margin-left: auto; }
+.agent-section-empty { margin: 0; padding: 12px; border-radius: var(--isl-r-sm); color: var(--isl-ink-soft); background: var(--isl-surface-sunk); font-size: 12px; line-height: 18px; text-align: center; overflow-wrap: anywhere; }
+
+/* In the drawer the header already names the page; keep the card heading for screen readers only. */
+.agent-activity--status .agent-linkstatus__title,
+.agent-activity--log .agent-runlog__title {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}

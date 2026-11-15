@@ -15,7 +15,7 @@ type Lang = 'en' | 'zho';
 
 const STATUS_LABELS: Record<string, [string, string, string]> = {
   active: ['进行中', 'Active', 'var(--isl-ink-soft)'],
-  blocked: ['已阻塞', 'Blocked', '#e5484d'],
+  blocked: ['已阻塞', 'Blocked', 'var(--isl-coral-deep)'],
   passed: ['已通过', 'Passed', 'var(--isl-mint)'],
   archived: ['已归档', 'Archived', 'var(--isl-mint)'],
   stopped: ['已停止', 'Stopped', 'var(--isl-ink-ghost)'],
@@ -29,7 +29,7 @@ const VERDICT_LABELS: Record<string, [string, string]> = {
 
 const STEP_STATUS_COLOR: Record<string, string> = {
   succeeded: 'var(--isl-mint)',
-  failed: '#e5484d',
+  failed: 'var(--isl-coral-deep)',
   running: 'var(--isl-ink-soft)',
   unknown_submit: '#e5a50a',
 };
@@ -62,7 +62,7 @@ function RunTrace({ trace, zh }: { trace: PipelineTrace; zh: boolean }) {
             <code className="truncate">{step.tool}</code>
             <span style={{ color: 'var(--isl-ink-soft)' }}>{step.caller}</span>
             {step.attempts > 1 ? <span style={{ color: 'var(--isl-ink-ghost)' }}>×{step.attempts}</span> : null}
-            {step.error?.code ? <span className="truncate" style={{ color: '#e5484d' }} title={step.error.message}>{step.error.code}</span> : null}
+            {step.error?.code ? <span className="truncate" style={{ color: 'var(--isl-coral-deep)' }} title={step.error.message}>{step.error.code}</span> : null}
           </li>
         ))}
       </ol>
@@ -154,18 +154,18 @@ export function AgentPipelineRunsSection({ language = 'zho' }: { language?: Lang
 
   return (
     <div className="flex flex-col gap-2 text-xs" data-testid="agent-pipeline-runs">
-      <div className="flex items-center gap-2">
-        <Clapperboard size={14} />
+      <div className="agent-section-head">
+        <Clapperboard size={14} aria-hidden="true" />
         <strong>{zh ? '视频流水线' : 'Video pipeline'}</strong>
-        <span style={{ color: 'var(--isl-ink-ghost)' }}>{zh ? '每个 run 一张卡，Step 由命令边界自动记录' : 'One card per run; steps are recorded at the command boundary'}</span>
-        <button type="button" onClick={() => void refresh()} className="ml-auto inline-flex items-center gap-1 rounded border px-1.5 py-0.5" style={{ borderColor: 'var(--isl-border)' }} disabled={loading} aria-label={zh ? '刷新流水线' : 'Refresh pipeline'}>
-          <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
+        <span className="agent-section-head__hint" title={zh ? '每个 run 一张卡，Step 由命令边界自动记录' : 'One card per run; steps are recorded at the command boundary'}>{zh ? '每个 run 一张卡，Step 由命令边界自动记录' : 'One card per run; steps are recorded at the command boundary'}</span>
+        <button type="button" onClick={() => void refresh()} className="agent-copy-btn agent-section-head__action" disabled={loading} aria-label={zh ? '刷新流水线' : 'Refresh pipeline'} title={zh ? '刷新流水线' : 'Refresh pipeline'}>
+          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
         </button>
       </div>
-      {error ? <p style={{ color: '#e5484d' }}>{error}</p> : null}
+      {error ? <p style={{ color: 'var(--isl-coral-deep)' }}>{error}</p> : null}
       {notice ? <p data-testid="agent-pipeline-notice" style={{ color: 'var(--isl-ink-soft)' }}>{notice}</p> : null}
       {runs.length === 0 ? (
-        <p className="rounded-xl border p-3 text-center" style={{ borderColor: 'var(--isl-border)', color: 'var(--isl-ink-soft)' }}>
+        <p className="agent-section-empty">
           {zh ? '还没有流水线 run。Agent 调用 pipeline.run.start 后会出现在这里。' : 'No pipeline runs yet. They appear here after an agent calls pipeline.run.start.'}
         </p>
       ) : (
@@ -174,7 +174,7 @@ export function AgentPipelineRunsSection({ language = 'zho' }: { language?: Lang
             const label = STATUS_LABELS[run.status] || [run.status, run.status, 'var(--isl-ink-soft)'];
             const verdict = run.lastVerdict ? (VERDICT_LABELS[run.lastVerdict.verdict] || [run.lastVerdict.verdict, run.lastVerdict.verdict]) : null;
             return (
-              <li key={run.runId} className="rounded-xl border" style={{ borderColor: 'var(--isl-border)' }} data-testid="pipeline-run-card">
+              <li key={run.runId} className="rounded-lg border" style={{ borderColor: 'var(--isl-border)' }} data-testid="pipeline-run-card">
                 <div className="flex items-center gap-2 px-3 py-2">
                   <button type="button" onClick={() => void toggle(run.runId)} className="inline-flex min-w-0 flex-1 items-center gap-1 text-left" aria-expanded={open === run.runId}>
                     {open === run.runId ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -192,7 +192,7 @@ export function AgentPipelineRunsSection({ language = 'zho' }: { language?: Lang
                     {placing === run.runId ? (zh ? '放置中…' : 'Placing…') : (zh ? '放到画布' : 'Place on canvas')}
                   </button>
                 </div>
-                {run.blocker?.message ? <p className="px-3 pb-2" style={{ color: '#e5484d' }}>{run.blocker.code ? `${run.blocker.code}: ` : ''}{run.blocker.message}</p> : null}
+                {run.blocker?.message ? <p className="px-3 pb-2" style={{ color: 'var(--isl-coral-deep)' }}>{run.blocker.code ? `${run.blocker.code}: ` : ''}{run.blocker.message}</p> : null}
                 {open === run.runId && traces[run.runId] ? <RunTrace trace={traces[run.runId]} zh={zh} /> : null}
               </li>
             );

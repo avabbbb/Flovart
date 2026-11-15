@@ -1,6 +1,7 @@
 import { Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { copyToClipboard } from './agentTranscript';
+import { AgentSetupGuide } from './AgentSetupGuide';
 import '../../styles/agent.css';
 import type { WorkflowProject } from '../workflow/types';
 
@@ -32,11 +33,12 @@ export function AgentConnectionsPage({ project, language = 'zho' }: { project: W
         envLocal: '当前为本地工作区，可按以下步骤连接 DSH。',
         stepsTitle: '本地连接步骤',
         steps: [
-          ['克隆 Flovart 仓库并安装依赖', 'npm install'],
-          ['安装 DSH Profile（兼容 DeepSeek Harness 0.1.0-rc.8，Node 22.19+ 或 24+）', 'npm run dsh:profile:install'],
-          ['启动 DSH；启动器会准备本地工作区并打开可见 Workflow', 'npm run dsh:start'],
-          ['在 DeepSeek 主会话切换到 Flovart 页签，用自然语言指挥，例如“创建三个镜头的工作流”，再“只修改第二个镜头”', ''],
-          ['回到本地画布查看变更；没有可见 Workflow 时 DSH 会明确提示，不会创建隐藏副本', ''],
+          { text: '克隆 Flovart 仓库并安装依赖（Node 22.19+ 或 24+）', command: 'npm install' },
+          { text: '安装 DSH Profile（兼容 DeepSeek Harness 0.2.2-rc.1 起的 0.2.x）', command: 'npm run dsh:profile:install' },
+          { text: '启动 DSH；启动器会准备本地工作区并打开可见 Workflow', command: 'npm run dsh:start' },
+          { text: '在 DeepSeek 主会话切换到 Flovart 页签，用自然语言指挥，例如“创建三个镜头的工作流”，再“只修改第二个镜头”' },
+          { text: '回到本地画布查看变更；没有可见 Workflow 时 DSH 会明确提示，不会创建隐藏副本' },
+          { text: '连不上时运行诊断，并在画布右侧 Agent 面板的「连接状态」查看原因与下一步', command: 'npm --prefix dsh-plugin run profile:doctor' },
         ],
         status: '状态：插件已在本地完成打包与干净 Profile 安装验证；npm 发布与插件市场尚未完成；真实 DeepSeek 登录态下的对话验收待验证。',
         drawer: '不连接 DSH 也可以在画布右侧的助手面板继续工作。',
@@ -49,11 +51,12 @@ export function AgentConnectionsPage({ project, language = 'zho' }: { project: W
         envLocal: 'This is a local workspace; follow the steps below to connect DSH.',
         stepsTitle: 'Local setup',
         steps: [
-          ['Clone the Flovart repo and install dependencies', 'npm install'],
-          ['Install the DSH profile (DeepSeek Harness 0.1.0-rc.8, Node 22.19+ or 24+)', 'npm run dsh:profile:install'],
-          ['Start DSH; the launcher prepares the local workspace and opens a visible Workflow', 'npm run dsh:start'],
-          ['In the DeepSeek main conversation open the Flovart tab and give instructions, e.g. "create a three-shot workflow", then "only change the second shot"', ''],
-          ['Check the change on the local canvas; with no visible Workflow DSH says so and never creates a hidden copy', ''],
+          { text: 'Clone the Flovart repo and install dependencies (Node 22.19+ or 24+)', command: 'npm install' },
+          { text: 'Install the DSH profile (DeepSeek Harness 0.2.x, from 0.2.2-rc.1)', command: 'npm run dsh:profile:install' },
+          { text: 'Start DSH; the launcher prepares the local workspace and opens a visible Workflow', command: 'npm run dsh:start' },
+          { text: 'In the DeepSeek main conversation open the Flovart tab and give instructions, e.g. "create a three-shot workflow", then "only change the second shot"' },
+          { text: 'Check the change on the local canvas; with no visible Workflow DSH says so and never creates a hidden copy' },
+          { text: 'If it cannot connect, run the doctor and check the reason under Status in the Agent panel beside the canvas', command: 'npm --prefix dsh-plugin run profile:doctor' },
         ],
         status: 'Status: packaged and installed into a clean profile locally; npm publish and marketplace listing not done yet; conversation acceptance under a real DeepSeek login still unverified.',
         drawer: 'Without DSH you can keep working in the assistant panel beside the canvas.',
@@ -113,19 +116,8 @@ For DSH: run npm run dsh:profile:install, then switch to the Flovart tab in the 
           <div className="m-3 rounded-xl border p-4 text-sm" role="note" data-testid="agent-env-note" data-env={hosted ? 'hosted' : 'local'} style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }}>
             {hosted ? copy.envHosted : copy.envLocal}
           </div>
-          <div className="m-3 rounded-xl border p-4" data-testid="agent-dsh-steps" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }}>
-            <div className="mb-2 flex items-center gap-2">
-              <Sparkles size={18} style={{ color: 'var(--isl-mint)' }} />
-              <strong className="text-sm">{copy.stepsTitle}</strong>
-            </div>
-            <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm">
-              {copy.steps.map(([text, command]) => (
-                <li key={text}>
-                  <span>{text}</span>
-                  {command ? <code className="ml-2 rounded px-1.5 py-0.5 text-xs" style={{ background: 'var(--isl-surface-strong, rgba(0,0,0,0.06))' }}>{command}</code> : null}
-                </li>
-              ))}
-            </ol>
+          <div className="m-3" data-testid="agent-dsh-steps">
+            <AgentSetupGuide hostId="deepseek-harness" hostLabel="DeepSeek Harness" language={language} steps={copy.steps} title={copy.stepsTitle} />
           </div>
           <div className="m-3 rounded-xl border p-4" data-testid="agent-handoff-prompt" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }}>
             <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
@@ -149,7 +141,7 @@ For DSH: run npm run dsh:profile:install, then switch to the Flovart tab in the 
                 {copiedPrompt ? (zh ? '已复制' : 'Copied') : (zh ? '一键复制提示词' : 'Copy prompt')}
               </button>
             </div>
-            <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg p-3 text-xs leading-relaxed" style={{ background: 'var(--isl-surface-strong, rgba(0,0,0,0.06))', color: 'var(--isl-ink-soft)', userSelect: 'text' }}>{handoffPrompt}</pre>
+            <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg p-3 text-xs leading-relaxed" style={{ background: 'var(--isl-surface-sunk)', color: 'var(--isl-ink-soft)', userSelect: 'text' }}>{handoffPrompt}</pre>
           </div>
           <p className="mx-3 text-xs" data-testid="agent-dsh-status" style={{ color: 'var(--isl-ink-soft)' }}>{copy.status}</p>
           <p className="mx-3 mb-3 mt-1 text-xs" style={{ color: 'var(--isl-ink-soft)' }}>{copy.drawer}</p>

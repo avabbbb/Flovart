@@ -250,7 +250,12 @@ async function runBootstrap(options: AgentConnectionBootstrapOptions, runId: num
   const session = readSessionConnection(storage);
   const url = params.url || session.url;
   const token = params.token || session.token;
-  if (!url && !token && !params.bootstrapToken) return { state: 'skipped' };
+  if (!url && !token && !params.bootstrapToken) {
+    // Nothing handed over: say so (with the next step) instead of a bare "offline".
+    const state = useAgentConnectionStore.getState();
+    if (isCurrent() && state.status === 'offline' && !state.issue) setStoreStatus('offline', { issue: agentLinkIssue('not_configured', null) });
+    return { state: 'skipped' };
+  }
 
   setStoreStatus('connecting', { url: url || null, error: null, issue: null });
   let connection: ManagedAgentConnection;
@@ -332,6 +337,11 @@ export function bootstrapLocalAgentConnection(options: AgentConnectionBootstrapO
   const run = runBootstrap(options, runId).finally(() => { if (inFlight === run) inFlight = null; });
   inFlight = run;
   return run;
+}
+
+/** True while a bootstrap run owns the link status (it will set ready / offline / auth_failed itself). */
+export function isAgentBootstrapInFlight() {
+  return inFlight !== null;
 }
 
 export function resetAgentConnectionBootstrapForTests() {

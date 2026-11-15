@@ -1,7 +1,7 @@
 import { getManagedAgentConnection, type ManagedAgentConnection } from './managedAgentConnection';
 import { WorkflowAgentBridge, type WorkflowAgentBridgeOptions } from './workflowAgentBridge';
 import { useAgentConnectionStore } from '../stores/useAgentConnectionStore';
-import { consumeBrowserWriterAutoActivation } from './agentConnectionBootstrap';
+import { consumeBrowserWriterAutoActivation, isAgentBootstrapInFlight } from './agentConnectionBootstrap';
 import { hydrateAgentActivity, toActivityEntry } from './agentActivity';
 import { hydrateAgentReceipts, toReceipt } from './agentReceipts';
 import { useAgentReceiptStore } from '../stores/useAgentReceiptStore';
@@ -67,6 +67,14 @@ export class WorkflowWorkspaceAdapter {
     }
     if (lifecycleVersion !== this.lifecycleVersion) return 'disconnected';
     if (!connection) {
+      // Bootstrap is still exchanging / probing: it owns the status and the
+      // binding subscription restarts us when it succeeds. Writing "offline"
+      // here only flashed a false "not connected" before every launch.
+      if (isAgentBootstrapInFlight()) {
+        const state = useAgentConnectionStore.getState();
+        useAgentConnectionStore.getState().setStatus(state.status, { projectId: projectIdOf(project), revision: revisionOf(project) });
+        return 'unavailable';
+      }
       useAgentConnectionStore.getState().setStatus('offline', {
         clientId: null,
         projectId: projectIdOf(project),

@@ -1,11 +1,16 @@
 import { Check, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { discoverAgentHosts, type AgentHostDiscovery, type AgentHostRecord } from '../../services/agentHostDiscovery';
+import { describeAgentLinkIssue } from '../../services/agentLinkIssue';
 import { prepareAgent } from '../../services/link/hostActivation';
 import { toLinkPublicStatus, type LinkPublicStatus } from '../../services/link/publicStatus';
 import { useAgentConnectionStore } from '../../stores/useAgentConnectionStore';
 import registry from '../../tools/flovart/contracts/host-registry.v1.json';
 import { AgentHostDiagnostics } from './AgentHostDiagnostics';
+import { AgentLinkBadge } from './AgentLinkStatus';
+import { AgentSetupGuide } from './AgentSetupGuide';
+import '../../styles/agentLink.css';
+
 const SELECTED_HOST_KEY = 'flovart.agent.selectedHost';
 const PRIMARY_HOSTS = ['codex', 'workbuddy', 'deepseek-harness'];
 // SUPPORT_MATRIX.md Closed Beta freeze: Codex is the promoted host; every other
@@ -30,15 +35,11 @@ function publicStatusFor(host: AgentHostRecord | undefined, connectionStatus: st
   });
 }
 
-function statusDot(state: LinkPublicStatus['state']) {
-  return state === 'ready' ? 'var(--isl-mint)' : state === 'offline' ? 'var(--isl-coral)' : 'var(--isl-sun)';
-}
-
 function actionLabel(status: LinkPublicStatus, hostLabel: string, language: 'en' | 'zho'): string {
   switch (status.action) {
     case 'setup': return language === 'zho' ? '设置' : 'Set up';
     case 'login': return language === 'zho' ? '登录' : 'Sign in';
-    case 'repair': return language === 'zho' ? '重试' : 'Retry';
+    case 'repair': return language === 'zho' ? '重新连接' : 'Reconnect';
     default: return language === 'zho' ? `使用 ${hostLabel}` : `Use ${hostLabel}`;
   }
 }
@@ -51,15 +52,15 @@ interface AgentHostPickerProps {
 export function AgentHostPicker({ projectTitle, language = 'zho' }: AgentHostPickerProps) {
   const zh = language === 'zho';
   const copy = zh ? {
-    aria: '协作 Agent', title: '协作 Agent', description: '选择你习惯的助手，Flovart 会准备当前项目。', refresh: '刷新协作状态', current: '当前协作 Agent', currentAgent: '当前 Agent', selected: '已选择', ready: '已准备',
-    workflow: '当前 Workflow', preparing: '正在准备…', inUse: '当前使用', messageReady: '已选择并准备连接。', others: '其他 Agent', switchHint: '可随时切换', active: '当前协作 Agent', diagnostics: '高级诊断',
+    aria: '协作 Agent', title: '协作 Agent', description: '选择你习惯的助手，Flovart 会准备当前项目。', refresh: '刷新协作状态', current: '当前协作 Agent', currentAgent: '当前 Agent', selected: '已选择',
+    workflow: '当前 Workflow', preparing: '正在准备…', connecting: '正在连接…', waiting: '等待连接', connectingMessage: '正在连接本机 Agent，连上后即可选择协作助手。', inUse: '当前使用', messageReady: '已选择并准备连接。', others: '其他 Agent', switchHint: '可随时切换', active: '当前协作 Agent', link: '本机连接',
     state: { ready: '已准备', needs_setup: '需安装', needs_login: '需登录', offline: '离线' },
-    message: { ready: '可以操作当前项目。', needs_setup: '先安装或导入这个助手的 Flovart 入口。', needs_login: '请先登录这个助手，再回来继续。', offline: 'Flovart 本地服务暂时离线。' },
+    message: { ready: '可以操作当前项目。', needs_setup: '按下方接入步骤安装这个助手的 Flovart 入口。', needs_login: '请先登录这个助手，再回来继续。', offline: 'Flovart 本地服务暂时离线。' },
   } : {
-    aria: 'Collaborating Agent', title: 'Collaborating agent', description: 'Choose the assistant you prefer. Flovart will prepare it for this project.', refresh: 'Refresh connection status', current: 'Current collaborating agent', currentAgent: 'Current agent', selected: 'Selected', ready: 'Ready',
-    workflow: 'Current Workflow', preparing: 'Preparing…', inUse: 'In use', messageReady: 'is selected and ready to connect.', others: 'Other agents', switchHint: 'Switch at any time', active: 'Current collaborating agent', diagnostics: 'Advanced diagnostics',
+    aria: 'Collaborating Agent', title: 'Collaborating agent', description: 'Choose the assistant you prefer. Flovart will prepare it for this project.', refresh: 'Refresh connection status', current: 'Current collaborating agent', currentAgent: 'Current agent', selected: 'Selected',
+    workflow: 'Current Workflow', preparing: 'Preparing…', connecting: 'Connecting…', waiting: 'Waiting for link', connectingMessage: 'Connecting to the local agent; pick an assistant once it is connected.', inUse: 'In use', messageReady: 'is selected and ready to connect.', others: 'Other agents', switchHint: 'Switch at any time', active: 'Current collaborating agent', link: 'Local link',
     state: { ready: 'Ready', needs_setup: 'Setup needed', needs_login: 'Sign in required', offline: 'Offline' },
-    message: { ready: 'Ready to work with the current project.', needs_setup: 'Install or import the Flovart entry point for this assistant.', needs_login: 'Sign in to this assistant, then return here.', offline: 'Flovart local service is currently offline.' },
+    message: { ready: 'Ready to work with the current project.', needs_setup: 'Follow the steps below to install this assistant’s Flovart entry point.', needs_login: 'Sign in to this assistant, then return here.', offline: 'Flovart local service is currently offline.' },
   };
   const [discovery, setDiscovery] = useState<AgentHostDiscovery>({ ok: false, state: 'offline', agents: [] });
   const [selectedId, setSelectedId] = useState(readSelectedHost);
@@ -70,6 +71,8 @@ export function AgentHostPicker({ projectTitle, language = 'zho' }: AgentHostPic
   const scanRequest = useRef(0);
   const actionRequest = useRef(0);
   const connectionStatus = useAgentConnectionStore(state => state.status);
+  const linkIssue = useAgentConnectionStore(state => state.issue);
+  const requestReconnect = useAgentConnectionStore(state => state.requestReconnect);
   const writerStatus = useAgentConnectionStore(state => state.writerStatus);
   const projectId = useAgentConnectionStore(state => state.projectId);
   const activeHostIdentity = useAgentConnectionStore(state => state.activeHostIdentity);
@@ -112,6 +115,11 @@ export function AgentHostPicker({ projectTitle, language = 'zho' }: AgentHostPic
 
   const useHost = async (id: string) => {
     selectHost(id);
+    // Without a working local link no host can be prepared: fix the link first.
+    if (connectionStatus !== 'ready' && connectionStatus !== 'connecting') {
+      requestReconnect();
+      return;
+    }
     const request = ++actionRequest.current;
     setPendingId(id);
     setFailure('');
@@ -135,37 +143,51 @@ export function AgentHostPicker({ projectTitle, language = 'zho' }: AgentHostPic
   const selectedDetected = discovery.agents.find(host => host.id === selectedHost.id);
   const selectedActive = activeHostIdentity === selectedHost.id && activeHostProjectId === projectId && writerStatus === 'active';
   const selectedStatus = publicStatusFor(selectedDetected, connectionStatus, selectedActive);
-  const localizedStatusMessage = (status: LinkPublicStatus) => copy.message[status.state];
   const selectedBusy = pendingId === selectedHost.id;
+  const selectedReadiness = hostReadiness(selectedHost.id, language);
+  const issueCopy = linkIssue && connectionStatus !== 'ready' ? describeAgentLinkIssue(linkIssue.kind, language) : null;
+  // While the link is still coming up nothing is known about the hosts yet:
+  // say "waiting" instead of flashing "offline / reconnect".
+  const linking = connectionStatus === 'connecting';
+  const stateText = (state: LinkPublicStatus['state'], active: boolean) => (active ? copy.selected : linking && state === 'offline' ? copy.waiting : copy.state[state]);
+  const statusMessage = selectedActive
+    ? `${selectedHost.label} ${copy.messageReady}`
+    : linking ? copy.connectingMessage
+    : selectedStatus.state === 'offline' && issueCopy ? `${issueCopy.title}：${issueCopy.next}`.replace('：', zh ? '：' : ': ') : copy.message[selectedStatus.state];
 
   return (
     <section className="agent-host-picker" data-testid="agent-host-picker" aria-label={copy.aria}>
       <header className="agent-picker__header">
-        <div>
-          <span className="agent-picker__eyebrow">{zh ? 'AI 协作' : 'AI COLLABORATION'}</span>
+        <div className="agent-picker__header-text">
           <h2>{copy.title}</h2>
           <p>{copy.description}</p>
         </div>
-        <button type="button" onClick={() => void scan()} disabled={scanning || Boolean(pendingId)} className="agent-picker__refresh" aria-label={copy.refresh} title={zh ? '刷新' : 'Refresh'}><RefreshCw size={15} /></button>
+        <button type="button" onClick={() => void scan()} disabled={scanning || Boolean(pendingId)} className="agent-picker__refresh" aria-label={copy.refresh} title={copy.refresh}>
+          <RefreshCw size={14} className={scanning ? 'animate-spin' : undefined} />
+        </button>
       </header>
+
+      <div className="agent-picker__linkrow">
+        <span className="agent-picker__linklabel">{copy.link}</span>
+        <AgentLinkBadge status={connectionStatus} reconnecting={connectionStatus === 'connecting' && Boolean(linkIssue)} language={language} issueKind={linkIssue?.kind} />
+      </div>
 
       <div className="agent-picker__layout">
         <section className="agent-picker__current" aria-label={copy.current}>
           <div className="agent-picker__current-head">
-            <span className="agent-picker__dot" style={{ background: statusDot(selectedStatus.state) }} />
-            <div>
+            <span className={`agent-picker__dot is-${selectedActive ? 'ready' : linking ? 'waiting' : selectedStatus.state}`} aria-hidden="true" />
+            <div className="agent-picker__current-name">
               <span className="agent-picker__eyebrow">{copy.currentAgent}</span>
-              <h3>{selectedHost.label}</h3>
-              <p>{selectedActive ? copy.selected : copy.state[selectedStatus.state]}</p>
+              <h3 title={selectedHost.label}>{selectedHost.label}</h3>
             </div>
-            <span className="agent-picker__badges">
-              <span className={`agent-picker__badge agent-picker__badge--tier${hostReadiness(selectedHost.id, language).experimental ? ' is-experimental' : ''}`}>{hostReadiness(selectedHost.id, language).label}</span>
-              <span className="agent-picker__badge">{selectedActive ? copy.ready : copy.state[selectedStatus.state]}</span>
-            </span>
+          </div>
+          <div className="agent-picker__badges">
+            <span className={`agent-picker__badge agent-picker__badge--tier${selectedReadiness.experimental ? ' is-experimental' : ''}`}>{selectedReadiness.label}</span>
+            <span className={`agent-picker__badge is-${selectedActive ? 'ready' : linking ? 'waiting' : selectedStatus.state}`}>{stateText(selectedStatus.state, selectedActive)}</span>
           </div>
           {projectTitle && <div className="agent-picker__current-workflow"><p>{copy.workflow}</p><strong title={projectTitle}>{projectTitle}</strong></div>}
-          <button type="button" className="agent-picker__primary-action" disabled={selectedActive || Boolean(pendingId)} onClick={() => void useHost(selectedHost.id)}>{selectedBusy ? copy.preparing : selectedActive ? copy.inUse : actionLabel(selectedStatus, selectedHost.label, language)}</button>
-          <p className="agent-picker__message">{selectedActive ? (zh ? `${selectedHost.label} ${copy.messageReady}` : `${selectedHost.label} ${copy.messageReady}`) : localizedStatusMessage(selectedStatus)}</p>
+          <button type="button" className="agent-picker__primary-action" disabled={selectedActive || Boolean(pendingId) || linking} onClick={() => void useHost(selectedHost.id)}>{selectedBusy ? copy.preparing : selectedActive ? copy.inUse : linking ? copy.connecting : actionLabel(selectedStatus, selectedHost.label, language)}</button>
+          <p className="agent-picker__message">{statusMessage}</p>
         </section>
 
         <section className="agent-picker__others" aria-label={copy.others}>
@@ -180,13 +202,15 @@ export function AgentHostPicker({ projectTitle, language = 'zho' }: AgentHostPic
               const busy = pendingId === id;
               return (
                 <div key={id} role="listitem" className="agent-card">
-                  <span aria-hidden="true" className="agent-card__dot" style={{ background: statusDot(status.state) }} />
-                  <button type="button" onClick={() => selectHost(id)} aria-pressed={selectedId === id} className="agent-card__body">
+                  <span aria-hidden="true" className={`agent-card__dot is-${active ? 'ready' : linking ? 'waiting' : status.state}`} />
+                  <button type="button" onClick={() => selectHost(id)} aria-pressed={selectedId === id} className="agent-card__body" title={host.label}>
                     <strong>{host.label}</strong>
-                    <span>{active ? copy.selected : copy.state[status.state]}</span>
-                    <span className={`agent-card__state${readiness.experimental ? ' is-experimental' : ''}`}>{readiness.label}</span>
+                    <span className="agent-card__meta">
+                      <span className="agent-card__status">{stateText(status.state, active)}</span>
+                      <span className={`agent-card__state${readiness.experimental ? ' is-experimental' : ''}`}>{readiness.label}</span>
+                    </span>
                   </button>
-                  {active ? <Check size={15} style={{ color: 'var(--isl-mint-deep)' }} aria-label={copy.active} /> : <button type="button" disabled={Boolean(pendingId)} onClick={() => void useHost(id)} className="agent-card__action">{busy ? copy.preparing : actionLabel(status, host.label, language)}</button>}
+                  {active ? <Check size={15} className="agent-card__check" aria-label={copy.active} /> : <button type="button" disabled={Boolean(pendingId) || linking} onClick={() => void useHost(id)} className="agent-card__action">{busy ? copy.preparing : actionLabel(status, host.label, language)}</button>}
                 </div>
               );
             })}
@@ -194,10 +218,14 @@ export function AgentHostPicker({ projectTitle, language = 'zho' }: AgentHostPic
         </section>
       </div>
 
-      <div className="agent-picker__status-row">
-        {failure && <p role="alert" className="agent-picker__message agent-picker__message--error">{failure}</p>}
-        {notice && <p role="status" className="agent-picker__message" data-testid="agent-projection-status">{notice}</p>}
-      </div>
+      {(failure || notice) && (
+        <div className="agent-picker__status-row">
+          {failure && <p role="alert" className="agent-picker__message agent-picker__message--error">{failure}</p>}
+          {notice && <p role="status" className="agent-picker__message" data-testid="agent-projection-status">{notice}</p>}
+        </div>
+      )}
+
+      <AgentSetupGuide hostId={selectedHost.id} hostLabel={selectedHost.label} language={language} />
 
       <AgentHostDiagnostics
         scanning={scanning}

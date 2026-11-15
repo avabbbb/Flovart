@@ -31,19 +31,19 @@ export function AgentReceiptsSection({ language = 'zho' }: { language?: Lang }) 
 
   return (
     <div className="flex flex-col gap-2" data-testid="agent-receipts">
-      <div className="flex items-center gap-2 text-xs">
-        <BookMarked size={14} />
+      <div className="agent-section-head">
+        <BookMarked size={14} aria-hidden="true" />
         <strong>{zh ? '项目共享回执' : 'Shared project receipts'}</strong>
-        <span style={{ color: 'var(--isl-ink-ghost)' }}>
+        <span className="agent-section-head__hint" title={zh ? '各 Agent 留下的任务、产物和决定，只读，所有 Agent 都能看到' : 'Tasks, artifacts and decisions any agent left here; read-only and visible to every agent'}>
           {zh ? '各 Agent 留下的任务、产物和决定，只读，所有 Agent 都能看到' : 'Tasks, artifacts and decisions any agent left here; read-only and visible to every agent'}
         </span>
       </div>
       {visible.length === 0 ? (
-        <p className="rounded-xl border p-4 text-center text-xs" style={{ borderColor: 'var(--isl-border)', color: 'var(--isl-ink-soft)' }}>
+        <p className="agent-section-empty">
           {zh ? '还没有回执。外部 Agent 可以通过本地服务的 /receipts 写入或导入历史记录。' : 'No receipts yet. External agents can add or import history through the local service /receipts endpoint.'}
         </p>
       ) : (
-        <ol className="flex max-h-[320px] flex-col overflow-y-auto rounded-xl border" style={{ borderColor: 'var(--isl-border)' }}>
+        <ol className="flex max-h-[320px] flex-col overflow-y-auto rounded-lg border" style={{ borderColor: 'var(--isl-border)' }}>
           {visible.map(receipt => (
             <li key={receipt.id} className="flex items-start gap-2 border-b px-3 py-2 text-xs last:border-b-0" style={{ borderColor: 'var(--isl-border)' }}>
               <span className="shrink-0 rounded px-1" style={{ background: 'var(--isl-surface-2)', color: 'var(--isl-ink-soft)' }}>

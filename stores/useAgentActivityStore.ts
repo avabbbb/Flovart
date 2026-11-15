@@ -29,15 +29,20 @@ interface AgentActivityState {
   entries: AgentActivityEntry[];
   windows: AgentConnectedWindow[];
   lastSyncedAt: string | null;
+  /** Entries at or before this time were cleared from the log view and are not re-added by history sync. */
+  clearedAt: string | null;
   upsert: (entry: AgentActivityEntry) => void;
   replace: (entries: AgentActivityEntry[], windows: AgentConnectedWindow[]) => void;
   clear: () => void;
+  /** Clear the run log only; connected windows stay. */
+  clearEntries: () => void;
 }
 
 export const useAgentActivityStore = create<AgentActivityState>(set => ({
   entries: [],
   windows: [],
   lastSyncedAt: null,
+  clearedAt: null,
   upsert: entry => set(state => {
     const index = state.entries.findIndex(item => item.id === entry.id);
     const entries = index >= 0
@@ -47,7 +52,8 @@ export const useAgentActivityStore = create<AgentActivityState>(set => ({
   }),
   replace: (entries, windows) => set(state => {
     const merged = new Map<string, AgentActivityEntry>();
-    entries.forEach(entry => merged.set(entry.id, entry));
+    const cleared = state.clearedAt;
+    entries.forEach(entry => { if (!cleared || entry.at > cleared) merged.set(entry.id, entry); });
     // Live events that arrived during the fetch are newer; keep them.
     state.entries.forEach(entry => {
       const existing = merged.get(entry.id);
@@ -56,5 +62,6 @@ export const useAgentActivityStore = create<AgentActivityState>(set => ({
     const sorted = [...merged.values()].sort((a, b) => a.at.localeCompare(b.at));
     return { entries: sorted.slice(-AGENT_ACTIVITY_LIMIT), windows, lastSyncedAt: new Date().toISOString() };
   }),
-  clear: () => set({ entries: [], windows: [], lastSyncedAt: null }),
+  clear: () => set({ entries: [], windows: [], lastSyncedAt: null, clearedAt: null }),
+  clearEntries: () => set({ entries: [], clearedAt: new Date().toISOString() }),
 }));
