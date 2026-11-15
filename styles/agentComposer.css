@@ -9,7 +9,7 @@
   padding: 10px 10px 9px !important;
   transition: box-shadow .15s cubic-bezier(.2, .8, .2, 1), border-color .15s ease;
 }
-:root .agent-conversation .workflow-agent__composer.agent-composer > textarea {
+:root .agent-conversation .workflow-agent__composer.agent-composer .agent-composer__input-row > textarea {
   min-height: 56px !important;
   padding: 4px 6px !important;
 }
@@ -230,4 +230,30 @@
 }
 @container agentcomposer (max-width: 340px) {
   .agent-conversation .agent-composer .agent-composer__tools .agent-mode-control > button > span + svg { display: none; }
+}
+
+/* ── Agent 输入卡 · 玻璃面 + 虹彩球（原先误加在节点 Prompt Bar 上，移到这里）──
+   磨砂半透明 + 顶部高光 + 长投影；左侧虹彩球缓慢变色，聚焦时轻轻放大，运行中收成 2×2 变形点；
+   发送那一下卡片轻压回弹。prefers-reduced-motion 下全部静止。 */
+:root .agent-conversation .workflow-agent__composer.agent-composer.agent-composer--glass {
+  border-color: color-mix(in srgb, var(--wf-border) 40%, transparent) !important;
+  background: color-mix(in srgb, var(--wf-strong) 80%, transparent) !important;
+  backdrop-filter: blur(22px) saturate(1.35);
+  -webkit-backdrop-filter: blur(22px) saturate(1.35);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 18px 40px -18px rgba(120,60,30,.28), 0 2px 6px -2px rgba(0,0,0,.08), var(--card-on-shell-shadow);
+}
+:root[data-theme='dark'] .agent-conversation .workflow-agent__composer.agent-composer.agent-composer--glass {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 0 0 1px rgba(255,255,255,.06), 0 18px 44px -18px rgba(0,0,0,.6), var(--card-on-shell-shadow);
+}
+.agent-composer .agent-composer__input-row { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.agent-composer .agent-composer__input-row > textarea { flex: 1; min-width: 0; }
+.agent-composer .agent-composer__orb { margin: 4px 0 0 4px; }
+.agent-composer:focus-within .agent-composer__orb:not(.is-loading) .prompt-orb__sphere { transform: scale(1.12); }
+.agent-composer.is-sending { animation: agent-composer-press .42s cubic-bezier(.34,1.56,.64,1); }
+@keyframes agent-composer-press { 30% { transform: scale(.985); } 100% { transform: none; } }
+.agent-composer .agent-composer__input-row > textarea::placeholder { transition: opacity .3s ease; }
+.agent-composer .agent-composer__input-row > textarea:focus::placeholder { opacity: .55; }
+@media (prefers-reduced-motion: reduce) {
+  .agent-composer.is-sending { animation: none; }
+  .agent-composer .agent-composer__orb .prompt-orb__sphere { transition: none; }
 }

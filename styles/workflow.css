@@ -920,17 +920,8 @@ textarea.agent-ask__control { resize: vertical; min-height: 56px; }
 .workflow-batch-stack__layer img { display: block; width: 100%; height: 100%; object-fit: cover; filter: saturate(.92) brightness(.97); }
 .workflow-batch-stack__preview { border-radius: 14px; }
 
-/* ── 画布 Prompt Bar：玻璃面板 + 虹彩球 → 变形点加载（参考 inspora “AI prompt bar”）── */
-.workflow-node-prompt .prompt-glass {
-  border-radius: 26px !important;
-  border-color: color-mix(in srgb, var(--wf-border) 35%, transparent) !important;
-  background: color-mix(in srgb, var(--wf-strong) 78%, transparent) !important;
-  backdrop-filter: blur(22px) saturate(1.35);
-  -webkit-backdrop-filter: blur(22px) saturate(1.35);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 18px 40px -18px rgba(120,60,30,.28), 0 2px 6px -2px rgba(0,0,0,.08);
-}
-.workflow-node-prompt .prompt-glass .isl-chip { border-radius: 999px; }
-.prompt-orb { position: absolute; left: 12px; top: 12px; width: 24px; height: 24px; z-index: 2; pointer-events: none; }
+/* ── Agent 输入卡：虹彩球 → 变形点加载（参考 inspora “AI prompt bar”）。只用在右侧 Agent，不用在节点 Prompt Bar。── */
+.prompt-orb { position: relative; flex: none; width: 24px; height: 24px; pointer-events: none; }
 .prompt-orb__sphere {
   position: absolute; inset: 0; border-radius: 50%;
   background:
@@ -958,12 +949,8 @@ textarea.agent-ask__control { resize: vertical; min-height: 56px; }
 @keyframes prompt-dot-d { 0%,100% { transform: translate(-5px,5px); } 35% { transform: translate(-7px,0); } 65% { transform: translate(0,0); } }
 @keyframes prompt-dots-spin { to { transform: rotate(90deg); } }
 @keyframes prompt-orb-drift { 0%,100% { filter: hue-rotate(0deg); } 50% { filter: hue-rotate(-18deg); } }
-/* 占位文字：从左侧去模糊淡入 */
-.prompt-glass-editor .is-editor-empty::before,
-.prompt-glass-editor [data-placeholder]::before { animation: prompt-placeholder-in .7s ease-out both; }
-@keyframes prompt-placeholder-in { from { opacity: 0; filter: blur(6px); transform: translateX(-4px); } to { opacity: 1; filter: blur(0); transform: none; } }
 @media (prefers-reduced-motion: reduce) {
-  .prompt-orb__sphere, .prompt-orb.is-loading .prompt-orb__dots, .prompt-orb.is-loading .prompt-orb__dots i, .prompt-glass-editor [data-placeholder]::before, .prompt-glass-editor .is-editor-empty::before { animation: none; }
+  .prompt-orb__sphere, .prompt-orb.is-loading .prompt-orb__dots, .prompt-orb.is-loading .prompt-orb__dots i { animation: none; }
 }
 /* 打字浮现：新键入的字符由模糊、半透明、轻微下沉过渡到清晰 */
 .prompt-glass-editor .pm-fresh { display: inline-block; animation: prompt-char-in .45s cubic-bezier(.2,.7,.2,1) both; }

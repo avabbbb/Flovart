@@ -1084,7 +1084,7 @@ const userApiKeysRef = useRef(userApiKeys);
         />}
         <div
           ref={composer}
-          className="workflow-agent__composer agent-composer"
+          className={"workflow-agent__composer agent-composer agent-composer--glass" + (sending ? " is-sending" : "")}
           data-testid="agent-composer"
           onDragEnter={event => {
             if (!Array.from(event.dataTransfer.items).some(item => item.kind === 'file' && (item.type.startsWith('image/') || item.type.startsWith('video/')))) return;
@@ -1147,6 +1147,11 @@ const userApiKeysRef = useRef(userApiKeys);
             onReplace={() => startReplace(reference)}
             onRemove={() => setReferences(current => current.filter(item => item !== reference))}
           />)}</div>}
+          <div className="agent-composer__input-row">
+          <span className={'prompt-orb agent-composer__orb' + (sending ? ' is-loading' : '')} data-testid="agent-orb" aria-hidden="true">
+            <span className="prompt-orb__sphere" />
+            <span className="prompt-orb__dots"><i /><i /><i /><i /></span>
+          </span>
           <textarea
             ref={textarea}
             value={prompt}
@@ -1172,6 +1177,7 @@ const userApiKeysRef = useRef(userApiKeys);
             }}
             disabled={status === 'connecting'}
           />
+          </div>
           <ComposerAttachmentTray
             attachments={attachments}
             label={language === 'zho' ? '本轮附件' : 'Attachments'}
