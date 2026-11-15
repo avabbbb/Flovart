@@ -12,7 +12,7 @@ function resolveCliPath() {
 }
 
 export const HELP_TEXT = `
-Iris Terminal Command Center
+Flovart Terminal Command Center
 
   /runtime              inspect Production Runtime
   /workspace            inspect visible Workflow connection
@@ -152,7 +152,7 @@ export async function readTuiDashboard() {
 
 export function formatTuiSnapshot(model) {
   const lines = [
-    '┌ Iris Terminal Command Center ────────────────────────────────',
+    '┌ Flovart Terminal Command Center ────────────────────────────────',
     `│ Runtime   ${model.runtime.state} ${model.runtime.detail}`.trimEnd(),
     `│ Workflow  ${model.workspace.state} ${model.workspace.detail}`.trimEnd(),
     `│ Tasks     ${model.tasks.length} recent`,

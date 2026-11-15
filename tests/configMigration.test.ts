@@ -47,6 +47,38 @@ describe('config migration bundle', () => {
     expect(parsed.apiKeys).toHaveLength(1);
   });
 
+  it.each([false, true])('export (includeSecrets=%s) contains user scripts, custom service URLs and model mappings', includeSecrets => {
+    const mapped = {
+      ...apiKey,
+      provider: 'custom',
+      baseUrl: 'https://relay.example.com/v1',
+      extraConfig: { providerScriptId: 'demo-video' },
+      routeMappings: [{ productModelId: 'flovart:seedance-2-fast', routeId: 'demo-video' }],
+    } as unknown as UserApiKey;
+    const bundle = JSON.parse(JSON.stringify(buildConfigBundle([mapped], includeSecrets)));
+    expect(bundle.providerScripts).toEqual([expect.objectContaining({ id: 'demo-video', endpoint })]);
+    expect(bundle.apiKeys[0]).toMatchObject({
+      baseUrl: 'https://relay.example.com/v1',
+      extraConfig: { providerScriptId: 'demo-video' },
+      routeMappings: [{ productModelId: 'flovart:seedance-2-fast', routeId: 'demo-video' }],
+      key: includeSecrets ? 'sk-test' : '***',
+    });
+  });
+
+  it('labels both export buttons as including scripts, URLs and model mappings (zh + en)', async () => {
+    const { translations } = await import('../utils/translations');
+    for (const locale of ['en', 'zho'] as const) {
+      const transfer = (translations as Record<string, any>)[locale].settingsExtra.transfer;
+      expect(transfer.exportConfig).toMatch(locale === 'en' ? /scripts/ : /脚本/);
+      expect(transfer.exportWithKeys).toMatch(locale === 'en' ? /scripts/ : /脚本/);
+      for (const hint of [transfer.exportConfigHint, transfer.exportWithKeysHint]) {
+        expect(hint).toMatch(locale === 'en' ? /user scripts/ : /用户脚本/);
+        expect(hint).toMatch(locale === 'en' ? /service URLs/ : /服务地址/);
+        expect(hint).toMatch(locale === 'en' ? /model mappings/ : /模型映射/);
+      }
+    }
+  });
+
   it('still accepts the legacy top-level key array', () => {
     const parsed = parseConfigBundle(JSON.stringify([{ provider: 'openai', key: 'sk-legacy' }]));
     expect(parsed).toMatchObject({ legacy: true, invalidScripts: 0, noSecrets: false });

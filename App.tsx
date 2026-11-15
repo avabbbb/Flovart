@@ -35,7 +35,7 @@ import type { WorkflowProject } from './components/workflow/types';
 import { translations } from './utils/translations';
 import './styles/generation.css';
 import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from './services/routeMapping';
-import { ensureWorkflowImageGenerateOperation } from './components/workflow/operations';
+import { prepareWorkflowImageGenerateRun } from './components/workflow/operations';
 import { getWorkflowOperationCapability } from './components/workflow/operationRegistry';
 import { buildGenerationGateSummary, getGenerationGateDetails, requiresExternalGenerationGate } from './services/generationGate';
 import { applyPlanChecks, buildGenerationPlanChecks } from './services/generationPlan';
@@ -344,17 +344,11 @@ const App: React.FC = () => {
             });
             return { status: 'completed' };
         }
-        const prepared = await ensureWorkflowImageGenerateOperation({ project, nodeId, createId: generateId });
+        // 转换在读取最新状态的同一同步片段内写回 store，并在开新 Take 前重新读取最新状态：
+        // 批量 node.run 并行转换多个节点时，旧快照不能覆盖其他节点的转换。
+        const prepared = await prepareWorkflowImageGenerateRun({ project, nodeId, createId: generateId });
         const executableNodeId = prepared.operationNodeId;
-        if (prepared.created) {
-            project = prepared.project;
-            useWorkflowStore.getState().updateProject(projectId, {
-                nodes: project.nodes,
-                connections: project.connections,
-                selectedNodeIds: project.selectedNodeIds,
-                draftVersion: project.draftVersion,
-            });
-        }
+        project = useWorkflowStore.getState().projects.find(item => item.id === projectId) || prepared.project;
         let canonicalInput: CanonicalGenerationInput | undefined;
         const generated = await runWorkflowGeneration(project, executableNodeId, {
             userApiKeys,

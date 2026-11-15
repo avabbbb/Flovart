@@ -37,6 +37,16 @@ describe('workflow CLI metadata', () => {
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ command: 'workflow.node.create', source: 'cli', args: expect.objectContaining({ type: 'config' }) }));
   });
 
+  it('parses comma-separated --node-ids the same way for node.run and focus.nodes', async () => {
+    const dispatch = vi.fn().mockResolvedValue({ ok: true });
+    await executeFlovartCommand('workflow.focus.nodes', { 'project-id': 'p1', 'node-ids': 'a, b,a' }, { workflow: { dispatch } });
+    await executeFlovartCommand('workflow.node.run', { 'project-id': 'p1', 'node-ids': 'a,b' }, { workflow: { dispatch } });
+    await executeFlovartCommand('workflow.focus.nodes', { 'project-id': 'p1', 'node-ids': '["a","b"]' }, { workflow: { dispatch } });
+    expect(dispatch.mock.calls[0][0].args.nodeIds).toEqual(['a', 'b', 'a']);
+    expect(dispatch.mock.calls[1][0].args.nodeIds).toEqual(['a', 'b']);
+    expect(dispatch.mock.calls[2][0].args.nodeIds).toEqual(['a', 'b']);
+  });
+
   it('normalizes typed arguments for the granular workflow node tool adapter', async () => {
     const dispatch = vi.fn().mockResolvedValue({ ok: true });
     await executeFlovartCommand('workflow.node.tool', {

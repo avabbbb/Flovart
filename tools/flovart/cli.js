@@ -200,7 +200,7 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
   }
 
   // WorkBuddy's CLI connector lifecycle is local-ready semantics, not a second
-  // account or OAuth flow. It never revokes Iris credentials shared by other
+  // account or OAuth flow. It never revokes Flovart credentials shared by other
   // Hosts when WorkBuddy runs unAuth.
   if (routingCommand === 'workbuddy.status') {
     const result = await getLocalStatus();
@@ -215,7 +215,7 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
   if (routingCommand === 'workbuddy.unAuth') {
     printCliResponse(true, command, {
       state: 'local-ready',
-      message: 'Iris 本地服务不保存 WorkBuddy 账号；此次 unAuth 不会注销或影响其它 Host。',
+      message: 'Flovart 本地服务不保存 WorkBuddy 账号；此次 unAuth 不会注销或影响其它 Host。',
     }, null, { runtime: 'workbuddy-connector' });
     return;
   }
@@ -435,7 +435,7 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
   if (RETIRED_COMMANDS.has(routingCommand)) {
     printCliResponse(false, command, null, {
       code: 'COMMAND_RETIRED',
-      message: `${routingCommand} 已下线：浏览器 Bridge 文件队列已删除且前端不再消费。请使用生产 Runtime 命令（generate.image、generate.video、provider.status、task.list）或 Iris WebUI。`,
+      message: `${routingCommand} 已下线：浏览器 Bridge 文件队列已删除且前端不再消费。请使用生产 Runtime 命令（generate.image、generate.video、provider.status、task.list）或 Flovart WebUI。`,
       retryable: false,
     }, { runtime: 'retired' });
     return;
@@ -446,7 +446,11 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
   }
 
   main().catch(error => {
-    printCliResponse(false, command || 'unknown', null, { code: 'CLI_FATAL', message: error instanceof Error ? error.message : String(error) });
+    printCliResponse(false, command || 'unknown', null, {
+      code: error?.code === 'UNKNOWN_COMMAND' ? 'UNKNOWN_COMMAND' : 'CLI_FATAL',
+      message: error instanceof Error ? error.message : String(error),
+      ...(Array.isArray(error?.availableCommands) ? { availableCommands: error.availableCommands } : {}),
+    });
     process.exitCode = 1;
   });
 }

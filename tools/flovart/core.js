@@ -82,10 +82,10 @@ export const HELP_TEXT = [
 ].join('\n');
 
 export const SETUP_TEXT = [
-  'Iris Agent Toolkit setup (run from a source checkout):',
+  'Flovart Agent Toolkit setup (run from a source checkout):',
   '1. npm install',
   '2. npm run flovart:cli -- start --source --web --open',
-  '3. Enter provider credentials only in the local Iris Runtime/WebUI',
+  '3. Enter provider credentials only in the local Flovart Runtime/WebUI',
   '4. npm run flovart:cli -- status --json',
   '5. npm run flovart:cli -- workflow.inspect --json',
   '',
@@ -412,6 +412,23 @@ async function loadAgentKit() {
   return await import(/* @vite-ignore */ specifier);
 }
 
+/** 与未知命令同一命名空间（如 skill.run → skill.*）下真实可用的命令，供错误提示列出。 */
+export function commandsInSameNamespace(commandName) {
+  const name = String(commandName || '').trim();
+  const namespace = name.includes('.') ? name.slice(0, name.indexOf('.') + 1) : '';
+  if (!namespace) return [];
+  return COMMANDS.filter(item => item.startsWith(namespace)).sort();
+}
+
+export function unknownCommandMessage(commandName) {
+  const name = String(commandName || '').trim();
+  const available = commandsInSameNamespace(name);
+  const namespace = name.includes('.') ? name.slice(0, name.indexOf('.')) : '';
+  return available.length
+    ? `Unknown Flovart command: ${name}. Available ${namespace}.* commands: ${available.join(', ')}.`
+    : `Unknown Flovart command: ${name}. Run \`help\` or \`command.list\` to see available commands.`;
+}
+
 export async function executeFlovartCommand(commandName, args = {}, runtime = {}) {
   const command = normalizeCommandName(commandName);
 
@@ -430,7 +447,8 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
       ...commandOptions,
       projectId: commandOptions.projectId || commandOptions['project-id'],
       nodeId: commandOptions.nodeId || commandOptions['node-id'],
-      nodeIds: commandOptions.nodeIds || commandOptions['node-ids'],
+      // node.run 与 focus.nodes 统一接受 `--node-ids a,b`、JSON 数组或数组。
+      nodeIds: (commandOptions.nodeIds ?? commandOptions['node-ids']) === undefined ? undefined : parseListOption(commandOptions.nodeIds ?? commandOptions['node-ids']),
       expectedRevision: commandOptions.expectedRevision ?? commandOptions['expected-revision'],
       mutationId: commandOptions.mutationId || commandOptions['mutation-id'],
       clientId: commandOptions.clientId || commandOptions['client-id'],
@@ -496,7 +514,7 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
       const schema = COMMAND_REGISTRY[commandKey];
       return schema
         ? { ok: true, command: commandKey, schema: { ...schema, aliases: getCommandAliases(commandKey) } }
-        : { ok: false, error: { code: 'UNKNOWN_COMMAND', message: `Unknown Iris command: ${requested}` } };
+        : { ok: false, error: { code: 'UNKNOWN_COMMAND', message: unknownCommandMessage(requested), availableCommands: commandsInSameNamespace(requested) } };
     }
     case 'inspiration.search': {
       const { searchInspiration } = await loadAgentKit();
@@ -626,7 +644,7 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
     case 'export.project':
       return await runtime.export?.project?.({ format: args.format || 'json' });
     default:
-      throw new Error(`Unknown Iris command: ${commandName}`);
+      throw Object.assign(new Error(unknownCommandMessage(commandName)), { code: 'UNKNOWN_COMMAND', availableCommands: commandsInSameNamespace(commandName) });
   }
 }
 
@@ -638,7 +656,7 @@ export function planFlovartInput(rawInput, session = createFlovartSession()) {
   session.lastTool = command;
   return {
     title: command,
-    steps: [`Run deterministic Iris tool: ${command}`],
+    steps: [`Run deterministic Flovart tool: ${command}`],
     run: async ({ runtime }) => executeFlovartCommand(command, args, runtime),
   };
 }

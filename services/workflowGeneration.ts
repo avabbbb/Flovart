@@ -509,7 +509,10 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         routeId: resolved.routeId,
       });
       operationTakeId = started.take.id;
-      current = { ...latest, nodes: latest.nodes.map(node => node.id === nodeId ? started.node : node) };
+      // beginWorkflowOperationTake 会 await（recipe 哈希）；期间批量运行的其他节点可能已写回。
+      // 创建新 Take 时必须基于此刻的最新状态，只替换本节点，不能用 await 之前的快照整体覆盖。
+      const fresh = canonical(runtime, latest);
+      current = { ...fresh, nodes: fresh.nodes.map(node => node.id === nodeId ? started.node : node) };
       await publish(runtime, current);
     }
     const count = mode === 'text' ? 1 : Math.max(1, Math.min(4, config.count || 1));

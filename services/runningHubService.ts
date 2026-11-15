@@ -342,6 +342,24 @@ export interface RHTaskResponse {
   };
 }
 
+/**
+ * 从 RunningHub 任务结果的 usage 字段取实际扣费（元，CNY）。
+ * consumeMoney 是本次任务的实际扣款；第三方模型（Seedream/Seedance 等）可能只填 thirdPartyConsumeMoney。
+ * 两者都缺失或不是合法金额时返回 undefined：调用方保持 billableState='unknown'，不假装成 actual。
+ * consumeCoins 是 RH 币，单位与人民币不可直接换算，因此不用于回填。
+ */
+export function runningHubTaskCost(result: Pick<RHTaskResponse, 'usage'> | null | undefined): { amount: number; currency: 'CNY' } | undefined {
+  const usage = result?.usage as Record<string, unknown> | undefined;
+  if (!usage || typeof usage !== 'object') return undefined;
+  for (const field of ['consumeMoney', 'thirdPartyConsumeMoney'] as const) {
+    const raw = usage[field];
+    if (raw === null || raw === undefined || (typeof raw === 'string' && !raw.trim())) continue;
+    const amount = Number(raw);
+    if (Number.isFinite(amount) && amount >= 0) return { amount, currency: 'CNY' };
+  }
+  return undefined;
+}
+
 export interface RHSubmitPayload {
   webhookUrl?: string;
   [key: string]: unknown; // RunningHub standard model fields, e.g. 12##text
@@ -852,26 +870,38 @@ export async function rhRunTask(
   }));
 }
 
-/** Quick test: verify API key validity */
-export async function rhTestApiKey(apiKey: string, baseUrl?: string): Promise<boolean> {
+export type RunningHubKeyProbe = 'valid' | 'invalid' | 'unreachable';
+
+/**
+ * 探测 RunningHub Key：区分「Key 无效」与「连不上服务」。
+ * 网络错误、CORS 拦截、超时、5xx 都只说明没连上，不能据此判定 Key 无效。
+ */
+export async function rhProbeApiKey(apiKey: string, baseUrl?: string): Promise<RunningHubKeyProbe> {
+  let res: Response;
   try {
     // Use a lightweight query with a dummy task ID to test auth
-    const res = await fetchWithTimeout(`${rhBase(baseUrl)}/query`, {
+    res = await fetchWithTimeout(`${rhBase(baseUrl)}/query`, {
       method: 'POST',
       headers: rhHeaders(apiKey),
       body: JSON.stringify({ taskId: '1234567890123456789' }),
     }, 30_000);
-    // If auth fails, RunningHub may still return HTTP 200 with a business error code.
-    // A missing dummy task means the key reached the API; auth codes/messages mean it did not.
-    if (res.status === 401 || res.status === 403) return false;
-    const json = await res.json().catch(() => null);
-    const code = firstString(json?.errorCode, json?.code);
-    const message = firstString(json?.errorMessage, json?.msg, json?.message);
-    if (/^(401|403|802|806)$/i.test(code) || /api\s*key|apikey|unauthori[sz]ed|forbidden|permission|token|认证|鉴权|权限/i.test(message)) {
-      return false;
-    }
-    return true;
   } catch {
-    return false;
+    return 'unreachable';
   }
+  // If auth fails, RunningHub may still return HTTP 200 with a business error code.
+  // A missing dummy task means the key reached the API; auth codes/messages mean it did not.
+  if (res.status === 401 || res.status === 403) return 'invalid';
+  if (res.status >= 500) return 'unreachable';
+  const json = await res.json().catch(() => null);
+  const code = firstString(json?.errorCode, json?.code);
+  const message = firstString(json?.errorMessage, json?.msg, json?.message);
+  if (/^(401|403|802|806)$/i.test(code) || /api\s*key|apikey|unauthori[sz]ed|forbidden|permission|token|认证|鉴权|权限/i.test(message)) {
+    return 'invalid';
+  }
+  return 'valid';
+}
+
+/** Quick test: verify API key validity（连不上也返回 false；需要区分原因时用 rhProbeApiKey）。 */
+export async function rhTestApiKey(apiKey: string, baseUrl?: string): Promise<boolean> {
+  return (await rhProbeApiKey(apiKey, baseUrl)) === 'valid';
 }

@@ -9,7 +9,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
 import type { AIProvider, AICapability } from '../types';
 import { getOpenAICompatibleBaseUrlCandidates, normalizeProviderBaseUrl } from './baseUrl';
-import { isLikelyRunningHubModelEndpoint, normalizeRunningHubModelEndpoint, rhTestApiKey, BUILTIN_RUNNINGHUB_MODELS, stripRunningHubVersionName } from './runningHubService';
+import { isLikelyRunningHubModelEndpoint, normalizeRunningHubModelEndpoint, rhProbeApiKey, BUILTIN_RUNNINGHUB_MODELS, stripRunningHubVersionName } from './runningHubService';
 
 export interface FetchedModel {
     id: string;
@@ -29,6 +29,21 @@ export interface FetchModelsResult {
     endpointFlavor?: 'google' | 'openai-compatible' | 'openrouter-compatible';
     capabilitySummary?: AICapability[];
     effectiveBaseUrl?: string;
+    /** network：请求没能到达服务（断网、CORS 拦截、超时）。此时不能判定 Key 无效。 */
+    reason?: 'network';
+}
+
+/** 连不上服务时的统一说明：明确 Key 没有被判定为无效。 */
+export const CANNOT_CONNECT_MESSAGE = '无法连接到服务（网络不可用、被跨域 CORS 拦截或超时），未能判定 API Key 是否有效。';
+
+/** fetch 层面的失败（TypeError: Failed to fetch / NetworkError / Load failed、超时、中止）而非服务端拒绝。 */
+export function isNetworkFailure(error: unknown): boolean {
+    if (typeof DOMException !== 'undefined' && error instanceof DOMException) {
+        return error.name === 'TimeoutError' || error.name === 'AbortError' || error.name === 'NetworkError';
+    }
+    const message = error instanceof Error ? error.message : String(error ?? '');
+    // 只认浏览器/Node fetch 的网络错误文案（Chrome / Firefox / Safari / undici），不把代码里的普通 TypeError 当成断网。
+    return /failed to fetch|fetch failed|networkerror|network error|load failed|cors|err_connection|econnrefused|enotfound|etimedout|socket hang up/i.test(message);
 }
 
 export const MODEL_DISCOVERY_TIMEOUT_MS = 10_000;
@@ -258,6 +273,7 @@ async function fetchGoogleModels(apiKey: string, baseUrl?: string): Promise<Fetc
             });
         return { ok: true, models, modelDiscovery: 'available', endpointFlavor: 'google', capabilitySummary: summarizeCapabilities(models), effectiveBaseUrl: base };
     } catch (err) {
+        if (isNetworkFailure(err)) return { ok: false, models: [], error: CANNOT_CONNECT_MESSAGE, reason: 'network' };
         return { ok: false, models: [], error: err instanceof Error ? err.message : '网络错误' };
     }
 }
@@ -295,6 +311,9 @@ async function fetchOpenAICompatibleModels(
     const candidates = getOpenAICompatibleBaseUrlCandidates(provider, baseUrl);
     let lastError = '网络错误';
     let modelListUnavailable = false;
+    // 只有所有候选地址都连不上时才报 network；任一候选给出 HTTP 响应，以那个响应为准。
+    let networkFailed = false;
+    let reachedServer = false;
 
     for (const candidateBaseUrl of candidates) {
         try {
@@ -303,6 +322,7 @@ async function fetchOpenAICompatibleModels(
                 headers: { Authorization: `Bearer ${apiKey}` },
             });
             const text = await res.text().catch(() => '');
+            reachedServer = true;
 
             if (!res.ok) {
                 lastError = parseErrorText(res, text, '模型列表拉取失败');
@@ -351,7 +371,12 @@ async function fetchOpenAICompatibleModels(
             };
         } catch (err) {
             if (err instanceof DOMException && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
-                return { ok: false, models: [], error: '连接超时，请检查服务地址后重试' };
+                return { ok: false, models: [], error: '连接超时，请检查服务地址后重试；未能判定 API Key 是否有效。', reason: 'network' };
+            }
+            if (isNetworkFailure(err)) {
+                networkFailed = true;
+                lastError = CANNOT_CONNECT_MESSAGE;
+                continue;
             }
             lastError = err instanceof Error ? err.message : '网络错误';
         }
@@ -368,14 +393,18 @@ async function fetchOpenAICompatibleModels(
         };
     }
 
+    if (networkFailed && !reachedServer) return { ok: false, models: [], error: CANNOT_CONNECT_MESSAGE, reason: 'network' };
     return { ok: false, models: [], error: lastError };
 }
 
 // ── RunningHub 标准模型 ─────────────────────────────
 async function fetchRunningHubModels(apiKey: string, baseUrl?: string): Promise<FetchModelsResult> {
     const effectiveBaseUrl = normalizeProviderBaseUrl('runningHub', baseUrl || 'https://www.runninghub.cn/openapi/v2');
-    const valid = await rhTestApiKey(apiKey, effectiveBaseUrl);
-    if (!valid) {
+    const probe = await rhProbeApiKey(apiKey, effectiveBaseUrl);
+    if (probe === 'unreachable') {
+        return { ok: false, models: [], error: CANNOT_CONNECT_MESSAGE, reason: 'network' };
+    }
+    if (probe === 'invalid') {
         return { ok: false, models: [], error: 'RunningHub API Key 无效或权限不足' };
     }
 

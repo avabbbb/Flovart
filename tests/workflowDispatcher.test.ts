@@ -189,6 +189,23 @@ describe('workflow dispatcher', () => {
     expect(project.draftChangeSets).toEqual([]);
   });
 
+  it('accepts comma-separated, JSON and array node ids for focus.nodes like node.run', async () => {
+    const { dispatch, dependencies } = setup();
+    const project = dependencies.getState().projects[0];
+    project.nodes.push(createWorkflowNode('image-2', 'image', { x: 800, y: 400 }, {}));
+    for (const nodeIds of ['image-1,image-2', ' image-1 , image-2 ', '["image-1","image-2"]', ['image-1', 'image-2']]) {
+      const result = await dispatch({ id: 'focus-' + JSON.stringify(nodeIds), command: 'workflow.focus.nodes', args: { nodeIds }, source: 'cli' });
+      expect(result.ok).toBe(true);
+      expect((result.result as { nodeIds: string[] }).nodeIds).toEqual(['image-1', 'image-2']);
+    }
+    const single = await dispatch({ id: 'focus-single', command: 'workflow.focus.nodes', args: { nodeId: 'image-1,image-2' }, source: 'cli' });
+    expect((single.result as { nodeIds: string[] }).nodeIds).toEqual(['image-1', 'image-2']);
+    const missing = await dispatch({ id: 'focus-missing', command: 'workflow.focus.nodes', args: { nodeIds: 'image-1,ghost' }, source: 'cli' });
+    expect(missing.ok).toBe(false);
+    const empty = await dispatch({ id: 'focus-empty', command: 'workflow.focus.nodes', args: { nodeIds: ' , ' }, source: 'cli' });
+    expect(empty.ok).toBe(false);
+  });
+
   it('publishes workflow.apply as one atomic revisioned batch', async () => {
     const { dispatch, dependencies } = setup();
     const project = dependencies.getState().projects[0];

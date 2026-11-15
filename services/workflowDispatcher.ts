@@ -382,15 +382,39 @@ export function workflowCommandNeedsConfirmation(command: string, args: Record<s
   return requiresWorkflowConfirmation({ id: 'policy-probe', command, args, source: 'agent' } as WorkflowCommandEnvelope);
 }
 
+/**
+ * 节点 ID 列表的统一解析（node.run 与 focus.nodes 共用）：
+ * 接受数组、逗号分隔字符串（CLI `--node-ids a,b`）或 JSON 数组字符串。
+ */
+export function parseWorkflowNodeIdList(value: unknown, name = 'nodeIds'): string[] {
+  let raw: unknown = value;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('[')) {
+      try { raw = JSON.parse(trimmed); } catch { throw new Error(name + ' 不是合法的 JSON 数组。'); }
+    } else {
+      raw = trimmed.split(',');
+    }
+  }
+  if (!Array.isArray(raw)) throw new Error(name + ' 必须是节点 ID 数组或逗号分隔的字符串。');
+  const ids = raw.map(item => (typeof item === 'string' ? item.trim() : item)).filter(item => item !== '');
+  const nodeIds = [...new Set(ids.map(item => requiredString(item, name)))];
+  if (!nodeIds.length) throw new Error(name + ' 不能为空。');
+  return nodeIds;
+}
+
 /** workflow.node.run 的目标节点：nodeId 单跑，或 nodeIds 一次确认后批量并行。 */
 function workflowRunNodeIds(args: Record<string, unknown>): string[] {
   if (args.nodeIds === undefined) return [requiredString(args.nodeId || args.id, 'nodeId')];
   if (args.nodeId !== undefined || args.id !== undefined) throw new Error('nodeId 与 nodeIds 只能二选一。');
-  const raw = typeof args.nodeIds === 'string' ? args.nodeIds.split(',') : args.nodeIds;
-  if (!Array.isArray(raw)) throw new Error('nodeIds 必须是节点 ID 数组。');
-  const nodeIds = [...new Set(raw.map(value => requiredString(typeof value === 'string' ? value.trim() : value, 'nodeIds')))];
-  if (!nodeIds.length) throw new Error('nodeIds 不能为空。');
-  return nodeIds;
+  return parseWorkflowNodeIdList(args.nodeIds);
+}
+
+/** workflow.focus.nodes 的目标节点：与 node.run 相同的列表语义；单个 nodeId 也可以是逗号分隔。 */
+function workflowFocusNodeIds(args: Record<string, unknown>): string[] {
+  if (args.nodeIds !== undefined) return parseWorkflowNodeIdList(args.nodeIds);
+  if (args.nodeId !== undefined) return parseWorkflowNodeIdList(args.nodeId, 'nodeId');
+  throw new Error('nodeIds 不能为空');
 }
 
 export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDependencies) {
@@ -616,9 +640,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
           cache(cacheKey, result);
           return result;
         } else if (command === 'workflow.focus.nodes') {
-          const rawIds = Array.isArray(args.nodeIds) ? args.nodeIds : args.nodeId !== undefined ? [args.nodeId] : [];
-          const nodeIds = [...new Set(rawIds.map(value => requiredString(value, 'nodeId')))];
-          if (!nodeIds.length) throw new Error('nodeIds 不能为空');
+          const nodeIds = workflowFocusNodeIds(args);
           const missing = nodeIds.find(nodeId => !project.nodes.some(node => node.id === nodeId));
           if (missing) return error(envelope.id, 'NOT_FOUND', `节点不存在：${missing}`);
           const targets = project.nodes.filter(node => nodeIds.includes(node.id));

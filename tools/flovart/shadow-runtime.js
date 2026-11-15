@@ -295,8 +295,11 @@ function dispatchShadowWorkflow(envelope, state) {
   } else if (command === 'workflow.viewport.set') {
     project.viewport = { x: Number(args.x || 0), y: Number(args.y || 0), k: Number(args.k || args.zoom || 1) };
   } else if (command === 'workflow.focus.nodes') {
-    const rawIds = Array.isArray(args.nodeIds) ? args.nodeIds : [args.nodeId].filter(Boolean);
-    const nodeIds = [...new Set(rawIds.map(String))];
+    const rawIds = args.nodeIds !== undefined ? args.nodeIds : args.nodeId;
+    const list = Array.isArray(rawIds) ? rawIds : typeof rawIds === 'string'
+      ? (rawIds.trim().startsWith('[') ? (() => { try { return JSON.parse(rawIds); } catch { return []; } })() : rawIds.split(','))
+      : [];
+    const nodeIds = [...new Set((Array.isArray(list) ? list : []).map(item => String(item).trim()).filter(Boolean))];
     if (!nodeIds.length) return fail('BAD_REQUEST', 'nodeIds is required.');
     const targets = project.nodes.filter(node => nodeIds.includes(node.id));
     if (targets.length !== nodeIds.length) return fail('NOT_FOUND', 'Workflow node not found.');

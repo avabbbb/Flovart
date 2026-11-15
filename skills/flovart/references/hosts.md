@@ -3,9 +3,9 @@
 Read this only when the task names one of these hosts. Everything in the main
 SKILL still applies.
 
-## Optional local MCP projection (Iris)
+## Optional local MCP projection (Flovart)
 
-The five stable operations are also available through Iris's optional local
+The five stable operations are also available through Flovart's optional local
 stdio MCP projection, for MCP-capable hosts such as TeleAgent:
 `flovart_status`, `flovart_workflow_inspect`, `flovart_workflow_selection`,
 `flovart_workflow_apply` and `flovart_workflow_run`.

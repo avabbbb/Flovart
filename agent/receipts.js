@@ -103,3 +103,59 @@ export class ReceiptStore {
     return { added, skipped };
   }
 }
+
+// node.run 成功后的自动产物回执：每个成功且带 runId 的节点一条 artifact 回执，externalRef = run:<runId>。
+// 同一 runId（幂等键重放、批量结果重复上报）只写一次，与调用方身份无关。
+export function runArtifactReceipts(response, args = {}) {
+  if (!response || typeof response !== 'object' || response.ok === false) return [];
+  if (response.confirmation && response.confirmation.required) return [];
+  const inner = response.result && typeof response.result === 'object' ? response.result : null;
+  if (!inner) return [];
+  const projectId = String(inner.projectId || args.projectId || args['project-id'] || '').trim();
+  if (!projectId) return [];
+  const runs = Array.isArray(inner.runs) ? inner.runs : [inner];
+  const receipts = [];
+  for (const run of runs) {
+    if (!run || typeof run !== 'object' || run.ok === false) continue;
+    const runId = typeof run.runId === 'string' ? run.runId.trim() : '';
+    const nodeId = typeof run.nodeId === 'string' ? run.nodeId : '';
+    if (!runId) continue;
+    const artifact = run.artifact && typeof run.artifact === 'object' ? run.artifact : null;
+    const kind = artifact?.kind || 'media';
+    receipts.push({
+      projectId,
+      kind: 'artifact',
+      title: (nodeId ? '节点 ' + nodeId : '节点') + ' 生成完成（' + kind + '）',
+      summary: [
+        'runId=' + runId,
+        artifact?.artifactId ? 'artifactId=' + artifact.artifactId : '',
+        artifact?.mimeType ? 'mimeType=' + artifact.mimeType : '',
+        artifact?.name ? 'name=' + artifact.name : '',
+      ].filter(Boolean).join(' · '),
+      externalRef: 'run:' + runId,
+      nodeIds: nodeId ? [nodeId] : [],
+    });
+  }
+  return receipts;
+}
+
+export async function appendRunArtifactReceipts(store, response, args = {}, caller = {}) {
+  const candidates = runArtifactReceipts(response, args);
+  if (!store || candidates.length === 0) return { added: [], skipped: [] };
+  const byProject = new Map();
+  const fresh = [];
+  const skipped = [];
+  for (const receipt of candidates) {
+    if (!byProject.has(receipt.projectId)) {
+      const existing = await store.readAll(receipt.projectId);
+      byProject.set(receipt.projectId, new Set(existing.map(item => item.externalRef).filter(Boolean)));
+    }
+    const seen = byProject.get(receipt.projectId);
+    if (seen.has(receipt.externalRef)) { skipped.push(receipt.externalRef); continue; }
+    seen.add(receipt.externalRef);
+    fresh.push(receipt);
+  }
+  if (fresh.length === 0) return { added: [], skipped };
+  const result = await store.appendMany(fresh, caller);
+  return { added: result.added, skipped: [...skipped, ...result.skipped] };
+}

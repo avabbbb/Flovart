@@ -4,7 +4,7 @@ import { commitStreamUsage, createStreamUsageAccumulator, streamOutcome, type St
 import { fetchStreamWithUsageOptIn } from './streamUsageOptIn';
 import type { AICapability, AIProvider, ProductModelMode, PromptEnhanceRequest, PromptEnhanceResult, UserApiKey } from '../types';
 import { editImage, enhancePromptWithGemini, generateImageFromText, generateVideo, validateGeminiApiKey, getGeminiRestBaseUrl } from './geminiService';
-import { fetchModelsWithCache, type FetchModelsResult } from './modelFetcher';
+import { CANNOT_CONNECT_MESSAGE, fetchModelsWithCache, isNetworkFailure, type FetchModelsResult } from './modelFetcher';
 import { normalizeProviderBaseUrl } from './baseUrl';
 import { assertRunningHubModelEndpoint, rhUploadDataUrl, rhUploadFile } from './runningHubService';
 import { explainReferenceCompatibility, sanitizeProductGenerationParams } from './productModelCatalog';
@@ -163,6 +163,25 @@ export type ProviderTaskLifecycleEvent =
     | { phase: 'cancelled'; providerTaskId: string; canceled: boolean; upstreamStillRunning?: boolean; message?: string }
     | { phase: 'usage'; providerTaskId: string; status: SeedanceVideoReconcileResult['status']; amount?: number; currency?: string; totalTokens?: number };
 
+/**
+ * RunningHub 任务成功后用其返回的实际扣费回填用量（billableState: unknown → actual）。
+ * 拿不到金额时不发事件，用量保持 unknown；回填失败不影响产物交付。
+ */
+export async function reportRunningHubTaskCost(
+    result: { taskId?: string; usage?: unknown } | null | undefined,
+    onLifecycle?: (event: ProviderTaskLifecycleEvent) => void | Promise<void>,
+): Promise<void> {
+    if (!onLifecycle || !result?.taskId) return;
+    const { runningHubTaskCost } = await import('./runningHubService');
+    const cost = runningHubTaskCost(result as never);
+    if (!cost) return;
+    try {
+        await onLifecycle({ phase: 'usage', providerTaskId: result.taskId, status: 'succeeded', amount: cost.amount, currency: cost.currency });
+    } catch (error) {
+        console.warn('[RunningHub] cost backfill failed', error instanceof Error ? error.message : String(error));
+    }
+}
+
 export interface UnifiedIgnitionInput {
     elementId: string;
     prompt: string;
@@ -292,6 +311,8 @@ export const DEFAULT_PROVIDER_MODELS: Partial<Record<AIProvider, ProviderModelMa
 export interface ApiKeyValidationResult {
     ok: boolean;
     message?: string;
+    /** network：没连上服务（断网 / CORS / 超时），Key 未被判定为无效；UI 不能显示「Key 无效」。 */
+    reason?: 'network';
     endpointFlavor?: FetchModelsResult['endpointFlavor'];
     modelDiscovery?: FetchModelsResult['modelDiscovery'];
     capabilitySummary?: AICapability[];
@@ -592,6 +613,12 @@ export function getSupportedRatios(model: string, key?: UserApiKey): VideoAspect
 /**
  * 通用 API Key 验证 — 根据 provider 调用对应的验证逻辑
  */
+/** 验证请求抛异常时：网络/CORS/超时归为 network（不判定 Key 无效），其余保留原文。 */
+function validationFailureFromError(err: unknown): ApiKeyValidationResult {
+    if (isNetworkFailure(err)) return { ok: false, reason: 'network', message: CANNOT_CONNECT_MESSAGE };
+    return { ok: false, message: err instanceof Error ? err.message : '网络错误' };
+}
+
 export async function validateApiKey(provider: AIProvider, apiKey: string, baseUrl?: string, extraConfig?: CustomProviderExtraConfig): Promise<ApiKeyValidationResult> {
     const normalizedInputBaseUrl = baseUrl ? normalizeProviderBaseUrl(provider, baseUrl) : undefined;
 
@@ -616,13 +643,13 @@ export async function validateApiKey(provider: AIProvider, apiKey: string, baseU
             if (res.status === 401 || res.status === 403) return { ok: false, message: 'API Key 无效或权限不足' };
             return { ok: true, capabilitySummary: ['text'], effectiveBaseUrl: url };
         } catch (err) {
-            return { ok: false, message: err instanceof Error ? err.message : '网络错误' };
+            return validationFailureFromError(err);
         }
     }
 
     if (provider === 'google') {
         const result = await fetchModelsWithCache(provider, apiKey, baseUrl, true);
-        if (!result.ok) return { ok: false, message: result.error };
+        if (!result.ok) return { ok: false, message: result.error, ...(result.reason ? { reason: result.reason } : {}) };
         return {
             ok: true,
             message: result.capabilitySummary?.length
@@ -639,7 +666,7 @@ export async function validateApiKey(provider: AIProvider, apiKey: string, baseU
     // OpenAI-compatible: 不仅检查鉴权，还拿到能力摘要和协议类型
     if (provider === 'openai' || provider === 'qwen' || provider === 'deepseek' || provider === 'siliconflow' || provider === 'minimax' || provider === 'volcengine' || provider === 'openrouter' || provider === 'openai_compatible' || provider === 'custom') {
         const result = await fetchModelsWithCache(provider, apiKey, baseUrl, true);
-        if (!result.ok) return { ok: false, message: result.error };
+        if (!result.ok) return { ok: false, message: result.error, ...(result.reason ? { reason: result.reason } : {}) };
         return {
             ok: true,
             message: result.capabilitySummary?.length
@@ -670,7 +697,7 @@ export async function validateApiKey(provider: AIProvider, apiKey: string, baseU
             if (res.status === 401 || res.status === 403) return { ok: false, message: 'API Key 无效或权限不足' };
             return { ok: true, capabilitySummary: ['text'] }; // 其他错误可能是模型不存在，但 key 是对的
         } catch (err) {
-            return { ok: false, message: err instanceof Error ? err.message : '网络错误' };
+            return validationFailureFromError(err);
         }
     }
 
@@ -686,7 +713,7 @@ export async function validateApiKey(provider: AIProvider, apiKey: string, baseU
             if (res.status === 401 || res.status === 403) return { ok: false, message: 'API Key 无效或权限不足' };
             return { ok: true, message: '已保存（无法确认在线状态，但格式正确）', capabilitySummary: inferCapabilitiesByProvider(provider) };
         } catch (err) {
-            return { ok: false, message: err instanceof Error ? err.message : '网络错误' };
+            return validationFailureFromError(err);
         }
     }
 
@@ -694,7 +721,7 @@ export async function validateApiKey(provider: AIProvider, apiKey: string, baseU
     if (provider === 'runningHub') {
         try {
             const result = await fetchModelsWithCache(provider, apiKey, normalizedInputBaseUrl, true);
-            if (!result.ok) return { ok: false, message: result.error || 'API Key 无效或权限不足' };
+            if (!result.ok) return { ok: false, message: result.error || 'API Key 无效或权限不足', ...(result.reason ? { reason: result.reason } : {}) };
             return {
                 ok: true,
                 message: result.models.length > 0
@@ -705,7 +732,7 @@ export async function validateApiKey(provider: AIProvider, apiKey: string, baseU
                 models: result.models,
             };
         } catch (err) {
-            return { ok: false, message: err instanceof Error ? err.message : '网络错误' };
+            return validationFailureFromError(err);
         }
     }
 
@@ -2736,6 +2763,7 @@ export async function generateImageWithProvider(
             onTaskId: taskId => options?.onProviderTaskLifecycle?.({ phase: 'submitted', providerTaskId: taskId, submittedAt: Date.now() }),
             ...(options?.onProgress ? { onProgress: (status: string, attempt: number) => options.onProgress!('RunningHub ' + status + ' (' + attempt + ')', { phase: status === 'QUEUED' ? 'queue' : 'generate', polls: attempt }) } : {}),
         });
+        await reportRunningHubTaskCost(result, options?.onProviderTaskLifecycle);
         const imageUrl = extractRunningHubMediaUrl(result, 'image');
         if (!imageUrl) {
             return {
@@ -3619,6 +3647,7 @@ export async function generateVideoWithProvider(
             onTaskId: taskId => options?.onProviderTaskLifecycle?.({ phase: 'submitted', providerTaskId: taskId, submittedAt: Date.now() }),
             onProgress: (status, attempt) => onProgress('RunningHub ' + status + ' (' + attempt + ')', { phase: status === 'QUEUED' ? 'queue' : 'generate', polls: attempt }),
         });
+        await reportRunningHubTaskCost(result, options?.onProviderTaskLifecycle);
         const videoUrl = extractRunningHubMediaUrl(result, 'video');
         if (!videoUrl) {
             throw new Error(result.results?.map(item => item.text).filter(Boolean).join('\n') || 'RunningHub 视频任务完成但未返回视频 URL。');

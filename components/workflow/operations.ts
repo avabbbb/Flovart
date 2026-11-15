@@ -376,6 +376,12 @@ export async function ensureWorkflowImageGenerateOperation(input: {
   nodeId: string;
   createId: () => string;
   now?: string;
+  /**
+   * 同步写回：在读取最新状态并合并本节点变更的同一同步片段内调用。
+   * 批量 node.run 并行转换多个节点时，若等 await 返回后再由调用方写回，
+   * 两次转换都基于同一份旧基线，后写的会覆盖先写的（只有最后一个节点成功）。
+   */
+  commit?: (project: WorkflowProject) => void;
 }): Promise<{ project: WorkflowProject; operationNodeId: string; created: boolean }> {
   // 幂等安全实现：以 store 最新状态为基准计算。调用方（App.tsx）会把返回的 project
   // 整体写回 store；若基于传入快照计算，等待期间的并发修改会被整体覆盖（互踩）。
@@ -475,5 +481,32 @@ export async function ensureWorkflowImageGenerateOperation(input: {
       return { project: fresh, operationNodeId: source.id, created: false };
     }
   }
-  return { operationNodeId: operation.id, created: true, project: applyChanges(fresh) };
+  const next = applyChanges(fresh);
+  // 与上面的 fresh 读取处于同一同步片段：中间没有 await，其他并发转换无法插队。
+  input.commit?.(next);
+  return { operationNodeId: operation.id, created: true, project: next };
+}
+
+/**
+ * node.run 的图片生成准备：把普通图片节点原位转换为 image.generate Operation 并立即写回 store，
+ * 然后在创建新 Take 之前重新读取最新状态。批量运行（--node-ids a,b）时各节点并行进入这里，
+ * 任何一步都不能拿旧快照整体覆盖 store。
+ */
+export async function prepareWorkflowImageGenerateRun(input: {
+  project: WorkflowProject;
+  nodeId: string;
+  createId: () => string;
+  now?: string;
+  commit?: (project: WorkflowProject) => void;
+}): Promise<{ project: WorkflowProject; operationNodeId: string; created: boolean }> {
+  const commit = input.commit || ((next: WorkflowProject) => {
+    useWorkflowStore.getState().updateProject(next.id, {
+      nodes: next.nodes,
+      connections: next.connections,
+      selectedNodeIds: next.selectedNodeIds,
+      draftVersion: next.draftVersion,
+    });
+  });
+  const prepared = await ensureWorkflowImageGenerateOperation({ ...input, commit });
+  return { ...prepared, project: latestProjectSnapshot(input.project.id, prepared.project) };
 }

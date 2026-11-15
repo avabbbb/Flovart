@@ -4,6 +4,7 @@ import { buildDelivery, collectNodeIds } from './delivery.js';
 import { buildPlanCard, PAID_COMMANDS, SESSION_CONTROL_COMMANDS, SessionBudget } from './session-budget.js';
 import { planBatchPick } from './batch-pick.js';
 import { importFlovartPipelineModule } from './flovart-modules.js';
+import { appendRunArtifactReceipts } from './receipts.js';
 
 const { PIPELINE_COMMANDS } = await importFlovartPipelineModule('commands');
 
@@ -437,6 +438,7 @@ export class WorkflowAgentSession {
       const result = await this.dispatchCommand(command, args, source, idempotencyKey, signal, caller);
       const failed = Boolean(result) && typeof result === 'object' && result.ok === false;
       if (!failed && !result?.confirmation?.required && PAID_COMMANDS.has(command)) this.budget.consume(command, args);
+      if (!failed && command === 'workflow.node.run') await this.recordRunReceipts(result, args, caller);
       const delivery = failed ? null : this.deliveryFor(command, result, caller, args, entry);
       if (delivery && delivery.nodeIds.length) entry.nodeIds = delivery.nodeIds;
       this.finishActivity(entry, failed ? { ok: false, error: result.error } : { ok: true });
@@ -486,6 +488,17 @@ export class WorkflowAgentSession {
       }
     }
     return { ok: true, result: { ...plan, applied: true, receipt }, ...(applied?.delivery ? { delivery: applied.delivery } : {}) };
+  }
+
+  // node.run 成功后自动写产物回执（按 runId 去重）；回执失败只告警，不影响生成结果。
+  async recordRunReceipts(result, args, caller) {
+    if (!this.receiptStore) return;
+    try {
+      const { added } = await appendRunArtifactReceipts(this.receiptStore, result, args, caller || {});
+      added.forEach(receipt => this.emit('receipt', receipt));
+    } catch (error) {
+      console.warn('[flovart-agent] auto artifact receipt failed:', error instanceof Error ? error.message : String(error));
+    }
   }
 
   resolveWebUrl() {

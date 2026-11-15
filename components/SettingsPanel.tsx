@@ -1132,7 +1132,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
             try {
                 const result = await validateApiKey(item.provider, item.key, item.baseUrl, item.extraConfig);
                 results[item.id] = result;
-                onUpdateApiKey(item.id, { status: result.ok ? 'ok' : 'error' });
+                // 连不上服务不等于 Key 无效：保持原状态，不把 Key 标成 error。
+                if (result.reason !== 'network') onUpdateApiKey(item.id, { status: result.ok ? 'ok' : 'error' });
             } catch (error) {
                 // 单个 Key 校验抛异常（网络/解析失败）不中断批量流程，记为失败后继续下一项
                 results[item.id] = { ok: false, message: String(error?.message || error) };
@@ -1187,6 +1188,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         type="button"
                         data-testid="settings-header-export"
                         onClick={handleExportKeys}
+                        title={t('settingsExtra.transfer.exportConfigHint')}
                         className="rounded-lg border border-[var(--isl-border)] px-2.5 py-1 text-xs font-medium text-[var(--isl-ink-soft)] transition hover:text-[var(--isl-ink)]"
                     >
                         {t('settingsExtra.transfer.exportConfig')}
@@ -1325,6 +1327,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                 <button
                                     type="button"
                                     onClick={handleExportKeysWithSecrets}
+                                    data-testid="settings-export-with-keys"
+                                    title={t('settingsExtra.transfer.exportWithKeysHint')}
                                     className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
                                         isDark ? 'border-[#2A3140] text-[#98A2B3] hover:bg-[#252C39]' : 'border-[#E4E7EC] text-[#667085] hover:bg-[#F2F4F7]'
                                     }`}
@@ -1813,7 +1817,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                 }`}>
                                     {validationResult.ok
                                         ? t('settingsExtra.keyDialog.validationSuccess')
-                                        : t('settingsExtra.keyDialog.validationFailure', validationResult.message || t('settingsExtra.keyDialog.invalidApiKey'))
+                                        : validationResult.reason === 'network'
+                                            // 连不上服务时不能说「Key 无效」：明确 Key 未被判定无效。
+                                            ? t('settingsExtra.keyDialog.cannotConnect')
+                                            : t('settingsExtra.keyDialog.validationFailure', validationResult.message || t('settingsExtra.keyDialog.invalidApiKey'))
                                     }
                                 </div>
                             )}

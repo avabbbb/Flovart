@@ -27,7 +27,7 @@ export function AgentConnectionsPage({ project, language = 'zho' }: { project: W
     ? {
         tag: 'Agent · DSH',
         title: '用 DeepSeek Harness（DSH）指挥画布',
-        body: 'DSH 主会话是指挥入口，Flovart 插件在 Iris 页签中读取并修改你当前可见的 Workflow。生成仍走同一条确认与提交链路。',
+        body: 'DSH 主会话是指挥入口，Flovart 插件在 Flovart 页签中读取并修改你当前可见的 Workflow。生成仍走同一条确认与提交链路。',
         envHosted: '你正在使用线上演示页（HTTPS）。线上页无法连接你电脑上的 DSH 或本地 Agent：浏览器会阻止 HTTPS 页面访问本机 http 服务。以下步骤需要在本地工作区完成。',
         envLocal: '当前为本地工作区，可按以下步骤连接 DSH。',
         stepsTitle: '本地连接步骤',
@@ -35,7 +35,7 @@ export function AgentConnectionsPage({ project, language = 'zho' }: { project: W
           ['克隆 Flovart 仓库并安装依赖', 'npm install'],
           ['安装 DSH Profile（兼容 DeepSeek Harness 0.1.0-rc.8，Node 22.19+ 或 24+）', 'npm run dsh:profile:install'],
           ['启动 DSH；启动器会准备本地工作区并打开可见 Workflow', 'npm run dsh:start'],
-          ['在 DeepSeek 主会话切换到 Iris 页签，用自然语言指挥，例如“创建三个镜头的工作流”，再“只修改第二个镜头”', ''],
+          ['在 DeepSeek 主会话切换到 Flovart 页签，用自然语言指挥，例如“创建三个镜头的工作流”，再“只修改第二个镜头”', ''],
           ['回到本地画布查看变更；没有可见 Workflow 时 DSH 会明确提示，不会创建隐藏副本', ''],
         ],
         status: '状态：插件已在本地完成打包与干净 Profile 安装验证；npm 发布与插件市场尚未完成；真实 DeepSeek 登录态下的对话验收待验证。',
@@ -44,7 +44,7 @@ export function AgentConnectionsPage({ project, language = 'zho' }: { project: W
     : {
         tag: 'Agent · DSH',
         title: 'Drive the canvas from DeepSeek Harness (DSH)',
-        body: 'The DSH main conversation is the command entry; the Flovart plugin reads and edits your currently visible Workflow from the Iris tab. Generation still goes through the same confirm-and-submit path.',
+        body: 'The DSH main conversation is the command entry; the Flovart plugin reads and edits your currently visible Workflow from the Flovart tab. Generation still goes through the same confirm-and-submit path.',
         envHosted: 'You are on the hosted demo (HTTPS). It cannot reach DSH or a local agent on your computer: browsers block HTTPS pages from calling local http services. The steps below run in a local workspace.',
         envLocal: 'This is a local workspace; follow the steps below to connect DSH.',
         stepsTitle: 'Local setup',
@@ -52,7 +52,7 @@ export function AgentConnectionsPage({ project, language = 'zho' }: { project: W
           ['Clone the Flovart repo and install dependencies', 'npm install'],
           ['Install the DSH profile (DeepSeek Harness 0.1.0-rc.8, Node 22.19+ or 24+)', 'npm run dsh:profile:install'],
           ['Start DSH; the launcher prepares the local workspace and opens a visible Workflow', 'npm run dsh:start'],
-          ['In the DeepSeek main conversation open the Iris tab and give instructions, e.g. "create a three-shot workflow", then "only change the second shot"', ''],
+          ['In the DeepSeek main conversation open the Flovart tab and give instructions, e.g. "create a three-shot workflow", then "only change the second shot"', ''],
           ['Check the change on the local canvas; with no visible Workflow DSH says so and never creates a hidden copy', ''],
         ],
         status: 'Status: packaged and installed into a clean profile locally; npm publish and marketplace listing not done yet; conversation acceptance under a real DeepSeek login still unverified.',
@@ -79,7 +79,7 @@ npm run flovart:cli -- workflow.inspect --summary --json
 - 不直接写 React/Zustand、浏览器存储、Runtime 数据库或 Provider 私有 API。
 - 修改前后都要 inspect；付费生成前先让用户确认。
 
-如果在 DSH 中运行：先执行 npm run dsh:profile:install，然后在 DSH 主会话切到 Iris 页签，用同一套自然语言指令操作画布；其他 Agent 使用上面的 CLI 方式。`
+如果在 DSH 中运行：先执行 npm run dsh:profile:install，然后在 DSH 主会话切到 Flovart 页签，用同一套自然语言指令操作画布；其他 Agent 使用上面的 CLI 方式。`
     : `You are a local coding agent working on Flovart. Operate only through the visible Flovart Workflow; never write frontend state directly.
 
 Repository: https://github.com/avabbbb/Flovart
@@ -100,7 +100,7 @@ Constraints:
 - Never write React/Zustand, browser storage, Runtime databases or Provider private APIs directly.
 - Inspect before and after changes; ask the user before any paid generation.
 
-For DSH: run npm run dsh:profile:install, then switch to the Iris tab in the DSH main conversation and use the same natural-language instructions. Other agents should use the CLI setup above.`;
+For DSH: run npm run dsh:profile:install, then switch to the Flovart tab in the DSH main conversation and use the same natural-language instructions. Other agents should use the CLI setup above.`;
   return (
     <div className="h-full min-h-0 overflow-y-auto" data-testid="agent-connections-page" style={{ color: 'var(--isl-ink)' }}>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 sm:p-6">

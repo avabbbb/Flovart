@@ -208,7 +208,7 @@ describe('fake provider real HTTP integration', () => {
     const startedAt = Date.now();
     const result = await fetchModelsForProvider('custom', 'fake-secret', `${origin}/v1`);
 
-    expect(result).toMatchObject({ ok: false, error: '连接超时，请检查服务地址后重试' });
+    expect(result).toMatchObject({ ok: false, error: '连接超时，请检查服务地址后重试；未能判定 API Key 是否有效。', reason: 'network' });
     expect(Date.now() - startedAt).toBeLessThan(MODEL_DISCOVERY_TIMEOUT_MS + 2_000);
   }, MODEL_DISCOVERY_TIMEOUT_MS + 5_000);
 

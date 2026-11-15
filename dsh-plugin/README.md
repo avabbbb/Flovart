@@ -1,4 +1,4 @@
-# @flovart/dsh-plugin — DeepSeek Harness Iris Plugin
+# @flovart/dsh-plugin — DeepSeek Harness Flovart Plugin
 
 > 当前兼容范围：DeepSeek Harness `>=0.2.2-rc.1 <0.3.0-0`（已验证 `0.2.2-rc.1`、`0.2.2-rc.2`）、Node `^22.19.0 || >=24.0.0`。
 >
@@ -8,11 +8,11 @@
 ## 用户路径
 
 1. 在仓库根目录运行 `npm run dsh:start`。
-2. 启动器准备 Workspace Operator，并通过 Iris Link 确保可见 Browser Workflow，再启动 `flovart` Harness Profile。
-3. 在 DeepSeek 主会话中切换到 `Iris` 页签。
-4. 查看当前可见 Workflow；修改和生成由 `ctx.flovart` tools 继续走同一条 Iris Core 链路。
+2. 启动器准备 Workspace Operator，并通过 Flovart Link 确保可见 Browser Workflow，再启动 `flovart` Harness Profile。
+3. 在 DeepSeek 主会话中切换到 `Flovart` 页签。
+4. 查看当前可见 Workflow；修改和生成由 `ctx.flovart` tools 继续走同一条 Flovart Core 链路。
 
-用户不需要填写 Runtime 地址或 Token，也不需要理解 Browser binding。DeepSeek 主对话是指挥入口，Iris 页签只承载当前可见 Workflow、制作状态和产物摘要；没有可见 Browser Workflow 时会明确提示，不创建隐藏副本。
+用户不需要填写 Runtime 地址或 Token，也不需要理解 Browser binding。DeepSeek 主对话是指挥入口，Flovart 页签只承载当前可见 Workflow、制作状态和产物摘要；没有可见 Browser Workflow 时会明确提示，不创建隐藏副本。
 
 ## 组成
 
