@@ -147,14 +147,30 @@ the browser itself is offline.
 
 - “打开 Flovart” / “打开 Iris” → `ensure`, then `workflow.inspect`.
 - “看看当前 Workflow” → `workflow.inspect`. “当前选择” → `workflow.selection.get`.
-- Add, delete, move, resize, connect, disconnect or edit → one `workflow.apply`.
-- A sequence of new nodes → `workflow.node.create-connected`, which fills the
-  node defaults a bare `add_node` in `workflow.apply` needs:
+- Generate an image or video → one `workflow.generate` (MCP / Agent tool
+  `flovart_generate`). It creates or reuses **one** generation node, writes the
+  prompt into that node's Prompt Bar, turns `references` into Prompt Bar @chips
+  plus connections (order = chip order), picks the mode from the references
+  and, with `run: true`, runs it in place:
 
   ```bash
-  npm run flovart:cli -- workflow.node.create-connected --from-node-id <id> --type text --title "Shot 2" --x 420 --y 120 --agent-identity codex --idempotency-key <key> --json
+  npm run flovart:cli -- workflow.generate --type video --title "Shot 2" --prompt "@ref:<shot-1-image> 里的人物转身走进雨里" --references '[{"nodeId":"<shot-1-image>","role":"first_frame"}]' --shot '{"index":2,"durationSec":5}' --agent-identity codex --idempotency-key <key> --json
   ```
 
+  Never build a text node (or a "prompt/config node") and connect it to a
+  generation node: text nodes are notes for people and are never generation
+  input. Shot order is `shot.index`, not a chain of connections.
+- Pick or change a model → `workflow.models.list` first (live catalog with
+  per-mode configuration and reference limits). On `MODE_UNSUPPORTED` or
+  `REFERENCE_LIMIT`, use a model from the returned list; do not try models one
+  by one.
+- Bring an image from a URL or the asset library onto the canvas →
+  `workflow.media.import` (optionally `attachToNodeId` to use it as a reference).
+- Write a note only when the user asks for one → `workflow.note.write`. Notes
+  never connect to anything.
+- Move, connect, disconnect, group, retitle or reorder references → one
+  `workflow.apply` (`reorder_connections` with `targetNodeId` +
+  `orderedSourceIds`).
 - Run a node → `workflow.node.run` after confirming the node from inspection.
   Several independent nodes → one `workflow.node.run` with `nodeIds`; the user
   agrees to the cost once and the result lists each node. Rerun only failed
