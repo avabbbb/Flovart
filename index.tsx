@@ -5,6 +5,7 @@ import { RouterHost } from './RouterHost';
 import { bootstrapRuntimeCredentials } from './services/bootstrapRuntimeCredentials';
 import { installCrashLog } from './utils/crashLog';
 import { installDshEmbedBridge } from './services/dshEmbedBridge';
+import { installLlmCorsProxy } from './services/llmCorsProxy';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import './styles/index.css';
 import './styles/adaptive.css';
@@ -12,6 +13,8 @@ import './styles/dshEmbed.css';
 
 installCrashLog();
 installDshEmbedBridge();
+// Web 端：OpenCode Go 等不支持浏览器 CORS 的网关走同源代理 /api/llm-proxy。
+installLlmCorsProxy();
 
 void bootstrapRuntimeCredentials().catch(() => {
   // Browser builds and unavailable Desktop IPC keep using the encrypted Web Vault.

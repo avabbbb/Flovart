@@ -3,6 +3,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { configDefaults } from 'vitest/config';
+import { llmProxyPlugin } from './server/viteLlmProxyPlugin';
 
 // Tauri 期望固定端口；CLI source bootstrap 通过 FLOVART_DYNAMIC_WEB_PORT
 // 显式启用动态端口，避免把用户带到无关的 localhost 服务。
@@ -37,7 +38,7 @@ export default defineConfig(() => {
           ignored: (p: string) => p.replaceAll(path.sep, '/').split('/').some((s) => s === 'target' || s === '.git' || s === '.tmp'),
         },
       },
-      plugins: [tailwindcss(), react()],
+      plugins: [tailwindcss(), react(), llmProxyPlugin()],
       // 排除独立 HTML 文件，避免 esbuild 扫描其内联脚本报错
       optimizeDeps: {
         entries: ['index.html'],
