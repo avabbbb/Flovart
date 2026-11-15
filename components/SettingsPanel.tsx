@@ -1,4 +1,5 @@
 import { getRouteCatalog } from '../services/runningHubRouteCatalog';
+import { BUILTIN_RUNNINGHUB_MODELS, stripRunningHubVersionName } from '../services/runningHubService';
 import { ProtocolSelect } from './settings/ProtocolSelect';
 import { TokenUsageSection, usageTabLabel } from './TokenUsageSection';
 import { saveBlob } from '../services/desktopNetwork';
@@ -412,6 +413,38 @@ type ProviderPreset = {
     featured?: boolean;
 };
 
+function mergeModelItems(existing: ModelItem[], incoming: ModelItem[]): ModelItem[] {
+    const seen = new Set(existing.map(item => item.id.trim().toLowerCase()));
+    const merged = [...existing];
+    for (const item of incoming) {
+        const key = item.id.trim().toLowerCase();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        merged.push(item);
+    }
+    return merged;
+}
+
+// RunningHub 预设模型 = 内置模型表 ∪ Route Catalog 已核验线路（按 id 去重，核验线路排前面）。
+export function buildRunningHubPresetModelItems(): ModelItem[] {
+    const items: ModelItem[] = [];
+    const seen = new Set<string>();
+    const push = (item: ModelItem) => {
+        const key = item.id.trim().toLowerCase();
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        items.push(item);
+    };
+    for (const schema of getRouteCatalog()) {
+        const isImage = schema.modes.some(mode => mode === 'text-to-image' || mode === 'image-to-image');
+        push({ id: schema.routeId, name: schema.routeId, capability: isImage ? 'image' : 'video' });
+    }
+    for (const model of BUILTIN_RUNNINGHUB_MODELS) {
+        push({ id: model.id, name: stripRunningHubVersionName(model.description) || model.id, capability: model.capability });
+    }
+    return items;
+}
+
 // 内置五种协议入口（OpenAI compatible / Gemini / 火山 / RunningHub / 自定义配置）。
 // 「自定义配置」不走任何固定协议：请求地址/鉴权/请求体/响应映射全部由绑定的适配脚本描述（见 userScriptAuthoring）。
 const USER_SCRIPT_PRESET_ID = 'user-script';
@@ -463,8 +496,9 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
         baseUrl: providerBaseUrl.runningHub,
         capabilities: ['image', 'video'],
         requestFormat: 'native',
-        // 模型不自动发现，由内置 Route Catalog 提供线路。
-        models: [],
+        // 内置 RunningHub 预设模型：选中即可用，不必先点「获取模型」；获取模型只会在此基础上追加。
+        modelItems: buildRunningHubPresetModelItems(),
+        defaultModel: 'seedream-v5-flash/text-to-image',
     },
     {
         id: USER_SCRIPT_PRESET_ID,
@@ -713,15 +747,16 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         const detectedModelItems: ModelItem[] = result.models?.length
             ? result.models.map(model => ({ id: model.id, name: model.name || model.id, capability: model.capability }))
             : [];
+        // 「验证并更新」与自动拉取的列表合并，不覆盖手填模型和内置预设。
+        const finalModels = mergeModelItems(editModels, detectedModelItems);
         if (detectedModelItems.length > 0) {
             setFetchedModels(result.models || []);
-            setEditModels(detectedModelItems);
-            if (!editDefaultModel || !detectedModelItems.some(model => model.id === editDefaultModel)) {
-                setEditDefaultModel(detectedModelItems[0].id);
+            setEditModels(finalModels);
+            if (!editDefaultModel || !finalModels.some(model => model.id === editDefaultModel)) {
+                setEditDefaultModel(finalModels[0].id);
             }
         }
 
-        const finalModels = detectedModelItems.length > 0 ? detectedModelItems : editModels;
         const finalDefaultModel = editDefaultModel && finalModels.some(model => model.id === editDefaultModel)
             ? editDefaultModel
             : finalModels[0]?.id;
@@ -881,9 +916,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     setBaseUrl(result.effectiveBaseUrl);
                 }
                 // 自动填充到编辑模型列表
-                const modelItems: ModelItem[] = result.models.map(m => ({ id: m.id, name: m.name || m.id, capability: m.capability }));
-                setEditModels(modelItems);
-                if (modelItems.length > 0) setEditDefaultModel(modelItems[0].id);
+                const fetchedItems: ModelItem[] = result.models.map(m => ({ id: m.id, name: m.name || m.id, capability: m.capability }));
+                // 合并而不是覆盖：保留手填模型和内置预设，拉取结果只追加新 id。
+                setEditModels(prev => mergeModelItems(prev, fetchedItems));
+                setEditDefaultModel(prev => prev || fetchedItems[0]?.id || '');
                 // 自动推断 capabilities
                 const caps = new Set<AICapability>();
                 for (const m of result.models) caps.add(m.capability);
