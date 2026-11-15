@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getLocalStatus } from './local-status.js';
 import { toLocalLinkPublicStatus } from './public-status.js';
@@ -35,9 +35,45 @@ function parseJsonOutput(output) {
   return null;
 }
 
-function startArguments(cwd, open) {
-  const source = existsSync(join(cwd, 'agent', 'index.js')) && existsSync(join(cwd, 'vite.config.ts'));
-  return ['start', ...(source ? ['--source', '--web'] : []), '--json', ...(open ? ['--open'] : ['--no-open'])];
+function isSourceCheckout(dir) {
+  return Boolean(dir) && existsSync(join(dir, 'agent', 'index.js')) && existsSync(join(dir, 'vite.config.ts'));
+}
+
+/** 本 CLI 所在的源码仓库（tools/flovart/ensure.js → 仓库根）；npm 安装的 toolkit 没有 agent/ 与 vite.config.ts。 */
+function cliSourceDir() {
+  // 不写 new URL('../../', import.meta.url)：Vite 会把这种写法当静态资源改写。
+  try { return join(dirname(fileURLToPath(import.meta.url)), '..', '..'); }
+  catch { return null; }
+}
+
+/**
+ * 选择源码目录：当前目录是源码仓库时用当前目录；否则（在别的目录跑 `node <repo>/tools/flovart/cli.js ensure`）
+ * 回退到 CLI 自身所在的仓库。旧实现只看 cwd，离开仓库目录就落到 toolkit 模式，前端已在跑也起不来 Agent。
+ */
+function resolveSourceDir(cwd, sourceDir = cliSourceDir()) {
+  if (isSourceCheckout(cwd)) return cwd;
+  if (isSourceCheckout(sourceDir)) return sourceDir;
+  return null;
+}
+
+function frontendPort(status) {
+  const url = status?.frontend?.status === 'ready' ? status.frontend.url : null;
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    if (!['127.0.0.1', 'localhost', '[::1]', '::1'].includes(parsed.hostname)) return null;
+    return parsed.port || null;
+  } catch {
+    return null;
+  }
+}
+
+function startArguments(cwd, open, options = {}) {
+  const sourceDir = options.sourceDir === undefined ? resolveSourceDir(cwd) : options.sourceDir;
+  const source = Boolean(sourceDir) || Boolean(options.web || options.source);
+  // 前端已在跑：把它的端口交给 start，start 复用这个 WebUI、只补起 Agent，而不是另起一个前端。
+  const port = source ? frontendPort(options.status) : null;
+  return ['start', ...(source ? ['--source', '--web'] : []), ...(port ? [`--web-port=${port}`] : []), '--json', ...(open ? ['--open'] : ['--no-open'])];
 }
 
 function runStart(args, { cwd = process.cwd(), env = process.env, spawnImpl = spawn } = {}) {
@@ -67,11 +103,13 @@ function ensureResponse(status, fallbackError) {
   return response;
 }
 
-export async function ensureFlovart({ open = true, cwd = process.cwd(), env = process.env, statusReader = getLocalStatus, startRunner = runStart } = {}) {
+export async function ensureFlovart({ open = true, web = false, source = false, cwd = process.cwd(), env = process.env, statusReader = getLocalStatus, startRunner = runStart, sourceDir } = {}) {
   let status = await statusReader({ env });
   if (status.ready) return ensureResponse(status);
   if (!startRunner) return ensureResponse(status);
-  const started = await startRunner(startArguments(cwd, open), { cwd, env });
+  const projectDir = sourceDir === undefined ? resolveSourceDir(cwd) : sourceDir;
+  // start 在源码仓库里执行，它的 resolveProjectDir 才会指向这个仓库。
+  const started = await startRunner(startArguments(cwd, open, { sourceDir: projectDir, web, source, status }), { cwd: projectDir || cwd, env });
   status = await statusReader({ env });
   if (status.ready) return ensureResponse(status);
   const startResult = parseJsonOutput(started.stdout);
@@ -79,4 +117,4 @@ export async function ensureFlovart({ open = true, cwd = process.cwd(), env = pr
   return ensureResponse(status, startError);
 }
 
-export { ensureResponse, parseJsonOutput, startArguments };
+export { ensureResponse, parseJsonOutput, resolveSourceDir, startArguments };

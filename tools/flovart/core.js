@@ -64,7 +64,7 @@ export const HELP_TEXT = [
   'External Agents plan; this CLI executes explicit Flovart Workflow operations.',
   '',
   'Bootstrap/admin:',
-  'ensure [--no-open]                              Prepare the local Flovart connection',
+  'ensure [--no-open] [--web]                      Prepare the local Flovart connection (reuses a running WebUI, starts the Agent)',
   'setup                                           Show local setup steps',
   'doctor                                          Diagnose local CLI readiness',
   'uninstall [--plan] [--json]                     Remove the installed Agent Toolkit and launcher shims',

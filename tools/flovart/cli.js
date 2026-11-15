@@ -194,7 +194,7 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
   }
 
   if (routingCommand === 'ensure') {
-    const result = await ensureFlovart({ open: !(args.noOpen || args['no-open']) });
+    const result = await ensureFlovart({ open: !(args.noOpen || args['no-open']), web: Boolean(args.web), source: Boolean(args.source) });
     printCliResponse(result.ok, command, result, result.ok ? null : result.error, { runtime: 'flovart-link' });
     return;
   }

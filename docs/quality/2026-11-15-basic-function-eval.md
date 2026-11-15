@@ -118,9 +118,15 @@
 - **修复**：`patchConfig` 只发增量（`update_node` 本来就把 config 合并一层）；节点尚无 config 时才带上默认 `mode`。PromptBar 的比例改为「`config.aspectRatio` → Operation recipe 的 `aspectRatio` → 默认值」。`2d95e46` 的防循环约束保持不变：空比例不回写、模型族 effect 仍以字符串为依赖。
 - **测试**：`tests/workflowPromptBarAspectRatio.test.tsx`（经真实 `applyWorkflowOps` 的 `update_node` 写回）：Seedream 节点 16:9 显示正确且不回写比例；挂载后 CLI 改为 16:9 能跟随，PromptBar 先前算出的补丁晚到也不会改回 1:1，再改分辨率比例仍为 16:9；PromptBar 里选 21:9 能落到节点配置；只有 recipe 带比例的 Operation 显示 16:9。改动前这 4 个用例全部失败。`tests/workflowNodeOverlays.test.tsx` 的默认模型断言改为增量补丁。
 
+### 14. 前端已在运行时 `flovart ensure --web` 起不来 Agent
+
+- **现象**：WebUI 已经在跑，`ensure --web` 返回 `frontend: ready`、`agent: offline`；只能改用 `start --source` 绕过。
+- **根因**：`tools/flovart/ensure.js` 只看**当前目录**是不是源码仓库来决定启动参数，`--web` 参数根本没传进去。在仓库外执行 `node <repo>/tools/flovart/cli.js ensure --web` 时拼出的是 `start --json --no-open`，`start` 因而走 toolkit（Desktop Runtime）模式，源码 Agent 不会启动；前端已在线又让人误以为链路就绪。另外前端在非默认端口时，`start` 找不到它，会另起一个前端。本地复现：仓库外启动一个带 `data-flovart-webui="1"` 标记的假 WebUI，旧代码返回 `agent: offline`。
+- **修复**：源码目录改为「当前目录是源码仓库 → 用当前目录；否则用 CLI 自身所在的仓库」，`start` 在该目录下执行；`ensure` 接收 `--web` / `--source`，找不到源码仓库时也按源码模式启动；前端已就绪且在 loopback 上时把端口作为 `--web-port=<port>` 交给 `start`，复用现有 WebUI、只补起 Agent。CLI 帮助补上 `--web`。
+- **测试**：`tests/flovartEnsure.test.js` 新增 4 个用例：仓库外解析到 CLI 所在仓库；前端已在 40123 端口时，仓库外 `ensure --web` 发出 `start --source --web --web-port=40123 --json --no-open` 且在仓库目录执行；找不到仓库时 `--web` 仍走源码模式；非 loopback 地址不传端口。真实复现（沙箱）：修复后在 `/tmp` 执行同一命令返回 `agent: ready`（`browser: offline` 是因为沙箱没有真实浏览器连接，属预期）。
+
 ## 仍未修复
 
-- `--web` 模式下若前端已在运行，`ensure` 无法启动 Agent；临时办法：改用 `--source` 启动。
 - 自动产物回执（第 4 项）只经单元测试验证，尚未在真实画布上确认。
 
 ## 验证
