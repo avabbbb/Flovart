@@ -5,6 +5,8 @@ export interface FlovartAgentMessage {
   id: string;
   role: 'user' | 'assistant' | 'tool';
   text: string;
+  /** 模型的思考过程（reasoning_content），与正文分开展示。 */
+  thinking?: string;
   toolName?: string;
   isError?: boolean;
   timestamp?: number;
@@ -22,6 +24,7 @@ export interface FlovartAgentSnapshot {
 
 export type FlovartAgentTurnEvent =
   | { type: 'text-delta'; delta: string }
+  | { type: 'thinking-delta'; delta: string }
   | { type: 'snapshot'; snapshot: FlovartAgentSnapshot }
   | { type: 'status'; running: boolean }
   | { type: 'tool-start'; id: string; name: string; args: unknown }

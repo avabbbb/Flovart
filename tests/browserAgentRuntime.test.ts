@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import localforage from 'localforage';
 import { BrowserAgentRuntime, AgentRuntimeError, delegatedPolicyFor, getBrowserAgentRuntime, type RuntimeKernel } from '../services/browserAgentRuntime';
+import { resolveToolApproval, toolApprovalFor } from '../services/agentToolPolicy';
 import { resolveBrowserAgentTextRoute } from '../services/browserAgentKernel';
 import type { UserApiKey } from '../types';
 import { COMMAND_REGISTRY } from '../tools/flovart/core.js';
@@ -127,9 +128,23 @@ describe('delegated agent turns', () => {
     await localforage.removeItem(`flovart.agent.sessions.${projectId}`);
   });
 
-  it('defaults to a read-only sandbox and on-request approval', () => {
-    expect(delegatedPolicyFor()).toEqual({ sandbox: 'read-only', approval: 'on-request' });
-    expect(delegatedPolicyFor('workspace-write')).toEqual({ sandbox: 'workspace-write', approval: 'on-request' });
+  it('runs delegated turns headless: read-only by default, write only when asked, user policy carried over', () => {
+    expect(delegatedPolicyFor()).toEqual({ mode: 'always-ask', headless: true });
+    expect(delegatedPolicyFor('workspace-write')).toEqual({ mode: 'write', headless: true });
+    const userPolicy = { 'workflow.apply': 'deny' as const };
+    expect(delegatedPolicyFor('workspace-write', { mode: 'yolo', userPolicy, isGranted: () => true })).toEqual({ mode: 'write', userPolicy, headless: true });
+  });
+
+  it('fails closed on any prompt inside a delegated turn and keeps deny absolute', () => {
+    const readOnly = delegatedPolicyFor();
+    const write = delegatedPolicyFor('workspace-write');
+    expect(resolveToolApproval({ ...readOnly, tool: 'workflow.inspect', decision: toolApprovalFor('workflow.inspect') }).action).toBe('allow');
+    expect(resolveToolApproval({ ...readOnly, tool: 'workflow.apply', decision: toolApprovalFor('workflow.apply', { operations: [] }) })).toMatchObject({ action: 'deny', reason: expect.stringContaining('无人值守') });
+    expect(resolveToolApproval({ ...write, tool: 'workflow.apply', decision: toolApprovalFor('workflow.apply', { operations: [] }) }).action).toBe('allow');
+    expect(resolveToolApproval({ ...write, tool: 'workflow.node.run', decision: toolApprovalFor('workflow.node.run') }).action).toBe('deny');
+    // 会话授权在无人值守回合里不生效。
+    expect(resolveToolApproval({ ...readOnly, isGranted: () => true, tool: 'workflow.apply', decision: 'write' }).action).toBe('deny');
+    expect(resolveToolApproval({ ...delegatedPolicyFor('workspace-write', { mode: 'write', userPolicy: { 'workflow.apply': 'deny' } }), tool: 'workflow.apply', decision: 'write' })).toMatchObject({ action: 'deny', reason: expect.stringContaining('禁止') });
   });
 
   it('returns a summary, tool calls, and the draft version', async () => {

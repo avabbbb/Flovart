@@ -361,7 +361,7 @@
 .agent-confirm__more .flovart-plan { max-height: 220px; margin-top: 6px; font-size: 11px; }
 .agent-confirm__cap { display: block; color: var(--c-muted); font-size: 11px; line-height: 2; }
 .agent-confirm__cap input { width: 48px; height: 22px; margin: 0 4px; padding: 0 6px; border: 1px solid var(--c-border); border-radius: 6px; background: var(--c-field); color: var(--c-text); font: inherit; }
-.agent-confirm__actions { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.agent-confirm__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 4px; }
 .agent-confirm__actions > span { flex: 1 1 auto; }
 .agent-confirm__actions select { flex: 1 1 auto; min-width: 0; max-width: 62%; height: 28px; padding: 0 6px; border: 1px solid var(--c-border); border-radius: 7px; background: var(--c-field); color: var(--c-text); font: inherit; font-size: 12px; text-overflow: ellipsis; }
 .agent-confirm__actions button { flex: none; height: 28px; padding: 0 12px; border: 1px solid var(--c-border); border-radius: 7px; background: transparent; color: var(--c-text); font: inherit; font-size: 12px; font-weight: 500; white-space: nowrap; cursor: pointer; }
@@ -369,6 +369,8 @@
 .agent-confirm__actions .agent-confirm__allow { border-color: transparent; background: var(--c-text); color: var(--c-bg); }
 .agent-confirm__actions .agent-confirm__allow:hover { background: color-mix(in srgb, var(--c-text) 88%, var(--c-bg)); }
 .agent-confirm__actions .agent-confirm__allow:disabled { opacity: .4; cursor: not-allowed; }
+.agent-confirm__actions .agent-confirm__allow--session { height: auto; min-height: 28px; padding: 4px 10px; border-color: var(--c-border); background: transparent; color: var(--c-text); white-space: normal; text-align: center; }
+.agent-confirm__actions .agent-confirm__allow--session:hover { background: color-mix(in srgb, var(--c-text) 8%, transparent); }
 .agent-ask { --c-bg: var(--wf-strong, var(--panel-strong, #1f1f22)); --c-field: var(--wf-panel, var(--panel-bg, #18181b)); --c-border: var(--wf-border, var(--border-color, rgba(255,255,255,.12))); --c-text: var(--wf-text, var(--text-primary, #f4f4f5)); --c-muted: var(--wf-muted, var(--text-muted, #a1a1aa)); flex: none; display: grid; gap: 8px; margin: 0 0 8px; max-height: 60%; overflow: auto; padding: 12px; border: 1px solid var(--c-border); border-radius: 10px; background: var(--c-bg); color: var(--c-text); font-size: 12px; line-height: 1.5; outline: none; }
 .agent-ask:focus-visible { border-color: color-mix(in srgb, var(--c-text) 35%, var(--c-border)); }
 .agent-ask__context { display: grid; gap: 3px; color: var(--c-muted); font-size: 11px; }
@@ -969,3 +971,6 @@ textarea.agent-ask__control { resize: vertical; min-height: 56px; }
 .prompt-glass-editor .pm-fresh { display: inline-block; animation: prompt-char-in .45s cubic-bezier(.2,.7,.2,1) both; }
 @keyframes prompt-char-in { from { opacity: .15; filter: blur(5px); transform: translateY(2px); } to { opacity: 1; filter: blur(0); transform: none; } }
 @media (prefers-reduced-motion: reduce) { .prompt-glass-editor .pm-fresh { animation: none; } }
+.workflow-agent__thinking{margin:3px 0 6px;color:var(--wf-muted);font-size:11px}
+.workflow-agent__thinking>summary{cursor:pointer;user-select:none}
+.workflow-agent__message .workflow-agent__thinking p{margin:4px 0 0;padding:6px 8px;background:none;border-left:2px solid var(--wf-border,rgba(127,127,127,.3));border-radius:0;color:var(--wf-muted);font-size:11px;max-height:240px;overflow:auto}

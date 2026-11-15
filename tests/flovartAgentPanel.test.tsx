@@ -29,6 +29,8 @@ describe('Flovart Agent panel', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   beforeEach(() => {
+    localStorage.removeItem('flovart.agent.approvalMode');
+    localStorage.removeItem('flovart.agent.toolApproval');
     vi.mocked(getManagedAgentConnection).mockResolvedValue({
       state: 'ready',
       url: 'http://127.0.0.1:17372',
@@ -112,10 +114,15 @@ describe('Flovart Agent panel', () => {
     expect(screen.getByRole('textbox', { name: '搜索 Skill' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '关闭 Skill' }));
 
-    fireEvent.click(screen.getByRole('button', { name: '生成模式' }));
-    expect(screen.getByText('每个写操作前询问')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('menuitem', { name: /自动模式/ }));
-    expect(screen.getByRole('button', { name: '生成模式' })).toHaveTextContent('自动');
+    fireEvent.click(screen.getByRole('button', { name: '审批模式' }));
+    expect(screen.getByText('读取直接执行；每次修改或执行前询问')).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /全自动/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitem', { name: /全自动/ }));
+    expect(screen.getByRole('button', { name: '审批模式' })).toHaveTextContent('全自动');
+    expect(localStorage.getItem('flovart.agent.approvalMode')).toBe('yolo');
+    fireEvent.click(screen.getByRole('button', { name: '审批模式' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /自动（推荐）/ }));
+    expect(screen.getByRole('button', { name: '审批模式' })).toHaveTextContent('自动（推荐）');
 
     fireEvent.click(screen.getByRole('button', { name: '选择制作 Skill' }));
     fireEvent.click(screen.getByRole('button', { name: '添加 VOX Skill' }));
@@ -170,8 +177,8 @@ describe('Flovart Agent panel', () => {
     expect(card).toHaveTextContent('删除「脚本大纲」');
     expect(card).not.toHaveTextContent('workflow.node.delete');
     expect(card).not.toHaveTextContent(createdId);
-    // 删除只能逐次确认，不提供授权范围。
-    expect(screen.queryByRole('combobox', { name: '授权范围' })).not.toBeInTheDocument();
+    // 删除是安全覆盖：只能逐次确认，不提供会话授权。
+    expect(screen.queryByRole('button', { name: '本会话总是允许此工具' })).not.toBeInTheDocument();
     expect(onActivityChange).toHaveBeenCalledWith('waiting');
     fireEvent.click(screen.getByRole('button', { name: '拒绝' }));
     await waitFor(() => expect(screen.queryByRole('alertdialog', { name: 'Agent 请求确认' })).not.toBeInTheDocument());
@@ -188,8 +195,8 @@ describe('Flovart Agent panel', () => {
 
     render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} />);
     await waitFor(() => expect(StubEventSource.current).toBeDefined());
-    fireEvent.click(screen.getByRole('button', { name: '生成模式' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: /手动模式/ }));
+    fireEvent.click(screen.getByRole('button', { name: '审批模式' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /手动确认/ }));
     StubEventSource.current!.emit('tool_call', {
       requestId: 'request-manual-create',
       envelope: {
@@ -200,9 +207,8 @@ describe('Flovart Agent panel', () => {
 
     expect(await screen.findByRole('alertdialog', { name: 'Agent 请求确认' })).toBeInTheDocument();
     expect(useWorkflowStore.getState().projects[0].nodes).toHaveLength(0);
-    // 可逆写入可以选「本次对话」：同类操作在本次对话里不再重复询问。
-    fireEvent.change(screen.getByRole('combobox', { name: '授权范围' }), { target: { value: 'session' } });
-    fireEvent.click(screen.getByRole('button', { name: '允许' }));
+    // 由模式发起的询问可以「本会话总是允许此工具」：同一工具、同一 tier 在本会话里不再询问。
+    fireEvent.click(screen.getByRole('button', { name: '本会话总是允许此工具' }));
     await waitFor(() => expect(useWorkflowStore.getState().projects[0].nodes).toHaveLength(1));
     StubEventSource.current!.emit('tool_call', {
       requestId: 'request-manual-create-2',

@@ -5,6 +5,7 @@ import { confirmGrantKey, confirmScopesFor, describeAgentConfirmation } from '..
 import { agentToolLabel, displayUserTurnText } from '../components/agent/agentTurnText';
 import { ASK_TOOL_NAME, createBrowserAgentTools, NODE_TOOL_TOOL_NAME } from '../services/browserAgentKernel';
 import { setWorkflowNodeToolRunner } from '../services/workflowDispatcher';
+import { sessionGrantKey } from '../services/agentToolPolicy';
 
 const video = createWorkflowNode('video-1', 'video', { x: 0, y: 0 }, { storageKey: 'video-key', mimeType: 'video/mp4', name: 'dragon.mp4' });
 video.title = '视频 1';
@@ -22,16 +23,19 @@ describe('Agent confirmation copy', () => {
 
   it('never shows raw command text as the sentence', () => {
     expect(describeAgentConfirmation(undefined, [], 'zho', 'workflow.node.create：abc').title).toBe('执行一个画布操作');
-    expect(describeAgentConfirmation({ kind: 'other', command: 'workflow.node.create', risk: 'write' }, [], 'en').title).toBe('Edit the canvas');
+    expect(describeAgentConfirmation({ kind: 'other', command: 'workflow.node.create', tier: 'write' }, [], 'en').title).toBe('Edit the canvas');
   });
 
-  it('limits approval scope by risk: deletes ask every time, paid tools stop at this chat', () => {
+  it('offers a session grant only for mode-raised prompts, never for safety overrides', () => {
     expect(confirmScopesFor({ kind: 'destructive', command: 'workflow.node.delete' })).toEqual(['once']);
     expect(confirmScopesFor({ kind: 'generation', command: 'workflow.node.run' }, { offerMandate: true })).toEqual(['once', 'session']);
-    expect(confirmScopesFor({ kind: 'other', command: 'workflow.node.tool', args: { tool: 'upscale' } })).toEqual(['once', 'session']);
-    expect(confirmScopesFor({ kind: 'other', command: 'workflow.node.tool', args: { tool: 'video-extract-frame' }, risk: 'write' })).toEqual(['once', 'session', 'always']);
+    expect(confirmScopesFor({ kind: 'generation', command: 'workflow.node.run' })).toEqual(['once']);
+    // 付费节点工具是安全覆盖：逐次确认。
+    expect(confirmScopesFor({ kind: 'other', command: 'workflow.node.tool', args: { tool: 'upscale' }, tier: 'exec', reason: '可能产生费用', grantable: false })).toEqual(['once']);
+    expect(confirmScopesFor({ kind: 'other', command: 'workflow.node.tool', args: { tool: 'video-extract-frame' }, tier: 'write', grantable: true })).toEqual(['once', 'session']);
     expect(confirmGrantKey({ kind: 'destructive', command: 'workflow.node.delete' })).toBeNull();
-    expect(confirmGrantKey({ kind: 'other', command: 'workflow.node.tool', args: { tool: 'video-trim' }, risk: 'write' })).toBe('workflow.node.tool:video-trim:write');
+    expect(confirmGrantKey({ kind: 'other', command: 'workflow.apply', tier: 'write', grantable: false })).toBeNull();
+    expect(confirmGrantKey({ kind: 'other', command: 'workflow.node.tool', args: { tool: 'video-trim' }, tier: 'write', grantable: true })).toBe(sessionGrantKey('workflow.node.tool', 'write'));
   });
 });
 
@@ -85,5 +89,27 @@ describe('built-in Agent canvas tools', () => {
     const result = await tool.execute('call-1', { nodeId: 'video-1', tool: 'video-extract-frame', position: 'current', currentTimeSec: 10 } as never, undefined as never);
     expect(runner).toHaveBeenCalledWith(project.id, 'video-1', 'video-extract-frame', { position: 'current', currentTimeSec: 10 });
     expect(JSON.parse((result.content[0] as { text: string }).text)).toMatchObject({ committed: true, outputNodeIds: ['frame-1'] });
+  });
+
+  it('routes tool calls through the approval resolver: mode prompts are grantable, headless prompts fail closed', async () => {
+    const project = { ...createWorkflowProject('审批'), id: 'project-approval', nodes: [video] };
+    useWorkflowStore.setState({ projects: [project], activeProjectId: project.id });
+    const confirm = vi.fn(async () => false);
+    const operations = [{ type: 'update_node', id: 'video-1', patch: { title: '新标题' } }];
+    const ask = createBrowserAgentTools({ projectId: project.id, confirm, activeChangeSetId: 't', getApproval: () => ({ mode: 'always-ask' }) })
+      .find(item => item.label === 'workflow.apply')!;
+    await expect(ask.execute('c1', { operations } as never, undefined as never)).rejects.toThrow('用户拒绝');
+    expect(confirm).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ command: 'workflow.apply', tool: 'workflow.apply', tier: 'write', grantable: true }));
+
+    confirm.mockClear();
+    const headless = createBrowserAgentTools({ projectId: project.id, confirm, activeChangeSetId: 't', getApproval: () => ({ mode: 'always-ask', headless: true }) })
+      .find(item => item.label === 'workflow.apply')!;
+    await expect(headless.execute('c2', { operations } as never, undefined as never)).rejects.toThrow('无人值守');
+    expect(confirm).not.toHaveBeenCalled();
+
+    const denied = createBrowserAgentTools({ projectId: project.id, confirm, activeChangeSetId: 't', getApproval: () => ({ mode: 'yolo', userPolicy: { 'workflow.apply': 'deny' } }) })
+      .find(item => item.label === 'workflow.apply')!;
+    await expect(denied.execute('c3', { operations } as never, undefined as never)).rejects.toThrow('禁止');
+    expect(confirm).not.toHaveBeenCalled();
   });
 });

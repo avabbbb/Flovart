@@ -5,8 +5,9 @@ import type { ImageContent } from '@earendil-works/pi-ai';
 import type { WorkflowNode } from '../components/workflow/types';
 import type { AgentConfirmRequest } from './agentSpendMandate';
 import type { AgentSearchCredential } from './agentWebSearch';
-import type { ApprovalPolicy, SandboxPolicy } from './agentToolPolicy';
+import type { ApprovalContext, ApprovalMode } from './agentToolPolicy';
 import type { ProductionSkillAttachment } from './productionSkillCatalog';
+import type { AgentThinkingLevel } from './agentThinking';
 import {
   BrowserAgentKernel,
   createBrowserAgentTools,
@@ -22,9 +23,12 @@ export interface BrowserAgentRuntimeDeps {
   ask?: (request: AgentAskRequest) => Promise<AgentAskResult>;
   systemPrompt: string;
   getNodes?: () => readonly WorkflowNode[];
-  getPolicy?: () => { sandbox: SandboxPolicy; approval: ApprovalPolicy };
+  /** 面板当前的审批上下文（模式、用户按工具策略、会话授权）。 */
+  getApproval?: () => ApprovalContext;
   webSearch?: AgentSearchCredential;
   getDraftVersion?: () => number | undefined;
+  /** 当前思考强度；缺省由内核读本机为该模型保存的设置。 */
+  getThinkingLevel?: () => AgentThinkingLevel;
 }
 
 /** 只依赖运行时实际用到的内核方法，测试可注入替身。 */
@@ -92,11 +96,19 @@ interface RuntimeSnapshot {
   messages?: SnapshotMessage[];
 }
 
-/** 委派回合的默认策略：只读；调用方显式申请才允许写。 */
-export function delegatedPolicyFor(policy?: DelegatedTurnPolicy): { sandbox: SandboxPolicy; approval: ApprovalPolicy } {
+/**
+ * 委派回合的审批上下文：无人值守（headless），与面板走同一个解析器。
+ * - 默认 read-only → always-ask：只有 read 自动放行，write / exec 解析为 prompt 后被拒绝；
+ * - workspace-write → write：read + write 放行，exec（付费、删除等）被拒绝。
+ * 用户的按工具策略照旧生效（deny 绝对；allow 可放行非安全覆盖的调用），会话授权不生效。
+ * 与 OMP 子代理用 yolo 不同：这里的委派方是外部 Agent，授权边界是调用方声明的 policy，不能升级。
+ */
+export function delegatedPolicyFor(policy?: DelegatedTurnPolicy, base?: ApprovalContext): ApprovalContext {
+  const mode: ApprovalMode = policy === 'workspace-write' ? 'write' : 'always-ask';
   return {
-    sandbox: policy === 'workspace-write' ? 'workspace-write' : 'read-only',
-    approval: 'on-request',
+    mode,
+    ...(base?.userPolicy ? { userPolicy: base.userPolicy } : {}),
+    headless: true,
   };
 }
 
@@ -111,7 +123,7 @@ export class BrowserAgentRuntime {
   private constructor(
     readonly projectId: string,
     private readonly kernel: RuntimeKernel,
-    private readonly policyState: { override: { sandbox: SandboxPolicy; approval: ApprovalPolicy } | null },
+    private readonly policyState: { override: DelegatedTurnPolicy | 'default' | null },
     private readonly getDraftVersion?: () => number | undefined,
   ) {}
 
@@ -120,7 +132,7 @@ export class BrowserAgentRuntime {
     deps: BrowserAgentRuntimeDeps,
     options: { kernel?: RuntimeKernel } = {},
   ): Promise<BrowserAgentRuntime> {
-    const policyState = { override: null as { sandbox: SandboxPolicy; approval: ApprovalPolicy } | null };
+    const policyState = { override: null as DelegatedTurnPolicy | 'default' | null };
     const kernel = options.kernel ?? new BrowserAgentKernel({
       projectId: deps.projectId,
       route: deps.route,
@@ -130,12 +142,15 @@ export class BrowserAgentRuntime {
         ask: deps.ask,
         activeChangeSetId: '',
         getNodes: deps.getNodes,
-        // 委派回合进行时强制套用只读/受限策略，不跟随面板模式。
-        getPolicy: () => policyState.override ?? deps.getPolicy?.(),
+        // 委派回合进行时强制套用无人值守的受限上下文，不跟随面板模式（只沿用用户的按工具策略）。
+        getApproval: () => (policyState.override
+          ? delegatedPolicyFor(policyState.override === 'default' ? undefined : policyState.override, deps.getApproval?.())
+          : deps.getApproval?.() ?? { mode: 'always-ask' }),
         webSearch: deps.webSearch,
       }),
       confirm: deps.confirm,
       systemPrompt: deps.systemPrompt,
+      ...(deps.getThinkingLevel ? { getThinkingLevel: deps.getThinkingLevel } : {}),
     });
     await kernel.openSession();
     const runtime = new BrowserAgentRuntime(deps.projectId, kernel, policyState, deps.getDraftVersion);
@@ -231,7 +246,7 @@ export class BrowserAgentRuntime {
       await this.kernel.openSessionById(request.sessionId);
     }
     const baseline = ((await this.kernel.snapshot() as RuntimeSnapshot).messages || []).length;
-    this.policyState.override = delegatedPolicyFor(request.policy);
+    this.policyState.override = request.policy ?? 'default';
     try {
       await this.kernel.send(request.prompt);
     } catch (cause) {

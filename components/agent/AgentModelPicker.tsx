@@ -1,8 +1,18 @@
-import { Box, Check, KeyRound, Loader2, Plus, Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Box, Brain, Check, KeyRound, Loader2, Plus, Search } from 'lucide-react';
+import { useMemo, useState, useSyncExternalStore } from 'react';
 import type { AICapability, ModelItem, RouteMappingBinding, UserApiKey } from '../../types';
 import { isAgentTextKey, isAgentTextMapping, resolveAgentTextRoutes } from '../../services/agentTextRoutes';
 import { fetchModelsForProvider } from '../../services/modelFetcher';
+import {
+  AGENT_THINKING_LEVELS,
+  agentThinkingVersion,
+  clearReasoningUnsupported,
+  isReasoningUnsupported,
+  readAgentThinkingLevel,
+  subscribeAgentThinking,
+  writeAgentThinkingLevel,
+  type AgentThinkingLevel,
+} from '../../services/agentThinking';
 
 type Lang = 'en' | 'zho';
 const ui = (language: Lang, zho: string, en: string) => (language === 'en' ? en : zho);
@@ -15,6 +25,35 @@ function keyModels(key: UserApiKey): ModelItem[] {
     : (key.customModels || []).map(id => ({ id, name: id, capability: 'text' as AICapability }));
   const text = items.filter(item => item.capability === 'text');
   return text.length ? text : items;
+}
+
+const THINKING_LABEL: Record<AgentThinkingLevel, [string, string]> = {
+  off: ['不思考', 'Off'],
+  minimal: ['极简', 'Minimal'],
+  low: ['低', 'Low'],
+  medium: ['中', 'Medium'],
+  high: ['高', 'High'],
+};
+
+/** 思考强度选择器：选择按模型记住，并成为新的全局默认；已知不支持的模型显示「不支持」并禁用。 */
+export function AgentThinkingSelect({ model, language }: { model: string; language: Lang }) {
+  useSyncExternalStore(subscribeAgentThinking, agentThinkingVersion, agentThinkingVersion);
+  const unsupported = isReasoningUnsupported(model);
+  const level = readAgentThinkingLevel(model);
+  const label = ui(language, '思考强度', 'Thinking effort');
+  const title = unsupported
+    ? ui(language, '该模型不支持思考强度参数（已自动关闭）；点击可重新尝试', 'This model rejected the thinking parameter; click to retry')
+    : label;
+  return (
+    <label className={`agent-thinking-select${unsupported ? ' is-unsupported' : ''}${level !== 'off' && !unsupported ? ' is-active' : ''}`} title={title}>
+      <Brain size={13} aria-hidden="true" />
+      {unsupported
+        ? <button type="button" aria-label={label} onClick={() => clearReasoningUnsupported(model)}>{ui(language, '不支持', 'Unsupported')}</button>
+        : <select aria-label={label} value={level} onChange={event => writeAgentThinkingLevel(model, event.target.value as AgentThinkingLevel)}>
+            {AGENT_THINKING_LEVELS.map(item => <option key={item} value={item}>{ui(language, THINKING_LABEL[item][0], THINKING_LABEL[item][1])}</option>)}
+          </select>}
+    </label>
+  );
 }
 
 function keyLabel(key: UserApiKey): string {
@@ -105,6 +144,7 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
   };
 
   return (
+    <>
     <div className="agent-mode-control">
       <button type="button" className={`agent-model-trigger${current ? ' is-active' : ''}`} aria-label={label} title={current ? current.model : label} aria-expanded={open} onClick={() => onOpenChange(!open)}>
         <Box size={14} /><span>{current ? current.model : label}</span>
@@ -149,5 +189,7 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
         </div>
       )}
     </div>
+    {current && <AgentThinkingSelect model={current.model} language={language} />}
+    </>
   );
 }

@@ -5,7 +5,9 @@ import type { UserApiKey } from '../types';
 const { fetchModelsForProvider } = vi.hoisted(() => ({ fetchModelsForProvider: vi.fn() }));
 vi.mock('../services/modelFetcher', () => ({ fetchModelsForProvider }));
 
-import { AgentModelPicker } from '../components/agent/AgentModelPicker';
+import { AgentModelPicker, AgentThinkingSelect } from '../components/agent/AgentModelPicker';
+import { act } from 'react';
+import { markReasoningUnsupported, readAgentThinkingLevel } from '../services/agentThinking';
 
 const agentText = (routeId: string) => ({ target: { kind: 'runtime-capability' as const, capability: 'agent-text' as const }, routeId, order: 0 });
 
@@ -64,5 +66,21 @@ describe('AgentModelPicker', () => {
     expect(onUpdateApiKey).toHaveBeenCalledWith('k1', { routeMappings: [] });
     expect(onUpdateApiKey).toHaveBeenCalledWith('k2', { routeMappings: [agentText('m2')] });
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('picks a thinking level per model and shows 不支持 once the model rejected it', () => {
+    localStorage.removeItem('flovart.agent.thinking');
+    render(<AgentThinkingSelect model="chat-think" language="zho" />);
+    const select = screen.getByRole('combobox', { name: '思考强度' });
+    expect(select).toHaveValue('off');
+    fireEvent.change(select, { target: { value: 'high' } });
+    expect(readAgentThinkingLevel('chat-think')).toBe('high');
+    expect(screen.getByRole('combobox', { name: '思考强度' })).toHaveValue('high');
+    act(() => markReasoningUnsupported('chat-think'));
+    expect(screen.queryByRole('combobox', { name: '思考强度' })).not.toBeInTheDocument();
+    const retry = screen.getByRole('button', { name: '思考强度' });
+    expect(retry).toHaveTextContent('不支持');
+    fireEvent.click(retry);
+    expect(screen.getByRole('combobox', { name: '思考强度' })).toHaveValue('high');
   });
 });

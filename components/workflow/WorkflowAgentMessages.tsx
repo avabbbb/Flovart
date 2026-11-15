@@ -12,6 +12,8 @@ export interface WorkflowAgentDisplayMessage {
   id: string;
   role: 'user' | 'assistant' | 'system' | 'tool' | 'error';
   text: string;
+  /** 助手的思考过程：折叠展示，不进正文。 */
+  thinking?: string;
   title?: string;
   detail?: unknown;
   status?: 'pending' | 'success' | 'error' | 'denied';
@@ -38,7 +40,8 @@ export function WorkflowAgentMessages({ messages, running, language = 'zho', onC
         : (
           <div key={message.id} className={`workflow-agent__message workflow-agent__message--${message.role}`}>
             <span>{message.role === 'user' ? (en ? 'You' : '你') : message.role === 'assistant' ? 'Agent' : message.role === 'error' ? (en ? 'Error' : '错误') : (en ? 'System' : '系统')}</span>
-            {message.role === 'assistant' ? <AgentMarkdown text={message.text} language={language} /> : <p>{message.text}</p>}
+            {message.role === 'assistant' && message.thinking ? <details className="workflow-agent__thinking"><summary>{en ? 'Thinking' : '思考过程'}</summary><p>{message.thinking}</p></details> : null}
+            {message.role === 'assistant' ? (message.text ? <AgentMarkdown text={message.text} language={language} /> : null) : <p>{message.text}</p>}
             {message.attachments?.length === 1 ? <div className="workflow-agent__message-attachments">{message.attachments.map(item => <img key={item.id} src={item.previewUrl} alt={item.name} title={item.name} />)}</div> : null}
             {message.attachments && message.attachments.length > 1 ? <ImageFan className="workflow-agent__message-fan" items={message.attachments.map(item => ({ id: item.id, src: item.previewUrl, alt: item.name }))} /> : null}
             {(onCopyMessage || (onBranchMessage && message.role === 'assistant')) && (

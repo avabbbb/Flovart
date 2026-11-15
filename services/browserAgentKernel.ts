@@ -27,9 +27,10 @@ import { loadAgentNodeMedia, type AgentVideoFrame } from './agentMediaView';
 import { WORKFLOW_OPERATION_CAPABILITIES, WORKFLOW_OPERATION_CAPABILITY_IDS, WORKFLOW_OPERATION_NODE_TOOLS } from '../components/workflow/operationRegistry';
 import { formatSearchSources, searchAgentWeb, WEB_SEARCH_TOOL_NAME, type AgentSearchCredential, type SearchRecency } from './agentWebSearch';
 import { formatGrepMatches, grepLocalFolders, LOCAL_GREP_TOOL_NAME } from './agentLocalGrep';
-import { decideToolCall, toolRiskFor, type ApprovalPolicy, type SandboxPolicy } from './agentToolPolicy';
+import { resolveToolApproval, toolApprovalFor, type ApprovalContext } from './agentToolPolicy';
 import type { UserApiKey } from '../types';
 import { displayError } from './displayError';
+import { buildReasoningParams, effectiveAgentThinkingLevel, isReasoningRejection, isReasoningUnsupported, markReasoningUnsupported, normalizeThinkingLevel, type AgentThinkingLevel } from './agentThinking';
 
 // ---------------------------------------------------------------------------
 // 会话持久化：localforage 存 InMemorySessionStorage 的 metadata + entries
@@ -197,7 +198,16 @@ function textBlocks(message: AgentMessage): string {
   if (!hasContent(message)) return '';
   if (typeof message.content === 'string') return message.content;
   return message.content
-    .map(block => block.type === 'text' ? block.text : block.type === 'thinking' ? block.thinking : '')
+    .map(block => block.type === 'text' ? block.text : '')
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** 助手消息里的思考内容（reasoning_content / reasoning），与正文分开展示。 */
+function thinkingBlocks(message: AgentMessage): string {
+  if (!hasContent(message) || typeof message.content === 'string') return '';
+  return message.content
+    .map(block => block.type === 'thinking' ? block.thinking : '')
     .filter(Boolean)
     .join('\n');
 }
@@ -311,6 +321,33 @@ export function toOpenAIMessages(messages: AgentMessage[]): Array<Record<string,
   return out;
 }
 
+/**
+ * /chat/completions 请求体。思考强度为 off 时不带任何思考参数；
+ * 其余按服务映射（见 agentThinking.buildReasoningParams）。
+ */
+export function buildBrowserAgentRequestBody(
+  route: Pick<BrowserAgentTextRoute, 'provider' | 'model' | 'baseUrl'>,
+  context: { messages: AgentMessage[]; tools?: Array<{ name: string; description: string; parameters: unknown }> },
+  thinkingLevel: AgentThinkingLevel = 'off',
+): Record<string, unknown> {
+  const reasoning = buildReasoningParams(thinkingLevel, route);
+  return {
+    model: route.model,
+    messages: toOpenAIMessages(context.messages),
+    ...(context.tools?.length ? {
+      tools: context.tools.map(tool => ({
+        type: 'function',
+        function: { name: tool.name, description: tool.description, parameters: tool.parameters },
+      })),
+    } : {}),
+    stream: true,
+    // 工具选择与参数需要可复现，与 aiGateway 的 STABLE_TEXT_TEMPERATURE 保持一致；Anthropic 开启思考时不允许改 temperature。
+    ...(reasoning.dropTemperature ? {} : { temperature: 0.2 }),
+    max_tokens: 16384,
+    ...reasoning.params,
+  };
+}
+
 export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn {
   return async (model, context, options) => {
     const stream = createAssistantMessageEventStream();
@@ -324,41 +361,43 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
       stopReason: 'stop',
       timestamp: Date.now(),
     };
+    // pi-agent-core 把 state.thinkingLevel 作为 options.reasoning 传进来（off 时为 undefined）。
+    const requested = normalizeThinkingLevel((options as { reasoning?: unknown } | undefined)?.reasoning);
+    const thinkingLevel: AgentThinkingLevel = requested !== 'off' && isReasoningUnsupported(route.model) ? 'off' : requested;
     void (async () => {
       try {
-        const response = await fetchStreamWithUsageOptIn(`${route.baseUrl}/chat/completions`, {
+        const request = (level: AgentThinkingLevel) => fetchStreamWithUsageOptIn(`${route.baseUrl}/chat/completions`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${route.apiKey}`,
           },
           signal: options?.signal,
-        }, {
-          model: route.model,
-          messages: toOpenAIMessages(context.messages),
-          ...(context.tools?.length ? {
-            tools: context.tools.map(tool => ({
-              type: 'function',
-              function: { name: tool.name, description: tool.description, parameters: tool.parameters },
-            })),
-          } : {}),
-          stream: true,
-          // 工具选择与参数需要可复现，与 aiGateway 的 STABLE_TEXT_TEMPERATURE 保持一致。
-          temperature: 0.2,
-          max_tokens: 16384,
-        }, route.streamUsage);
+        }, buildBrowserAgentRequestBody(route, context as never, level), route.streamUsage);
+        let response = await request(thinkingLevel);
+        if (!response.ok && thinkingLevel !== 'off') {
+          const body = await response.clone().text().catch(() => '');
+          if (isReasoningRejection(response.status, body)) {
+            // 该模型不接受思考参数：记住并去掉参数重试一次；选择器随后显示「不支持」。
+            markReasoningUnsupported(route.model);
+            response = await request('off');
+          }
+        }
         if (!response.ok) {
           const body = await response.text().catch(() => '');
           throw new Error(`模型请求失败（HTTP ${response.status}）：${body.slice(0, 200)}`);
         }
         if (!response.body) throw new Error('模型没有返回流');
         let text = '';
+        let thinking = '';
+        let thinkingOpen = false;
         const toolCalls: Array<{ index: number; id?: string; name?: string; arguments?: string }> = [];
         let finishReason = '';
 
         const invalidToolCalls: string[] = [];
         const partial = (strict = false) => {
           const content: AssistantMessage['content'] = [];
+          if (thinking) content.push({ type: 'thinking', thinking });
           if (text) content.push({ type: 'text', text });
           for (const toolCall of toolCalls) {
             if (!toolCall.id || !toolCall.name) continue;
@@ -387,9 +426,24 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
             try { json = JSON.parse(data); } catch { continue; }
             usage.feed(json);
             const delta = json.choices?.[0]?.delta || {};
+            // DeepSeek / Qwen / vLLM 用 reasoning_content，OpenRouter 等用 reasoning（字符串）。
+            const reasoningDelta = typeof delta.reasoning_content === 'string' ? delta.reasoning_content
+              : typeof delta.reasoning === 'string' ? delta.reasoning : '';
+            if (reasoningDelta) {
+              if (!thinkingOpen && !thinking) {
+                thinkingOpen = true;
+                stream.push({ type: 'thinking_start', contentIndex: 0, partial: partial() });
+              }
+              thinking += reasoningDelta;
+              stream.push({ type: 'thinking_delta', contentIndex: 0, delta: reasoningDelta, partial: partial() });
+            }
             if (typeof delta.content === 'string' && delta.content) {
+              if (thinkingOpen) {
+                thinkingOpen = false;
+                stream.push({ type: 'thinking_end', contentIndex: 0, content: thinking, partial: partial() });
+              }
               text += delta.content;
-              stream.push({ type: 'text_delta', contentIndex: 0, delta: delta.content, partial: partial() });
+              stream.push({ type: 'text_delta', contentIndex: thinking ? 1 : 0, delta: delta.content, partial: partial() });
             }
             const toolCallsDelta = delta.tool_calls;
             if (Array.isArray(toolCallsDelta)) {
@@ -410,6 +464,10 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
           throw error;
         }
         commitStreamUsage(usageMeta, usage, 'ok');
+        if (thinkingOpen) {
+          thinkingOpen = false;
+          stream.push({ type: 'thinking_end', contentIndex: 0, content: thinking, partial: partial() });
+        }
         const finalMessage = partial(true);
         if (invalidToolCalls.length) {
           const truncated = finishReason === 'length' ? '，输出被 max_tokens 截断' : '';
@@ -483,26 +541,34 @@ export interface BrowserAgentToolDependencies {
   getNodes?: () => readonly WorkflowNode[];
   /** DeepSeek 搜索凭证；提供时注册 flovart_web_search */
   webSearch?: AgentSearchCredential;
-  /** 当前工具策略；提供时每次调用前按沙箱/审批判定 allow / ask / deny */
-  getPolicy?: () => { sandbox: SandboxPolicy; approval: ApprovalPolicy };
+  /**
+   * 当前审批上下文（模式、用户按工具策略、会话授权、是否无人值守）。
+   * 未提供时 fail closed：按 always-ask 处理、没有任何授权（与 OMP 一致）。
+   */
+  getApproval?: () => ApprovalContext;
 }
+
+const FAIL_CLOSED_APPROVAL: ApprovalContext = { mode: 'always-ask' };
 
 export function createBrowserAgentTools(dependencies: BrowserAgentToolDependencies): AgentTool[] {
   const workflowContract = createBrowserWorkflowContract();
-  // 调用前先过策略层：deny 直接拒绝；ask 时先问用户，命令面自己会问的（删除、付费）不重复弹窗。
+  // 调用前先过审批层：deny 直接拒绝；prompt 时先问用户。命令面自己会带计划确认的（删除、付费），
+  // 交给命令面问，避免同一次调用弹两张卡；无人值守回合里 prompt 已在解析时转为 deny。
   const guard = async (command: string, params: Record<string, unknown>) => {
-    const policy = dependencies.getPolicy?.();
-    if (!policy) return;
-    const risk = toolRiskFor(command, params);
-    const verdict = decideToolCall({ ...policy, risk });
-    if (verdict.decision === 'deny') throw new Error(verdict.reason);
-    if (verdict.decision === 'allow') return;
+    const context = dependencies.getApproval?.() ?? FAIL_CLOSED_APPROVAL;
+    const decision = toolApprovalFor(command, params);
+    const resolution = resolveToolApproval({ ...context, tool: command, decision });
+    if (resolution.action === 'deny') throw new Error(resolution.reason);
+    if (resolution.action === 'allow') return;
     if (workflowCommandNeedsConfirmation(command, params)) return;
-    const approved = await dependencies.confirm(verdict.summary, {
-      kind: risk === 'delete' ? 'destructive' : 'other',
+    const approved = await dependencies.confirm(resolution.reason || command, {
+      kind: resolution.hardGate === 'delete' ? 'destructive' : 'other',
       command,
       args: params,
-      risk,
+      tier: resolution.tier,
+      tool: command,
+      grantable: resolution.grantable,
+      ...(resolution.reason ? { reason: resolution.reason } : {}),
     });
     if (!approved) throw new Error('用户拒绝了该操作');
   };
@@ -522,7 +588,15 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
     await guard(command, params);
     let result = await workflowContract.dispatch(envelope);
     if (result.confirmation?.required) {
-      const approved = await dependencies.confirm(result.confirmation.summary, workflowConfirmRequest(envelope));
+      // 命令面的确认都是安全覆盖（付费 / 删除）：只能逐次批准（付费可由付费授权覆盖），不提供会话授权。
+      const decision = toolApprovalFor(command, params);
+      const approved = await dependencies.confirm(result.confirmation.summary, {
+        ...workflowConfirmRequest(envelope),
+        tier: decision.tier,
+        tool: command,
+        grantable: false,
+        ...(decision.reason ? { reason: decision.reason } : {}),
+      });
       if (!approved) throw new Error('用户拒绝了该操作');
       result = await workflowContract.dispatch(withWorkflowHumanApproval(envelope));
     }
@@ -817,6 +891,7 @@ function snapshotMessage(entry: { type: string; id: string; message?: AgentMessa
   id: string;
   role: string;
   text: string;
+  thinking?: string;
   toolName?: string;
   isError?: boolean;
   timestamp?: number;
@@ -833,10 +908,12 @@ function snapshotMessage(entry: { type: string; id: string; message?: AgentMessa
       timestamp: (message as { timestamp?: number }).timestamp,
     };
   }
+  const thinking = message?.role === 'assistant' ? thinkingBlocks(message) : '';
   return {
     id: entry.id,
     role: message?.role ?? 'message',
     text: message ? textBlocks(message) : '',
+    ...(thinking ? { thinking } : {}),
     timestamp: message ? (message as { timestamp?: number }).timestamp : undefined,
     error: (message as { errorMessage?: string } | undefined)?.errorMessage,
   };
@@ -849,6 +926,8 @@ export interface BrowserAgentKernelOptions {
   confirm: (summary: string) => Promise<boolean>;
   systemPrompt?: string;
   skillAttachment?: ProductionSkillAttachment | null;
+  /** 当前思考强度；每轮发送前读取，缺省读本机为该模型保存的设置。 */
+  getThinkingLevel?: () => AgentThinkingLevel;
 }
 
 export class BrowserAgentKernel {
@@ -866,9 +945,11 @@ export class BrowserAgentKernel {
   private readonly tools: AgentTool[];
   private readonly confirm: (summary: string) => Promise<boolean>;
   private readonly initialSkillAttachment: ProductionSkillAttachment | null;
+  private readonly getThinkingLevel: () => AgentThinkingLevel;
 
   constructor(options: BrowserAgentKernelOptions) {
     this.projectId = options.projectId;
+    this.getThinkingLevel = options.getThinkingLevel ?? (() => effectiveAgentThinkingLevel(options.route.model));
     this.route = options.route;
     // 与 Node 内核一致：任务清单是内核自带的只读工具，调用方已提供同名工具时不重复注册。
     this.tools = options.tools.some(tool => tool.name === TODO_TOOL_NAME)
@@ -937,8 +1018,10 @@ export class BrowserAgentKernel {
     this.agent?.abort();
     this.unsubscribe?.();
     this.unsubscribe = null;
+    const thinkingLevel = this.currentThinkingLevel();
     this.agent = new Agent({
       initialState: {
+        thinkingLevel,
         systemPrompt: this.boundProductionSkill ? `${this.systemPrompt}${skillContext}` : this.systemPrompt,
         model: {
           id: this.route.model,
@@ -946,7 +1029,7 @@ export class BrowserAgentKernel {
           api: 'openai-compatible',
           provider: this.route.provider,
           baseUrl: this.route.baseUrl,
-          reasoning: false,
+          reasoning: thinkingLevel !== 'off',
           input: ['text', 'image'],
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
           contextWindow: 128_000,
@@ -972,6 +1055,25 @@ export class BrowserAgentKernel {
       }
       this.emit(event as { type: string; [key: string]: unknown });
     });
+  }
+
+  private currentThinkingLevel(): AgentThinkingLevel {
+    try {
+      return normalizeThinkingLevel(this.getThinkingLevel());
+    } catch {
+      return 'off';
+    }
+  }
+
+  /** 每轮发送前同步思考强度：模型的 reasoning 标记与 Agent 的 thinkingLevel 一起切换。 */
+  private syncThinkingLevel(): void {
+    if (!this.agent) return;
+    const level = this.currentThinkingLevel();
+    this.agent.state.thinkingLevel = level;
+    const current = this.agent.state.model as unknown as { reasoning?: boolean };
+    if (Boolean(current.reasoning) !== (level !== 'off')) {
+      this.agent.state.model = { ...(this.agent.state.model as object), reasoning: level !== 'off' } as never;
+    }
   }
 
   async listSessions(): Promise<Array<{ id: string; title: string; updatedAt: string }>> {
@@ -1133,6 +1235,7 @@ export class BrowserAgentKernel {
       });
     }
 
+    this.syncThinkingLevel();
     await this.agent.prompt(prompt, images.length > 0 ? images : undefined);
     return this.snapshot();
   }
@@ -1156,7 +1259,7 @@ export class BrowserAgentKernel {
       messages: entries
         .filter(entry => entry.type === 'message')
         .map(snapshotMessage)
-        .filter(message => message.role !== 'assistant' || message.text || message.error),
+        .filter(message => message.role !== 'assistant' || message.text || message.thinking || message.error),
       running: Boolean(this.agent?.state.isStreaming),
     };
   }

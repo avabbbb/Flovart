@@ -231,3 +231,35 @@
 @container agentcomposer (max-width: 340px) {
   .agent-conversation .agent-composer .agent-composer__tools .agent-mode-control > button > span + svg { display: none; }
 }
+
+/* 思考强度：与模型胶囊同高同色的小胶囊，原生 select 保证键盘可用 */
+.agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 28px;
+  flex: none;
+  padding: 0 4px 0 9px;
+  border-radius: 999px;
+  color: var(--isl-ink-soft);
+  background: var(--isl-surface-2);
+  font-size: 11px;
+}
+.agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select.is-active { color: var(--isl-ink); }
+.agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select.is-unsupported { opacity: .6; }
+.agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select select,
+.agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select button {
+  height: 26px;
+  border: 0;
+  padding: 0 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+:root[data-theme='dark'] .agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select {
+  background: color-mix(in srgb, var(--isl-ink) 8%, transparent);
+}
+
+.agent-mode-menu .agent-mode-menu__policies select { max-width: 96px; font: inherit; font-size: 11px; }
+.agent-mode-menu .agent-mode-menu__policies > button { display: flex; width: 100%; align-items: center; gap: 10px; border: 0; border-radius: 5px; padding: 6px 8px; color: inherit; background: transparent; text-align: left; cursor: pointer; }

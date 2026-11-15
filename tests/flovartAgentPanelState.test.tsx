@@ -74,12 +74,12 @@ describe('Flovart Agent panel explicit state', () => {
     render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} />);
 
     const input = await screen.findByPlaceholderText('告诉 Flovart Agent 你想制作什么');
-    fireEvent.click(screen.getByRole('button', { name: '生成模式' }));
-    expect(screen.getByRole('menu', { name: '生成模式' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '审批模式' }));
+    expect(screen.getByRole('menu', { name: '审批模式' })).toBeInTheDocument();
 
     fireEvent.change(input, { target: { value: '参考 @' } });
     expect(screen.getByRole('listbox', { name: '@ 引用节点和资产' })).toBeInTheDocument();
-    expect(screen.queryByRole('menu', { name: '生成模式' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menu', { name: '审批模式' })).not.toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('listbox', { name: '@ 引用节点和资产' })).not.toBeInTheDocument());

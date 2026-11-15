@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { AtSign, Box, Check, ChevronDown, Copy, GitBranch, Hand, Image as ImageIcon, KeyRound, LayoutGrid, Plus, RotateCw, Send, Square, Trash2, Video, X } from 'lucide-react';
+import { AtSign, Box, Check, ChevronDown, Copy, GitBranch, Hand, Image as ImageIcon, KeyRound, LayoutGrid, Plus, RotateCw, Send, Square, Trash2, Video, X, Zap } from 'lucide-react';
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { AGENT_ATTACHMENT_MAX, composerAttachmentsToImages, createComposerAttachment, mergeComposerAttachments, releaseComposerAttachment, type AgentComposerAttachment } from '../../services/agentComposerAttachments';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
@@ -43,7 +43,7 @@ import { AgentReferenceChip } from './AgentReferenceChip';
 import { AgentTodoCard } from './AgentTodoCard';
 import { copyToClipboard, transcriptMarkdown } from './agentTranscript';
 import { resolveSearchCredential } from '../../services/agentWebSearch';
-import { policyForMode } from '../../services/agentToolPolicy';
+import { readApprovalMode, readUserToolPolicy, resolveToolApproval, sessionGrantKey, toolApprovalFor, writeApprovalMode, writeUserToolPolicy, type ApprovalContext, type ApprovalMode, type ToolPolicy } from '../../services/agentToolPolicy';
 import { AGENT_TODO_TOOL_NAME, latestTodoFromMessages, todoFromToolResult, type AgentTodoItem } from './agentTodo';
 import { AgentHeaderLeadingContext } from './agentHeaderSlot';
 import { DrawerChromeCollapse, DrawerChromeTabs } from '../studio/drawerChrome';
@@ -51,7 +51,7 @@ import { AgentConfirmCard } from './AgentConfirmCard';
 import { AgentAskCard } from './AgentAskCard';
 import '../../styles/agentComposer.css';
 import { parseAgentAskHtml, type AgentAskForm } from './agentAskForm';
-import { confirmGrantKey, confirmScopesFor, readAlwaysGrants, writeAlwaysGrants, type AgentConfirmScope } from './agentConfirmCopy';
+import { confirmGrantKey, confirmScopesFor, type AgentConfirmScope } from './agentConfirmCopy';
 import { displayUserTurnText, agentToolLabel } from './agentTurnText';
 import { activityAfterConfirmation, agentLayerReducer, blockerAfterCredentialSignal, closedLayers, needsCredential, replacePendingConfirmation, useAgentTurn } from './agentPanelState';
 
@@ -113,13 +113,14 @@ function snapshotNeedsConfiguration(snapshot: FlovartAgentSnapshot) {
 }
 
 function displayMessages(snapshot: {
-  messages: Array<{ id: string; role: string; text: string; toolName?: string; isError?: boolean; timestamp?: number; error?: string }>;
+  messages: Array<{ id: string; role: string; text: string; thinking?: string; toolName?: string; isError?: boolean; timestamp?: number; error?: string }>;
   boundProductionSkill?: ProductionSkillAttachment | null;
 }, language: 'en' | 'zho'): WorkflowAgentDisplayMessage[] {
   return snapshot.messages.map(message => ({
     id: message.id,
     role: (message.error ? 'error' : message.role) as WorkflowAgentDisplayMessage['role'],
     text: message.error ? agentMessageText(message.error, language) : message.role === 'user' ? displayUserTurnText(message.text) : message.text,
+    ...(message.role === 'assistant' && !message.error && message.thinking ? { thinking: message.thinking } : {}),
     title: message.role === 'tool' ? agentToolLabel(message.toolName, language) : undefined,
     status: message.role === 'tool' ? message.isError ? 'error' : 'success' : undefined,
     createdAt: message.timestamp ? new Date(message.timestamp).toISOString() : undefined,
@@ -162,17 +163,24 @@ const userApiKeysRef = useRef(userApiKeys);
   const stickToBottom = useRef(true);
   const skillAttachmentDirty = useRef(false);
   const activity = useRef(onActivityChange);
-  const modeRef = useRef<'manual' | 'auto'>('auto');
+  // 审批模式（OMP approval mode）：always-ask / write（默认）/ yolo，存本机；旧的 manual/auto 自动迁移。
+  const [initialMode] = useState<ApprovalMode>(() => readApprovalMode());
+  const modeRef = useRef<ApprovalMode>(initialMode);
   const confirmationRef = useRef<PendingConfirmation | undefined>(undefined);
   const askRef = useRef<PendingAsk | undefined>(undefined);
   // 自动模式付费授权：第一次生成时确认上限，之后上限内的生成自动批准。
   const mandateRef = useRef<AgentSpendMandate | null>(null);
-  // 「本次对话」授权：同一类操作在当前会话里不再重复询问；切换会话或项目时清空。
+  // 会话授权：「本会话总是允许此工具」覆盖同一工具、同一 tier 的后续调用；切换会话或项目时清空。
   const sessionGrantsRef = useRef(new Set<string>());
-  // 「始终允许」授权：只覆盖可逆操作，存本机，可在模式菜单里撤销。
-  const [alwaysGrants, setAlwaysGrants] = useState<string[]>(() => readAlwaysGrants());
-  const alwaysGrantsRef = useRef(alwaysGrants);
-  alwaysGrantsRef.current = alwaysGrants;
+  // 按工具的用户策略（allow | deny | prompt），存本机，每种模式都生效，但绕不过工具自身的 deny 与安全覆盖。
+  const [userToolPolicy, setUserToolPolicy] = useState<Record<string, ToolPolicy>>(() => readUserToolPolicy());
+  const userToolPolicyRef = useRef(userToolPolicy);
+  userToolPolicyRef.current = userToolPolicy;
+  const approvalContext = useRef((): ApprovalContext => ({
+    mode: modeRef.current,
+    userPolicy: userToolPolicyRef.current,
+    isGranted: (tool, tier) => sessionGrantsRef.current.has(sessionGrantKey(tool, tier)),
+  })).current;
   // 内核工具（media_view）在会话期间读取最新画布节点。
   const projectRef = useRef(project);
   projectRef.current = project;
@@ -188,7 +196,7 @@ const userApiKeysRef = useRef(userApiKeys);
   const [pendingAsk, setPendingAsk] = useState<PendingAsk>();
   const [mandate, setMandate] = useState<AgentSpendMandate | null>(null);
   const [mandateTasks, setMandateTasks] = useState(10);
-  const [mode, setMode] = useState<'manual' | 'auto'>('auto');
+  const [mode, setMode] = useState<ApprovalMode>(initialMode);
   const hasMessages = messages.length > 0;
   useLayoutEffect(() => {
     const scrollers = messageScrollers(messagesRef.current);
@@ -276,11 +284,6 @@ const userApiKeysRef = useRef(userApiKeys);
       } else {
         const key = confirmGrantKey(request);
         if (key && scope === 'session') sessionGrantsRef.current.add(key);
-        if (key && scope === 'always') {
-          const next = [...new Set([...alwaysGrantsRef.current, key])];
-          writeAlwaysGrants(next);
-          setAlwaysGrants(next);
-        }
       }
     }
     settleConfirmation(pending, approved);
@@ -289,20 +292,19 @@ const userApiKeysRef = useRef(userApiKeys);
     // 停止中的轮次不再弹确认卡：直接拒绝，让内核尽快收尾。
     if (turnRef.current.phase === 'stopping') return Promise.resolve(false);
     const current = mandateRef.current;
-    if (modeRef.current === 'auto' && current && request && evaluateSpendMandate(current, request).allow) {
+    // 付费授权只在 write / yolo 模式生效；手动确认模式逐次询问。
+    if (modeRef.current !== 'always-ask' && current && request && evaluateSpendMandate(current, request).allow) {
       const next = consumeSpendMandate(current, request);
       mandateRef.current = next;
       setMandate(next);
       return Promise.resolve(true);
     }
     const grantKey = confirmGrantKey(request);
-    if (grantKey && !planBlocked(request)) {
-      const scopes = confirmScopesFor(request);
-      if ((scopes.includes('session') && sessionGrantsRef.current.has(grantKey))
-        || (scopes.includes('always') && alwaysGrantsRef.current.includes(grantKey))) return Promise.resolve(true);
+    if (grantKey && !planBlocked(request) && confirmScopesFor(request).includes('session') && sessionGrantsRef.current.has(grantKey)) {
+      return Promise.resolve(true);
     }
     return new Promise<boolean>(resolve => {
-      const offerMandate = modeRef.current === 'auto' && request?.kind === 'generation' && (request.gates?.length ?? 0) > 0 && !planBlocked(request);
+      const offerMandate = modeRef.current !== 'always-ask' && request?.kind === 'generation' && (request.gates?.length ?? 0) > 0 && !planBlocked(request);
       if (offerMandate) setMandateTasks(defaultMandateTasks(request));
       // 有计划时由 GenerationPlanCard 展示，文本摘要只给 CLI/无宿主。
       presentConfirmation({ summary: request?.gates?.length ? '' : summary, resolve, request, offerMandate, blocked: planBlocked(request) });
@@ -470,7 +472,7 @@ const userApiKeysRef = useRef(userApiKeys);
         systemPrompt: BROWSER_DEFAULT_SYSTEM_PROMPT + receiptContext,
         getNodes: () => projectRef.current.nodes,
         webSearch: searchCredential ?? undefined,
-        getPolicy: () => policyForMode(modeRef.current),
+        getApproval: approvalContext,
         getDraftVersion: () => projectRef.current.draftVersion,
       });
       if (!active) { await kernel.close(); return; }
@@ -505,7 +507,15 @@ const userApiKeysRef = useRef(userApiKeys);
             url: connection.url,
             token: connection.token,
             confirm: askConfirmation,
-            confirmWrite: (summary, request) => modeRef.current === 'auto' || askConfirmation(summary, request),
+            // 托管 Agent 的可逆写入走同一个审批解析器；删除 / 付费由 bridge 的高风险确认单独处理。
+            confirmWrite: (summary, request) => {
+              if (!request) return askConfirmation(summary, request);
+              const tool = request.tool || request.command;
+              const resolution = resolveToolApproval({ ...approvalContext(), tool, decision: toolApprovalFor(request.command, { ...(request.args || {}) }) });
+              if (resolution.action === 'allow') return true;
+              if (resolution.action === 'deny') return false;
+              return askConfirmation(summary, { ...request, tool, tier: resolution.tier, grantable: resolution.grantable, ...(resolution.reason ? { reason: resolution.reason } : {}) });
+            },
             onStatus: nextStatus => {
               if (!active) return;
               setWorkspaceStatus(nextStatus === 'connected' ? 'ready' : nextStatus === 'error' ? 'error' : 'connecting');
@@ -570,6 +580,8 @@ const userApiKeysRef = useRef(userApiKeys);
       const update = (event as { assistantMessageEvent?: { type: string; delta?: string } }).assistantMessageEvent;
       if (update?.type === 'text_delta' && update.delta) {
         handleEventRef.current({ type: 'text-delta', delta: update.delta }, streamIdRef.current);
+      } else if (update?.type === 'thinking_delta' && update.delta) {
+        handleEventRef.current({ type: 'thinking-delta', delta: update.delta }, streamIdRef.current);
       }
       return;
     }
@@ -706,6 +718,10 @@ const userApiKeysRef = useRef(userApiKeys);
       setMessages(items => items.some(item => item.id === assistantId)
         ? items.map(item => item.id === assistantId ? { ...item, text: item.text + event.delta } : item)
         : [...items, { id: assistantId, role: 'assistant', text: event.delta }]);
+    } else if (event.type === 'thinking-delta') {
+      setMessages(items => items.some(item => item.id === assistantId)
+        ? items.map(item => item.id === assistantId ? { ...item, thinking: (item.thinking || '') + event.delta } : item)
+        : [...items, { id: assistantId, role: 'assistant', text: '', thinking: event.delta }]);
     } else if (event.type === 'snapshot') {
       setSetupBlocker(current => blockerAfterCredentialSignal(current, snapshotNeedsConfiguration(event.snapshot)));
       setMessages(displayMessages(event.snapshot, language));
@@ -1191,12 +1207,41 @@ const userApiKeysRef = useRef(userApiKeys);
               <CreationModeControl value={creationMode} onChange={setCreationMode} open={creationModeOpen} onOpenChange={open => dispatchLayer(open ? { type: 'open', layer: 'creationMode' } : { type: 'close', layer: 'creationMode' })} language={language} />
               <AgentModelPicker userApiKeys={userApiKeys} onAddApiKey={onAddApiKey} onUpdateApiKey={onUpdateApiKey} open={modelPickerOpen} onOpenChange={open => dispatchLayer(open ? { type: 'open', layer: 'modelPicker' } : { type: 'close', layer: 'modelPicker' })} language={language} />
               <div className="agent-mode-control">
-                <button type="button" aria-label={t('agentPanel.generationMode')} title={mode === 'manual' ? t('agentPanel.manualModeHint') : t('agentPanel.autoModeHint')} aria-expanded={modeOpen} onClick={() => dispatchLayer({ type: 'toggle', layer: 'mode' })}><Hand size={15} /><span>{mode === 'manual' ? t('agentPanel.manualMode') : t('agentPanel.autoMode')}</span></button>
-                {modeOpen && <div className="agent-mode-menu" role="menu" aria-label={t('agentPanel.generationMode')}>
-                  <button type="button" role="menuitem" aria-pressed={mode === 'manual'} onClick={() => { modeRef.current = 'manual'; mandateRef.current = null; setMandate(null); setMode('manual'); dispatchLayer({ type: 'close', layer: 'mode' }); }}><Hand size={17} /><span><strong>{t('agentPanel.manualMode')}</strong><small>{t('agentPanel.manualModeHint')}</small></span>{mode === 'manual' && <Check size={15} />}</button>
-                  <button type="button" role="menuitem" aria-pressed={mode === 'auto'} onClick={() => { modeRef.current = 'auto'; setMode('auto'); dispatchLayer({ type: 'close', layer: 'mode' }); }}><RotateCw size={17} /><span><strong>{t('agentPanel.autoMode')}</strong><small>{t('agentPanel.autoModeHint')}</small></span>{mode === 'auto' && <Check size={15} />}</button>
-                  {alwaysGrants.length > 0 && <button type="button" role="menuitem" onClick={() => { writeAlwaysGrants([]); setAlwaysGrants([]); dispatchLayer({ type: 'close', layer: 'mode' }); }}><X size={17} /><span><strong>{language === 'zho' ? '撤销「始终允许」' : 'Reset “Always allow”'}</strong><small>{language === 'zho' ? `已记住 ${alwaysGrants.length} 类操作，撤销后会重新询问` : `${alwaysGrants.length} remembered; Agent will ask again`}</small></span></button>}
-                  <p style={{ margin: 0, padding: '6px 12px 8px', fontSize: 10, lineHeight: 1.6, color: 'var(--isl-ink-ghost)' }}>删除、付费生成、Production 批准/运行、任务取消始终单独确认。</p>
+                <button type="button" aria-label={t('agentPanel.approvalMode')} title={t(APPROVAL_MODE_COPY[mode].hint)} aria-expanded={modeOpen} onClick={() => dispatchLayer({ type: 'toggle', layer: 'mode' })}>{(() => { const Icon = APPROVAL_MODE_COPY[mode].icon; return <Icon size={15} />; })()}<span>{t(APPROVAL_MODE_COPY[mode].label)}</span></button>
+                {modeOpen && <div className="agent-mode-menu" role="menu" aria-label={t('agentPanel.approvalMode')}>
+                  {APPROVAL_MODE_ORDER.map(item => {
+                    const copy = APPROVAL_MODE_COPY[item];
+                    const Icon = copy.icon;
+                    return <button key={item} type="button" role="menuitem" aria-pressed={mode === item} onClick={() => {
+                      modeRef.current = item;
+                      // 手动确认模式不使用付费授权；切过去时撤销已有授权。
+                      if (item === 'always-ask') { mandateRef.current = null; setMandate(null); }
+                      writeApprovalMode(item);
+                      setMode(item);
+                      dispatchLayer({ type: 'close', layer: 'mode' });
+                    }}><Icon size={17} /><span><strong>{t(copy.label)}</strong><small>{t(copy.hint)}</small></span>{mode === item && <Check size={15} />}</button>;
+                  })}
+                  <details className="agent-mode-menu__policies">
+                    <summary style={{ padding: '6px 12px', fontSize: 11, cursor: 'pointer', color: 'var(--isl-ink-soft)' }}>{t('agentPanel.toolPolicies')}{Object.keys(userToolPolicy).length ? ` · ${Object.keys(userToolPolicy).length}` : ''}</summary>
+                    {POLICY_TOOLS.map(tool => <label key={tool.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '3px 12px', fontSize: 11 }}>
+                      <span>{language === 'zho' ? tool.zho : tool.en}</span>
+                      <select aria-label={language === 'zho' ? tool.zho : tool.en} value={userToolPolicy[tool.key] || ''} onChange={event => {
+                        const value = event.target.value as ToolPolicy | '';
+                        const next = { ...userToolPolicyRef.current };
+                        if (value) next[tool.key] = value; else delete next[tool.key];
+                        userToolPolicyRef.current = next;
+                        writeUserToolPolicy(next);
+                        setUserToolPolicy(next);
+                      }}>
+                        <option value="">{t('agentPanel.toolPolicyDefault')}</option>
+                        <option value="allow">{t('agentPanel.toolPolicyAllow')}</option>
+                        <option value="prompt">{t('agentPanel.toolPolicyPrompt')}</option>
+                        <option value="deny">{t('agentPanel.toolPolicyDeny')}</option>
+                      </select>
+                    </label>)}
+                    {Object.keys(userToolPolicy).length > 0 && <button type="button" role="menuitem" onClick={() => { userToolPolicyRef.current = {}; writeUserToolPolicy({}); setUserToolPolicy({}); }}><X size={17} /><span><strong>{t('agentPanel.resetToolPolicies')}</strong></span></button>}
+                  </details>
+                  <p style={{ margin: 0, padding: '6px 12px 8px', fontSize: 10, lineHeight: 1.6, color: 'var(--isl-ink-ghost)' }}>{t('agentPanel.approvalHardGates')}</p>
                 </div>}
               </div>
             </div>
@@ -1215,6 +1260,21 @@ const userApiKeysRef = useRef(userApiKeys);
     </div>
   );
 }
+
+const APPROVAL_MODE_ORDER: readonly ApprovalMode[] = ['always-ask', 'write', 'yolo'];
+const APPROVAL_MODE_COPY: Record<ApprovalMode, { label: string; hint: string; icon: typeof Hand }> = {
+  'always-ask': { label: 'agentPanel.approvalAlwaysAsk', hint: 'agentPanel.approvalAlwaysAskHint', icon: Hand },
+  write: { label: 'agentPanel.approvalWrite', hint: 'agentPanel.approvalWriteHint', icon: RotateCw },
+  yolo: { label: 'agentPanel.approvalYolo', hint: 'agentPanel.approvalYoloHint', icon: Zap },
+};
+/** 可设置按工具策略的工具：键与审批层的工具名一致（命令名或内置工具名）。 */
+const POLICY_TOOLS: ReadonlyArray<{ key: string; zho: string; en: string }> = [
+  { key: 'workflow.apply', zho: '修改画布', en: 'Edit canvas' },
+  { key: 'workflow.node.run', zho: '运行生成', en: 'Run generation' },
+  { key: 'workflow.node.tool', zho: '节点工具', en: 'Node tools' },
+  { key: 'flovart_web_search', zho: '联网搜索', en: 'Web search' },
+  { key: 'flovart_grep', zho: '本地文件搜索', en: 'Local file search' },
+];
 
 /** 输入框附件托盘：大圆角方块，1-2 张两列、3 张起三列；进出带错落缩放，托盘高度随内容平滑伸缩。纯展示，不改附件逻辑。 */
 function ComposerAttachmentTray({ attachments, label, removeLabel, kindLabel, onRemove }: {

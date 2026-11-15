@@ -2,9 +2,10 @@ import type { WorkflowNode } from '../workflow/types';
 import type { AgentConfirmRequest } from '../../services/agentSpendMandate';
 import { getWorkflowOperationCapabilityByNodeTool, localizeOperationLabel, parseWorkflowOperationNodeToolArguments } from '../workflow/operationRegistry';
 import { planSummaryLine } from '../GenerationPlanCard';
+import { sessionGrantKey } from '../../services/agentToolPolicy';
 
 type Language = 'en' | 'zho';
-export type AgentConfirmScope = 'once' | 'session' | 'always';
+export type AgentConfirmScope = 'once' | 'session';
 
 export interface AgentConfirmCopy {
   /** 一句人话：动作 + 对象，例如「删除「海报 1」」。 */
@@ -13,12 +14,15 @@ export interface AgentConfirmCopy {
   detail?: string;
 }
 
-const RISK_COPY: Record<string, { zho: string; en: string }> = {
+const TOOL_COPY: Record<string, { zho: string; en: string }> = {
+  flovart_web_search: { zho: '联网搜索', en: 'Search the web' },
+  flovart_grep: { zho: '读取本地文件夹', en: 'Read your local folder' },
+};
+
+const TIER_COPY: Record<string, { zho: string; en: string }> = {
+  read: { zho: '读取画布', en: 'Read the canvas' },
   write: { zho: '修改画布', en: 'Edit the canvas' },
-  delete: { zho: '删除内容', en: 'Delete content' },
-  run: { zho: '运行生成', en: 'Run generation' },
-  network: { zho: '联网搜索', en: 'Search the web' },
-  'filesystem-read': { zho: '读取本地文件夹', en: 'Read your local folder' },
+  exec: { zho: '执行高风险操作', en: 'Run a high-risk action' },
 };
 
 function nodeNames(nodes: readonly WorkflowNode[], ids: readonly string[], language: Language) {
@@ -107,51 +111,26 @@ export function describeAgentConfirmation(
     default:
       break;
   }
-  const risk = request?.risk && RISK_COPY[request.risk];
-  if (risk) return { title: risk[language] };
+  const known = request && (TOOL_COPY[request.tool || request.command] || (request.tier && TIER_COPY[request.tier]));
+  if (known) return { title: known[language], ...(request?.reason && !en ? { detail: request.reason } : {}) };
   if (fallback && !looksLikeMachineText(fallback)) return { title: fallback };
   return { title: en ? 'Run a canvas action' : '执行一个画布操作' };
 }
 
 /**
- * 授权范围：删除永远逐次确认；付费只到“本次对话”（自动模式下受任务上限约束）；
- * 其余可逆操作可以“始终允许”，并可在模式菜单里撤销。
+ * 授权范围（对齐 OMP）：「本会话总是允许此工具」只给审批模式按 tier 发起的询问；
+ * 安全覆盖（删除、可能产生费用）、显式 prompt 策略永远逐次确认。
+ * 例外：付费生成可在 write / yolo 模式开启有上限的付费授权（Spend Mandate），它不是工具授权。
  */
 export function confirmScopesFor(request: AgentConfirmRequest | undefined, options: { offerMandate?: boolean } = {}): AgentConfirmScope[] {
   if (!request) return ['once'];
-  if (request.kind === 'destructive' || request.risk === 'delete') return ['once'];
   if (request.kind === 'generation') return options.offerMandate ? ['once', 'session'] : ['once'];
-  if (request.command === 'workflow.node.tool') {
-    const capability = getWorkflowOperationCapabilityByNodeTool(String(request.args?.tool || ''));
-    if (capability && capability.executor !== 'local-transform') return ['once', 'session'];
-  }
-  if (request.risk === 'run') return ['once'];
-  return ['once', 'session', 'always'];
+  if (request.kind === 'destructive') return ['once'];
+  return request.grantable && request.tier ? ['once', 'session'] : ['once'];
 }
 
-/** 记住授权用的键：同一类操作（同一命令、同一画布工具）共用一个键。 */
+/** 会话授权键：同一工具、同一 tier（与 agentToolPolicy.sessionGrantKey 一致）。不可授权时为 null。 */
 export function confirmGrantKey(request: AgentConfirmRequest | undefined): string | null {
-  if (!request || request.kind === 'generation' || request.kind === 'destructive') return null;
-  const tool = request.command === 'workflow.node.tool' ? String(request.args?.tool || '') : '';
-  return [request.command, tool, request.risk || ''].filter(Boolean).join(':');
-}
-
-const ALWAYS_KEY = 'flovart.agent.alwaysAllow';
-
-export function readAlwaysGrants(storage: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage): string[] {
-  try {
-    const parsed = JSON.parse(storage?.getItem(ALWAYS_KEY) || '[]');
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
-export function writeAlwaysGrants(grants: readonly string[], storage: Pick<Storage, 'setItem' | 'removeItem'> | undefined = globalThis.localStorage) {
-  try {
-    if (grants.length) storage?.setItem(ALWAYS_KEY, JSON.stringify([...new Set(grants)]));
-    else storage?.removeItem(ALWAYS_KEY);
-  } catch {
-    // 存储不可用（隐私模式）时只在本次对话内生效。
-  }
+  if (!request || request.kind !== 'other' || !request.grantable || !request.tier) return null;
+  return sessionGrantKey(request.tool || request.command, request.tier);
 }

@@ -370,7 +370,7 @@ export class WorkflowAgentBridge {
         const highRisk = requiresHighRiskWorkflowConfirmation(envelope);
         const operatorDraftOnly = envelope.source === 'operator' && !highRisk;
         if (this.options.confirmWrite && !WORKFLOW_READ_COMMANDS.has(envelope.command) && !highRisk && !operatorDraftOnly
-          && !await this.options.confirmWrite(workflowCommandSummary(envelope.command, envelope.args), { ...workflowConfirmRequest(envelope), risk: 'write' })) {
+          && !await this.options.confirmWrite(workflowCommandSummary(envelope.command, envelope.args), { ...workflowConfirmRequest(envelope), tier: 'write', tool: envelope.command })) {
           result = { ok: false, commandId: envelope.id, error: { code: 'DENIED', message: '用户拒绝了 Workflow 变更。' } };
           await this.post('/workflow/result', { requestId, clientId: this.clientId, result });
           this.emit('tool_result', { requestId, command: envelope.command, result });

@@ -1,5 +1,5 @@
 import { ShieldCheck } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { WorkflowNode } from '../workflow/types';
 import type { AgentConfirmRequest } from '../../services/agentSpendMandate';
 import { GenerationPlanCard } from '../GenerationPlanCard';
@@ -29,14 +29,13 @@ export function AgentConfirmCard({
   const L = (zho: string, en: string) => (language === 'en' ? en : zho);
   const copy = describeAgentConfirmation(request, nodes, language, summary);
   const scopes = confirmScopesFor(request, { offerMandate });
-  const [scope, setScope] = useState<AgentConfirmScope>('once');
   const root = useRef<HTMLElement>(null);
   const gates = request?.gates || [];
-  const scopeLabel: Record<AgentConfirmScope, string> = {
-    once: L('仅这次', 'Just this once'),
-    session: L('本次对话', 'For this chat'),
-    always: L('始终允许此类操作', 'Always allow this'),
-  };
+  const canGrantSession = scopes.includes('session');
+  // 付费授权（Spend Mandate）是有上限的会话授权；普通工具是「本会话总是允许此工具」（同一工具、同一 tier）。
+  const sessionLabel = offerMandate
+    ? L('本会话自动运行（上限内）', 'Auto-run in this chat (within limit)')
+    : L('本会话总是允许此工具', 'Always allow this tool in this chat');
 
   // 卡片出现时拿到焦点：Esc 即拒绝；不自动聚焦「允许」，避免误按回车批准。
   useEffect(() => { root.current?.focus({ preventScroll: true }); }, []);
@@ -65,7 +64,8 @@ export function AgentConfirmCard({
           <GenerationPlanCard plan={{ items: [...gates], mandate: planMandateNote }} />
         </details>
       )}
-      {scope === 'session' && offerMandate && (
+      {request?.reason && !copy.detail && <p className="agent-confirm__detail">{request.reason}</p>}
+      {canGrantSession && offerMandate && (
         <label className="agent-confirm__cap">
           {L('本次对话最多自动运行', 'Auto-run up to')}
           <input
@@ -79,13 +79,9 @@ export function AgentConfirmCard({
         </label>
       )}
       <div className="agent-confirm__actions">
-        {scopes.length > 1 ? (
-          <select value={scope} onChange={event => setScope(event.target.value as AgentConfirmScope)} aria-label={L('授权范围', 'Approval scope')}>
-            {scopes.map(item => <option key={item} value={item}>{scopeLabel[item]}</option>)}
-          </select>
-        ) : <span />}
         <button type="button" className="agent-confirm__deny" onClick={() => onDecide(false, 'once')}>{L('拒绝', 'Deny')}</button>
-        <button type="button" className="agent-confirm__allow" disabled={blocked} onClick={() => onDecide(true, scope)}>{L('允许', 'Allow')}</button>
+        {canGrantSession && <button type="button" className="agent-confirm__allow agent-confirm__allow--session" disabled={blocked} onClick={() => onDecide(true, 'session' satisfies AgentConfirmScope)}>{sessionLabel}</button>}
+        <button type="button" className="agent-confirm__allow" disabled={blocked} onClick={() => onDecide(true, 'once')}>{L('本次允许', 'Allow once')}</button>
       </div>
     </section>
   );

@@ -1,5 +1,5 @@
 import type { GenerationGateDetails } from './generationGate';
-import type { ToolRisk } from './agentToolPolicy';
+import type { ToolTier } from './agentToolPolicy';
 
 /**
  * 自动模式的付费授权（Spend Mandate）。
@@ -22,8 +22,14 @@ export interface AgentConfirmRequest {
   gates?: readonly GenerationGateDetails[];
   /** 原始命令参数：确认卡据此把节点 ID 换成标题、写出一句人话。 */
   args?: Readonly<Record<string, unknown>>;
-  /** 来自工具策略层的询问（手动模式的写入等）。 */
-  risk?: ToolRisk;
+  /** 来自审批层的询问：被询问调用的 tier。 */
+  tier?: ToolTier;
+  /** 审批层给出的原因（安全覆盖：可能产生费用 / 删除内容）。 */
+  reason?: string;
+  /** 询问由审批模式按 tier 发起，可以给「本会话总是允许此工具」；安全覆盖与显式 prompt 策略不可授权。 */
+  grantable?: boolean;
+  /** 会话授权与用户策略所用的工具键（缺省为 command）。 */
+  tool?: string;
 }
 
 export type SpendCurrency = 'USD' | 'CNY';
