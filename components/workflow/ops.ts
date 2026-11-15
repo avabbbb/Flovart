@@ -3,6 +3,7 @@ import { createWorkflowNode } from './constants';
 import { resolveWorkflowInputs } from './inputResolver';
 import { getWorkflowOperationInputRoleForNodeType, validateWorkflowOperationInputBindings } from './operationRegistry';
 import { createWorkflowOperationInputBinding, updateWorkflowOperationFromMetadata, updateWorkflowOperationRecipe, workflowOperationInputConnections } from './operations';
+import { preservePromptMentions } from './promptDocument';
 import type { WorkflowConnection, WorkflowNode, WorkflowNodeMetadata, WorkflowOp, WorkflowOperationInputBinding, WorkflowOperationInputRole, WorkflowSnapshot } from './types';
 
 /** 只改这些字段时不触碰 Operation 配方（不置空 recipeHash，不制造 stale）。 */
@@ -264,11 +265,22 @@ function normalizeDocumentNode(node: WorkflowNode): WorkflowNode {
       const isPlainRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
       const currentConfig = (current.metadata as unknown as Record<string, unknown>).config;
       // metadata 按顶层键合并；config 再合并一层（只改 durationSec 不会丢 modelId）；
-      // 只写 prompt 不带 richTextDocument 时清掉旧富文本，编辑器显示与执行都以新 prompt 为准。
+      // 只写 prompt 不带 richTextDocument 时：原文档有 @引用 chip 就保留（新文本里的 @标签重新编成 chip，
+      // 没写到的引用追加在末尾）；原文档没有引用才清掉旧富文本，以新 prompt 为准。
+      const promptOnly = 'prompt' in rawMetadataPatch && !('richTextDocument' in rawMetadataPatch);
+      const preserved = promptOnly && typeof rawMetadataPatch.prompt === 'string'
+        ? preservePromptMentions({
+          text: rawMetadataPatch.prompt,
+          previousDocument: current.metadata.richTextDocument,
+          targetNodeId: current.id,
+          nodes: snapshot.nodes,
+          connections: snapshot.connections,
+        })
+        : null;
       const metadataPatch = {
         ...rawMetadataPatch,
         ...(isPlainRecord(rawMetadataPatch.config) && isPlainRecord(currentConfig) ? { config: { ...currentConfig, ...rawMetadataPatch.config } } : {}),
-        ...('prompt' in rawMetadataPatch && !('richTextDocument' in rawMetadataPatch) ? { richTextDocument: undefined } : {}),
+        ...(promptOnly ? (preserved ? { prompt: preserved.prompt, richTextDocument: preserved.richTextDocument } : { richTextDocument: undefined }) : {}),
       } as unknown as typeof current.metadata;
       const base = { ...current, ...op.patch, metadata: current.metadata };
       const updated = op.replaceMetadata
