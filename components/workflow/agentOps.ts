@@ -16,6 +16,9 @@ export const WORKFLOW_MUTATION_COMMANDS = new Set([
   'workflow.viewport.set',
   'workflow.node.run',
   'workflow.node.stop',
+  'workflow.generate',
+  'workflow.note.write',
+  'workflow.media.import',
 ]);
 
 export const workflowCommandSummary = (command: string, args: Record<string, unknown>) => {

@@ -46,6 +46,12 @@ export function describeWorkflowDraftCommand(command: string, args: Record<strin
     }
     case 'workflow.node.stop':
       return `停止节点「${nodeId}」`;
+    case 'workflow.generate':
+      return (nodeId ? `在节点「${nodeId}」写入提示词` : `新建${type || ''}生成节点并写入提示词`) + (args.run === true ? '并运行' : '');
+    case 'workflow.note.write':
+      return args.noteId ? `更新备注「${String(args.noteId)}」` : '写备注';
+    case 'workflow.media.import':
+      return '导入素材' + (args.attachToNodeId ? `并接到「${String(args.attachToNodeId)}」` : '');
     case 'workflow.node.tool':
       return `对节点「${nodeId}」执行 ${String(args.tool || '')} 工具`;
     case 'workflow.connect':

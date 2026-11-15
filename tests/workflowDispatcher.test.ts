@@ -89,7 +89,7 @@ describe('workflow dispatcher', () => {
 
   it('applies reversible Agent canvas edits without stopping for confirmation', async () => {
     const { dispatch, dependencies } = setup();
-    const envelope = { id: 'create', command: 'workflow.node.create', args: { type: 'text', title: '脚本' }, source: 'agent' as const };
+    const envelope = { id: 'create', command: 'workflow.node.create', args: { type: 'image', title: '主视觉' }, source: 'agent' as const };
     const applied = await dispatch(envelope);
     expect(applied.ok).toBe(true);
     expect(dependencies.getState().projects[0].nodes).toHaveLength(2);
@@ -107,7 +107,7 @@ describe('workflow dispatcher', () => {
     const applied = await dispatch({
       id: 'create-change-set',
       command: 'workflow.node.create',
-      args: { id: 'outline-1', type: 'text', title: '脚本大纲', confirmed: true },
+      args: { id: 'outline-1', type: 'image', title: '主视觉', confirmed: true },
       source: 'agent',
       idempotencyKey: 'create-outline-v1',
     });
@@ -116,7 +116,7 @@ describe('workflow dispatcher', () => {
     const changed = dependencies.getState().projects[0];
     expect(changed.draftChangeSets?.at(-1)).toMatchObject({
       actor: 'agent',
-      intent: '创建text节点「脚本大纲」',
+      intent: '创建image节点「主视觉」',
       status: 'completed',
       baseDraftVersion: 1,
       resultDraftVersion: 2,
@@ -241,7 +241,7 @@ describe('workflow dispatcher', () => {
       id: 'apply-once', command: 'workflow.apply', source: 'agent' as const,
       args: {
         projectId: project.id, expectedRevision: 1, mutationId: 'persisted-mutation',
-        operations: [{ type: 'add_node', node: createWorkflowNode('persisted-node', 'text', { x: 40, y: 40 }) }],
+        operations: [{ type: 'add_node', node: createWorkflowNode('persisted-node', 'image', { x: 40, y: 40 }) }],
       },
     };
     const applied = await first.dispatch(request);
@@ -266,7 +266,7 @@ describe('workflow dispatcher', () => {
       id: 'stale-apply', command: 'workflow.apply', source: 'cli',
       args: {
         projectId: project.id, expectedRevision: 0, mutationId: 'stale-mutation',
-        operations: [{ type: 'add_node', node: createWorkflowNode('never-created', 'text', { x: 0, y: 0 }) }],
+        operations: [{ type: 'add_node', node: createWorkflowNode('never-created', 'image', { x: 0, y: 0 }) }],
       },
     });
 
@@ -279,7 +279,7 @@ describe('workflow dispatcher', () => {
     const canonical = setup();
     const legacyProject = legacy.dependencies.getState().projects[0];
     const canonicalProject = canonical.dependencies.getState().projects[0];
-    const node = createWorkflowNode('parity-node', 'text', { x: 20, y: 30 });
+    const node = createWorkflowNode('parity-node', 'image', { x: 20, y: 30 });
 
     await legacy.dispatch({
       id: 'parity-mutation', command: 'workflow.node.create', source: 'cli',
@@ -328,7 +328,7 @@ describe('workflow dispatcher', () => {
 
   it('deduplicates confirmed mutations by idempotency key', async () => {
     const { dispatch, dependencies } = setup();
-    const envelope = { id: 'once', command: 'workflow.node.create', args: { type: 'text', confirmed: true }, source: 'operator' as const, idempotencyKey: 'same' };
+    const envelope = { id: 'once', command: 'workflow.node.create', args: { type: 'image', confirmed: true }, source: 'operator' as const, idempotencyKey: 'same' };
     await dispatch(envelope);
     await dispatch(envelope);
     expect(dependencies.getState().projects[0].nodes).toHaveLength(2);
@@ -520,7 +520,7 @@ describe('workflow dispatcher', () => {
 
   it('records agent/operator draft actions into the project draft log but skips pure UI edits', async () => {
     const { dispatch, dependencies } = setup();
-    await dispatch({ id: 'create', command: 'workflow.node.create', args: { type: 'text', title: '旁白', confirmed: true }, source: 'agent' });
+    await dispatch({ id: 'create', command: 'workflow.node.create', args: { type: 'audio', title: '旁白', confirmed: true }, source: 'agent' });
     await dispatch({ id: 'move', command: 'workflow.node.move', args: { nodeId: 'image-1', x: 10, y: 20, confirmed: true }, source: 'operator' });
     await dispatch({ id: 'select', command: 'workflow.select', args: { ids: ['image-1'] }, source: 'ui' });
 
@@ -528,7 +528,7 @@ describe('workflow dispatcher', () => {
     expect(log).toHaveLength(2);
     expect(log[0].source).toBe('agent');
     expect(log[0].command).toBe('workflow.node.create');
-    expect(log[0].summary).toBe('创建text节点「旁白」');
+    expect(log[0].summary).toBe('创建audio节点「旁白」');
     const createdId = dependencies.getState().projects[0].nodes[1].id;
     expect(log[0].nodeIds).toEqual([createdId]);
     expect(log[1].source).toBe('operator');
@@ -626,7 +626,7 @@ describe('workflow dispatcher auto layout', () => {
 
   it('keeps explicit coordinates untouched', async () => {
     const { dispatch, dependencies } = setup();
-    await dispatch({ id: 'c-xy', command: 'workflow.node.create', args: { type: 'text', id: 'manual', x: 10, y: 20 }, source: 'agent' });
+    await dispatch({ id: 'c-xy', command: 'workflow.node.create', args: { type: 'image', id: 'manual', x: 10, y: 20 }, source: 'agent' });
     expect(nodeById(dependencies, 'manual').position).toEqual({ x: 10, y: 20 });
   });
 
