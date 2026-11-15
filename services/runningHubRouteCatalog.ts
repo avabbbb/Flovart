@@ -7,6 +7,10 @@ export interface RouteParamSpec {
     type: RouteParamType;
     default?: string | number | boolean;
     required?: boolean;
+    /** 数值参数的官方约束（来自 RunningHub 文档 OpenAPI schema）。 */
+    minimum?: number;
+    maximum?: number;
+    multipleOf?: number;
 }
 
 export type RouteMediaMapping =
@@ -428,10 +432,12 @@ const RUNNHUB_ROUTE_CATALOG: RouteCapabilitySchema[] = [
         promptField: 'prompt',
         aspectRatioField: null,
         durationType: null,
+        // 官方 schema：resolution 优先级高于 width/height，传了 resolution 就不再用宽高像素。
+        // 有比例时网关会去掉 resolution、只发精确宽高（见 aiGateway sizeFromAspectRatio）。
         resolutionDefault: '2k',
         params: [
-            { field: 'width', type: 'number', default: 2048 },
-            { field: 'height', type: 'number', default: 2048 },
+            { field: 'width', type: 'number', default: 2048, minimum: 240, maximum: 8192, multipleOf: 1 },
+            { field: 'height', type: 'number', default: 2048, minimum: 240, maximum: 8192, multipleOf: 1 },
             { field: 'outputFormat', type: 'string', default: 'jpeg' },
         ],
         media: [],
@@ -447,8 +453,8 @@ const RUNNHUB_ROUTE_CATALOG: RouteCapabilitySchema[] = [
         durationType: null,
         resolutionDefault: '2k',
         params: [
-            { field: 'width', type: 'number', default: 2048 },
-            { field: 'height', type: 'number', default: 2048 },
+            { field: 'width', type: 'number', default: 2048, minimum: 512, maximum: 8192, multipleOf: 8 },
+            { field: 'height', type: 'number', default: 2048, minimum: 512, maximum: 8192, multipleOf: 8 },
             { field: 'sequentialImageGeneration', type: 'string', default: 'disabled' },
             { field: 'maxImages', type: 'number', default: 1 },
         ],

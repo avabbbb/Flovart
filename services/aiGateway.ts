@@ -1471,18 +1471,52 @@ function buildRouteMediaFields(
     return output;
 }
 
-function sizeFromAspectRatio(aspectRatio: string, params: RouteParamSpec[]): { width: number; height: number } | null {
+const RESOLUTION_LONG_EDGE: Record<string, number> = { '1k': 1024, '1.5k': 1536, '2k': 2048, '4k': 4096 };
+
+function gcd(a: number, b: number): number {
+    return b === 0 ? a : gcd(b, a % b);
+}
+
+/**
+ * 只收 width/height 的线路（Seedream）：把比例换成精确的整数宽高。
+ * - 宽高严格等于约分后的比例 × k，不做四舍五入，所以输出比例与请求完全一致；
+ * - 长边取请求的 resolution（1K / 1.5K / 2K / 4K），没有则取线路默认宽高；
+ * - 遵守官方 schema 的 minimum / maximum / multipleOf。
+ * 导出供测试逐个比例断言。
+ */
+export function sizeFromAspectRatio(
+    aspectRatio: string,
+    params: RouteParamSpec[],
+    resolution?: string,
+): { width: number; height: number } | null {
     const widthParam = params.find(param => param.field === 'width');
     const heightParam = params.find(param => param.field === 'height');
-    const match = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(aspectRatio.trim());
+    const match = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(String(aspectRatio || '').trim());
     if (!widthParam || !heightParam || !match) return null;
-    const ratio = Number(match[1]) / Number(match[2]);
-    if (!(ratio > 0)) return null;
-    const longEdge = Math.max(Number(widthParam.default) || 2048, Number(heightParam.default) || 2048);
-    const even = (value: number) => Math.max(64, Math.round(value / 16) * 16);
-    return ratio >= 1
-        ? { width: even(longEdge), height: even(longEdge / ratio) }
-        : { width: even(longEdge * ratio), height: even(longEdge) };
+    // 小数比例（如 2.39:1）放大成整数再约分
+    let a = Math.round(Number(match[1]) * 100);
+    let b = Math.round(Number(match[2]) * 100);
+    if (!(a > 0 && b > 0)) return null;
+    const divisor = gcd(a, b);
+    a /= divisor;
+    b /= divisor;
+    const minimum = Math.max(widthParam.minimum ?? 64, heightParam.minimum ?? 64);
+    const maximum = Math.min(widthParam.maximum ?? 8192, heightParam.maximum ?? 8192);
+    const step = Math.max(widthParam.multipleOf ?? 8, heightParam.multipleOf ?? 8);
+    const requestedLongEdge = resolution ? RESOLUTION_LONG_EDGE[resolution.trim().toLowerCase()] : undefined;
+    const longEdge = Math.min(
+        maximum,
+        requestedLongEdge || Math.max(Number(widthParam.default) || 2048, Number(heightParam.default) || 2048),
+    );
+    const fits = (k: number) => a * k % step === 0 && b * k % step === 0;
+    // 先找不超过长边的最大 k；比例太极端、短边低于下限时再往上找满足下限的最小 k。
+    for (let k = Math.floor(longEdge / Math.max(a, b)); k >= 1; k -= 1) {
+        if (fits(k) && Math.min(a, b) * k >= minimum) return { width: a * k, height: b * k };
+    }
+    for (let k = Math.ceil(minimum / Math.min(a, b)); Math.max(a, b) * k <= maximum; k += 1) {
+        if (fits(k)) return { width: a * k, height: b * k };
+    }
+    return null;
 }
 
 function snapDuration(requested: number, allowed: number[]): number {
@@ -1531,12 +1565,19 @@ function buildRunningHubRoutePayload(
 
     payload[promptField] = prompt;
 
+    let sizedFromAspectRatio = false;
     if (schema.aspectRatioField && options?.aspectRatio) {
         payload[schema.aspectRatioField] = options.aspectRatio;
     } else if (options?.aspectRatio && !disableDefaults) {
-        // 没有比例字段、只收 width/height 的线路（Seedream）：按比例换算宽高，长边沿用默认值。
-        const size = sizeFromAspectRatio(options.aspectRatio, schema.params);
-        if (size) Object.assign(payload, size);
+        // 没有比例字段、只收 width/height 的线路（Seedream）：按比例换算精确宽高。
+        // 官方 schema 写明 resolution 优先级高于 width/height，留着 resolution 宽高就会被忽略、
+        // 比例由模型自己决定，所以换算成功后去掉 resolution，只发宽高（resolution 只用来定长边）。
+        const size = sizeFromAspectRatio(options.aspectRatio, schema.params, options.resolution || String(payload.resolution || ''));
+        if (size) {
+            Object.assign(payload, size);
+            delete payload.resolution;
+            sizedFromAspectRatio = true;
+        }
     }
 
     if (schema.durationType && options?.durationSec && options.durationSec > 0) {
@@ -1556,7 +1597,7 @@ function buildRunningHubRoutePayload(
         }
     }
 
-    if (options?.resolution) {
+    if (options?.resolution && !sizedFromAspectRatio) {
         payload.resolution = options.resolution;
     }
 

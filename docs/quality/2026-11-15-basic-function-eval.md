@@ -104,10 +104,16 @@
 - **修复**：新增 `runningHubDocsModelUrl(baseUrl)`：主机名是 `runninghub.ai`（含子域）时读 `https://www.runninghub.ai/page-api`，其余（国内站、无法判断的代理地址、默认值）读 `https://www.runninghub.cn/page-api`。两站目录页结构相同（`__NUXT_DATA__`），同一解析器可用；已用当日抓取的国内站页面核对能解析出约 50 个图片 / 视频模型。
 - **测试**：`tests/runningHubModelDiscoverySite.test.ts`：地址映射（含 `evil-runninghub.ai.example.com` 不被当成国际站）；国内站与国际站 Base URL 各跑一次「获取模型」，断言只请求对应站点的 `page-api`，结果里有该站独有的模型。
 
+### 12. Seedream 输出比例不稳定
+
+- **现象**：经 RunningHub 的 `seedream-v5-flash/text-to-image` 生成时，节点选 16:9 / 3:2 等比例，交付图片的比例时对时不对。
+- **根因**：两处。① 请求体里同时带了线路默认的 `resolution: "2k"` 和换算出的 `width` / `height`；官方 OpenAPI schema（`api-519905082.md`、Seedream 4.5 的 `api-448183229.md`）写明 resolution 优先级高于宽高，「传入 resolution 后不再使用宽高像素」，于是宽高被丢弃，比例由模型按提示词自己定。节点的 `resolution`（1K / 2K）也会写回 `resolution` 字段，同样覆盖宽高。② 旧换算按 16 取整（3:2 → 2048×1360，21:9 → 2048×880），比例本身就不精确。
+- **修复**：`sizeFromAspectRatio` 改为把比例约分后取 `宽 = a×k、高 = b×k` 的精确整数，长边取节点的 resolution（1K / 1.5K / 2K / 4K，缺省用线路默认 2048），并遵守 schema 的 `minimum` / `maximum` / `multipleOf`（已写进 Route Catalog：Flash 240–8192、步长 1；4.5 512–8192、步长 8）。换算成功后从请求体去掉 `resolution`，只发宽高；没有比例（或 `adaptive`）时保持官方默认 `resolution: "2k"`。
+- **测试**：`tests/seedreamAspectRatioSize.test.ts`：产品给 Seedream 5 Flash 暴露的每个比例都有断言；Flash 2K / 1K、4.5 2K 每个比例的精确宽高、比例误差为 0、满足上下限与步长；经 `generateImageWithProvider` 截取真正发给 RunningHub 的请求体，断言每个比例的 `width` / `height` 且没有 `resolution`。真实账号出图比例尚未复测（需要扣费，留给 owner 用国内站 Key 跑一张 16:9 与 21:9 核对）。
+
 ## 仍未修复
 
 - PromptBar 显示 1:1，而节点 `config.aspectRatio` 是 16:9：两处显示不一致。
-- Seedream 输出的宽高比不稳定，与请求的比例不总是一致。
 - `--web` 模式下若前端已在运行，`ensure` 无法启动 Agent；临时办法：改用 `--source` 启动。
 - 自动产物回执（第 4 项）只经单元测试验证，尚未在真实画布上确认。
 
