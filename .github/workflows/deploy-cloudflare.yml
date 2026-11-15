@@ -1,0 +1,53 @@
+name: Deploy to Cloudflare Workers
+
+# Pushes to main publish the web build to the `flovart` Worker (flovart.avabbbb.com).
+# Needs repo secret CLOUDFLARE_API_TOKEN ("Edit Cloudflare Workers" template).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-workers
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_ACCOUNT_ID: 698d3643700adbbc8dcbe83c5440d458
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: |
+          export VITE_APP_VERSION="$(node -p "require('./package.json').version")"
+          export VITE_APP_COMMIT_SHA="${GITHUB_SHA}"
+          export VITE_BASE_PATH="/"
+          npx vite build
+
+      - name: Deploy Worker
+        run: npx --yes wrangler@4 deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Smoke test
+        run: |
+          sleep 10
+          curl -fsS -o /dev/null -w "index %{http_code}\n" https://flovart.avabbbb.com/
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X POST https://flovart.avabbbb.com/api/llm-proxy/opencode.ai/zen/go/v1/chat/completions -H "Origin: https://flovart.avabbbb.com" -H "content-type: application/json" -d '{}')
+          echo "llm proxy (no key) $code"; test "$code" = "401"
