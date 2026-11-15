@@ -79,4 +79,40 @@ describe('skill draft from session', () => {
       await fs.rm(root, { recursive: true, force: true });
     }
   });
+
+  it('skill.draft --from-project reads any Workspace project (history canvases included) plus its receipts', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'flovart-skill-project-'));
+    const requests = [];
+    const workspace = {
+      async execute(command, args) {
+        requests.push({ command, args });
+        return { ok: true, commandId: 'c1', result: { ...project, id: args.projectId } };
+      },
+      async request(url) {
+        requests.push({ url });
+        return { ok: true, projectId: 'proj-old', receipts: [
+          { kind: 'task', title: '生成奶蛙 emoji 系列', at: '2026-11-01T00:00:01Z' },
+          { kind: 'decision', title: '选 51ae 为风格参考', at: '2026-11-01T00:00:00Z' },
+        ] };
+      },
+    };
+    try {
+      const drafted = await runSkillCommand('skill.draft', { id: 'community.old-canvas', projectDir: root, fromProject: 'proj-old', nodeIds: ['ref', 'prompt', 'gen'] }, { workspace });
+      expect(drafted.ok).toBe(true);
+      expect(drafted.evaluation.ok).toBe(true);
+      expect(requests[0]).toEqual({ command: 'workflow.inspect', args: { projectId: 'proj-old' } });
+      expect(String(requests[1].url)).toContain('projectId=proj-old');
+      const skillMd = await fs.readFile(path.join(drafted.dir, 'SKILL.md'), 'utf8');
+      expect(skillMd.indexOf('选 51ae')).toBeLessThan(skillMd.indexOf('生成奶蛙'));
+      const manifest = await fs.readFile(path.join(drafted.dir, 'flovart.skill.yaml'), 'utf8');
+      expect(manifest).toContain('flovart-session:proj-old');
+      expect(manifest).not.toContain(FAKE_KEY);
+      const receiptsResult = await runSkillCommand('receipts.list', { projectId: 'proj-old' }, { workspace });
+      expect(receiptsResult.receipts).toHaveLength(2);
+      const both = await runSkillCommand('skill.draft', { id: 'community.x', projectDir: root, fromProject: 'a', fromSnapshot: 'b' }, { workspace });
+      expect(both.error.code).toBe('INVALID_ARGUMENT');
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
 });

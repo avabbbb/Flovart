@@ -10,11 +10,19 @@ import { COMMAND_REGISTRY } from './core.js';
 import { createOperationGateway, MCP_TOOL_NAMES } from './operation-gateway.js';
 import { WORKFLOW_APPLY_GUIDE } from './workflow-operation-schema.js';
 import { PIPELINE_COMMAND_NAMES, PIPELINE_WRITE_COMMANDS } from './pipeline/commands.js';
+import { SKILL_SURFACE_COMMAND_NAMES, SKILL_SURFACE_WRITE_COMMANDS } from './skill-surface.js';
 
 /** Agent 视频流水线命令的 MCP 工具名：flovart_ + 命令名（点换下划线），如 flovart_composition_render。 */
 export const PIPELINE_MCP_TOOL_NAMES = Object.freeze(Object.fromEntries(
   PIPELINE_COMMAND_NAMES.map(command => [command, `flovart_${command.replace(/[.-]/g, '_')}`]),
 ));
+
+/** Skill 生态与项目回执的 MCP 工具名：flovart_skill_list、flovart_skill_draft、flovart_receipts_list…… */
+export const SKILL_MCP_TOOL_NAMES = Object.freeze(Object.fromEntries(
+  SKILL_SURFACE_COMMAND_NAMES.map(command => [command, `flovart_${command.replace(/[.-]/g, '_')}`]),
+));
+
+const SKILL_GUIDE = 'Production Skills only reach providers through the Flovart Runtime: they never read API keys. To turn a canvas into a Skill, pick a project (workflow.project.list / workflow.inspect, history canvases included), then call skill.draft with fromProject; it installs only with install=true and a passing evaluation.';
 
 const PIPELINE_GUIDE = 'Agent video pipeline: every call is recorded as a step in the run trace. Write tools need a stable mutationId so retries replay instead of re-running. Pass agentIdentity (codex, claude-code, ...) so the trace shows who called.';
 
@@ -155,6 +163,28 @@ export function createMcpServer(options = {}) {
           });
           if (!response?.ok) return failureResult({ toJSON: () => response?.error || { code: 'PIPELINE_FAILED', message: 'pipeline command failed', retryable: false } });
           return successResult({ ...response.result, ...(response.step ? { step: response.step } : {}) });
+        } catch (error) {
+          return failureResult(error);
+        }
+      });
+    }
+  }
+
+  if (options.includeSkills !== false) {
+    const executeSkill = options.skillExecute
+      || (async (command, args) => (await import('./skill-commands.js')).runSkillCommand(command, args));
+    for (const command of SKILL_SURFACE_COMMAND_NAMES) {
+      const definition = COMMAND_REGISTRY[command];
+      server.registerTool(SKILL_MCP_TOOL_NAMES[command], {
+        description: `${definition.summary} ${SKILL_GUIDE}`,
+        inputSchema: mcpInputShape(command),
+        annotations: { readOnlyHint: !SKILL_SURFACE_WRITE_COMMANDS.has(command), idempotentHint: !SKILL_SURFACE_WRITE_COMMANDS.has(command), openWorldHint: command === 'skill.hub.list' || command === 'skill.install' },
+      }, async input => {
+        const { agentIdentity: _agentIdentity, hostSessionId: _hostSessionId, ...args } = input || {};
+        try {
+          const response = await executeSkill(command, args);
+          if (!response?.ok) return failureResult({ toJSON: () => response?.error || { code: 'SKILL_COMMAND_FAILED', message: 'skill command failed', retryable: false } });
+          return successResult(response);
         } catch (error) {
           return failureResult(error);
         }

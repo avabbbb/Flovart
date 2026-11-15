@@ -28,6 +28,7 @@ import {
   RESEARCH_WRITE_COMMAND_NAMES,
 } from '../tools/flovart/research-command-surface.js';
 import { PIPELINE_COMMAND_NAMES } from '../tools/flovart/pipeline/commands.js';
+import { SKILL_SURFACE_COMMAND_NAMES } from '../tools/flovart/skill-surface.js';
 
 describe('Production Runtime canonical registry', () => {
   it('publishes the S1.1 durable-task contract without restoring removed surfaces', () => {
@@ -35,7 +36,7 @@ describe('Production Runtime canonical registry', () => {
     const commandNames = Object.keys(registry.commands);
 
     expect(registry.protocolVersion).toBe('1');
-    expect(registry.registryHash).toBe('24bdcc86ce81a0fdef9e99c10de6f7db1affe390ea36cc9d0a9692b10b234118');
+    expect(registry.registryHash).toBe('d33931237d9926f6b149df78dcf450a963933de8135c47ce18361909c8a240ca');
     expect(hashCanonicalRegistryDocument(registryDocument)).toBe(registry.registryHash);
     expect(Object.isFrozen(registry.commands)).toBe(true);
     expect(Object.isFrozen(registry.commands['runtime.status'].args)).toBe(true);
@@ -110,6 +111,7 @@ describe('Production Runtime canonical registry', () => {
       ...WORKSPACE_COMMAND_NAMES,
       ...RESEARCH_COMMAND_NAMES,
       ...PIPELINE_COMMAND_NAMES, // Agent 视频流水线本机边界
+      ...SKILL_SURFACE_COMMAND_NAMES, // Skill 生态与项目共享回执
       'status', // CLI local-system adapter
       'host.list', // CLI local Host discovery adapter
       'init', // CLI Distribution Target installer

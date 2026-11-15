@@ -11,6 +11,7 @@ const { COMMAND_ALIASES, COMMAND_REGISTRY } = core;
 const AGENT_WRITE_COMMANDS = new Set([
   'workflow.apply',
   'workflow.node.run',
+  'workflow.node.tool',
 ]);
 
 const toolName = command => {

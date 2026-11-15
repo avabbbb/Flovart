@@ -39,6 +39,7 @@
     "registry.js",
     "runtime-command-surface.js",
     "skill-commands.js",
+    "skill-surface.js",
     "skill-hub.js",
     "skill-package.js",
     "skill-registry.js",

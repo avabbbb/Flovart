@@ -78,7 +78,7 @@ export function topologicalNodeOrder(subgraph) {
 function receiptSteps(receipts) {
   return (Array.isArray(receipts) ? receipts : [])
     .filter(receipt => receipt && (receipt.kind === 'task' || receipt.kind === 'decision') && receipt.title)
-    .sort((left, right) => String(left.createdAt || '').localeCompare(String(right.createdAt || '')))
+    .sort((left, right) => String(left.createdAt || left.at || '').localeCompare(String(right.createdAt || right.at || '')))
     .slice(0, SKILL_DRAFT_MAX_RECEIPTS)
     .map(receipt => {
       const detail = oneLine(receipt.summary || receipt.body || receipt.detail || '', 160);

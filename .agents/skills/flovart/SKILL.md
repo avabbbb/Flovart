@@ -225,5 +225,7 @@ the user.
   tracer.
 - `commands/pipeline.md`: the Agent video pipeline (runs, capture, voice,
   render, review). Read it only when the task is to make or revise a video.
+- `commands/skill.md`: Production Skills (list, install from a Skill Hub,
+  turn a canvas into a Skill). Read it only when the task is about Skills.
 - `commands/`: compatibility and diagnostic commands. Not needed for normal
   work.

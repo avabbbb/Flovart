@@ -12,6 +12,7 @@ export const MCP_TOOL_NAMES = Object.freeze({
   'workflow.focus.nodes': 'flovart_workflow_focus',
   'workflow.apply': 'flovart_workflow_apply',
   'workflow.node.run': 'flovart_workflow_run',
+  'workflow.node.tool': 'flovart_workflow_node_tool',
 });
 
 const WRITE_OPERATIONS = new Set(CANONICAL_AGENT_OPERATIONS.filter(command => AGENT_OPERATION_DEFINITIONS[command]?.mutation));

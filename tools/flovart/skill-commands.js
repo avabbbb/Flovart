@@ -57,6 +57,7 @@ const SKILL_COMMAND_NAMES = new Set([
   'skill.init',
   'skill.validate',
   'skill.draft',
+  'receipts.list',
   'web.open',
 ]);
 
@@ -123,7 +124,38 @@ function scaffoldSkillFiles(id, handle, displayName) {
   return { 'flovart.skill.yaml': manifest, 'SKILL.md': skill, 'agents/openai.yaml': openai };
 }
 
-export async function runSkillCommand(command, args = {}) {
+// Workspace Adapter 依赖懒加载：只有 receipts.list / skill.draft --from-project 需要连本地 Agent 服务。
+async function defaultWorkspaceClient() {
+  const { FlovartWorkspaceClient } = await import('./workspace-client.js');
+  return new FlovartWorkspaceClient();
+}
+
+// 读取某个工程的共享回执（本地 Agent 服务 GET /receipts），供 skill.draft 沉淀步骤。
+export async function listProjectReceipts(client, projectId, limit = 200) {
+  const query = new URLSearchParams();
+  if (projectId) query.set('projectId', String(projectId));
+  query.set('limit', String(Math.max(1, Math.min(200, Number(limit) || 200))));
+  const body = await client.request('/receipts?' + query.toString());
+  return { projectId: body?.projectId || projectId || null, receipts: Array.isArray(body?.receipts) ? body.receipts : [] };
+}
+
+// 从可见 Workspace 读取任意工程（含历史画布）组成 skill.draft 快照：workflow.inspect + 回执。
+export async function snapshotFromProject(client, projectId) {
+  const raw = await client.execute('workflow.inspect', { projectId }, 'cli');
+  // 浏览器 dispatcher 回包是 { ok, commandId, result }；兼容直接返回工程的实现。
+  const project = raw && raw.result && Array.isArray(raw.result.nodes) ? raw.result : raw;
+  if (!project || !Array.isArray(project.nodes)) throw new Error('workflow.inspect 没有返回工程节点：' + projectId);
+  let receipts = [];
+  try {
+    receipts = (await listProjectReceipts(client, project.id || projectId)).receipts;
+  } catch {
+    receipts = []; // 回执是可选上下文；Agent 服务没有回执时只用画布子图。
+  }
+  return { projectId: project.id || projectId, project, receipts };
+}
+
+export async function runSkillCommand(command, args = {}, deps = {}) {
+  const getWorkspace = async () => deps.workspace || await defaultWorkspaceClient();
   const projectDir = resolveProjectDir(args.projectDir ?? args['project-dir']);
   const id = String(args.id || args.skillId || args._?.[0] || '').trim();
 
@@ -231,17 +263,28 @@ export async function runSkillCommand(command, args = {}) {
       return okResult({ command, id, dir, files: Object.keys(files), next: ['skill.validate --from-dir ' + dir, 'skill.install ' + id + ' --from-dir ' + dir] });
     }
 
-    // 对话转 Skill：--from-snapshot 为 { projectId, project: workflow.inspect 的工程, receipts: receipts.list 的回执 }。
+    // 画布 / 对话转 Skill：--from-project 直接读可见 Workspace 里的工程（含历史画布）与回执；
+    // --from-snapshot 为离线快照 { projectId, project: workflow.inspect 的工程, receipts: receipts.list 的回执 }。
     // 默认只写草稿到 .agents/skill-drafts/<handle>；带 --install 且基础验收全部通过才入库。
     case 'skill.draft': {
       if (!id) return error('INVALID_ARGUMENT', 'skill.draft 需要 <id>（如 community.my-flow）。');
       const snapshotPath = String(args.fromSnapshot ?? args['from-snapshot'] ?? '').trim();
-      if (!snapshotPath) return error('INVALID_ARGUMENT', 'skill.draft 需要 --from-snapshot <json>。');
+      const fromProject = String(args.fromProject ?? args['from-project'] ?? '').trim();
+      if (!snapshotPath && !fromProject) return error('INVALID_ARGUMENT', 'skill.draft 需要 --from-project <projectId>（可先 workflow.project.list 选历史画布）或 --from-snapshot <json>。');
+      if (snapshotPath && fromProject) return error('INVALID_ARGUMENT', '--from-project 与 --from-snapshot 只能二选一。');
       let snapshot;
-      try {
-        snapshot = JSON.parse(await fs.readFile(path.resolve(snapshotPath), 'utf8'));
-      } catch (cause) {
-        return error('INVALID_ARGUMENT', '无法读取快照：' + (cause instanceof Error ? cause.message : String(cause)));
+      if (fromProject) {
+        try {
+          snapshot = await snapshotFromProject(await getWorkspace(), fromProject);
+        } catch (cause) {
+          return error(cause?.code || 'WORKSPACE_UNAVAILABLE', '无法读取工程 ' + fromProject + '：' + (cause instanceof Error ? cause.message : String(cause)));
+        }
+      } else {
+        try {
+          snapshot = JSON.parse(await fs.readFile(path.resolve(snapshotPath), 'utf8'));
+        } catch (cause) {
+          return error('INVALID_ARGUMENT', '无法读取快照：' + (cause instanceof Error ? cause.message : String(cause)));
+        }
       }
       let draft;
       try {
@@ -252,7 +295,9 @@ export async function runSkillCommand(command, args = {}) {
           projectId: snapshot?.projectId || snapshot?.project?.id,
           project: snapshot?.project || snapshot,
           receipts: snapshot?.receipts,
-          nodeIds: typeof args.nodes === 'string' ? args.nodes.split(',').map(item => item.trim()).filter(Boolean) : snapshot?.nodeIds,
+          nodeIds: Array.isArray(args.nodeIds)
+            ? args.nodeIds.map(String)
+            : typeof args.nodes === 'string' ? args.nodes.split(',').map(item => item.trim()).filter(Boolean) : snapshot?.nodeIds,
         });
       } catch (cause) {
         return error('INVALID_ARGUMENT', cause instanceof Error ? cause.message : String(cause));
@@ -278,6 +323,16 @@ export async function runSkillCommand(command, args = {}) {
         return okResult({ command, id, dir, files, evaluation, skill, installed: true });
       } catch (cause) {
         return error('REJECTED', cause instanceof Error ? cause.message : String(cause));
+      }
+    }
+
+    case 'receipts.list': {
+      const projectId = String(args.projectId ?? args['project-id'] ?? args._?.[0] ?? '').trim();
+      try {
+        const result = await listProjectReceipts(await getWorkspace(), projectId, args.limit);
+        return okResult({ command, ...result });
+      } catch (cause) {
+        return error(cause?.code || 'WORKSPACE_UNAVAILABLE', cause instanceof Error ? cause.message : String(cause));
       }
     }
 

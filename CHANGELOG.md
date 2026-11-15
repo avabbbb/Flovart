@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Agent 工具面补齐：`workflow.node.tool`（裁剪 / 放大 / 去背景 / 剪辑 / 抽帧 / 反推提示词等）进入外部 Agent 公开面，MCP 工具 `flovart_workflow_node_tool`，付费工具仍在浏览器侧确认；Skill 命令（list / manifest / hub.list / validate / init / draft / install / uninstall）与新命令 `receipts.list` 写入 Runtime 注册表并投影为 MCP 工具 `flovart_skill_*` / `flovart_receipts_list`。
+- 画布转 Skill：`skill.draft --from-project <projectId>` 直接读取可见 Workspace 里的任意工程（含历史画布）与共享回执生成草稿，不再需要手工拼快照；Skill 增加 `commands/skill.md`。
+- 修复 release red-team 公开面白名单与实际公开命令不一致。
 - Agent 视频流水线 P0（实验性）：13 条 pipeline 命令（run / 素材 / TTS / 转写 / 对齐 / 合成修订 / 渲染 / 探测 / 抽帧 / 评审 / 归档），命令边界自动记 trace，评审 → 定向修补（locked 片段不变）→ 重渲染可端到端跑通（`npm run e2e:pipeline`）。
 - 流水线 trace 迁入桌面 Runtime 共用的 `flovart-state.db`（migration 5，表名 `pipeline_*`）；Rust Runtime 新增只读 `pipeline.run.get`，与 Node 输出逐字段一致（`npm run e2e:pipeline:parity`）；agent 新增只读 `GET /pipeline/runs`、`/pipeline/runs/:id`、`/pipeline/artifacts/:id`。
 - 流水线配音新增 RunningHub 路由（MiniMax speech，通过 RunningHub Key 调用），附真实 trial 脚本。

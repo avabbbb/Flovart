@@ -6,8 +6,9 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
 import { AGENT_PUBLIC_COMMANDS } from '../tools/flovart/agent-surface.js';
 import { AGENT_OPERATION_DEFINITIONS } from '../tools/flovart/agent-surface.js';
-import { createMcpServer, PIPELINE_MCP_TOOL_NAMES } from '../tools/flovart/mcp-server.js';
+import { createMcpServer, PIPELINE_MCP_TOOL_NAMES, SKILL_MCP_TOOL_NAMES } from '../tools/flovart/mcp-server.js';
 import { PIPELINE_COMMAND_NAMES } from '../tools/flovart/pipeline/commands.js';
+import { SKILL_SURFACE_COMMAND_NAMES } from '../tools/flovart/skill-surface.js';
 import { createOperationGateway } from '../tools/flovart/operation-gateway.js';
 
 async function connectProjection(gateway: (command: string, args: Record<string, unknown>, context: Record<string, unknown>) => Promise<unknown>) {
@@ -45,9 +46,11 @@ describe('Flovart MCP projection', () => {
       'flovart_workflow_focus',
       'flovart_workflow_apply',
       'flovart_workflow_run',
+      'flovart_workflow_node_tool',
       ...PIPELINE_COMMAND_NAMES.map(command => PIPELINE_MCP_TOOL_NAMES[command]),
+      ...SKILL_SURFACE_COMMAND_NAMES.map(command => SKILL_MCP_TOOL_NAMES[command]),
     ]);
-    expect(result.tools).toHaveLength(AGENT_PUBLIC_COMMANDS.length + PIPELINE_COMMAND_NAMES.length);
+    expect(result.tools).toHaveLength(AGENT_PUBLIC_COMMANDS.length + PIPELINE_COMMAND_NAMES.length + SKILL_SURFACE_COMMAND_NAMES.length);
     expect(result.tools.map(tool => tool.name).join(' ')).not.toMatch(/command\.list|command\.schema|node\.create/);
   });
 
@@ -212,5 +215,30 @@ describe('Flovart MCP projection', () => {
     expect(capture.isError).toBe(true);
     expect(capture.structuredContent).toMatchObject({ ok: false, error: { code: 'CONFIRMATION_REQUIRED' } });
     expect(calls[1].context).toEqual({ caller: 'mcp', mutationId: 'm-2' });
+  });
+  it('projects the Skill ecosystem and receipts as flovart_skill_* tools', async () => {
+    // 运行时拼出来的假密钥：避免 release 密钥审计扫到源码字面量。
+    const LEAK = ['sk', 'should-not-leak', '0'.repeat(10)].join('-');
+    const calls: Array<{ command: string; args: Record<string, unknown> }> = [];
+    const server = createMcpServer({
+      gateway: async () => ({ ok: true }),
+      includePipeline: false,
+      includeResources: false,
+      skillExecute: async (command: string, args: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return { ok: true, command, dir: '/tmp/draft', evaluation: { ok: true }, apiKey: LEAK };
+      },
+    });
+    const client = new Client({ name: 'flovart-skill-test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    const { tools } = await client.listTools();
+    expect(tools.find(tool => tool.name === 'flovart_skill_list')?.annotations?.readOnlyHint).toBe(true);
+    expect(tools.find(tool => tool.name === 'flovart_skill_draft')?.annotations?.readOnlyHint).toBe(false);
+    expect(tools.map(tool => tool.name)).toContain('flovart_receipts_list');
+    const result = await client.callTool({ name: 'flovart_skill_draft', arguments: { id: 'community.demo', fromProject: 'p-1', nodeIds: ['a'], agentIdentity: 'codex' } });
+    expect(calls).toEqual([{ command: 'skill.draft', args: { id: 'community.demo', fromProject: 'p-1', nodeIds: ['a'] } }]);
+    expect(JSON.stringify(result)).not.toContain(LEAK);
   });
 });

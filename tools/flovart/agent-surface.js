@@ -8,6 +8,7 @@ export const AGENT_PUBLIC_COMMANDS = Object.freeze([
   'workflow.focus.nodes',
   'workflow.apply',
   'workflow.node.run',
+  'workflow.node.tool',
 ]);
 
 export const AGENT_PUBLIC_COMMAND_SET = new Set(AGENT_PUBLIC_COMMANDS);
@@ -33,8 +34,11 @@ export const AGENT_OPERATION_DEFINITIONS = Object.freeze({
   'workflow.apply': Object.freeze({ sideEffects: 'workflow.write', risk: 'reversible', permissions: Object.freeze(['workflow.write']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow']) }),
   'agent.turn': Object.freeze({ sideEffects: 'agent.delegate', risk: 'cost-and-generation', permissions: Object.freeze(['agent.delegate']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow']) }),
   'workflow.node.run': Object.freeze({ sideEffects: 'generation.maybe', risk: 'cost-and-generation', permissions: Object.freeze(['workflow.run']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow', 'provider-gate']) }),
+  // 画布二次处理（裁剪 / 放大 / 去背景 / 剪辑 / 抽帧 / 反推提示词…）：付费工具在浏览器侧仍需人工确认。
+  'workflow.node.tool': Object.freeze({ sideEffects: 'generation.maybe', risk: 'cost-and-generation', permissions: Object.freeze(['workflow.run']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow', 'provider-gate']) }),
 });
 
+// 内置 Agent 由注册表摘要生成的工具；workflow.node.tool 另有带完整工具清单的专用工具（browserAgentKernel）。
 export const AGENT_BROWSER_COMMANDS = Object.freeze([
   'workflow.inspect',
   'workflow.selection.get',

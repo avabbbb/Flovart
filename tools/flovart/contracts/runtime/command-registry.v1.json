@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "24bdcc86ce81a0fdef9e99c10de6f7db1affe390ea36cc9d0a9692b10b234118",
+  "registryHash": "d33931237d9926f6b149df78dcf450a963933de8135c47ce18361909c8a240ca",
   "commands": [
     {
       "name": "runtime.status",
@@ -554,7 +554,7 @@
     },
     {
       "name": "workflow.node.tool",
-      "summary": "Run one canvas secondary-processing tool on a visible Workflow node.",
+      "summary": "Run one canvas secondary-processing tool on a visible Workflow node (crop, upscale, remove-background, edit, video-trim, video-extract-frame, audio tools, reverse-prompt, filter, outpaint, mask; reverse-prompt writes the vision model's prompt back to the image/video node).",
       "args": {
         "projectId": "string?",
         "nodeId": "string",
@@ -803,6 +803,95 @@
         "include": "string[]?",
         "confirmed": "boolean",
         "mutationId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "skill.list",
+      "summary": "List Production Skills installed in the local registry (built-in, project and community roots).",
+      "args": {
+        "projectDir": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "skill.manifest",
+      "summary": "Read one installed Production Skill manifest (capabilities, permissions, gates, inputs).",
+      "args": {
+        "id": "string",
+        "projectDir": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "skill.hub.list",
+      "summary": "List Production Skills published by a Skill Hub (https or loopback http).",
+      "args": {
+        "hubUrl": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "skill.validate",
+      "summary": "Validate a local Production Skill package directory before installing it.",
+      "args": {
+        "fromDir": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "skill.init",
+      "summary": "Scaffold a new community Production Skill package (flovart.skill.yaml + SKILL.md) without overwriting.",
+      "args": {
+        "id": "string",
+        "name": "string?",
+        "dir": "string?",
+        "projectDir": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "skill.draft",
+      "summary": "Compile a Workflow canvas (any project, including history canvases from workflow.project.list) and its shared receipts into a Production Skill draft, run the basic evaluation, and install only when install=true and it passes.",
+      "args": {
+        "id": "string",
+        "fromProject": "string?",
+        "fromSnapshot": "string?",
+        "nodeIds": "string[]?",
+        "name": "string?",
+        "description": "string?",
+        "install": "boolean?",
+        "dir": "string?",
+        "projectDir": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "skill.install",
+      "summary": "Install a Production Skill from a Skill Hub or a local package directory into the local registry.",
+      "args": {
+        "id": "string",
+        "hubUrl": "string?",
+        "fromDir": "string?",
+        "projectDir": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "skill.uninstall",
+      "summary": "Remove a community Production Skill from the local registry.",
+      "args": {
+        "id": "string",
+        "projectDir": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "receipts.list",
+      "summary": "List the shared, read-only receipts Agents left on a Workflow project (task, artifact, decision, note).",
+      "args": {
+        "projectId": "string?",
+        "limit": "number?"
       },
       "availability": "available"
     }
