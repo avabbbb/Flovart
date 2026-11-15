@@ -31,10 +31,9 @@ await refreshDirectory(resolve(repoDir, '.agents', 'skills', 'open-flovart'), re
 // Bundled Production Skills also ship inside the package so the packaged
 // Managed Agent can bind them (skill/vox-director/); the loader checks both
 // the repo checkout and this packaged location.
-await refreshDirectory(
-  resolve(repoDir, '.agents', 'skills', 'vox-director'),
-  resolve(packageDir, 'skill', 'vox-director'),
-);
+for (const name of ['vox-director', 'still-mad']) {
+  await refreshDirectory(resolve(repoDir, '.agents', 'skills', name), resolve(packageDir, 'skill', name));
+}
 for (const [name, content] of Object.entries(PACKAGE_LAYOUT_ALIASES)) {
   await writeFile(resolve(packageDir, 'managed-agent', name), content, 'utf8');
 }

@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 2,
+  "output": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "durationMs": 15000
+  },
+  "tracks": {
+    "visual": [
+      {
+        "id": "shot-01",
+        "kind": "image",
+        "artifactId": "a1",
+        "startMs": 0,
+        "durationMs": 3750,
+        "fit": "cover",
+        "motion": {
+          "type": "push",
+          "ease": "in-out"
+        },
+        "locked": false
+      },
+      {
+        "id": "shot-02",
+        "kind": "image",
+        "artifactId": "a2",
+        "startMs": 3750,
+        "durationMs": 3750,
+        "fit": "cover",
+        "motion": {
+          "type": "pan-left",
+          "ease": "in-out"
+        },
+        "locked": false
+      },
+      {
+        "id": "shot-03",
+        "kind": "image",
+        "artifactId": "a3",
+        "startMs": 7500,
+        "durationMs": 938,
+        "fit": "cover",
+        "motion": {
+          "type": "tilt-up",
+          "ease": "linear"
+        },
+        "locked": false
+      },
+      {
+        "id": "shot-04",
+        "kind": "image",
+        "artifactId": "a4",
+        "startMs": 8438,
+        "durationMs": 937,
+        "fit": "cover",
+        "motion": {
+          "type": "pull",
+          "ease": "linear"
+        },
+        "locked": false
+      },
+      {
+        "id": "shot-05",
+        "kind": "image",
+        "artifactId": "a2",
+        "startMs": 9375,
+        "durationMs": 937,
+        "fit": "cover",
+        "motion": {
+          "type": "pan-right",
+          "ease": "linear"
+        },
+        "locked": false
+      },
+      {
+        "id": "shot-06",
+        "kind": "image",
+        "artifactId": "a5",
+        "startMs": 10312,
+        "durationMs": 938,
+        "fit": "cover",
+        "motion": {
+          "type": "push",
+          "ease": "out",
+          "flash": true
+        },
+        "locked": false
+      },
+      {
+        "id": "shot-07",
+        "kind": "image",
+        "artifactId": "a6",
+        "startMs": 11250,
+        "durationMs": 469,
+        "fit": "cover",
+        "motion": {
+          "type": "impact",
+          "ease": "out",
+          "flash": true
+        },
+        "locked": false
+      },
+      {
+        "id": "shot-08",
+        "kind": "image",
+        "artifactId": "a3",
+        "startMs": 11719,
+        "durationMs": 469,
+        "fit": "cover",
+        "motion": {
+          "type": "shake",
+          "ease": "out"
+        },
+        "locked": false
+      },
+      {
+        "id": "shot-09",
+        "kind": "image",
+        "artifactId": "a4",
+        "startMs": 12188,
+        "durationMs": 468,
+        "fit": "cover",
+        "motion": {
+          "type": "impact",
+          "ease": "out",
+          "flash": true
+        },
+        "locked": false
+      },
+      {
+        "id": "shot-10",
+        "kind": "image",
+        "artifactId": "a5",
+        "startMs": 12656,
+        "durationMs": 469,
+        "fit": "cover",
+        "motion": {
+          "type": "push",
+          "ease": "out",
+          "flash": true
+        },
+        "locked": false
+      },
+      {
+        "id": "shot-11",
+        "kind": "image",
+        "artifactId": "a1",
+        "startMs": 13125,
+        "durationMs": 1875,
+        "fit": "cover",
+        "motion": {
+          "type": "pull",
+          "ease": "in-out"
+        },
+        "locked": false
+      }
+    ],
+    "text": [
+      {
+        "id": "card-intro",
+        "text": "雨夜",
+        "startMs": 0,
+        "durationMs": 1875,
+        "position": "center",
+        "size": 120,
+        "locked": false
+      },
+      {
+        "id": "card-drop",
+        "text": "开始",
+        "startMs": 11250,
+        "durationMs": 938,
+        "position": "bottom",
+        "size": 96,
+        "locked": false
+      }
+    ],
+    "captions": [],
+    "audio": [
+      {
+        "id": "music",
+        "role": "music",
+        "artifactId": "music-1",
+        "startMs": 0,
+        "durationMs": 15000,
+        "gainDb": 0,
+        "duck": false,
+        "locked": false
+      }
+    ]
+  }
+}

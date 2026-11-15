@@ -5,7 +5,7 @@
 //   schemaVersion: 2,
 //   output: { width, height, fps, durationMs },
 //   tracks: {
-//     visual:   [{ id, kind: image|video|color, artifactId?, color?, startMs, durationMs, fit?, motion?, label?, locked }],
+//     visual:   [{ id, kind: image|video|color, artifactId?, color?, startMs, durationMs, fit?, motion?: { type, amount?, ease?, flash? }, label?, locked }],
 //     text:     [{ id, text, startMs, durationMs, position: top|center|bottom, size?, locked }],
 //     captions: [{ id, lineId?, displayText, startMs, durationMs, locked }],
 //     audio:    [{ id, role: voice|music|sfx, artifactId, startMs, durationMs?, gainDb?, duck?, locked }],
@@ -19,6 +19,10 @@ const TRACK_SET = new Set(TRACKS);
 const VISUAL_KINDS = new Set(['image', 'video', 'color']);
 const AUDIO_ROLES = new Set(['voice', 'music', 'sfx']);
 const POSITIONS = new Set(['top', 'center', 'bottom']);
+// 与 services/reverse/stillMotion.ts 的 STILL_MOTION_TYPES 同步（tests/stillMotion.test.ts 校验）。
+export const MOTION_TYPES = Object.freeze(['none', 'push', 'pull', 'pan-left', 'pan-right', 'tilt-up', 'tilt-down', 'shake', 'impact']);
+const MOTION_TYPE_SET = new Set(MOTION_TYPES);
+const MOTION_EASES = new Set(['linear', 'out', 'in-out']);
 
 export class SpecError extends Error {
   constructor(code, message, details) {
@@ -114,6 +118,15 @@ export function validateSpec(spec) {
       if (track === 'visual') {
         if (!VISUAL_KINDS.has(clip?.kind)) errors.push(`${label}: kind 只能是 image / video / color`);
         if (clip?.kind !== 'color' && !clip?.artifactId) errors.push(`${label}: 缺少 artifactId`);
+        if (clip?.motion !== undefined) {
+          const motion = clip.motion;
+          if (!motion || typeof motion !== 'object' || !MOTION_TYPE_SET.has(motion.type)) errors.push(`${label}: motion.type 只能是 ${MOTION_TYPES.join(' / ')}`);
+          else {
+            if (motion.amount !== undefined && !(Number.isFinite(motion.amount) && motion.amount >= 0 && motion.amount <= 0.5)) errors.push(`${label}: motion.amount 须在 0–0.5`);
+            if (motion.ease !== undefined && !MOTION_EASES.has(motion.ease)) errors.push(`${label}: motion.ease 只能是 linear / out / in-out`);
+            if (motion.flash !== undefined && typeof motion.flash !== 'boolean') errors.push(`${label}: motion.flash 必须是布尔值`);
+          }
+        }
       }
       if (track === 'text') {
         if (!clip?.text) errors.push(`${label}: text 不能为空`);

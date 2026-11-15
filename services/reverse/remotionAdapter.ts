@@ -1,5 +1,6 @@
 // ProductionSpec → Remotion 预览描述。保持纯函数：组件只负责画，转换逻辑可测。
 import type { ProductionSpecV1 } from './productionSpec';
+import type { StillMotion } from './stillMotion';
 
 export type PreviewAssetKind = 'video' | 'image' | 'placeholder';
 
@@ -21,6 +22,7 @@ export interface PreviewSequence {
   kind: PreviewAssetKind;
   src?: string;
   label?: string;
+  motion?: StillMotion;
 }
 
 /** 每个镜头一个 Sequence；没有可定位素材时给占位，不伪造画面。 */
@@ -36,6 +38,7 @@ export function toPreviewSequences(
     kind: previewAssetKind(shot.assetRef),
     ...(shot.assetRef ? { src: shot.assetRef } : {}),
     ...(labels[shot.shotId] ? { label: labels[shot.shotId] } : {}),
+    ...(shot.motion ? { motion: shot.motion } : {}),
   }));
 }
 

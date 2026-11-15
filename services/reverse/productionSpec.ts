@@ -3,6 +3,7 @@
 // 消费方（Remotion Adapter、渲染 Worker、外部 Agent）都读这一个结构。
 import type { ReverseVideoProject } from './types';
 import { msToFrame } from './temporal';
+import type { StillMotion } from './stillMotion';
 
 export const PRODUCTION_SPEC_SCHEMA_VERSION = 1 as const;
 
@@ -19,6 +20,8 @@ export interface ProductionShotV1 {
   assetRef?: string;
   /** 已有可定位产物时默认锁定，局部重渲染只动未锁定的镜头。 */
   locked: boolean;
+  /** 静止画运镜（推拉摇移震、闪白），只作用于图片镜头。 */
+  motion?: StillMotion;
 }
 
 /** 文字层（标题、卡片字）。字号按 1080p 画面像素计，渲染按 output 高度等比缩放。 */

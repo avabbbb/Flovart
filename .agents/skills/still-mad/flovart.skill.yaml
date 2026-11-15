@@ -1,0 +1,51 @@
+schemaVersion: flovart.production-skill/1
+id: community.still-mad
+version: 1.0.0
+runtime:
+  minVersion: 0.3.0
+capabilities:
+  - image.generate
+  - media.render
+  - media.verify
+permissions:
+  network: none
+  secrets: none
+  filesystem: package-readonly
+gates:
+  - id: approve-shot-list
+    type: spec
+  - id: review-keyframes
+    type: keyframe-review
+  - id: review-cut
+    type: review
+evals:
+  entry: evals/cases.json
+license: MIT
+provenance:
+  source: https://github.com/avabbbb/Flovart
+  adaptation: flovart-original
+trustTier: bundled-example
+inputs:
+  - id: music
+    label: 音乐文件与 BPM
+    kind: longtext
+    required: true
+    placeholder: 文件路径，BPM（例如 128），有前奏的话写第一个重拍在几秒
+  - id: duration
+    label: 时长
+    kind: choice
+    options: ["30 秒", "60 秒", "90 秒"]
+    default: 60 秒
+  - id: aspect
+    label: 画幅
+    kind: choice
+    options: ["16:9", "9:16"]
+    default: "16:9"
+  - id: images
+    label: 素材图（可选）
+    kind: image
+    placeholder: 不传就按主题生成
+  - id: theme
+    label: 主题与画风
+    kind: longtext
+    placeholder: 例如：雨夜城市，赛璐璐动画风

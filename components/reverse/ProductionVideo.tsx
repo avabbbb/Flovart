@@ -1,6 +1,7 @@
 // 共享合成：Player 与 Node 渲染读同一个组件，避免预览/成片两套画面。
 import React, { useEffect, useState } from 'react';
-import { AbsoluteFill, Audio, Img, Sequence, Video, cancelRender, continueRender, delayRender, staticFile, useVideoConfig } from 'remotion';
+import { AbsoluteFill, Audio, Img, Sequence, Video, cancelRender, continueRender, delayRender, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
+import { stillMotionFrame, type StillMotion } from '../../services/reverse/stillMotion';
 import type { ProductionAudioV1, ProductionCaptionV1, ProductionTextV1 } from '../../services/reverse/productionSpec';
 import {
   MUSIC_DUCK_FACTOR,
@@ -81,6 +82,22 @@ function CaptionLayer({ clip, height, fontFamily }: { clip: ProductionCaptionV1;
   );
 }
 
+/** 图片镜头：按 motion 逐帧变换（Sequence 内帧号从 0 起），闪白叠一层白。 */
+function MovingStill({ src, motion, durationInFrames }: { src: string; motion?: StillMotion; durationInFrames: number }) {
+  const frame = useCurrentFrame();
+  const state = stillMotionFrame(motion, frame, durationInFrames);
+  return (
+    <>
+      <Img src={src} style={{
+        width: '100%', height: '100%', objectFit: 'cover',
+        transform: `translate(${state.x}%, ${state.y}%) scale(${state.scale}) rotate(${state.rotate}deg)`,
+        transformOrigin: '50% 50%',
+      }} />
+      {state.flash > 0 && <AbsoluteFill style={{ background: '#ffffff', opacity: state.flash }} />}
+    </>
+  );
+}
+
 export function ProductionVideo({ shots, texts = [], captions = [], audio = [], language = 'zho', fontSrc }: ProductionVideoProps) {
   const { height, durationInFrames } = useVideoConfig();
   const fontFamily = useEmbeddedFont(fontSrc);
@@ -92,7 +109,7 @@ export function ProductionVideo({ shots, texts = [], captions = [], audio = [], 
             {shot.kind === 'video' && shot.src
               ? <Video src={resolveSrc(shot.src)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted />
               : shot.kind === 'image' && shot.src
-                ? <Img src={resolveSrc(shot.src)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ? <MovingStill src={resolveSrc(shot.src)} motion={shot.motion} durationInFrames={shot.durationInFrames} />
                 : <AbsoluteFill style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8a8a92', fontSize: 28, fontFamily }}>
                     {language === 'zho' ? `镜头 ${shot.index} · 待生成` : `Shot ${shot.index} · pending`}
                   </AbsoluteFill>}

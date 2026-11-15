@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- CLI: `video.status` → `task.get`, `export.project` → `workflow.inspect`; `generate.images-batch` submits one Runtime `generate.image` per item with derived idempotency keys (no more file-state shadow).
+- Pipeline: image clips take `motion` (push / pull / pan / tilt / shake / impact, flash), rendered by Remotion; `beatGridCuts` helper.
+- New bundled Skill `still-mad` (静止系 MAD): beat-cut still images through the pipeline.
+
 - Agent 工具面补齐：`workflow.node.tool`（裁剪 / 放大 / 去背景 / 剪辑 / 抽帧 / 反推提示词等）进入外部 Agent 公开面，MCP 工具 `flovart_workflow_node_tool`，付费工具仍在浏览器侧确认；Skill 命令（list / manifest / hub.list / validate / init / draft / install / uninstall）与新命令 `receipts.list` 写入 Runtime 注册表并投影为 MCP 工具 `flovart_skill_*` / `flovart_receipts_list`。
 - 画布转 Skill：`skill.draft --from-project <projectId>` 直接读取可见 Workspace 里的任意工程（含历史画布）与共享回执生成草稿，不再需要手工拼快照；Skill 增加 `commands/skill.md`。
 - 修复 release red-team 公开面白名单与实际公开命令不一致。

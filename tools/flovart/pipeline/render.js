@@ -187,6 +187,7 @@ export function toProductionSpecV1(spec, runId, assetRef) {
       durationFrames: span(clip.durationMs),
       sourceType: 'imported',
       ...(clip.artifactId ? { assetRef: assetRef(clip.artifactId) } : {}),
+      ...(clip.kind === 'image' && clip.motion ? { motion: clip.motion } : {}),
       locked: clip.locked,
     })),
     texts: spec.tracks.text.map(clip => ({

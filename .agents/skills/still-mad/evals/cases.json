@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "flovart.production-skill-evals/1",
+  "cases": [
+    {
+      "id": "anime-60s-128bpm",
+      "prompt": "用我的 12 张插画和一首 128 BPM 的歌剪一支 60 秒静止系 MAD",
+      "expect": {
+        "durationMs": 60000,
+        "visualKind": "image",
+        "beatMs": 468.75,
+        "adjacentMotionsVary": true,
+        "flashOnlyOnDownbeats": true,
+        "engine": "remotion"
+      }
+    },
+    {
+      "id": "generated-30s-vertical",
+      "prompt": "没有素材，按雨夜城市主题生成关键帧，9:16，30 秒，BPM 140，前奏 0.4 秒",
+      "expect": {
+        "durationMs": 30000,
+        "aspectRatio": "9:16",
+        "offsetMs": 400,
+        "keyframesViaWorkflowNodeRun": true,
+        "requiredGates": ["spec", "keyframe-review", "review"]
+      }
+    }
+  ]
+}

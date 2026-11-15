@@ -21,6 +21,10 @@ user sees the same run as a card in the Canvas drawer's run log.
 - Commands that start local processes or write outside the run ask once:
   `capture.ui` and `run.archive` fail with `CONFIRMATION_REQUIRED` until the
   user agrees and you resend with `confirmed: true`.
+- Image clips may carry `motion: { type, amount?, ease?, flash? }` with type
+  `push`, `pull`, `pan-left`, `pan-right`, `tilt-up`, `tilt-down`, `shake`,
+  `impact` or `none`. Only `engine: remotion` renders every type; ffmpeg draws
+  `push` only. Still-image music edits: the `still-mad` Skill.
 - A missing local tool (ffmpeg, Chromium, Remotion) returns
   `CAPABILITY_UNAVAILABLE` with a `diagnose` hint. Report it; do not work around it.
 
