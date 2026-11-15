@@ -118,7 +118,8 @@ describe('workflow node overlays', () => {
     fireEvent.click(generate);
 
     await waitFor(() => expect(onRun).toHaveBeenCalledOnce());
-    expect(onChange).toHaveBeenCalledWith({ config: { mode: 'video', modelId: 'flovart:seedance-2' } });
+    // 只发增量：画布 update_node 会把 config 合并一层，已有的 mode 保留
+    expect(onChange).toHaveBeenCalledWith({ config: { modelId: 'flovart:seedance-2' } });
   });
 
   it('keeps the parameter entry visible before a model is configured', () => {

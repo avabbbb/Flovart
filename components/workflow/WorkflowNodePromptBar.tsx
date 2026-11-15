@@ -111,6 +111,10 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   const isLocalOperation = operationCapability?.executor === 'local-transform';
   const config = node.metadata.config || { mode: node.type === 'text' ? 'text' : node.type === 'video' ? 'video' : 'image' };
   const generationMode = modeFor(node, config);
+  // 节点配置的比例是唯一权威：config 没写时读 Operation Recipe 的参数（Agent 直接建的 Operation 只带 recipe），
+  // 两处都没有才用 PromptBar 默认值。
+  const recipeAspectRatio = node.metadata.operation?.recipe.parameters?.aspectRatio;
+  const configuredAspectRatio = config.aspectRatio || (typeof recipeAspectRatio === 'string' && recipeAspectRatio ? recipeAspectRatio : undefined);
   const availableProductModelIds = generationMode === 'video'
     ? dynamicModelOptions?.video || []
     : dynamicModelOptions?.image || [];
@@ -231,7 +235,10 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
     await onAddReferenceFiles?.(files);
   };
 
-  const patchConfig = (patch: Partial<WorkflowGenerationConfig>) => onChange({ config: { ...config, ...patch } });
+  // 只发增量：画布的 update_node 会把 config 再合并一层。发整份 config 时，PromptBar 在旧渲染里算出的补丁
+  // （如分辨率归一化）会把这期间 Agent / CLI 写入的新比例覆盖回旧值，PromptBar 与节点配置随之分叉。
+  // 节点还没有 config 时补上默认 mode，避免只剩一个字段。
+  const patchConfig = (patch: Partial<WorkflowGenerationConfig>) => onChange({ config: node.metadata.config ? patch as WorkflowGenerationConfig : { ...config, ...patch } });
 
   const translatedPrompts = t('quickPrompts');
   const prompts = Array.isArray(translatedPrompts) ? translatedPrompts.filter((item): item is { name: string; value: string } => Boolean(item) && typeof item.name === 'string' && typeof item.value === 'string') : [];
@@ -296,9 +303,9 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         modeOptions={operationCapability
           ? [operationCapability.mediaType === 'video' ? 'video' : 'image']
           : node.type === 'video' ? ['video'] : node.type === 'text' ? ['text'] : ['image']}
-        videoAspectRatio={(config.aspectRatio as any) || '16:9'}
+        videoAspectRatio={(configuredAspectRatio as any) || '16:9'}
         setVideoAspectRatio={aspectRatio => patchConfig({ aspectRatio })}
-        imageAspectRatio={(config.aspectRatio as any) || '1:1'}
+        imageAspectRatio={(configuredAspectRatio as any) || '1:1'}
         setImageAspectRatio={aspectRatio => patchConfig({ aspectRatio })}
         videoDurationSec={config.durationSec}
         onVideoDurationSecChange={durationSec => patchConfig({ durationSec })}

@@ -111,9 +111,15 @@
 - **修复**：`sizeFromAspectRatio` 改为把比例约分后取 `宽 = a×k、高 = b×k` 的精确整数，长边取节点的 resolution（1K / 1.5K / 2K / 4K，缺省用线路默认 2048），并遵守 schema 的 `minimum` / `maximum` / `multipleOf`（已写进 Route Catalog：Flash 240–8192、步长 1；4.5 512–8192、步长 8）。换算成功后从请求体去掉 `resolution`，只发宽高；没有比例（或 `adaptive`）时保持官方默认 `resolution: "2k"`。
 - **测试**：`tests/seedreamAspectRatioSize.test.ts`：产品给 Seedream 5 Flash 暴露的每个比例都有断言；Flash 2K / 1K、4.5 2K 每个比例的精确宽高、比例误差为 0、满足上下限与步长；经 `generateImageWithProvider` 截取真正发给 RunningHub 的请求体，断言每个比例的 `width` / `height` 且没有 `resolution`。真实账号出图比例尚未复测（需要扣费，留给 owner 用国内站 Key 跑一张 16:9 与 21:9 核对）。
 
+### 13. PromptBar 显示 1:1，节点配置却是 16:9
+
+- **现象**：Agent 经 CLI 把节点 `metadata.config.aspectRatio` 设为 16:9 后，选中节点的 PromptBar 显示 1:1；PromptBar 与节点配置分叉。
+- **根因**：`WorkflowNodePromptBar` 的 `patchConfig` 每次都把**整份** config（`{ ...渲染时的 config, ...patch }`）发给 `update_node`。PromptBar 的参数归一化 effect（分辨率、子模式）和用户点击都会产生这种补丁，补丁里带着渲染那一刻的旧比例；Agent / CLI 在两者之间写入的新比例会被晚到的旧补丁覆盖回去，同一个 effect 里连发两个补丁时后一个也会覆盖前一个（在 PromptBar 里点 21:9 会被随后的分辨率补丁改回原比例）。另外 Agent 直接创建的 Operation 只在 recipe 参数里带比例、config 里没有，PromptBar 只读 config，回退到默认 1:1。
+- **修复**：`patchConfig` 只发增量（`update_node` 本来就把 config 合并一层）；节点尚无 config 时才带上默认 `mode`。PromptBar 的比例改为「`config.aspectRatio` → Operation recipe 的 `aspectRatio` → 默认值」。`2d95e46` 的防循环约束保持不变：空比例不回写、模型族 effect 仍以字符串为依赖。
+- **测试**：`tests/workflowPromptBarAspectRatio.test.tsx`（经真实 `applyWorkflowOps` 的 `update_node` 写回）：Seedream 节点 16:9 显示正确且不回写比例；挂载后 CLI 改为 16:9 能跟随，PromptBar 先前算出的补丁晚到也不会改回 1:1，再改分辨率比例仍为 16:9；PromptBar 里选 21:9 能落到节点配置；只有 recipe 带比例的 Operation 显示 16:9。改动前这 4 个用例全部失败。`tests/workflowNodeOverlays.test.tsx` 的默认模型断言改为增量补丁。
+
 ## 仍未修复
 
-- PromptBar 显示 1:1，而节点 `config.aspectRatio` 是 16:9：两处显示不一致。
 - `--web` 模式下若前端已在运行，`ensure` 无法启动 Agent；临时办法：改用 `--source` 启动。
 - 自动产物回执（第 4 项）只经单元测试验证，尚未在真实画布上确认。
 
