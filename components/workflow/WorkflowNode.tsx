@@ -795,7 +795,7 @@ function OperationNodeCard({ node, onRun, onStop, onSelectTake, language = 'zho'
         <div className="workflow-operation-card__row"><strong>{parameterLabel}</strong><span>{statusLabel}</span></div>
         <OperationVersionStrip node={node} onSelectTake={onSelectTake} language={language} />
       <div className="workflow-operation-card__footer">
-          <span>{operation.recipe.inputBindings.length} 输入 · {operation.takes.length} Take</span>
+          <span>{operation.recipe.inputBindings?.length ?? 0} 输入 · {operation.takes.length} Take</span>
           {node.metadata.status === 'loading' && onStop
             ? <button type="button" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onStop(); }}>{language === 'en' ? 'Stop' : '停止'}</button>
             : <button type="button" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onRun(); }} disabled={node.metadata.status === 'loading'}>
@@ -813,7 +813,7 @@ function OperationNodeCard({ node, onRun, onStop, onSelectTake, language = 'zho'
         : <p title={operation.recipe.promptDocument.text}>{operation.recipe.promptDocument.text || '无文本 Prompt · 参数型操作'}</p>}
       <OperationVersionStrip node={node} onSelectTake={onSelectTake} language={language} />
       <div className="workflow-operation-card__footer">
-        <span>{operation.recipe.inputBindings.length} 输入 · {operation.takes.length} Take</span>
+        <span>{operation.recipe.inputBindings?.length ?? 0} 输入 · {operation.takes.length} Take</span>
         {node.metadata.status === 'loading' && onStop
           ? <button type="button" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onStop(); }}>{language === 'en' ? 'Stop' : '停止'}</button>
           : <button type="button" data-workflow-overlay onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onRun(); }} disabled={node.metadata.status === 'loading'}>

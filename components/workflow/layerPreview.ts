@@ -11,7 +11,7 @@ export function deriveWorkflowLayerPreview(operationNode: WorkflowNode, nodes: r
   const operation = operationNode.metadata.operation;
   if (!operation || operation.capabilityId !== 'image.layer@1') return undefined;
   const byId = new Map(nodes.map(node => [node.id, node] as const));
-  const sourceBinding = operation.recipe.inputBindings.find(binding => binding.role === 'source_image');
+  const sourceBinding = (operation.recipe.inputBindings || []).find(binding => binding.role === 'source_image');
   const take = operation.takes.find(item => item.id === operation.selectedTakeId)
     || [...operation.takes].reverse().find(item => item.status === 'success');
   const candidates = (take?.outputNodeIds || [])

@@ -108,7 +108,11 @@ function migrateNoteSemantics(
     const record = node.metadata.operation;
     const bindings = record.recipe.inputBindings || [];
     const textBindings = bindings.filter(binding => binding.role === 'prompt_context');
-    if (!textBindings.length) return node;
+    if (!textBindings.length) {
+      // 旧数据/外部导入可能缺 inputBindings：补成空数组，避免节点卡片渲染时崩溃。
+      if (Array.isArray(record.recipe.inputBindings)) return node;
+      return { ...node, metadata: { ...node.metadata, operation: { ...record, recipe: { ...record.recipe, inputBindings: [] } } } };
+    }
     textBindings.forEach(binding => addTarget(binding.sourceNodeId, node.id));
     return {
       ...node,
