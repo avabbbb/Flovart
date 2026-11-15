@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { imagesBatchInvocations, legacyForward } from './legacy-forward.js';
 import { COMMAND_REGISTRY, executeFlovartCommand, formatValue, HELP_TEXT, normalizeCommandName, parseCliArgs, SETUP_TEXT } from './core.js';
 import { createShadowRuntimeFacade } from './shadow-runtime.js';
 import { readFile } from 'node:fs/promises';
@@ -64,14 +65,11 @@ const LOCAL_COMMANDS = new Set([
 const CLIENT_REGISTRY_COMMANDS = new Set(['command.list', 'command.schema']);
 
 const FILE_STATE_COMMANDS = new Set([
-  'asset.list', 'export.project', 'video.status',
+  'asset.list',
 ]);
 
-// 旧浏览器 Bridge 文件队列已删除；Workflow 节点运行/停止现在只通过
-// Workspace Adapter 转发到浏览器 Authority 的唯一 WorkflowExecutor。
 const RETIRED_COMMANDS = new Set([
   'provider.begin-setup', 'provider.select-model', 'provider.test',
-  'generate.images-batch',
 ]);
 
 function runtimeInvocation(command, parsed) {
@@ -134,8 +132,8 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
 } else {
   const parsedArgs = parseCliArgs(argv.slice(1));
   const normalizedAtomic = normalizeAtomicAlias(rawCommand, parsedArgs);
-  const command = normalizeCommandName(normalizedAtomic.command);
-  const args = normalizedAtomic.args;
+  let command = normalizeCommandName(normalizedAtomic.command);
+  let args = normalizedAtomic.args;
   let fileReadError = false;
 
   if (args.file) {
@@ -168,7 +166,32 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
     return;
   }
 
+  const forwarded = legacyForward(command, args);
+  if (forwarded) {
+    command = forwarded.command;
+    args = forwarded.args;
+  }
   const routingCommand = command;
+
+  if (routingCommand === 'generate.images-batch') {
+    const runtime = new FlovartRuntimeClient();
+    try {
+      const invocations = imagesBatchInvocations(args);
+      const results = [];
+      for (const invocation of invocations) {
+        try {
+          results.push({ ok: true, task: await runtime.execute('generate.image', invocation.commandArgs, defaultRuntimeActor('cli'), invocation.options) });
+        } catch (error) {
+          results.push({ ok: false, error: error instanceof RuntimeClientError ? error.toJSON() : { code: 'RUNTIME_UNAVAILABLE', message: error instanceof Error ? error.message : String(error) } });
+        }
+      }
+      const ok = results.every(result => result.ok);
+      printCliResponse(ok, command, { forwardedTo: 'generate.image', results }, ok ? null : { code: 'PARTIAL_FAILURE', message: '部分图片提交失败；用同一个 --idempotency-key 重试只补失败项。', retryable: true }, { runtime: 'production-runtime' });
+    } catch (error) {
+      printCliResponse(false, command, null, { code: 'INVALID_ARGUMENT', message: error instanceof Error ? error.message : String(error), retryable: false }, { runtime: 'production-runtime' });
+    }
+    return;
+  }
 
   if (routingCommand === 'ensure') {
     const result = await ensureFlovart({ open: !(args.noOpen || args['no-open']) });

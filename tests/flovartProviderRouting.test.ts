@@ -11,7 +11,6 @@ const RETIRED_COMMANDS: Array<[string, string[]]> = [
   ['provider.begin-setup', ['--provider', 'custom']],
   ['provider.select-model', ['--image-model', 'flovart:gpt-image-2']],
   ['provider.test', ['--purpose', 'both']],
-  ['generate.images-batch', ['--items-json', '[{"name":"a","prompt":"p"}]']],
 ];
 
 describe('Flovart retired browser Bridge commands', () => {
@@ -39,6 +38,24 @@ describe('Flovart retired browser Bridge commands', () => {
     expect(HELP_TEXT).toContain('Compatibility commands remain callable and discoverable');
     expect(HELP_TEXT).not.toContain('provider.begin-setup');
     expect(HELP_TEXT).not.toContain('generate.images-batch');
+  });
+
+  it('forwards generate.images-batch to per-item Runtime generate.image instead of the Bridge queue', () => {
+    const cliPath = join(process.cwd(), 'tools', 'flovart', 'cli.js');
+    let output = '';
+    try {
+      output = execFileSync(process.execPath, [cliPath, 'generate.images-batch', '--items-json', '[{"name":"a","prompt":"p"}]', '--json'], {
+        cwd: tempDir,
+        encoding: 'utf8',
+        env: { ...process.env, FLOVART_SHADOW_STATE_FILE: join(tempDir, 'shadow-runtime-state.json') },
+      });
+    } catch (error) {
+      output = (error as { stdout?: Buffer }).stdout?.toString() || '';
+    }
+    const response = JSON.parse(output);
+    expect(response).toMatchObject({ ok: false, command: 'generate.images-batch', runtime: 'production-runtime', error: { code: 'INVALID_ARGUMENT' } });
+    expect(response.error.message).toMatch(/idempotency-key/);
+    expect(existsSync(join(tempDir, '.flovart', 'command-queue.json'))).toBe(false);
   });
 
   it.each(RETIRED_COMMANDS)('rejects retired browser-Bridge command %s without queueing it', (command, args) => {

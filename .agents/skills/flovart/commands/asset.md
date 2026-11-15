@@ -14,20 +14,20 @@ Use it to find generated media before adding results to a storyboard or final su
 
 ## export.project
 
-Export project metadata.
+Compatibility name for `workflow.inspect`: the CLI forwards it, so the result is the redacted Workflow graph.
 
 ```bash
-npm run flovart:cli -- export.project --format json --json
+npm run flovart:cli -- export.project --project-id <id> --json
 ```
 
 Use this at delivery time when the user asks for a project summary or when an agent needs a compact state handoff.
 
 ## video.status
 
-Query video/runtime job status.
+Compatibility name for `task.get`: the CLI forwards `--job-id` as the Runtime `taskId` returned by `generate.video`.
 
 ```bash
-npm run flovart:cli -- video.status --jobId <job-id> --json
+npm run flovart:cli -- video.status --job-id <task-id> --json
 ```
 
 Use for long-running video jobs. Do not submit duplicate video jobs until status confirms failure or cancellation.
