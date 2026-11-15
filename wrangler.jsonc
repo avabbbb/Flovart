@@ -1,6 +1,13 @@
 {
+  // Flovart on Cloudflare Workers (static assets only, free plan).
+  // Build: VITE_BASE_PATH=/ npx vite build, then `npx wrangler deploy`.
+  // Custom domain flovart.avabbbb.com is bound to this Worker.
+  // Rollback: the old Pages project "flovart" (flovart-b5a.pages.dev) is kept.
   "name": "flovart",
-  "pages_build_output_dir": "./dist",
   "compatibility_date": "2026-07-01",
-  "compatibility_flags": ["nodejs_compat"]
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  },
+  "routes": [{ "pattern": "flovart.avabbbb.com", "custom_domain": true }]
 }
