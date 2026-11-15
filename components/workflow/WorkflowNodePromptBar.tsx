@@ -130,8 +130,8 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   const keepConnectedMentions = (plainText: string, ids: string[]) => {
     const resolved = filterWorkflowInputIds(resolveWorkflowMentionIds(plainText, ids, mentionItems), node.id, connections);
     const operationInputIds = node.metadata.operation?.recipe.inputBindings
-      .filter(binding => binding.role !== 'prompt_context')
-      .map(binding => binding.sourceNodeId) || [];
+      ?.filter(binding => binding.role !== 'prompt_context')
+      ?.map(binding => binding.sourceNodeId) || [];
     return [...new Set([...operationInputIds, ...resolved])];
   };
   const allowedReferenceTypes = operationCapability
