@@ -491,6 +491,38 @@ export function startHttpServer() {
           return json(response, 400, { ok: false, error: { message: error instanceof Error ? error.message : String(error) } });
         }
       }
+      if (request.method === 'POST' && url.pathname === '/api/skills/draft') {
+        // 画布（当前或历史工程）→ Production Skill：浏览器送来脱敏后的节点与连线，
+        // 回执从本机回执库取；验收通过且 install=true 才入库，失败只回验收结果。
+        const body = await readBody(request);
+        const { buildSkillDraft, evaluateSkillDraft } = await importFlovartModule('skill-draft');
+        const id = String(body.id || '');
+        const projectId = String(body.projectId || body.project?.id || '');
+        let draft;
+        try {
+          const receipts = projectId ? await receiptStore.list(projectId, 200) : [];
+          draft = buildSkillDraft({
+            id,
+            name: body.name,
+            description: body.description,
+            projectId,
+            project: body.project && typeof body.project === 'object' ? body.project : {},
+            receipts,
+            nodeIds: Array.isArray(body.nodeIds) ? body.nodeIds.map(String) : [],
+          });
+        } catch (error) {
+          return json(response, 400, { ok: false, error: { message: error instanceof Error ? error.message : String(error) } });
+        }
+        const evaluation = evaluateSkillDraft(draft.files, id);
+        const summary = { id, handle: draft.handle, files: Object.keys(draft.files), skillMd: draft.files['SKILL.md'] };
+        if (!body.install || !evaluation.ok) return json(response, 200, { ok: true, draft: summary, evaluation, installed: false });
+        try {
+          const skill = await skillRegistry.installPackage({ id, files: Object.entries(draft.files).map(([entryPath, content]) => ({ path: entryPath, content })) });
+          return json(response, 200, { ok: true, draft: summary, evaluation, installed: true, skill });
+        } catch (error) {
+          return json(response, 400, { ok: false, error: { message: error instanceof Error ? error.message : String(error) }, evaluation });
+        }
+      }
       if (request.method === 'POST' && url.pathname === '/api/skills/uninstall') {
         const body = await readBody(request);
         try {

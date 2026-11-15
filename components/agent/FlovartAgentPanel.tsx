@@ -22,7 +22,7 @@ import {
   getBundledProductionSkill,
   type ProductionSkillAttachment,
 } from '../../services/productionSkillCatalog';
-import { createLocalSkillRegistry } from '../../services/localSkillRegistry';
+import { canvasSkillDraftPayload, canvasSkillId, createLocalSkillRegistry } from '../../services/localSkillRegistry';
 import { consumePendingProductionSkill } from '../../stores/useProductionSkillComposerStore';
 import { BROWSER_DEFAULT_SYSTEM_PROMPT, resolveBrowserAgentTextRoute, type AgentAskRequest, type AgentAskResult } from '../../services/browserAgentKernel';
 import { BrowserAgentRuntime } from '../../services/browserAgentRuntime';
@@ -228,7 +228,7 @@ const userApiKeysRef = useRef(userApiKeys);
   const [preferredModel, setPreferredModel] = useState<AgentModelSelection | null>(null);
   // ProductionSkillDeck 注册的键盘处理：返回 true 表示该按键已被 Skill 列表消费。
   const skillNav = useRef<((key: string) => boolean) | null>(null);
-  const [groupBanner, setGroupBanner] = useState<(AgentGroupPayload & { saved?: boolean }) | null>(null);
+  const [groupBanner, setGroupBanner] = useState<(AgentGroupPayload & { saved?: boolean; installed?: boolean; evaluationNote?: string }) | null>(null);
   const presentConfirmation = (next: PendingConfirmation) => {
     const pending = next.id ? next : { ...next, id: crypto.randomUUID() };
     replacePendingConfirmation(confirmationRef, pending); // a newer request supersedes; never leave the agent waiting
@@ -938,6 +938,19 @@ const userApiKeysRef = useRef(userApiKeys);
       const skill = skillFromRecipe(recipe, { name: groupBanner.label, slug: groupBanner.label, description: language === 'zho' ? `画布分组「${groupBanner.label}」的操作流程（${recipe.steps.length} 步）` : `Canvas group "${groupBanner.label}" (${recipe.steps.length} steps)` });
       await useMineSkillsStore.getState().save(skill);
       setGroupBanner(current => (current ? { ...current, saved: true } : current));
+      // 有本地 Agent 服务时同时编译成标准 Skill 包（带验收），外部 Agent 与 Skill Hub 都能用；没有服务时只留「我的」配方。
+      const registry = await createLocalSkillRegistry().catch(() => null);
+      if (registry?.draftFromCanvas) {
+        const result = await registry.draftFromCanvas({
+          id: canvasSkillId(),
+          name: groupBanner.label,
+          description: skill.description,
+          install: true,
+          ...canvasSkillDraftPayload(project, groupBanner.nodeIds),
+        }).catch(error => ({ installed: false, evaluation: { ok: false, checks: [{ id: 'request', ok: false, message: errorMessage(error) }] } }));
+        const failed = result.evaluation.checks.find(check => !check.ok);
+        setGroupBanner(current => (current ? { ...current, installed: result.installed, evaluationNote: failed?.message } : current));
+      }
     } catch (error) {
       setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: errorMessage(error) }]);
     }
@@ -1041,7 +1054,11 @@ const userApiKeysRef = useRef(userApiKeys);
             ? (language === 'zho' ? `已加入上下文「${groupBanner.label}」` : `Added "${groupBanner.label}" to context`)
             : (language === 'zho' ? `已添加分组「${groupBanner.label}」（${groupBanner.nodeIds.length} 个节点）` : `Added group "${groupBanner.label}" (${groupBanner.nodeIds.length} nodes)`)}</span>
           {groupBanner.nodeIds.length <= 1 ? null : groupBanner.saved
-            ? <small>{language === 'zho' ? '已保存到「我的」Skill' : 'Saved to My Skills'}</small>
+            ? <small title={groupBanner.evaluationNote}>{groupBanner.installed
+              ? (language === 'zho' ? '已保存，并装入本机 Skill 注册表' : 'Saved and installed as a local Skill')
+              : groupBanner.evaluationNote
+                ? (language === 'zho' ? `已保存到「我的」；未装入注册表：${groupBanner.evaluationNote}` : `Saved to My Skills; not installed: ${groupBanner.evaluationNote}`)
+                : (language === 'zho' ? '已保存到「我的」Skill' : 'Saved to My Skills')}</small>
             : <button type="button" onClick={() => void saveGroupAsSkill()}>{language === 'zho' ? '保存为 Skill' : 'Save as Skill'}</button>}
           <button type="button" aria-label={language === 'zho' ? '关闭' : 'Dismiss'} onClick={() => setGroupBanner(null)}><X size={12} /></button>
         </div>}

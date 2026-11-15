@@ -114,6 +114,7 @@ const MODULES = {
   'host-discovery': () => import('flovart-module:host-discovery'),
   'host-registry': () => import('flovart-module:host-registry'),
   'registry': () => import('flovart-module:registry'),
+  'skill-draft': () => import('flovart-module:skill-draft'),
 };
 export async function importFlovartModule(name) {
   const moduleName = String(name || '').trim();
