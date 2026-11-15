@@ -1,3 +1,4 @@
+import { getRouteCatalog } from '../services/runningHubRouteCatalog';
 import { ProtocolSelect } from './settings/ProtocolSelect';
 import { TokenUsageSection, usageTabLabel } from './TokenUsageSection';
 import { saveBlob } from '../services/desktopNetwork';
@@ -109,8 +110,18 @@ const routeTargetKey = (target: RouteMappingTarget) => target.kind === 'product-
     ? `${target.kind}:${target.productModelId}:${target.mode}`
     : `${target.kind}:${target.capability}`;
 
-const keyRouteOptions = (key: UserApiKey, capability: 'text' | 'image' | 'video'): string[] =>
-    getKeyModelIds(key, capability);
+// RunningHub 服务的可选线路 = 服务模型列表 ∪ Route Catalog 已核验线路。
+// 自动拉取的模型列表来自全球站且会覆盖手填 id，单靠它会让新加的核验线路（如国内站可用的 Seedream 5 Flash）无从映射。
+const keyRouteOptions = (key: UserApiKey, capability: 'text' | 'image' | 'video'): string[] => {
+    const ids = getKeyModelIds(key, capability);
+    if (key.provider !== 'runningHub' || capability === 'text') return ids;
+    const seen = new Set(ids.map(id => id.trim().toLowerCase()));
+    const verified = getRouteCatalog()
+        .filter(schema => schema.modes.some(mode => (mode === 'text-to-image' || mode === 'image-to-image') === (capability === 'image')))
+        .map(schema => schema.routeId)
+        .filter(routeId => !seen.has(routeId.toLowerCase()));
+    return [...ids, ...verified];
+};
 
 const ROUTE_MODES = ['text-to-image', 'image-to-image', 'text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame', 'video-extension'] as const;
 

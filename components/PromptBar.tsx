@@ -480,11 +480,14 @@ export const PromptBar: React.FC<PromptBarProps> = ({
         paramDisabledReason, currentModelOptions,
     } = policy;
 
+    // 依赖用字符串而非对象：policy 每次渲染都会重建 productModelGroups，
+    // 以对象为依赖时 effect 每帧执行并 setState，选中已映射模型后会触发无限更新（Maximum update depth）。
+    const selectedModelFamily = activeProductModel
+        ? productModelGroups.find(group => group.models.some(product => product.id === activeProductModel.id))?.family
+        : undefined;
     useEffect(() => {
-        if (!activeProductModel) return;
-        const selectedGroup = productModelGroups.find(group => group.models.some(product => product.id === activeProductModel.id));
-        if (selectedGroup) setActiveModelFamily(selectedGroup.family);
-    }, [activeProductModel, productModelGroups]);
+        if (selectedModelFamily) setActiveModelFamily(selectedModelFamily);
+    }, [selectedModelFamily]);
     const changeActiveModel = (model: string) => generationMode === 'text' ? onTextModelChange?.(model) : videoLikeMode ? onVideoModelChange?.(model) : onImageModelChange?.(model);
     const promptCharCount = prompt.trim().length;
     const promptReady = runWithoutPrompt || Boolean(prompt.trim());
@@ -633,7 +636,8 @@ export const PromptBar: React.FC<PromptBarProps> = ({
         if (!availableModes.includes(activeSubmode)) {
             onGenerationSubmodeChange?.(availableModes[0]);
         }
-        if (activeRatio && !capabilities.aspectRatios.includes(activeRatio)) {
+        // 线路未声明比例（如 Seedream 只收 width/height）时 aspectRatios 为空：不回写，否则 setActiveRatio(undefined) 与默认值互相覆盖，无限更新。
+        if (activeRatio && capabilities.aspectRatios.length > 0 && !capabilities.aspectRatios.includes(activeRatio)) {
             setActiveRatio(capabilities.aspectRatios[0]);
         }
         const normalized = policy.sanitizeParameters(activeSubmode, activeRatio, videoResolution, videoDurationSec);

@@ -116,6 +116,7 @@ const CAPABILITY_BY_ID: Record<string, ProductModelCapability> = {
   'flovart:gemini-3.1-flash-lite-image': { ...baseImage, aspectRatios: ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4'], resolutions: ['512', '1K', '2K'], supportsWebSearch: true, maxImageReferences: 14 },
   'flovart:imagen-4': { ...baseImage, modes: ['text-to-image'], aspectRatios: ['1:1', '16:9', '9:16', '4:3', '3:4'], resolutions: ['1K', '2K', '4K'], maxImageReferences: 0 },
   'flovart:seedream-5-pro': { ...baseImage, supportsWebSearch: true, supportsRealPersonCheck: true },
+  'flovart:seedream-5-flash': { ...baseImage, modes: ['text-to-image'], aspectRatios: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9'], resolutions: ['1K', '2K'], maxImageReferences: 0 },
   'flovart:seedream-4.5': { ...baseImage, modes: ['text-to-image'], resolutions: ['2K', '4K'], maxImageReferences: 0 },
   'flovart:midjourney-v8-1': { ...baseImage, modes: ['text-to-image'], qualities: ['low', 'medium', 'high'], maxImageReferences: 1 },
   'flovart:seedance-2': { ...baseVideo, modes: ['text-to-video', 'image-to-video', 'reference-to-video', 'first-last-frame'], aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', 'adaptive'], durations: [-1, 4, 5, 6, 8, 10, 12, 15], resolutions: ['480p', '720p', '1080p'], audioControl: 'optional', supportsRealPersonCheck: true, supportsSeed: true, maxImageReferences: 9, maxVideoReferences: 3, maxAudioReferences: 3, referenceVideoPixelRange: SEEDANCE_2_REFERENCE_VIDEO_PIXELS, referenceVideoLimits: SEEDANCE_2_REFERENCE_VIDEO_LIMITS },
@@ -251,8 +252,10 @@ export function getEffectiveProductModelCapabilities(
   const base = product.capabilities;
   const schema = mappedRouteSchema(product.id, mode, context);
   if (schema) {
+    const sizedByWidthHeight = schema.params.some(param => param.field === 'width') && schema.params.some(param => param.field === 'height');
+    // 只收 width/height 的线路（Seedream）由网关按比例换算宽高，比例选项沿用产品能力。
     const routeRatios = schema.aspectRatioField === null
-      ? []
+      ? (sizedByWidthHeight ? base.aspectRatios : [])
       : (schema.aspectRatioValues?.filter((value): value is VideoAspectRatio => base.aspectRatios.includes(value as VideoAspectRatio)) || base.aspectRatios);
     const routeDurations = getRouteDurations(schema.routeId);
     const routeFields = new Set(schema.params.map(param => param.field));

@@ -420,6 +420,24 @@ const RUNNHUB_ROUTE_CATALOG: RouteCapabilitySchema[] = [
         officialEvidence: RH_DOC_EN + 'api-498749513',
     },
     {
+        // 国内站可用（2026-11-15 实测）；GPT / Gemini / 悠船等海外模型在 CN 节点返回 40310。
+        routeId: 'seedream-v5-flash/text-to-image',
+        productModelId: 'flovart:seedream-5-flash',
+        modes: ['text-to-image'],
+        channelTier: 'official',
+        promptField: 'prompt',
+        aspectRatioField: null,
+        durationType: null,
+        resolutionDefault: '2k',
+        params: [
+            { field: 'width', type: 'number', default: 2048 },
+            { field: 'height', type: 'number', default: 2048 },
+            { field: 'outputFormat', type: 'string', default: 'jpeg' },
+        ],
+        media: [],
+        officialEvidence: 'https://www.runninghub.cn/runninghub-api-doc-cn/api-519905082',
+    },
+    {
         routeId: 'seedream-v4.5/text-to-image',
         productModelId: 'flovart:seedream-4.5',
         modes: ['text-to-image'],

@@ -46,8 +46,8 @@ describe('Route Catalog — structural integrity', () => {
         }
     });
 
-    it('contains exactly 21 routes', () => {
-        expect(CATALOG).toHaveLength(21);
+    it('contains exactly 22 routes', () => {
+        expect(CATALOG).toHaveLength(22);
     });
 
     it('every routeId is unique', () => {
@@ -61,8 +61,8 @@ describe('Route Catalog — structural integrity', () => {
         }
     });
 
-    it('contains 7 image routes and 14 video routes', () => {
-        expect(IMAGE_ROUTES).toHaveLength(7);
+    it('contains 8 image routes and 14 video routes', () => {
+        expect(IMAGE_ROUTES).toHaveLength(8);
         expect(VIDEO_ROUTES).toHaveLength(14);
     });
 
@@ -822,5 +822,13 @@ describe('Video Route — rhart-video/sparkvideo-2.0/text-to-video (Seedance 2.0
     });
     it('links to official evidence 448183167', () => {
         expect(s.officialEvidence).toContain('448183167');
+    });
+});
+
+describe('Image Route — seedream-v5-flash/text-to-image (CN 可用)', () => {
+    it('maps to flovart:seedream-5-flash and sizes from aspect ratio', async () => {
+        const s = getRouteSchema('seedream-v5-flash/text-to-image')!;
+        expect(s.productModelId).toBe('flovart:seedream-5-flash');
+        expect(s.aspectRatioField).toBeNull();
     });
 });

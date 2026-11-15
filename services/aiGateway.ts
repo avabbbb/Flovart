@@ -8,7 +8,7 @@ import { fetchModelsWithCache, type FetchModelsResult } from './modelFetcher';
 import { normalizeProviderBaseUrl } from './baseUrl';
 import { assertRunningHubModelEndpoint, rhUploadDataUrl, rhUploadFile } from './runningHubService';
 import { explainReferenceCompatibility, sanitizeProductGenerationParams } from './productModelCatalog';
-import { getRouteSchema, getRouteDurations, type RouteCapabilitySchema, type RouteMediaSpec } from './runningHubRouteCatalog';
+import { getRouteSchema, getRouteDurations, type RouteCapabilitySchema, type RouteMediaSpec, type RouteParamSpec } from './runningHubRouteCatalog';
 import { runRuntimeMediaGeneration } from './runtimeGeneration';
 import type { GenerationTransfer, WorkflowArtifactRef } from '../components/workflow/types';
 import type { CanonicalGenerationInput, WorkflowGenerationCapability } from '../components/workflow/inputResolver';
@@ -1444,6 +1444,20 @@ function buildRouteMediaFields(
     return output;
 }
 
+function sizeFromAspectRatio(aspectRatio: string, params: RouteParamSpec[]): { width: number; height: number } | null {
+    const widthParam = params.find(param => param.field === 'width');
+    const heightParam = params.find(param => param.field === 'height');
+    const match = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(aspectRatio.trim());
+    if (!widthParam || !heightParam || !match) return null;
+    const ratio = Number(match[1]) / Number(match[2]);
+    if (!(ratio > 0)) return null;
+    const longEdge = Math.max(Number(widthParam.default) || 2048, Number(heightParam.default) || 2048);
+    const even = (value: number) => Math.max(64, Math.round(value / 16) * 16);
+    return ratio >= 1
+        ? { width: even(longEdge), height: even(longEdge / ratio) }
+        : { width: even(longEdge * ratio), height: even(longEdge) };
+}
+
 function snapDuration(requested: number, allowed: number[]): number {
     return allowed.reduce((best, v) => Math.abs(v - requested) < Math.abs(best - requested) ? v : best, allowed[0]);
 }
@@ -1492,6 +1506,10 @@ function buildRunningHubRoutePayload(
 
     if (schema.aspectRatioField && options?.aspectRatio) {
         payload[schema.aspectRatioField] = options.aspectRatio;
+    } else if (options?.aspectRatio && !disableDefaults) {
+        // 没有比例字段、只收 width/height 的线路（Seedream）：按比例换算宽高，长边沿用默认值。
+        const size = sizeFromAspectRatio(options.aspectRatio, schema.params);
+        if (size) Object.assign(payload, size);
     }
 
     if (schema.durationType && options?.durationSec && options.durationSec > 0) {

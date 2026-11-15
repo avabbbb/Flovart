@@ -20,7 +20,10 @@ const keyExposesRoute = (key: UserApiKey, routeId: string) => {
   const routes = [key.defaultModel, ...(key.models || []).map(model => model.id), ...(key.customModels || [])]
     .map(value => value?.trim().toLowerCase())
     .filter(Boolean);
-  return routes.length === 0 || routes.includes(routeId.trim().toLowerCase());
+  // RunningHub 自动拉取的模型列表会覆盖手填 id，Route Catalog 已核验线路视为该服务可用。
+  return routes.length === 0
+    || routes.includes(routeId.trim().toLowerCase())
+    || (key.provider === 'runningHub' && isVerifiedRoute(routeId.trim()));
 };
 
 const keySupportsTarget = (key: UserApiKey, target: RouteMappingTarget) => {
