@@ -141,5 +141,5 @@
 ## 验证
 
 - `npx tsc --noEmit -p .`：只有 `dsh-plugin/` 与 `tests/dshService.test.ts` 中缺少 `@deepseek-ai` 包导致的 17 个既有错误，没有新增。
-- `npx vitest run`：1944 通过、4 失败、1 跳过。失败的 `dshService`（缺 `@deepseek-ai` 包）、`operationRegistryLocalize`（英文模式下的「半音」标签）、`pipelineTrace`（本机无 CJK 字体）在改动前就失败（`git stash` 对照确认）；`workflowEditor` 只在全量负载下失败，单跑通过。
+- `npx vitest run`（第 11–15 项修复后复跑）：2004 通过、2 失败、1 跳过（331 个测试文件）。失败的 `dshService`（缺 `@deepseek-ai` 包）与 `operationRegistryLocalize`（英文模式下的「半音」标签）为既有问题；第 11 项改动后 `aiGatewayValidation` 中 RunningHub 验证用例仍断言国际站 page-api，已同步改为国内站。`pipelineTrace`、`workflowEditor` 本轮通过。
 - `npm run docs:check`：通过。

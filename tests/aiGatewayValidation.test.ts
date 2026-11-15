@@ -165,7 +165,7 @@ describe('aiGateway - validateApiKey', () => {
                 headers: expect.objectContaining({ Authorization: 'Bearer 0123456789abcdef0123456789abcdef' }),
             }),
         );
-        expect(globalThis.fetch).toHaveBeenNthCalledWith(2, 'https://www.runninghub.ai/page-api', expect.objectContaining({ signal: expect.any(AbortSignal) }));
+        expect(globalThis.fetch).toHaveBeenNthCalledWith(2, 'https://www.runninghub.cn/page-api', expect.objectContaining({ signal: expect.any(AbortSignal) }));
     });
 
     it('RunningHub provider 不把 HTTP 200 的业务认证错误误判为已验证', async () => {
