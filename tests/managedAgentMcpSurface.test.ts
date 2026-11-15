@@ -12,9 +12,14 @@ describe('Flovart Agent tool surface', () => {
       'agent.turn',
       'workflow.inspect',
       'workflow.selection.get',
-      'workflow.apply',
       'workflow.focus.nodes',
+      'workflow.apply',
+      'workflow.generate',
+      'workflow.models.list',
+      'workflow.note.write',
+      'workflow.media.import',
       'workflow.node.run',
+      'workflow.node.stop',
       'workflow.node.tool',
     ]);
     expect(commands).not.toContain('command.list');
@@ -55,7 +60,7 @@ describe('Flovart Agent tool surface', () => {
       projectId: 'project-1',
       expectedRevision: 1,
       mutationId: 'mutation-1',
-      operations: [{ type: 'add_node', node: { id: 'node-1', type: 'text', title: '提纲' } }],
+      operations: [{ type: 'add_node', node: { id: 'node-1', type: 'image', title: '主视觉' } }],
       idempotencyKey: 'apply-once',
       changeSetId: 'turn-change-set',
     }, undefined);

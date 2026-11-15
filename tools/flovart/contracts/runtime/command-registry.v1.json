@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "d33931237d9926f6b149df78dcf450a963933de8135c47ce18361909c8a240ca",
+  "registryHash": "833b47e3d9fdbdef1b7b082aa66f63d9d2346cd9a6e574540b4d886b0912814d",
   "commands": [
     {
       "name": "runtime.status",
@@ -405,11 +405,11 @@
     },
     {
       "name": "workflow.node.create",
-      "summary": "Create one visible Workflow image/text/video/audio/config node.",
+      "summary": "Create one visible Workflow image/video/audio node (type is required). Agents must not create text notes here: use workflow.note.write for notes and workflow.generate for generation.",
       "args": {
         "projectId": "string?",
         "id": "string?",
-        "type": "image|text|video|audio",
+        "type": "image|video|audio",
         "title": "string?",
         "x": "number?",
         "y": "number?",
@@ -422,12 +422,12 @@
     },
     {
       "name": "workflow.node.create-connected",
-      "summary": "Create one visible Workflow node and connect it from an existing node atomically.",
+      "summary": "Create one visible Workflow image/video/audio node and connect it from an existing node atomically (type is required; text notes cannot be connected).",
       "args": {
         "projectId": "string?",
         "fromNodeId": "string",
         "id": "string?",
-        "type": "image|text|video|audio",
+        "type": "image|video|audio",
         "title": "string?",
         "x": "number?",
         "y": "number?",
@@ -533,7 +533,7 @@
     },
     {
       "name": "workflow.node.run",
-      "summary": "Run one Workflow config node, or a batch of independent nodes via nodeIds under one confirmation, through browser providers.",
+      "summary": "Run one image/video generation node in place (results replace the node; count>1 folds into one batch), or a batch of independent nodes via nodeIds under one confirmation. Returns runId, batch {batchId, headNodeId, memberNodeIds} and every take's artifact.",
       "args": {
         "projectId": "string?",
         "nodeId": "string?",
@@ -549,6 +549,76 @@
         "projectId": "string?",
         "nodeId": "string",
         "expectedRevision": "number?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.generate",
+      "summary": "Generate in one image/video node: create or reuse the generation node, write the prompt into its Prompt Bar, turn references into @chips plus connections (order = chip order), pick text/image-to-image or text/image/reference/first-last-frame video mode from the references, validate the model, and optionally run in place (run=true is paid and confirmed).",
+      "args": {
+        "projectId": "string?",
+        "nodeId": "string?",
+        "type": "image|video?",
+        "title": "string?",
+        "x": "number?",
+        "y": "number?",
+        "prompt": "string",
+        "references": "array?",
+        "modelId": "string?",
+        "submode": "string?",
+        "aspectRatio": "string?",
+        "resolution": "string?",
+        "quality": "string?",
+        "count": "number?",
+        "durationSec": "number?",
+        "generateAudio": "boolean?",
+        "params": "object?",
+        "shot": "object?",
+        "run": "boolean?",
+        "dryRun": "boolean?",
+        "expectedRevision": "number?",
+        "mutationId": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.models.list",
+      "summary": "List image/video generation models from the live browser catalog (static products plus RunningHub models parsed from official docs) with per-mode configuration, reference limits, counts, aspect ratios, resolutions and durations under the user's current API keys.",
+      "args": {
+        "mode": "image|video|all?",
+        "submode": "string?",
+        "referenceKinds": "string[]?",
+        "includeUnavailable": "boolean?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.note.write",
+      "summary": "Create or update a text note for people to read. Notes never connect to anything and never feed generation; only use when the user explicitly asks for a note.",
+      "args": {
+        "projectId": "string?",
+        "noteId": "string?",
+        "text": "string",
+        "title": "string?",
+        "attachToNodeId": "string?",
+        "placement": "right|below|above|left?",
+        "expectedRevision": "number?",
+        "mutationId": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.media.import",
+      "summary": "Import an http(s) URL or an asset-library item onto the canvas as a durable media node; optionally connect it to a generation node as a reference and add its @chip to that node's Prompt Bar.",
+      "args": {
+        "projectId": "string?",
+        "url": "string?",
+        "assetId": "string?",
+        "title": "string?",
+        "attachToNodeId": "string?",
+        "mention": "boolean?",
+        "expectedRevision": "number?",
+        "mutationId": "string?"
       },
       "availability": "available"
     },
@@ -571,7 +641,22 @@
         "endSec": "number?",
         "sourceNodeIds": "string[]?",
         "position": "string?",
-        "speed": "number?"
+        "speed": "number?",
+        "currentTimeSec": "number?",
+        "audio": "full|vocals|background?",
+        "filters": "object?",
+        "maskNodeId": "string?",
+        "direction": "string?",
+        "amount": "number?",
+        "action": "string?",
+        "x": "number?",
+        "y": "number?",
+        "width": "number?",
+        "height": "number?",
+        "style": "string?",
+        "count": "number?",
+        "semitones": "number?",
+        "preset": "string?"
       },
       "availability": "available"
     },

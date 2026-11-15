@@ -110,6 +110,7 @@ const FLOVART_MODULE_LOADER = `// Generated loader: every concrete module the ag
 const MODULES = {
   'agent-kit': () => import('flovart-module:agent-kit'),
   'agent-surface': () => import('flovart-module:agent-surface'),
+  'agent-tools': () => import('flovart-module:agent-tools'),
   'core': () => import('flovart-module:core'),
   'host-discovery': () => import('flovart-module:host-discovery'),
   'host-registry': () => import('flovart-module:host-registry'),

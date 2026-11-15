@@ -17,9 +17,8 @@ import { withWorkflowHumanApproval, workflowCommandNeedsConfirmation } from './w
 import { getBundledProductionSkill, type ProductionSkillAttachment } from './productionSkillCatalog';
 import { workflowConfirmRequest } from './workflowAgentBridge';
 import type { AgentConfirmRequest } from './agentSpendMandate';
-import { COMMAND_ALIASES, COMMAND_REGISTRY } from '../tools/flovart/core.js';
 import { AGENT_BROWSER_COMMANDS } from '../tools/flovart/agent-surface.js';
-import { WORKFLOW_APPLY_GUIDE, WORKFLOW_OPERATIONS_SCHEMA } from '../tools/flovart/workflow-operation-schema.js';
+import { agentToolInputSchema, getAgentToolSpecs } from '../tools/flovart/agent-tools.js';
 import { createTodoTool, TODO_TOOL_NAME } from '../agent/todo.js';
 import type { ImageContent } from '@earendil-works/pi-ai';
 import type { WorkflowNode } from '../components/workflow/types';
@@ -497,27 +496,8 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
 }
 
 // ---------------------------------------------------------------------------
-// 工具：复用命令面（与 mcp.js 同源：COMMAND_REGISTRY + COMMAND_ALIASES）
+// 工具：复用命令面（与本机 Agent / MCP / DSH 同源：tools/flovart/agent-tools.js）
 // ---------------------------------------------------------------------------
-
-function browserToolName(command: string): string {
-  const alias = Object.entries(COMMAND_ALIASES).find(([name, target]) => target === command && name.startsWith('flovart_'))?.[0];
-  return alias || `flovart_${command.replace(/[^a-zA-Z0-9]+/g, '_')}`;
-}
-
-function descriptorSchema(descriptor: string) {
-  const optional = descriptor.endsWith('?');
-  const token = optional ? descriptor.slice(0, -1) : descriptor;
-  let schema;
-  if (token === 'number') schema = Type.Number();
-  else if (token === 'boolean') schema = Type.Boolean();
-  else if (token === 'object') schema = Type.Record(Type.String(), Type.Unknown());
-  else if (token === 'array') schema = Type.Array(Type.Unknown());
-  else if (token === 'string[]') schema = Type.Array(Type.String());
-  else if (token.includes('|')) schema = Type.Union(token.split('|').map(value => Type.Literal(value)));
-  else schema = Type.String();
-  return optional ? Type.Optional(schema) : schema;
-}
 
 export interface AgentAskRequest {
   /** 与 omp ask 相同：一个 HTML <form>，控件必须带 name。 */
@@ -608,31 +588,33 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
       details: result,
     };
   };
-  const commandTools: AgentTool[] = AGENT_BROWSER_COMMANDS.map(command => {
-    const definition = COMMAND_REGISTRY[command] || { args: {}, summary: command };
-    const args = (definition.args || {}) as Record<string, string>;
-    // workflow.apply 的 operations 用完整的按 type 区分的 schema，模型不必猜写法。
-    const argumentSchema = (name: string, descriptor: string) => (
-      command === 'workflow.apply' && name === 'operations'
-        ? Type.Unsafe<unknown[]>({ ...WORKFLOW_OPERATIONS_SCHEMA })
-        : descriptorSchema(descriptor)
-    );
-    const parameters = Type.Object(
-      Object.fromEntries(Object.entries(args).map(([name, descriptor]) => [name, argumentSchema(name, descriptor)])),
-    );
-    const summary = String(definition.summary || command);
-    return {
-      name: browserToolName(command),
-      label: command,
-      description: command === 'workflow.apply' ? summary + ' ' + WORKFLOW_APPLY_GUIDE : summary,
-      parameters,
-      execute: async (_toolCallId, params, _signal) => runCommand(command, params as Record<string, unknown>),
-    };
-  });
+  // 工具名、说明与参数 Schema 全部来自统一 Agent 工具定义（与本机 Agent / MCP / DSH 同一份）；
+  // projectId 由内置 Agent 注入，不让模型填。
+  const commandTools: AgentTool[] = getAgentToolSpecs('builtin')
+    .filter(spec => AGENT_BROWSER_COMMANDS.includes(spec.command))
+    .map(spec => {
+      const command = spec.command;
+      const schema = agentToolInputSchema(spec, { omit: ['projectId'] }) as { properties: Record<string, Record<string, unknown>> } & Record<string, unknown>;
+      let description = spec.description;
+      if (command === 'workflow.node.tool') {
+        schema.properties.tool = { ...schema.properties.tool, enum: [...WORKFLOW_OPERATION_NODE_TOOLS, 'reverse-prompt', 'filter', 'outpaint', 'mask'] };
+        description += '先用 inspect 拿到节点 ID；视频截帧前可先用 media_view 的 times 找准时间点。可用工具：\n' + describeWorkflowNodeTools();
+      }
+      return {
+        name: spec.name,
+        label: command,
+        description,
+        parameters: Type.Unsafe(schema),
+        execute: async (_toolCallId, params, _signal) => {
+          const input = { ...(params as Record<string, unknown>) };
+          if (command === 'workflow.node.tool' && input.tool === 'video-merge' && !input.nodeId && Array.isArray(input.sourceNodeIds)) input.nodeId = input.sourceNodeIds[0];
+          return runCommand(command, input);
+        },
+      };
+    });
   const extraTools: AgentTool[] = [];
   extraTools.push(createWebSearchTool(dependencies.webSearch, guard));
   extraTools.push(createLocalGrepTool(guard));
-  extraTools.push(createNodeToolTool(runCommand));
   if (dependencies.ask) extraTools.push(createAskTool(dependencies.ask));
   if (dependencies.getNodes) extraTools.push(createMediaViewTool(dependencies.getNodes));
   return [...commandTools, ...extraTools];
@@ -704,49 +686,6 @@ export function describeWorkflowNodeTools(): string {
   return [...operationTools, '- reverse-prompt：反推提示词（image/video，调用视觉模型，把结果写回节点 prompt）', '- filter：图片滤镜（image，参数 filters：{ brightness, contrast, saturation, ... }，只改节点显示参数）', '- outpaint：扩展画面（image，参数 direction/amount/prompt；direction 为 left/right/top/bottom/all）', '- mask：蒙版编辑（image，参数 prompt + maskNodeId 或 maskHref/maskMimeType；生成新的结果图）'].join('\n');
 }
 
-function createNodeToolTool(runCommand: (command: string, params: Record<string, unknown>) => Promise<{ content: Array<{ type: 'text'; text: string }>; details: unknown }>): AgentTool {
-  const optionalNumber = (description: string) => Type.Optional(Type.Number({ description }));
-  return {
-    name: NODE_TOOL_TOOL_NAME,
-    label: 'workflow.node.tool',
-    description: '在画布节点上执行后处理工具（与节点工具条按钮同一实现），结果作为新节点写回画布并自动连线，返回 outputNodeIds。先用 inspect 拿到节点 ID；视频截帧前可先用 media_view 的 times 找准时间点。可用工具：\n' + describeWorkflowNodeTools(),
-    parameters: Type.Object({
-      nodeId: Type.String({ description: '源节点 ID（video-merge 可省略，改用 sourceNodeIds）' }),
-      tool: Type.Union([...WORKFLOW_OPERATION_NODE_TOOLS.map(tool => Type.Literal(tool)), Type.Literal('reverse-prompt'), Type.Literal('filter'), Type.Literal('outpaint'), Type.Literal('mask')]),
-      position: Type.Optional(Type.Union([Type.Literal('first'), Type.Literal('current'), Type.Literal('last')], { description: 'video-extract-frame：first 首帧 / last 尾帧 / current 指定秒数' })),
-      currentTimeSec: optionalNumber('video-extract-frame 的 position=current 时截取的秒数，例如 10'),
-      startSec: optionalNumber('剪辑开始秒数'),
-      endSec: optionalNumber('剪辑结束秒数'),
-      sourceNodeIds: Type.Optional(Type.Array(Type.String(), { description: 'video-merge 的有序视频节点 ID' })),
-      audio: Type.Optional(Type.Union([Type.Literal('full'), Type.Literal('vocals'), Type.Literal('background')])),
-      prompt: Type.Optional(Type.String()),
-      filters: Type.Optional(Type.Record(Type.String(), Type.Number(), { description: 'filter：亮度/对比度/饱和度等数值' })),
-      maskNodeId: Type.Optional(Type.String()),
-      maskHref: Type.Optional(Type.String()),
-      maskMimeType: Type.Optional(Type.String()),
-      direction: Type.Optional(Type.String({ description: 'outpaint：left/right/top/bottom/all' })),
-      amount: optionalNumber('outpaint 扩展幅度 0.05-2'),
-      targetLongEdge: optionalNumber('upscale 目标长边 512-8192'),
-      algorithm: Type.Optional(Type.String()),
-      action: Type.Optional(Type.String({ description: 'rotate：rotate-90/rotate-180/rotate-270/flip-h/flip-v' })),
-      rows: optionalNumber('split-grid 行数 1-6'),
-      cols: optionalNumber('split-grid 列数 1-6'),
-      speed: optionalNumber('audio-speed 倍速 0.25-4'),
-      x: optionalNumber('crop 归一化左边'),
-      y: optionalNumber('crop 归一化上边'),
-      width: optionalNumber('crop 归一化宽度'),
-      height: optionalNumber('crop 归一化高度'),
-      style: Type.Optional(Type.String()),
-      count: optionalNumber('layer 候选数量 1-4'),
-    }),
-    execute: async (_toolCallId, params) => {
-      const input = { ...(params as Record<string, unknown>) };
-      if (input.tool === 'video-merge' && !input.nodeId && Array.isArray(input.sourceNodeIds)) input.nodeId = input.sourceNodeIds[0];
-      return runCommand('workflow.node.tool', input);
-    },
-  };
-}
-
 export const ASK_TOOL_NAME = 'flovart_ask';
 
 /** omp ask 的浏览器版：模型给一个 <form>，宿主渲染并回传 JSON。 */
@@ -816,8 +755,13 @@ const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，Flovart 生成式 
 ## 你能直接调用的工具
 - flovart_workflow_inspect：读取当前项目的节点、连线、配置与 revision。处理项目前先调用，不得猜测项目、节点或连接 ID。媒体地址在结果里会被脱敏为 [media]，这不代表节点没有内容。
 - flovart_workflow_selection_get：读取用户当前选中的节点。
-- flovart_workflow_apply：结构化修改画布。operations 只允许 add_node、create_connected_node、update_node、delete_nodes、delete_connections、connect_nodes、move_nodes、reorder_nodes、group_nodes、ungroup_nodes、set_batch_primary。
-- flovart_workflow_node_run：运行生成节点（nodeId 或 nodeIds 批量，一次确认费用）。
+- flovart_generate：生成图片/视频的唯一入口。只建或复用一个生成节点，prompt 直接写进它的 Prompt Bar，references 同时变成 @chip 与连线（顺序即 chip 顺序），按引用自动选文生/图生/首尾帧/全能参考；run=true 时原位运行（扣费，会请用户确认），返回批次与每张产物。
+- flovart_models_list：列出模型的真实能力（各生成方式是否已配置、参考上限、张数、比例、分辨率、时长，含 RunningHub 动态模型）。选/换模型前先调，不要猜 modelId 或逐个试。
+- flovart_workflow_node_run：重跑已写好提示词的生成节点（nodeId 或 nodeIds 批量，一次确认费用），返回 batch 与 takes。
+- flovart_workflow_node_stop：停止某个节点正在进行的生成。
+- flovart_media_import：把 http(s) 地址或素材库素材导入画布成为媒体节点，可直接接到生成节点作参考（加 @chip）。
+- flovart_note_write：写给人看的备注（文本节点）。只在用户明确要求写备注时使用；备注不连线、不参与生成。
+- flovart_workflow_apply：结构化修改画布（移动、连线、分组、改标题、调整参考顺序 reorder_connections 等）。operations 只允许 add_node、create_connected_node、update_node、delete_nodes、delete_connections、connect_nodes、move_nodes、reorder_nodes、reorder_connections、group_nodes、ungroup_nodes、set_batch_primary。不要用它建文本节点。
 - flovart_workflow_node_tool：在节点上执行后处理工具（截取视频任意秒数的帧、剪辑、音视频分离、拼接、裁剪、放大、去背景等），结果作为新节点写回画布。
 - flovart_ask：需要用户在几个方案里做选择或补充关键信息时，用 HTML <form> 结构化提问（控件必须带 name；一次只问一个关键决定）。不要用它询问 API Key、Token 等秘密，也不要在正文里堆长问题让用户再回一轮。
 - flovart_workflow_media_view：查看图片/视频节点的真实画面（nodeIds；视频可用 frames: first/middle/last 或 times: [秒数] 指定任意时间点）。inspect 里的 [media] 只是脱敏占位；需要判断构图、风格或检查生成结果时调用它。用户 @引用的图片/视频会自动附带画面。用户粘贴的截图、拖入的视频会作为本轮图片内容直接附上。
@@ -827,13 +771,13 @@ const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，Flovart 生成式 
 command.list/schema 属于 CLI discovery/debug，不是你的工具；不得访问 Shell、任意文件或 Provider Secret。
 
 ## 画布能力地图
-节点类型：image、text、video、audio、config（生成配置）、script、operation、design、subgraph（逆向子画布框），插件可扩展自定义类型。
-生成（你可以做）：用 apply 建立/更新 config 或媒体节点并连好参考，再用 node_run 运行。
-- 图片：metadata.submode 为 text-to-image（文生图）或 image-to-image（图生图）；可设画幅 aspectRatio、分辨率、质量、张数 1-4、提示词增强等。
-- 视频：submode 为 text-to-video（文生视频）、image-to-video（图生视频）、reference-to-video（全能参考）、first-last-frame（首尾帧生视频）、video-extension（视频续写/扩展）。
-- 文本与音频：text-generate、audio-generate。
-- 参考角色（连线/引用的 role）：first_frame、last_frame、reference、character、style、mask、source_video、source_audio。首尾帧视频要把两张图分别以 first_frame / last_frame 连到视频配置节点。
-- 当前模型路由不支持某个 submode 时会返回明确错误：如实转告并建议换模型，不要假装成功。
+节点类型：image、video、audio（媒体与生成节点）、text（备注，只给人看）、script（剧本/分镜表）、operation、design、subgraph（逆向子画布框），插件可扩展自定义类型。
+生成（你可以做）：一律用 flovart_generate，一次调用完成“建/复用生成节点 → Prompt Bar 写提示词 → 参考 @引用 + 连线 → 可选运行”。不要先建提示词/文本/配置节点再连到生成节点。
+- 图片：生成方式 text-to-image（文生图）或 image-to-image（图生图，有图片参考时自动选）；可设比例、分辨率、质量、张数 1/2/4（多张折叠成同一批次）。
+- 视频：text-to-video、image-to-video（一张图）、first-last-frame（references 里给 first_frame + last_frame）、reference-to-video（多图/视频/音频参考）、video-extension（模型支持时）。
+- 参考角色（references[].role）：first_frame、last_frame、reference、character、style、mask、source_video、source_audio。
+- 模型或线路不支持某个生成方式、参考数量超限时会返回 MODE_UNSUPPORTED / REFERENCE_LIMIT 与可用模型列表：如实转告并换列表里的模型，不要逐个盲试、不要假装成功。
+- 当前没有音频生成和独立的文本生成工具；不要承诺。
 
 媒体后处理工具（用 flovart_workflow_node_tool 直接执行，与节点工具条按钮同一实现；用户想自己点时，再说明在哪个节点上点哪个按钮）：
 - 图片：裁剪、高清放大（长边 512-8192）、去背景、拆分图层、AI 编辑（编辑/扩图/局部重绘/标注/重打光，需提示词）、旋转/镜像、宫格切分（1-6 行列）、图层贴纸、矢量化（SVG）、滤镜、反推 Prompt（图片或视频首帧，结果写回该节点的 prompt）。
@@ -845,21 +789,22 @@ command.list/schema 属于 CLI discovery/debug，不是你的工具；不得访�
 其他工作台（只能引导用户操作）：
 - 逆向视频（顶部切换到「逆向」）：上传参考视频，按 参考 → 分析 → 目标 → 变体 → 回到画布 拆出镜头、脚本、节奏与可替换槽位，结果以 subgraph 子画布写回 Workflow；双击子画布框回到逆向。你可以读取子画布里的镜头节点继续加工，但不能改逆向工作台本身。
 - 逆向游戏美术素材：当前版本没有这个功能，不要承诺；可以用图生图、宫格切分、去背景、拆分图层组合出类似流程。
-- 素材库、历史、本地文件夹：用户从侧栏把文件插入画布后，你通过 inspect 按节点 ID 使用它们；你不能自己导入文件。
+- 素材库、网络图片：用 flovart_media_import 导入（url 或 assetId），可直接接到生成节点作参考；本地文件夹与历史仍由用户从侧栏插入画布，你再通过 inspect 按节点 ID 使用。
 - 本地 Agent 连接：在 Agent 抽屉的「连接」里选择 Codex、WorkBuddy 等本机 Agent；外部 Agent 通过 Flovart CLI/MCP 操作同一张画布，还能调用节点后处理工具。
 - 第三方 API 接入：设置 → API Key 内置五种协议入口（OpenAI compatible、Gemini、火山 Seedance、RunningHub、自定义配置）。其他服务选「自定义配置」并绑定适配脚本（受限 JSON mapping：请求地址/鉴权/请求体/响应映射，不执行任意 JS）。用户需要时你可以按其接口文档起草脚本 JSON，由用户在「自定义配置」里粘贴保存；不得索取或回显密钥。
 
 ## 工作规则
 默认只操作当前已绑定的可见 Browser Workflow；没有 Browser binding 时必须显式失败，不能切换到 Native、隐藏图或从 React/localforage 读取 Workflow 图，也不能自行解析 Provider。
-修改只用 flovart_workflow_apply 的结构化 operations，执行只用 flovart_workflow_node_run（交给 WorkflowExecutor）；不得模拟鼠标、直接改 React state，或用 CLI、文件桥、直接 generate 在后台另做一份结果。
+生成只用 flovart_generate（或对已写好提示词的节点用 flovart_workflow_node_run），其余修改用 flovart_workflow_apply 的结构化 operations，全部交给同一个 WorkflowExecutor；不得模拟鼠标、直接改 React state，或用 CLI、文件桥在后台另做一份结果。
+文本节点是备注：绝不用它承载提示词、剧本、分镜或 prompt_context，也不要把它连到任何节点；用户明确要求写备注时才用 flovart_note_write。改已有节点的提示词也用 flovart_generate（不传 run），它会保留并重排 @引用。
 写操作使用稳定的 idempotencyKey；只有工具返回成功后，才能声称画布已变化。可逆修改直接落到用户可见的同一 Workflow 并合并为本轮 ChangeSet，每次修改后读取返回的 draftVersion/objectVersions 再继续。
 删除、付费执行、Production 审批和运行会要求用户确认，不得绕过；普通可逆布局和节点编辑无需逐次确认。没有用户确认的 Production Mandate 时不得声称付费制作已经开始。
 
 ## 制作循环（每一步都落在可见 Workflow 上）
 1. 澄清：缺少时长、画幅、风格、字幕语言或主体参考时，一次性列出缺口并给出建议默认值，等用户回答；信息足够时直接继续。
-2. 锚点：先用 workflow.apply 建立角色/产品/场景锚点节点（如三视图、主视觉），节点写入 anchor: { kind, approved: false }；运行后请用户确认，确认后用 update_node 把 approved 设为 true；未确认前不要拆镜。
-3. 拆镜：锚点确认后，用一次 workflow.apply 建立分镜节点，每个镜头一个节点，标题写镜号与内容，并写入 shot: { index, durationSec, scene, camera, dialogue, anchorNodeIds }；生成时会自动连上已批准锚点。
-4. 批量生成：互不依赖的节点用 flovart_workflow_node_run 的 nodeIds 一次提交，由用户一次确认费用；有依赖的节点（如需要上一镜尾帧）等上游成功后再运行。
+2. 锚点：用 flovart_generate 建立角色/产品/场景锚点生成节点（如三视图、主视觉）并运行；请用户确认后用 update_node 写入 anchor: { kind, approved: true }；未确认前不要拆镜。
+3. 拆镜：锚点确认后，每个镜头调用一次 flovart_generate（type=image 或 video，不传 run）：镜头画面写进 prompt，锚点放进 references，镜号/时长/场景/机位/台词写进 shot: { index, durationSec, scene, camera, dialogue }。镜头先后用 shot.index 表示，不要用镜头之间的连线表示顺序，也不要建文本节点写分镜。
+4. 批量生成：互不依赖的镜头节点用 flovart_workflow_node_run 的 nodeIds 一次提交，由用户一次确认费用；有依赖的节点（如需要上一镜尾帧）等上游成功后再运行。多张结果在同一节点折叠成批次，返回的 takes 是全部产物。
 5. 汇报：按节点标题说明成功与失败；失败只重跑失败节点，不整批重跑。需要后处理时，指明节点和对应工具按钮。
 6. 清单：多步制作开始前用 flovart_todo 建立任务清单，每完成、阻塞一步就更新；工具结果 ok:false 时读 error.code 决定改写提示词、重试或停下说明，预算不足或会话暂停时不得重试。
 绑定 Production Skill 时，镜头语言、风格和节奏以 Skill 为准；与用户要求冲突时以用户为准并说明。

@@ -23,8 +23,13 @@ export interface FlovartToolPolicy {
   approval: FlovartApproval
 }
 
-const WRITE_TOOLS = new Set(['flovart_apply'])
-const RUN_TOOLS = new Set(['flovart_run'])
+const WRITE_TOOLS = new Set(['flovart_apply', 'flovart_workflow_apply'])
+const RUN_TOOLS = new Set(['flovart_run', 'flovart_workflow_node_run'])
+const READ_TOOLS = new Set([
+  'flovart_inspect', 'flovart_selection', 'flovart_status',
+  'flovart_workflow_inspect', 'flovart_workflow_selection_get', 'flovart_workflow_focus_nodes',
+  'flovart_models_list', 'flovart_workflow_node_stop',
+])
 
 /** Classify a Flovart tool call; unknown Flovart tools are treated as writes. */
 export function flovartToolRisk(name: string, args: Record<string, unknown>): FlovartToolRisk | null {
@@ -41,7 +46,9 @@ export function flovartToolRisk(name: string, args: Record<string, unknown>): Fl
     // 委派回合默认只读；显式 workspace-write 才是可写委派，按 write 走审批。
     return args.policy === 'workspace-write' ? 'write' : 'read'
   }
-  if (name === 'flovart_inspect' || name === 'flovart_selection' || name === 'flovart_status') return 'read'
+  // generate 只写 Prompt Bar 时是普通写入；run=true 才是付费运行。
+  if (name === 'flovart_generate') return args.run === true || args.run === 'true' ? 'run' : 'write'
+  if (READ_TOOLS.has(name)) return 'read'
   return name.startsWith('flovart_') ? 'write' : null
 }
 

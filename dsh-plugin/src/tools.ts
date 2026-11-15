@@ -14,7 +14,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { CommandMeta, FlovartService } from './service.ts'
+import type { AgentToolSpec, CommandMeta, FlovartService } from './service.ts'
 import { runCli } from './cli.ts'
 import { decideFlovartToolCall } from './policy.ts'
 // Type-only: erased at build; runtime access is dynamic (see ensureToolsApi).
@@ -23,9 +23,9 @@ import type { ParameterPropertySpec, ParameterSchemaSpec } from '@deepseek-ai/ds
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
 /**
- * The DSH projection exposes the same five model-facing commands as every
- * other Coding Agent. Granular Workflow commands remain CLI compatibility
- * adapters and are intentionally not derived into a second public surface.
+ * Fallback surface for older CLIs whose `command.list` has no `agentTools`.
+ * Current CLIs report the unified Agent tool specs, and DSH registers those
+ * (same names and schemas as the built-in Agent, the local Agent and MCP).
  */
 export const STABLE_TOOL_COMMANDS = [
   'status',
@@ -102,6 +102,58 @@ function normalizedArgs(args: Record<string, unknown>): Record<string, unknown> 
   return output
 }
 
+/** 统一 Agent 工具定义的 JSON Schema 属性 → DSH 参数描述（枚举写进说明，复杂结构按 JSON 传）。 */
+export function specParameter(schema: Record<string, unknown>, required: boolean): ParameterPropertySpec {
+  const type = schema.type
+  const base = typeof schema.description === 'string' ? schema.description : ''
+  const enumText = Array.isArray(schema.enum) ? `可选值：${schema.enum.join(' / ')}` : ''
+  const description = [base, enumText].filter(Boolean).join('；')
+  let spec: ParameterPropertySpec
+  if (type === 'number' || type === 'integer' || type === 'boolean' || type === 'string') {
+    spec = { type, description }
+  } else if (type === 'array') {
+    const items = schema.items as Record<string, unknown> | undefined
+    spec = { type: 'array', items: { type: items?.type === 'string' ? 'string' : 'json' }, description }
+  } else if (type === 'object') {
+    spec = { type: 'object', additionalProperties: true, description }
+  } else {
+    spec = { type: 'string', description }
+  }
+  if (required) spec.required = true
+  return spec
+}
+
+/** Register one tool from the unified Agent tool spec (same name and schema as every other host). */
+function registerSpecTool(
+  ctx: Context,
+  service: FlovartService,
+  defineTool: DefineToolFn,
+  spec: AgentToolSpec,
+): () => void {
+  const parameters: ParameterSchemaSpec = {}
+  for (const [argName, schema] of Object.entries(spec.inputSchema.properties)) {
+    parameters[argName] = specParameter(schema, spec.inputSchema.required.includes(argName))
+  }
+  if (spec.write) parameters.idempotencyKey = { type: 'string', required: true, description: '重试时保持不变的幂等键' }
+  return ctx.tools.register(defineTool({
+    name: spec.name,
+    description: spec.description + '（执行真实 `flovart ' + spec.command + ' --json`；删除与付费运行由 Flovart 确认）',
+    parameters,
+    output: {
+      schema: { type: 'json' },
+      render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }],
+    },
+    execute: async (args, exec) => {
+      const outcome = await runCli(service.config, spec.command, normalizedArgs(args as Record<string, unknown>), exec.signal)
+      if (!outcome.ok) {
+        throw new Error(`${spec.command} 失败：${outcome.error?.code} ${outcome.error?.message ?? ''}`)
+      }
+      return outcome.data as JsonValue
+    },
+    isConcurrencySafe: () => !spec.write,
+  }))
+}
+
 /** Register one derived tool for a canonical CLI command. */
 function registerDerivedTool(
   ctx: Context,
@@ -166,14 +218,24 @@ export async function registerFlovartTools(ctx: Context, service: FlovartService
     }))
   }
   let derived = 0
-  for (const command of STABLE_TOOL_COMMANDS) {
-    const meta = commands[command]
-    if (meta) {
-      disposers.push(registerDerivedTool(ctx, service, defineTool, command, meta))
+  const specs = service.state.agentTools?.filter(spec => commands[spec.command]) ?? []
+  if (specs.length) {
+    // 新 CLI：工具名、说明、参数 Schema 与内置 / 本机 Agent、MCP 同一份（tools/flovart/agent-tools.js）。
+    for (const spec of specs) {
+      disposers.push(registerSpecTool(ctx, service, defineTool, spec))
       derived += 1
     }
+    console.log(`[flovart] 模型工具已注册：unified ${derived}（CLI ${service.config.cli}）`)
+  } else {
+    for (const command of STABLE_TOOL_COMMANDS) {
+      const meta = commands[command]
+      if (meta) {
+        disposers.push(registerDerivedTool(ctx, service, defineTool, command, meta))
+        derived += 1
+      }
+    }
+    console.log(`[flovart] 模型工具已注册：stable ${derived}/${STABLE_TOOL_COMMANDS.length}（CLI ${service.config.cli}）`)
   }
-  console.log(`[flovart] 模型工具已注册：stable ${derived}/${STABLE_TOOL_COMMANDS.length}（CLI ${service.config.cli}）`)
   return () => {
     for (const dispose of disposers.splice(0).reverse()) dispose()
   }

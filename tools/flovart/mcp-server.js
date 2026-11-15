@@ -7,7 +7,8 @@ import * as z from 'zod/v4';
 
 import { AGENT_OPERATION_DEFINITIONS, AGENT_PUBLIC_COMMANDS } from './agent-surface.js';
 import { COMMAND_REGISTRY } from './core.js';
-import { createOperationGateway, MCP_TOOL_NAMES } from './operation-gateway.js';
+import { createOperationGateway, MCP_DEPRECATED_TOOL_NAMES, MCP_TOOL_NAMES } from './operation-gateway.js';
+import { AGENT_TOOL_SPEC_BY_COMMAND } from './agent-tools.js';
 import { WORKFLOW_APPLY_GUIDE } from './workflow-operation-schema.js';
 import { PIPELINE_COMMAND_NAMES, PIPELINE_WRITE_COMMANDS } from './pipeline/commands.js';
 import { SKILL_SURFACE_COMMAND_NAMES, SKILL_SURFACE_WRITE_COMMANDS } from './skill-surface.js';
@@ -43,13 +44,30 @@ function descriptorSchema(descriptor) {
   return optional ? schema.optional() : schema;
 }
 
+/** Agent 工具定义里的 JSON Schema → zod（与其他宿主同一份 Schema；转换失败时退回注册表类型标记）。 */
+function specPropertySchema(propertySchema, descriptor) {
+  try {
+    return z.fromJSONSchema(propertySchema);
+  } catch {
+    const fallback = descriptorSchema(String(descriptor).replace(/\?$/, ''));
+    return propertySchema.description ? fallback.describe(propertySchema.description) : fallback;
+  }
+}
+
 export function mcpInputShape(command) {
   const definition = COMMAND_REGISTRY[command];
   if (!definition) throw new Error(`Missing canonical command metadata: ${command}`);
-  const shape = Object.fromEntries(
-    Object.entries(definition.args || {}).map(([name, descriptor]) => [name, descriptorSchema(descriptor)]),
-  );
-  if (command === 'workflow.apply' && shape.operations) shape.operations = shape.operations.describe(WORKFLOW_APPLY_GUIDE);
+  const spec = AGENT_TOOL_SPEC_BY_COMMAND[command];
+  const shape = spec
+    ? Object.fromEntries(Object.entries(spec.inputSchema.properties).map(([name, propertySchema]) => {
+      // operations 在 MCP 边界保持宽松（与上一版一致），由 Workflow 分发器给出逐字段的可读错误。
+      const schema = command === 'workflow.apply' && name === 'operations'
+        ? z.array(z.unknown()).describe(WORKFLOW_APPLY_GUIDE)
+        : specPropertySchema(propertySchema, definition.args[name]);
+      return [name, spec.inputSchema.required.includes(name) ? schema : schema.optional()];
+    }))
+    : Object.fromEntries(Object.entries(definition.args || {}).map(([name, descriptor]) => [name, descriptorSchema(descriptor)]));
+  if (command === 'workflow.apply' && shape.operations && !spec) shape.operations = shape.operations.describe(WORKFLOW_APPLY_GUIDE);
   // Keep this optional at the Zod seam so the canonical gateway can return
   // the same structured INVALID_ARGUMENT error as the CLI/SDK projections.
   if (AGENT_OPERATION_DEFINITIONS[command]?.mutation) shape.idempotencyKey = z.string().min(1).optional();
@@ -123,12 +141,9 @@ export function createMcpServer(options = {}) {
     instructions: 'Flovart exposes the same small Agent surface as its CLI. Keep Workflow edits visible in the Browser Workflow; never send API keys or tokens as tool arguments.',
   });
 
-  for (const command of AGENT_PUBLIC_COMMANDS) {
-    const name = MCP_TOOL_NAMES[command];
-    if (!name) throw new Error(`Missing MCP tool name for ${command}`);
-    const definition = COMMAND_REGISTRY[command];
+  const registerOperationTool = (name, command, description) => {
     server.registerTool(name, {
-      description: command === 'workflow.apply' ? definition.summary + ' ' + WORKFLOW_APPLY_GUIDE : definition.summary,
+      description,
       inputSchema: mcpInputShape(command),
     }, async input => {
       const values = input || {};
@@ -143,6 +158,16 @@ export function createMcpServer(options = {}) {
         return failureResult(error);
       }
     });
+  };
+  for (const command of AGENT_PUBLIC_COMMANDS) {
+    const name = MCP_TOOL_NAMES[command];
+    if (!name) throw new Error(`Missing MCP tool name for ${command}`);
+    registerOperationTool(name, command, AGENT_TOOL_SPEC_BY_COMMAND[command]?.description || COMMAND_REGISTRY[command].summary);
+  }
+  if (options.includeDeprecatedAliases !== false) {
+    for (const [alias, command] of Object.entries(MCP_DEPRECATED_TOOL_NAMES)) {
+      registerOperationTool(alias, command, `[已弃用，下个版本移除] 请改用 ${MCP_TOOL_NAMES[command]}。` + (AGENT_TOOL_SPEC_BY_COMMAND[command]?.description || ''));
+    }
   }
 
   if (options.includePipeline !== false) {

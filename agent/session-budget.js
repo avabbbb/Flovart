@@ -3,7 +3,7 @@
 // 暂停后新的付费命令一律拒绝，已在跑的任务不受影响（取消用 task.cancel）。
 import { AGENT_SESSION_CONTROL_COMMANDS } from '../tools/flovart/agent-surface.js';
 
-export const PAID_COMMANDS = new Set(['workflow.node.run', 'production.run', 'generate.image', 'generate.video']);
+export const PAID_COMMANDS = new Set(['workflow.node.run', 'workflow.generate', 'production.run', 'generate.image', 'generate.video']);
 // 命令名单定义在 agent-surface（CLI 与 Agent 共用），这里只转成 Set。
 export const SESSION_CONTROL_COMMANDS = new Set(AGENT_SESSION_CONTROL_COMMANDS);
 export const MAX_BUDGET_RUNS = 200;
@@ -21,6 +21,8 @@ function listArg(value) {
 // 一次命令会消耗几次付费生成：批量 nodeIds 按个数计，count / batchSize 取较大者。
 export function paidUnits(command, args = {}) {
   if (!PAID_COMMANDS.has(command)) return 0;
+  // workflow.generate 只写 Prompt Bar 时不花钱；run=true 才计一次（乘 count）。
+  if (command === 'workflow.generate' && args.run !== true && args.run !== 'true') return 0;
   const nodes = listArg(args.nodeIds).length || 1;
   const count = Math.max(1, Math.floor(Number(args.count || args.batchSize || 1)) || 1);
   return Math.imul(nodes, count);

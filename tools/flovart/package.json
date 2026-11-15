@@ -19,6 +19,7 @@
     "browser-launch-state.js",
     "dev-commands.js",
     "agent-surface.js",
+    "agent-tools.js",
     "host-discovery.js",
     "host-registry.js",
     "local-agent.js",

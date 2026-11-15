@@ -1,5 +1,6 @@
 // The model-facing Agent surface is intentionally smaller than the CLI registry.
 // Granular commands remain CLI compatibility adapters; they are not Agent tools.
+// 工具名、说明与完整参数 Schema 见 agent-tools.js（四个宿主的唯一来源）；这里只列命令与副作用边界。
 export const AGENT_PUBLIC_COMMANDS = Object.freeze([
   'status',
   'agent.turn',
@@ -7,7 +8,12 @@ export const AGENT_PUBLIC_COMMANDS = Object.freeze([
   'workflow.selection.get',
   'workflow.focus.nodes',
   'workflow.apply',
+  'workflow.generate',
+  'workflow.models.list',
+  'workflow.note.write',
+  'workflow.media.import',
   'workflow.node.run',
+  'workflow.node.stop',
   'workflow.node.tool',
 ]);
 
@@ -33,16 +39,16 @@ export const AGENT_OPERATION_DEFINITIONS = Object.freeze({
   'workflow.focus.nodes': Object.freeze({ sideEffects: 'read', risk: 'none', permissions: Object.freeze(['workflow.read']), idempotent: true, mutation: false, requiredCapabilities: Object.freeze(['browser-workflow']) }),
   'workflow.apply': Object.freeze({ sideEffects: 'workflow.write', risk: 'reversible', permissions: Object.freeze(['workflow.write']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow']) }),
   'agent.turn': Object.freeze({ sideEffects: 'agent.delegate', risk: 'cost-and-generation', permissions: Object.freeze(['agent.delegate']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow']) }),
+  // 只写 Prompt Bar 时是可逆写入；run=true 才产生费用（浏览器侧确认、本机预算按 run 计）。
+  'workflow.generate': Object.freeze({ sideEffects: 'generation.maybe', risk: 'cost-and-generation', permissions: Object.freeze(['workflow.write', 'workflow.run']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow', 'provider-gate']) }),
+  'workflow.models.list': Object.freeze({ sideEffects: 'read', risk: 'none', permissions: Object.freeze(['workflow.read']), idempotent: true, mutation: false, requiredCapabilities: Object.freeze(['browser-workflow']) }),
+  'workflow.note.write': Object.freeze({ sideEffects: 'workflow.write', risk: 'reversible', permissions: Object.freeze(['workflow.write']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow']) }),
+  'workflow.media.import': Object.freeze({ sideEffects: 'workflow.write', risk: 'reversible', permissions: Object.freeze(['workflow.write']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow']) }),
+  'workflow.node.stop': Object.freeze({ sideEffects: 'generation.stop', risk: 'none', permissions: Object.freeze(['workflow.run']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow']) }),
   'workflow.node.run': Object.freeze({ sideEffects: 'generation.maybe', risk: 'cost-and-generation', permissions: Object.freeze(['workflow.run']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow', 'provider-gate']) }),
   // 画布二次处理（裁剪 / 放大 / 去背景 / 剪辑 / 抽帧 / 反推提示词…）：付费工具在浏览器侧仍需人工确认。
   'workflow.node.tool': Object.freeze({ sideEffects: 'generation.maybe', risk: 'cost-and-generation', permissions: Object.freeze(['workflow.run']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow', 'provider-gate']) }),
 });
 
-// 内置 Agent 由注册表摘要生成的工具；workflow.node.tool 另有带完整工具清单的专用工具（browserAgentKernel）。
-export const AGENT_BROWSER_COMMANDS = Object.freeze([
-  'workflow.inspect',
-  'workflow.selection.get',
-  'workflow.focus.nodes',
-  'workflow.apply',
-  'workflow.node.run',
-]);
+// 内置 Agent 可见的命令（与 agent-tools.js 的 builtin 宿主一致；status / agent.turn 只给外部 Agent）。
+export const AGENT_BROWSER_COMMANDS = Object.freeze(AGENT_PUBLIC_COMMANDS.filter(command => command !== 'status' && command !== 'agent.turn'));

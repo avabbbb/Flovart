@@ -17,6 +17,16 @@ export interface CommandMeta {
   availability: string
 }
 
+/** command.list 的 agentTools：与内置 Agent / 本机 Agent / MCP 同名同 Schema 的工具定义。 */
+export interface AgentToolSpec {
+  command: string
+  name: string
+  aliases: string[]
+  description: string
+  write?: boolean
+  inputSchema: { type: 'object'; properties: Record<string, Record<string, unknown>>; required: string[] }
+}
+
 export interface FlovartServiceState {
   /** Whether the CLI launcher resolved and spoke the registry at last probe. */
   cliReady: boolean
@@ -25,6 +35,8 @@ export interface FlovartServiceState {
   commands: Record<string, CommandMeta> | null
   /** Registry content hash, when the CLI reports one. */
   registryHash: string | null
+  /** Unified Agent tool specs, when the CLI reports them (older CLIs do not). */
+  agentTools?: AgentToolSpec[] | null
 }
 
 export class FlovartServiceError extends Error {
@@ -133,9 +145,10 @@ export class FlovartService extends Service {
     const outcome = runCliSync(this.config, 'command.list', {})
     const wasReady = this.state.cliReady
     if (outcome.ok) {
-      const data = outcome.data as { commands?: Record<string, CommandMeta>; registryHash?: string | null } | null
+      const data = outcome.data as { commands?: Record<string, CommandMeta>; registryHash?: string | null; agentTools?: AgentToolSpec[] } | null
       this.state.commands = data?.commands ?? null
       this.state.registryHash = data?.registryHash ?? null
+      this.state.agentTools = Array.isArray(data?.agentTools) ? data.agentTools : null
       this.state.cliReady = this.state.commands !== null
       this.state.cliError = null
     } else {
@@ -143,6 +156,7 @@ export class FlovartService extends Service {
       this.state.cliError = outcome.error?.message ?? '未知 CLI 错误'
       this.state.commands = null
       this.state.registryHash = null
+      this.state.agentTools = null
     }
     if (wasReady !== this.state.cliReady) this.ctx.reflect.notify(['flovart'])
     return outcome
