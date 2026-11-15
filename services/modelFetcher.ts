@@ -33,11 +33,38 @@ export interface FetchModelsResult {
 
 export const MODEL_DISCOVERY_TIMEOUT_MS = 10_000;
 
+function createModelDiscoveryTimeoutError() {
+    return new DOMException('模型列表请求超时', 'TimeoutError');
+}
+
+/**
+ * 模型发现请求：截止时间同时覆盖「等响应头」和「读响应体」。
+ * 只在 fetch 返回后清计时器会让响应头先到、响应体卡住的接口无限挂起（GitHub #43）。
+ * 返回的 Response 已经把响应体完整读进内存，调用方照常 .text() 不会再阻塞。
+ */
 async function fetchWithModelDiscoveryTimeout(input: string, init: RequestInit = {}): Promise<Response> {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(new DOMException('模型列表请求超时', 'TimeoutError')), MODEL_DISCOVERY_TIMEOUT_MS);
+    let rejectOnTimeout: (reason: unknown) => void = () => {};
+    const deadline = new Promise<never>((_, reject) => { rejectOnTimeout = reject; });
+    const timeout = setTimeout(() => {
+        const error = createModelDiscoveryTimeoutError();
+        controller.abort(error);
+        rejectOnTimeout(error);
+    }, MODEL_DISCOVERY_TIMEOUT_MS);
+    // 防止截止 Promise 在正常完成后被判为未处理的 rejection
+    deadline.catch(() => {});
     try {
-        return await fetch(input, { ...init, signal: controller.signal });
+        const response = await Promise.race([fetch(input, { ...init, signal: controller.signal }), deadline]);
+        const body = await Promise.race([response.text(), deadline]);
+        const headers = new Headers();
+        const contentType = response.headers?.get?.('Content-Type');
+        if (contentType) headers.set('Content-Type', contentType);
+        const nullBodyStatus = response.status === 204 || response.status === 205 || response.status === 304;
+        return new Response(nullBodyStatus ? null : body, {
+            status: response.status >= 200 && response.status <= 599 ? response.status : 500,
+            statusText: response.statusText,
+            headers,
+        });
     } finally {
         clearTimeout(timeout);
     }
