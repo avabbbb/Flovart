@@ -493,8 +493,25 @@ describe('workflow generation', () => {
       ingestMedia: vi.fn().mockResolvedValue({ type: 'image', storageKey: 'generated', name: 'result.png', mimeType: 'image/png', bytes: 1, naturalWidth: 100, naturalHeight: 100 }),
       fetchMedia: vi.fn().mockResolvedValue(new Blob(['out'])), getProject: () => latest, onProjectChange: next => { latest = next; },
     });
-    expect(result.nodes.filter(node => node.title === '生成图片')).toHaveLength(2);
-    expect(result.nodes.find(node => node.id === 'config-1')?.position).toEqual({ x: 900, y: 400 });
+    // 第一张原位替换源节点（批次封面），第二张作为同批次成员叠放在同一位置
+    const head = result.nodes.find(node => node.id === 'config-1')!;
+    const siblings = result.nodes.filter(node => node.title === '生成图片' && node.id !== 'config-1');
+    expect(siblings).toHaveLength(1);
+    expect(head.type).toBe('image');
+    expect(head.batchId).toBeTruthy();
+    expect(head.batchIndex).toBe(0);
+    expect(siblings[0].batchId).toBe(head.batchId);
+    expect(siblings[0].batchIndex).toBe(1);
+    expect(siblings[0].position).toEqual(head.position);
+    // 保持用户运行期间拖动后的位置（以最新节点中心为锚）
+    const movedNode = moved.nodes.find(node => node.id === 'config-1')!;
+    const movedCenter = { x: 900 + (movedNode.width ?? 0) / 2, y: 400 + (movedNode.height ?? 0) / 2 };
+    expect(head.position.x + (head.width ?? 0) / 2).toBeCloseTo(movedCenter.x);
+    expect(head.position.y + (head.height ?? 0) / 2).toBeCloseTo(movedCenter.y);
+    // 源节点的 prompt 与连线不丢，兄弟结果继承 prompt，且不与源节点连线
+    expect(head.metadata.prompt).toBe(source.nodes[2].metadata.prompt);
+    expect(siblings[0].metadata.prompt).toBeTruthy();
+    expect(result.connections).toEqual(source.connections);
   });
   it('merges direct upstream inputs and creates a connected result node', async () => {
     const source = project();

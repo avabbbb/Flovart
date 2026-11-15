@@ -525,9 +525,35 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       const liveKey = canonical(runtime, current).nodes.find(node => node.id === nodeId)?.metadata.storageKey;
       return liveKey !== previousStorageKey && liveKey !== singleMediaRecord?.storageKey;
     };
+    // 多张生成：第一张原位替换源节点，其余与它同位叠放并归入同一批次，
+    // 画布以折叠样式（叠放卡片）显示在原节点位置，展开后才平铺。
+    let singleMediaPushed = false;
+    const sourcePromptMetadata = (() => {
+      const source = canonical(runtime, current).nodes.find(node => node.id === nodeId) || initialNode;
+      return { prompt: source.metadata.prompt, richTextDocument: source.metadata.richTextDocument };
+    })();
+    // 原位替换以节点的最新位置为锚（运行期间用户可能拖动过节点），保持中心点不变。
+    const liveAnchorCenter = () => {
+      const live = canonical(runtime, current).nodes.find(node => node.id === nodeId);
+      const box = live && typeof live.width === 'number' && typeof live.height === 'number'
+        ? { x: live.position.x, y: live.position.y, width: live.width, height: live.height }
+        : executionTarget.outputTarget;
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    };
     const pushResultNode = (record: WorkflowMediaRecord, index: number) => {
+      const resultSize = fitWorkflowMediaSize(mode as 'image' | 'video', record.naturalWidth, record.naturalHeight);
+      const stacked = batched && !detachedResult;
+      const anchor = liveAnchorCenter();
+      const anchorCenterX = anchor.x;
+      const anchorCenterY = anchor.y;
+      const resultPosition = stacked
+        ? { x: anchorCenterX - resultSize.width / 2, y: anchorCenterY - resultSize.height / 2 }
+        : { x: executionTarget.outputTarget.x + executionTarget.outputTarget.width + 80, y: executionTarget.outputTarget.y + index * 48 };
       const resultNode = {
-        ...createWorkflowNode(createId(), mode, { x: executionTarget.outputTarget.x + executionTarget.outputTarget.width + 80, y: executionTarget.outputTarget.y + index * 48 }, {
+        ...createWorkflowNode(createId(), mode, resultPosition, {
+          // 同批结果继承源节点的提示词，便于展开后单独查看或重跑。
+          prompt: sourcePromptMetadata.prompt ?? effectivePrompt,
+          ...(sourcePromptMetadata.richTextDocument ? { richTextDocument: sourcePromptMetadata.richTextDocument } : {}),
           ...record,
           href: undefined,
           status: 'success',
@@ -536,11 +562,13 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
           operationTakeId: isImageOperation ? operationTakeId : undefined,
           operationOutputRole: isImageOperation ? 'result_image' : undefined,
         }),
-        ...fitWorkflowMediaSize(mode as 'image' | 'video', record.naturalWidth, record.naturalHeight),
+        ...resultSize,
       };
       resultNode.title = mode === 'video' ? '生成视频' : '生成图片';
       preparedNodes.push(resultNode);
       if (!stillActive()) throw abortError();
+      // 同批叠放的兄弟结果不是源节点的下游，不连线（否则重跑会把它们当成输入/输出链）。
+      if (stacked) return;
       preparedConnections.push({
         id: createId(), fromNodeId: nodeId, toNodeId: resultNode.id,
         kind: isImageOperation ? 'operation-output' : 'data',
@@ -725,12 +753,16 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         throw abortError();
       }
 
-      if (batched || userReplacedMedia()) {
-        if (!batched) detachedResult = true;
+      if (!detachedResult && userReplacedMedia()) {
+        // 运行期间用户换了源节点的媒体：已原位写入的结果改为另存新节点，绝不覆盖用户的选择。
+        detachedResult = true;
+        if (singleMediaRecord && !singleMediaPushed) { singleMediaPushed = true; pushResultNode(singleMediaRecord, 0); }
+      }
+      if (detachedResult || singleMediaRecord) {
         pushResultNode(record, index);
       } else {
         const size = fitWorkflowMediaSize(mode, record.naturalWidth, record.naturalHeight);
-        const center = { x: executionTarget.outputTarget.x + executionTarget.outputTarget.width / 2, y: executionTarget.outputTarget.y + executionTarget.outputTarget.height / 2 };
+        const center = liveAnchorCenter();
         singleMediaRecord = record;
         const latest = canonical(runtime, current);
         current = {
@@ -781,15 +813,17 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       preparedHistory.push({ name: mode === 'video' ? '生成视频' : '生成图片', dataUrl, mimeType: mode === 'video' ? 'image/jpeg' : record.mimeType, ...historySize, prompt: effectivePrompt, mediaType: mode });
     }
 
-    if (batchId) preparedNodes.forEach((node, index) => { node.batchId = batchId; node.batchIndex = index; });
+    // 原位替换时源节点是批次第 0 张（折叠样式的封面），新结果从 1 开始编号。
+    const batchHeadInPlace = Boolean(batchId) && !detachedResult && Boolean(singleMediaRecord);
+    if (batchId) preparedNodes.forEach((node, index) => { node.batchId = batchId; node.batchIndex = batchHeadInPlace ? index + 1 : index; });
 
     if (!stillActive()) throw abortError();
     // 提交后、提交前最后一刻再查一次：用户在结果落盘后才换了媒体，也不覆盖。
-    if (!batched && !detachedResult && singleMediaRecord && userReplacedMedia()) {
+    if (!detachedResult && singleMediaRecord && userReplacedMedia()) {
       detachedResult = true;
-      pushResultNode(singleMediaRecord, 0);
+      if (!singleMediaPushed) { singleMediaPushed = true; pushResultNode(singleMediaRecord, 0); }
     }
-    if (batched || detachedResult) {
+    if (detachedResult) {
       const latest = canonical(runtime, current);
       current = {
         ...latest,
@@ -801,10 +835,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       const size = singleMediaRecord
         ? fitWorkflowMediaSize(mode as 'image' | 'video', singleMediaRecord.naturalWidth, singleMediaRecord.naturalHeight)
         : undefined;
-      const center = {
-        x: executionTarget.outputTarget.x + executionTarget.outputTarget.width / 2,
-        y: executionTarget.outputTarget.y + executionTarget.outputTarget.height / 2,
-      };
+      const center = liveAnchorCenter();
       current = {
         ...latest,
         nodes: latest.nodes.map(node => {
@@ -842,20 +873,24 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
               ...terminalGenerationPatch({ kind: 'succeeded' }),
               ...(operationTakeId ? { operationTakeId, sourceOperationNodeId: nodeId } : {}),
             },
+            ...(batchId && preparedNodes.length > 0 ? { batchId, batchIndex: 0, batchGroupSource: 'auto' as const } : {}),
           };
-        }),
+        }).concat(preparedNodes),
+        connections: preparedConnections.length > 0 ? [...latest.connections, ...preparedConnections] : latest.connections,
       };
     }
     if (operationTakeId) {
       const operation = current.nodes.find(node => node.id === nodeId);
       if (operation) {
-        // 批量输出 = 新建结果节点；单张输出 = 原位替换后的节点自身
-        const outputNodeIds = preparedNodes.length > 0 ? preparedNodes.map(node => node.id) : [nodeId];
+        // 原位替换的第一张 = 节点自身；其余（或用户换图后另存的）= 新建结果节点
+        const replacedInPlace = !detachedResult && Boolean(singleMediaRecord);
+        const outputNodeIds = [...(replacedInPlace ? [nodeId] : []), ...preparedNodes.map(node => node.id)];
+        if (outputNodeIds.length === 0) outputNodeIds.push(nodeId);
         validateWorkflowOperationOutputs('image.generate@1', outputNodeIds.map(() => ({ role: 'result_image' as const, nodeType: 'image' as const })));
         const completed = applySelectedTakeMedia(completeWorkflowOperationTake(operation, operationTakeId, outputNodeIds, {
           providerTaskId: operation.metadata.generationProviderTaskId,
           usageRecordId: operation.metadata.generationUsageRecordId,
-          ...(preparedNodes.length === 0 && singleMediaRecord ? { outputMedia: pickTakeMedia(singleMediaRecord) } : {}),
+          ...(replacedInPlace && singleMediaRecord ? { outputMedia: pickTakeMedia(singleMediaRecord) } : {}),
         }));
         current = { ...current, nodes: current.nodes.map(node => node.id === nodeId ? completed : node) };
       }
@@ -866,7 +901,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
     preparedNodes.forEach(node => { if (node.metadata.storageKey) releaseWorkflowMediaRecord(node.metadata.storageKey); });
     // 非批量路径的结果直接替换了原节点（不在 preparedNodes 里），需在此补一次 release，
     // 与批量路径在 commit 后释放 pending 引用的时机对齐。
-    if (!batched && !detachedResult) {
+    if (!detachedResult) {
       const committedNode = current.nodes.find(node => node.id === nodeId);
       if (committedNode?.metadata.storageKey) releaseWorkflowMediaRecord(committedNode.metadata.storageKey);
     }

@@ -2887,6 +2887,8 @@ export function InfiniteWorkflow({
     return result;
   }, [batchGroups, expandedBatches]);
 
+  const collapsedBatchHeadIds = useMemo(() => new Set(collapsedBatches.map(({ head }) => head.id)), [collapsedBatches]);
+
   const expandedBatchGalleries = useMemo(() => [...batchGroups].flatMap(([batchId, group]) => (
     group.length > 1 && group.length <= 4 && expandedBatches.has(batchId) && !group.some(node => node.batchGroupSource === 'manual')
       ? [{ batchId, group: [...group].sort((left, right) => (left.batchIndex ?? 0) - (right.batchIndex ?? 0)) }]
@@ -3183,7 +3185,9 @@ export function InfiniteWorkflow({
           connections={edgesVisible === false ? [] : project.connections.filter(connection => {
             const from = project.nodes.find(node => node.id === connection.fromNodeId);
             const to = project.nodes.find(node => node.id === connection.toNodeId);
-            return from?.isVisible !== false && to?.isVisible !== false && !hiddenByBatch.has(connection.fromNodeId) && !hiddenByBatch.has(connection.toNodeId)
+            // 折叠批次以封面节点（叠放卡片所在位置）代表整组：封面的连线照常显示，其余成员的连线隐藏。
+            const batchHidden = (id: string) => hiddenByBatch.has(id) && !collapsedBatchHeadIds.has(id);
+            return from?.isVisible !== false && to?.isVisible !== false && !batchHidden(connection.fromNodeId) && !batchHidden(connection.toNodeId)
               && !hiddenBySubgraph.has(connection.fromNodeId) && !hiddenBySubgraph.has(connection.toNodeId);
           })}
           selectedId={selectedConnectionId}
