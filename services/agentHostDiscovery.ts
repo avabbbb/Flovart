@@ -2,6 +2,7 @@ import { getManagedAgentConnection, type ManagedAgentConnection } from './manage
 import { useAgentConnectionStore } from '../stores/useAgentConnectionStore';
 import { displayError } from './displayError';
 import { AGENTS_OFFLINE_MESSAGE } from './runtimeHealth';
+import { agentLinkIssueMessage } from './agentLinkIssue';
 
 export interface AgentHostRecord {
   id: string;
@@ -59,7 +60,10 @@ export async function discoverAgentHosts(options: AgentHostDiscoveryOptions = {}
       headers: { 'x-flovart-agent-token': connection.token },
       signal: AbortSignal.timeout(8000),
     });
-    const body = await response.json() as Partial<AgentHostDiscovery>;
+    const body = await response.json().catch(() => ({})) as Partial<AgentHostDiscovery>;
+    if (response.status === 401) {
+      return { ok: false, state: 'error', agents: [], error: agentLinkIssueMessage({ kind: 'auth' }) };
+    }
     if (!response.ok || body.ok !== true || !Array.isArray(body.agents)) {
       return { ok: false, state: 'error', agents: [], error: 'Agent Host discovery 返回无效结果。' };
     }
@@ -72,11 +76,16 @@ export async function discoverAgentHosts(options: AgentHostDiscoveryOptions = {}
       activeHostWriter,
     };
   } catch (error) {
+    // A network failure here is the local Agent link, not an AI provider:
+    // displayError would call it "AI 服务" and send the user to API keys.
+    const timedOut = error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError');
     return {
       ok: false,
       state: 'error',
       agents: [],
-      error: displayError(error, 'Agent Host discovery 失败。'),
+      error: error instanceof TypeError || timedOut
+        ? agentLinkIssueMessage({ kind: timedOut ? 'timeout' : 'refused' })
+        : displayError(error, 'Agent Host discovery 失败。'),
     };
   }
 }

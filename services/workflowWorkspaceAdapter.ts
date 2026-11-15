@@ -6,16 +6,25 @@ import { hydrateAgentActivity, toActivityEntry } from './agentActivity';
 import { hydrateAgentReceipts, toReceipt } from './agentReceipts';
 import { useAgentReceiptStore } from '../stores/useAgentReceiptStore';
 import { useAgentActivityStore } from '../stores/useAgentActivityStore';
+import { agentLinkIssue, agentLinkIssueMessage, diagnoseAgentLink, isTerminalAgentLinkIssue, type AgentLinkIssue } from './agentLinkIssue';
 
 type AdapterStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 type AdapterBridge = Pick<WorkflowAgentBridge, 'connect' | 'disconnect' | 'pushSnapshot'>
-  & Partial<Pick<WorkflowAgentBridge, 'activateWriter' | 'getClientId'>>;
+  & Partial<Pick<WorkflowAgentBridge, 'activateWriter' | 'getClientId' | 'reconnectNow'>>;
 
 interface WorkflowWorkspaceAdapterOptions {
   discover?: () => Promise<ManagedAgentConnection | null>;
   createBridge?: (options: WorkflowAgentBridgeOptions) => AdapterBridge;
   onStatus?: (status: AdapterStatus) => void;
   confirm?: (summary: string) => boolean | Promise<boolean>;
+  /** Classifies a broken link; injectable for tests. */
+  diagnose?: (connection: ManagedAgentConnection) => Promise<AgentLinkIssue | null>;
+  /**
+   * Called when the credential can no longer work (expired / reset / origin
+   * rejected). Returns true when it arranged a fresh credential itself, e.g.
+   * the DSH embed asking its host for a new one-time bootstrap token.
+   */
+  onCredentialRejected?: (issue: AgentLinkIssue) => boolean;
 }
 
 export class WorkflowWorkspaceAdapter {
@@ -26,19 +35,36 @@ export class WorkflowWorkspaceAdapter {
   private publishAgain = false;
   private lifecycleVersion = 0;
   private autoActivateWriter = false;
+  /** Set when the link hit an issue retrying cannot fix; later bridge statuses are ignored. */
+  private halted = false;
+  private diagnosing = false;
+  private readonly diagnose: (connection: ManagedAgentConnection) => Promise<AgentLinkIssue | null>;
   private readonly discover: () => Promise<ManagedAgentConnection | null>;
   private readonly createBridge: (options: WorkflowAgentBridgeOptions) => AdapterBridge;
 
   constructor(private readonly options: WorkflowWorkspaceAdapterOptions = {}) {
     this.discover = options.discover || getManagedAgentConnection;
     this.createBridge = options.createBridge || (bridgeOptions => new WorkflowAgentBridge(bridgeOptions));
+    this.diagnose = options.diagnose || (connection => diagnoseAgentLink({ url: connection.url, token: connection.token }));
   }
 
   async start(project: unknown): Promise<AdapterStatus | 'unavailable'> {
     this.stop();
     const lifecycleVersion = this.lifecycleVersion;
     this.latestProject = project;
-    const connection = await this.discover();
+    this.halted = false;
+    let connection: ManagedAgentConnection | null;
+    try {
+      connection = await this.discover();
+    } catch (cause) {
+      // Desktop discovery threw (sidecar not ready / bad endpoint): report it instead of leaving a stale status.
+      if (lifecycleVersion !== this.lifecycleVersion) return 'disconnected';
+      const issue = agentLinkIssue('unreachable', null, cause instanceof Error ? cause.name : undefined);
+      useAgentConnectionStore.getState().setStatus('offline', {
+        clientId: null, projectId: projectIdOf(project), revision: revisionOf(project), error: agentLinkIssueMessage(issue), issue,
+      });
+      return 'unavailable';
+    }
     if (lifecycleVersion !== this.lifecycleVersion) return 'disconnected';
     if (!connection) {
       useAgentConnectionStore.getState().setStatus('offline', {
@@ -49,6 +75,8 @@ export class WorkflowWorkspaceAdapter {
         writerClientId: null,
         writerProjectId: null,
         error: null,
+        // Keep a classified bootstrap failure (auth / refused …) visible; otherwise there is simply nothing configured.
+        issue: useAgentConnectionStore.getState().issue || agentLinkIssue('not_configured', null),
       });
       return 'unavailable';
     }
@@ -92,16 +120,22 @@ export class WorkflowWorkspaceAdapter {
           void hydrateAgentActivity(connection).catch(() => undefined);
         }
       },
-      onStatus: status => {
+      onStatus: (status, reason) => {
+        if (lifecycleVersion !== this.lifecycleVersion || this.halted) return;
         this.connected = status === 'connected';
         this.options.onStatus?.(status);
-        useAgentConnectionStore.getState().setStatus(status === 'connected' ? 'ready' : status === 'error' ? 'error' : status === 'connecting' ? 'connecting' : 'offline', {
+        const current = useAgentConnectionStore.getState();
+        const mapped = status === 'connected' ? 'ready' : status === 'error' ? 'error' : status === 'connecting' ? 'connecting' : 'offline';
+        useAgentConnectionStore.getState().setStatus(mapped, {
           url: connection.url,
           clientId: this.bridge?.getClientId?.() || null,
           projectId: projectIdOf(this.latestProject),
           revision: revisionOf(this.latestProject),
-          error: status === 'error' ? 'Flovart Agent 连接中断。' : null,
+          // Until diagnosis finishes, show the cause we already know instead of a blank error.
+          error: status === 'error' ? (current.issue ? current.error : agentLinkIssueMessage({ kind: reason === 'hello_timeout' ? 'timeout' : 'stream_lost' })) : null,
+          ...(status === 'error' && !current.issue ? { issue: agentLinkIssue(reason === 'hello_timeout' ? 'timeout' : 'stream_lost', connection.url) } : {}),
         });
+        if (status === 'error') void this.classify(connection, lifecycleVersion, 'stream_lost');
         if (this.connected) {
           this.schedulePublish();
           void hydrateAgentActivity(connection).catch(() => undefined);
@@ -109,6 +143,7 @@ export class WorkflowWorkspaceAdapter {
         }
       },
     });
+    this.connection = connection;
     useAgentConnectionStore.getState().setStatus('connecting', {
       url: connection.url,
       clientId: this.bridge.getClientId?.() || null,
@@ -118,9 +153,57 @@ export class WorkflowWorkspaceAdapter {
       writerClientId: null,
       writerProjectId: null,
       error: null,
+      issue: null,
     });
     this.bridge.connect();
     return 'connecting';
+  }
+
+  /** Retry now (user pressed Reconnect while the stream is in backoff). */
+  reconnectNow() {
+    this.bridge?.reconnectNow?.();
+  }
+
+  private connection: ManagedAgentConnection | null = null;
+
+  /**
+   * Classify a transport failure once per streak and publish it. Terminal
+   * issues (expired credential, rejected origin, version skew) stop the
+   * reconnect loop: hammering the Agent with a dead token every 15s cannot
+   * succeed and only hides the real cause behind "connecting…".
+   */
+  private async classify(connection: ManagedAgentConnection, lifecycleVersion: number, fallback: 'stream_lost' | 'sync_failed', detail?: string) {
+    if (this.diagnosing) return;
+    this.diagnosing = true;
+    let issue: AgentLinkIssue | null = null;
+    try {
+      issue = await this.diagnose(connection);
+    } catch {
+      issue = null;
+    } finally {
+      this.diagnosing = false;
+    }
+    if (lifecycleVersion !== this.lifecycleVersion || this.halted) return;
+    // The stream recovered while we were probing: nothing to report.
+    if (this.connected && fallback === 'stream_lost') return;
+    const resolved = issue || agentLinkIssue(fallback, connection.url, detail);
+    if (isTerminalAgentLinkIssue(resolved.kind)) {
+      this.halted = true;
+      this.connected = false;
+      this.bridge?.disconnect();
+      const rearmed = resolved.kind === 'auth' && this.options.onCredentialRejected?.(resolved) === true;
+      useAgentConnectionStore.getState().setStatus(resolved.kind === 'auth' && !rearmed ? 'auth_failed' : rearmed ? 'connecting' : 'error', {
+        url: connection.url,
+        clientId: null,
+        error: agentLinkIssueMessage(resolved),
+        issue: resolved,
+      });
+      return;
+    }
+    useAgentConnectionStore.getState().setStatus('error', {
+      error: agentLinkIssueMessage(resolved),
+      issue: resolved,
+    });
   }
 
   update(project: unknown) {
@@ -137,8 +220,10 @@ export class WorkflowWorkspaceAdapter {
     this.connected = false;
     this.publishAgain = false;
     this.autoActivateWriter = false;
+    this.halted = false;
     this.bridge?.disconnect();
     this.bridge = null;
+    this.connection = null;
   }
 
   private schedulePublish() {
@@ -161,8 +246,14 @@ export class WorkflowWorkspaceAdapter {
           await this.bridge.activateWriter(projectIdOf(this.latestProject) || undefined);
         }
       } while (this.publishAgain && this.bridge && this.connected);
-    } catch {
+      // A previous sync failure must not stick once a publish succeeds again.
+      const state = useAgentConnectionStore.getState();
+      if (this.connected && state.status === 'error') {
+        useAgentConnectionStore.getState().setStatus('ready', { error: null, issue: null });
+      }
+    } catch (cause) {
       this.options.onStatus?.('error');
+      if (this.connection) void this.classify(this.connection, this.lifecycleVersion, 'sync_failed', cause instanceof Error ? cause.message.slice(0, 160) : undefined);
     } finally {
       this.publishInFlight = false;
     }

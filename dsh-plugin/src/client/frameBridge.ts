@@ -11,7 +11,42 @@ export const MESSAGE = Object.freeze({
   locale: 'flovart:dsh-locale',
   bootstrap: 'flovart:dsh-bootstrap',
   startSession: 'flovart:start-session',
+  link: 'flovart:dsh-link',
 })
+
+export type FrameLinkStatus = 'connecting' | 'ready' | 'error'
+
+// Short reasons per Flovart link issue kind (services/agentLinkIssue.ts). The
+// frame only receives the kind, never URLs, tokens or raw error text.
+const LINK_ISSUE_LABEL: Record<string, string> = {
+  not_configured: '未拿到连接凭证',
+  blocked_by_page: '浏览器拦截了本机连接',
+  refused: 'Workspace Operator 未运行',
+  unreachable: '连不上 Workspace Operator',
+  timeout: 'Workspace Operator 响应超时',
+  cors: 'Operator 拒绝了页面来源',
+  auth: '连接凭证已失效，正在重新获取',
+  version: 'Flovart 与 Operator 版本不匹配',
+  wrong_service: '端口上不是 Flovart Operator',
+  stream_lost: '实时通道中断，正在重连',
+  sync_failed: '画布同步失败',
+}
+
+/**
+ * Map the canvas' real link state (posted by the embedded Flovart page) onto
+ * the frame header, so DSH never shows "connected" merely because a token
+ * was handed over.
+ */
+export function frameStatusFromLink(data: unknown): { status: FrameLinkStatus; detail: string } | null {
+  if (!isRecord(data) || data.type !== MESSAGE.link || typeof data.state !== 'string') return null
+  const issue = typeof data.issue === 'string' ? LINK_ISSUE_LABEL[data.issue] || '' : ''
+  if (data.state === 'ready') return { status: 'ready', detail: '' }
+  if (data.state === 'connecting') return { status: 'connecting', detail: issue }
+  if (data.state === 'offline' || data.state === 'error' || data.state === 'auth_failed') {
+    return { status: 'error', detail: issue || '画布未连接' }
+  }
+  return null
+}
 
 export type ColorScheme = 'light' | 'dark'
 

@@ -33,6 +33,10 @@ const RUNTIME_CONFIRM_COMMANDS = new Set(['production.approve', 'production.run'
 const READ_COMMANDS = new Set(['runtime.status', 'status', 'provider.status', 'asset.list', 'workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.focus.nodes', 'command.list', 'command.schema']);
 const WORKFLOW_READ_COMMANDS = new Set(['workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.focus.nodes']);
 const REQUEST_TIMEOUT_MS = 45_000;
+/** An EventSource that opens but never says hello (proxy buffering, half-dead Agent) must not stay "connecting" forever. */
+const HELLO_TIMEOUT_MS = 10_000;
+
+export type WorkflowAgentBridgeErrorReason = 'stream_error' | 'hello_timeout';
 
 export function redactWorkflowAgentSnapshot<T>(snapshot: T): T {
   return redactWorkflowAgentValue(snapshot);
@@ -42,7 +46,10 @@ export interface WorkflowAgentBridgeOptions {
   url: string;
   token: string;
   onEvent?: (type: string, payload: any) => void;
-  onStatus?: (status: 'connecting' | 'connected' | 'disconnected' | 'error') => void;
+  /** `reason` is set with `error`: the stream errored, or never said hello in time. */
+  onStatus?: (status: 'connecting' | 'connected' | 'disconnected' | 'error', reason?: WorkflowAgentBridgeErrorReason) => void;
+  /** How long to wait for the `hello` event before treating the stream as stuck. */
+  helloTimeoutMs?: number;
   confirm?: (summary: string, request?: AgentConfirmRequest) => boolean | Promise<boolean>;
   confirmWrite?: (summary: string, request?: AgentConfirmRequest) => boolean | Promise<boolean>;
   workflowContract?: BrowserWorkflowContract;
@@ -235,6 +242,7 @@ export class WorkflowAgentBridge {
   private readonly clientId = crypto.randomUUID();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempt = 0;
+  private helloTimer: ReturnType<typeof setTimeout> | null = null;
   private enabled = false;
   private readonly workflowContract: BrowserWorkflowContract;
 
@@ -255,6 +263,7 @@ export class WorkflowAgentBridge {
     this.enabled = false;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
+    this.clearHelloTimer();
     this.eventSource?.close();
     this.eventSource = null;
     this.options.onStatus?.('disconnected');
@@ -277,7 +286,22 @@ export class WorkflowAgentBridge {
     url.searchParams.set('clientId', this.clientId);
     const source = new EventSource(url);
     this.eventSource = source;
+    const fail = (reason: WorkflowAgentBridgeErrorReason) => {
+      if (this.eventSource !== source && this.eventSource !== null) return;
+      this.clearHelloTimer();
+      source.close();
+      if (this.eventSource === source) this.eventSource = null;
+      if (!this.enabled) return;
+      this.options.onStatus?.('error', reason);
+      if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+      const delay = Math.min(15_000, 500 * (2 ** this.reconnectAttempt++));
+      this.reconnectTimer = setTimeout(() => this.openEvents(), delay);
+    };
+    this.clearHelloTimer();
+    this.helloTimer = setTimeout(() => fail('hello_timeout'), this.options.helloTimeoutMs ?? HELLO_TIMEOUT_MS);
     source.addEventListener('hello', event => {
+      if (this.eventSource !== source) return;
+      this.clearHelloTimer();
       this.reconnectAttempt = 0;
       this.options.onStatus?.('connected');
       this.emit('hello', this.parseEvent(event));
@@ -285,14 +309,21 @@ export class WorkflowAgentBridge {
     source.addEventListener('ping', event => this.emit('ping', this.parseEvent(event)));
     source.addEventListener('tool_call', event => void this.handleToolCall(this.parseEvent(event)));
     ['agent_event', 'agent_log', 'agent_error', 'agent_done', 'writer_changed', 'writer_unavailable', 'host_writer_changed', 'activity', 'receipt'].forEach(type => source.addEventListener(type, event => this.emit(type, this.parseEvent(event))));
-    source.onerror = () => {
-      source.close();
-      if (this.eventSource === source) this.eventSource = null;
-      if (!this.enabled) return;
-      this.options.onStatus?.('error');
-      const delay = Math.min(15_000, 500 * (2 ** this.reconnectAttempt++));
-      this.reconnectTimer = setTimeout(() => this.openEvents(), delay);
-    };
+    source.onerror = () => fail('stream_error');
+  }
+
+  /** Restart the event stream now instead of waiting for the backoff timer. */
+  reconnectNow() {
+    if (!this.enabled) return;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    this.reconnectAttempt = 0;
+    this.openEvents();
+  }
+
+  private clearHelloTimer() {
+    if (this.helloTimer) clearTimeout(this.helloTimer);
+    this.helloTimer = null;
   }
 
   private parseEvent(event: Event) {

@@ -4,7 +4,9 @@ type BootstrapOptions = { location: { hash: string; search: string } };
 const bootstrapSpy = vi.hoisted(() => vi.fn(async (_options: BootstrapOptions) => ({ state: 'ready' as const })));
 vi.mock('../services/agentConnectionBootstrap', () => ({ bootstrapLocalAgentConnection: bootstrapSpy }));
 
-import { DSH_EMBED_MESSAGE, installDshEmbedBridge, isDshEmbed, requestDshStartSession, startDshBootstrap } from '../services/dshEmbedBridge';
+import { DSH_EMBED_MESSAGE, installDshEmbedBridge, isDshEmbed, requestDshRebootstrap, requestDshStartSession, resetDshRebootstrapThrottleForTests, startDshBootstrap } from '../services/dshEmbedBridge';
+import { useAgentConnectionStore } from '../stores/useAgentConnectionStore';
+import { frameStatusFromLink } from '../dsh-plugin/src/client/frameBridge';
 import { useWorkspaceStore } from '../stores/useWorkspaceStore';
 
 const ORIGIN = 'http' + '://127.0.0.1:5173';
@@ -153,5 +155,32 @@ describe('dshEmbedBridge', () => {
     expect(parent.postMessage).toHaveBeenCalledWith({ type: DSH_EMBED_MESSAGE.startSession, prompt: 'make a poster' }, ORIGIN);
     expect(requestDshStartSession('   ', win)).toBe(false);
     expect(requestDshStartSession('x', fakeWindow('').win)).toBe(false);
+  });
+
+  it('asks the host for a fresh one-time token, throttled, and only inside the embed', () => {
+    resetDshRebootstrapThrottleForTests();
+    const { win, parent } = fakeWindow();
+    expect(requestDshRebootstrap(win, 1_000)).toBe(true);
+    expect(parent.postMessage).toHaveBeenLastCalledWith({ type: DSH_EMBED_MESSAGE.ready }, ORIGIN);
+    expect(requestDshRebootstrap(win, 2_000)).toBe(false);
+    expect(requestDshRebootstrap(win, 20_000)).toBe(true);
+    expect(requestDshRebootstrap(fakeWindow('').win, 60_000)).toBe(false);
+  });
+
+  it('reports the real link state to the host without URLs or tokens', () => {
+    useAgentConnectionStore.getState().reset();
+    const { win, parent } = fakeWindow();
+    const dispose = installDshEmbedBridge(win);
+    useAgentConnectionStore.getState().setStatus('auth_failed', {
+      url: 'http://127.0.0.1:17372', error: 'secret-bearing text',
+      issue: { kind: 'auth', at: new Date().toISOString(), url: 'http://127.0.0.1:17372' },
+    });
+    const link = parent.postMessage.mock.calls.map(call => call[0]).filter(message => message.type === DSH_EMBED_MESSAGE.link);
+    expect(link.at(-1)).toEqual({ type: DSH_EMBED_MESSAGE.link, state: 'auth_failed', issue: 'auth' });
+    expect(frameStatusFromLink(link.at(-1))).toEqual({ status: 'error', detail: '连接凭证已失效，正在重新获取' });
+    expect(frameStatusFromLink({ type: DSH_EMBED_MESSAGE.link, state: 'ready', issue: null })).toEqual({ status: 'ready', detail: '' });
+    expect(frameStatusFromLink({ type: 'other' })).toBeNull();
+    dispose();
+    useAgentConnectionStore.getState().reset();
   });
 });

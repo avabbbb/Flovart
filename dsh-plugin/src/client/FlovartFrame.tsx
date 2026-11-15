@@ -3,7 +3,7 @@
 // bootstrap token fetched from the host, and turns start-session requests
 // into a DSH draft (never auto-sent).
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
-import { BOOTSTRAP_URL, FRAME_SRC, MESSAGE, isRecord, postBootstrap, postState, registerFrame } from './frameBridge.ts'
+import { BOOTSTRAP_URL, FRAME_SRC, MESSAGE, frameStatusFromLink, isRecord, postBootstrap, postState, registerFrame } from './frameBridge.ts'
 
 type FrameStatus = 'loading' | 'connecting' | 'ready' | 'error'
 
@@ -11,7 +11,7 @@ const MAX_PROMPT = 20000
 
 const STATUS_LABEL: Record<FrameStatus, string> = {
   loading: '正在加载画布',
-  connecting: '正在连接 Workspace Operator',
+  connecting: '正在连接画布',
   ready: '已连接',
   error: '连接失败',
 }
@@ -91,7 +91,9 @@ export function createFlovartFrame(startSession: (prompt: string) => void) {
             return
           }
           postBootstrap(frame, agentUrl, bootstrapToken)
-          setStatus('ready')
+          // Handing over the token is not a connection: the page reports the
+          // real link state back through MESSAGE.link.
+          setStatus('connecting')
         } catch (error) {
           if (controller.signal.aborted) return
           setStatus('error')
@@ -106,6 +108,12 @@ export function createFlovartFrame(startSession: (prompt: string) => void) {
         if (data.type === MESSAGE.ready) {
           postState(frame)
           void connect()
+          return
+        }
+        const link = frameStatusFromLink(data)
+        if (link) {
+          setStatus(link.status)
+          setDetail(link.detail)
           return
         }
         if (data.type === MESSAGE.startSession && typeof data.prompt === 'string') {

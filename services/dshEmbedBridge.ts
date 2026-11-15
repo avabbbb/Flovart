@@ -4,6 +4,7 @@
 // persistent Operator token: the host hands over a one-time bootstrap token.
 import { bootstrapLocalAgentConnection } from './agentConnectionBootstrap';
 import { detectWorkspaceLanguage, useWorkspaceStore } from '../stores/useWorkspaceStore';
+import { useAgentConnectionStore } from '../stores/useAgentConnectionStore';
 
 export const DSH_EMBED_MESSAGE = Object.freeze({
   ready: 'flovart:dsh-ready',
@@ -11,7 +12,13 @@ export const DSH_EMBED_MESSAGE = Object.freeze({
   locale: 'flovart:dsh-locale',
   bootstrap: 'flovart:dsh-bootstrap',
   startSession: 'flovart:start-session',
+  /** Flovart → host: the real link state, so the DSH frame never shows "connected" while the canvas is not. */
+  link: 'flovart:dsh-link',
 });
+
+/** A host that keeps handing out rejected tokens must not be asked again in a tight loop. */
+const REBOOTSTRAP_MIN_INTERVAL_MS = 15_000;
+let lastRebootstrapAt = Number.NEGATIVE_INFINITY;
 
 const TOKEN_NAME = /^--dsw-[a-z0-9-]+$/i;
 const UNSAFE_TOKEN_VALUE = /[;{}<>]/;
@@ -109,6 +116,30 @@ export function requestDshStartSession(prompt: string, win: EmbedWindow = window
   return true;
 }
 
+/**
+ * Ask the DSH host for a fresh one-time bootstrap token. The host answers a
+ * `ready` message by fetching a new token and posting `bootstrap` back, so this
+ * recovers a session that died with an Operator restart or token expiry.
+ */
+export function requestDshRebootstrap(win: EmbedWindow = window, now = Date.now()): boolean {
+  const parent = embeddedParent(win);
+  if (!parent || !isDshEmbed(win.location)) return false;
+  if (now - lastRebootstrapAt < REBOOTSTRAP_MIN_INTERVAL_MS) return false;
+  lastRebootstrapAt = now;
+  parent.postMessage({ type: DSH_EMBED_MESSAGE.ready }, win.location.origin);
+  return true;
+}
+
+export function resetDshRebootstrapThrottleForTests() {
+  lastRebootstrapAt = Number.NEGATIVE_INFINITY;
+}
+
+function postLinkState(parent: Window, origin: string) {
+  const { status, issue } = useAgentConnectionStore.getState();
+  // State and issue kind only: no URL, token or error text crosses the frame.
+  parent.postMessage({ type: DSH_EMBED_MESSAGE.link, state: status, issue: issue?.kind || null }, origin);
+}
+
 export function installDshEmbedBridge(win: EmbedWindow = window): () => void {
   const parent = embeddedParent(win);
   if (!parent || !isDshEmbed(win.location)) return () => undefined;
@@ -125,6 +156,16 @@ export function installDshEmbedBridge(win: EmbedWindow = window): () => void {
     }
   };
   win.addEventListener('message', onMessage);
+  let lastLink = '';
+  const unsubscribe = useAgentConnectionStore.subscribe(state => {
+    const key = `${state.status}:${state.issue?.kind || ''}`;
+    if (key === lastLink) return;
+    lastLink = key;
+    postLinkState(parent, win.location.origin);
+  });
   parent.postMessage({ type: DSH_EMBED_MESSAGE.ready }, win.location.origin);
-  return () => win.removeEventListener('message', onMessage);
+  return () => {
+    unsubscribe();
+    win.removeEventListener('message', onMessage);
+  };
 }

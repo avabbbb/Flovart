@@ -1,6 +1,7 @@
 import { setBrowserWorkflowBinding } from './browserWorkflowBinding';
 import type { ManagedAgentConnection } from './managedAgentConnection';
 import { useAgentConnectionStore, type AgentConnectionStatus } from '../stores/useAgentConnectionStore';
+import { agentLinkIssue, agentLinkIssueMessage, diagnoseAgentLink, type AgentLinkIssue } from './agentLinkIssue';
 
 const AGENT_URL_PARAM = 'agentUrl';
 const AGENT_TOKEN_PARAM = 'agentToken';
@@ -32,9 +33,13 @@ export interface AgentConnectionBootstrapOptions {
   timeoutMs?: number;
   retryDelayMs?: number;
   maxAttempts?: number;
+  /** Classifies a failed link; injectable for tests. */
+  diagnose?: typeof diagnoseAgentLink;
 }
 
 let inFlight: Promise<AgentBootstrapResult> | null = null;
+/** Bumped by every run; a run that is no longer the latest must not touch the store or binding. */
+let generation = 0;
 
 function browserLocation(): BootstrapLocation | null {
   return typeof window === 'undefined' ? null : window.location;
@@ -190,6 +195,7 @@ async function exchangeBootstrapCredential(url: string, bootstrapToken: string, 
   if (!result.response.ok || typeof result.body?.sessionToken !== 'string' || !result.body.sessionToken) {
     const error = new Error(String(result.body?.error?.message || result.body?.error || `Browser bootstrap 返回 HTTP ${result.response.status}。`));
     (error as Error & { code?: string }).code = result.body?.error?.code || 'AUTH_FAILED';
+    (error as Error & { httpStatus?: number }).httpStatus = result.response.status;
     throw error;
   }
   return { token: result.body.sessionToken, expiresAt: Number(result.body.expiresAt) || undefined };
@@ -224,7 +230,17 @@ function setStoreStatus(status: AgentConnectionStatus, patch: Parameters<ReturnT
   useAgentConnectionStore.getState().setStatus(status, patch);
 }
 
-async function runBootstrap(options: AgentConnectionBootstrapOptions): Promise<AgentBootstrapResult> {
+async function classifyFailure(options: AgentConnectionBootstrapOptions, url: string | null, token: string | null, fallback: AgentLinkIssue['kind']): Promise<AgentLinkIssue> {
+  try {
+    const issue = await (options.diagnose || diagnoseAgentLink)({ url, token, fetchImpl: options.fetchImpl, timeoutMs: Math.max(options.timeoutMs || 0, 1500) });
+    return issue || agentLinkIssue(fallback, url);
+  } catch {
+    return agentLinkIssue(fallback, url);
+  }
+}
+
+async function runBootstrap(options: AgentConnectionBootstrapOptions, runId: number): Promise<AgentBootstrapResult> {
+  const isCurrent = () => runId === generation;
   const location = options.location || browserLocation();
   if (!location) return { state: 'skipped' };
   const storage = options.sessionStorage || sessionStore();
@@ -236,7 +252,7 @@ async function runBootstrap(options: AgentConnectionBootstrapOptions): Promise<A
   const token = params.token || session.token;
   if (!url && !token && !params.bootstrapToken) return { state: 'skipped' };
 
-  setStoreStatus('connecting', { url: url || null, error: null });
+  setStoreStatus('connecting', { url: url || null, error: null, issue: null });
   let connection: ManagedAgentConnection;
   let sessionExpiresAt: number | undefined;
   try {
@@ -246,48 +262,81 @@ async function runBootstrap(options: AgentConnectionBootstrapOptions): Promise<A
     sessionExpiresAt = exchanged.expiresAt;
     connection = normalizeConnection(url, exchanged.token);
   } catch (cause) {
+    if (!isCurrent()) return { state: 'offline', error: 'superseded' };
+    const httpStatus = (cause as Error & { httpStatus?: number })?.httpStatus;
+    const rejected = typeof httpStatus === 'number';
+    // No HTTP answer at all means the Agent is down / unreachable — that is
+    // "offline", not an expired credential. Only a real rejection is auth.
+    if (params.bootstrapToken && !rejected) {
+      const issue = await classifyFailure(options, url || null, null, 'unreachable');
+      if (!isCurrent()) return { state: 'offline', error: 'superseded' };
+      const error = agentLinkIssueMessage(issue);
+      setStoreStatus('offline', { url: url || null, error, issue });
+      return { state: 'offline', error };
+    }
     clearSessionConnection(storage);
     saveAutoActivation(storage, false);
     setBrowserWorkflowBinding(null);
-    const error = cause instanceof Error ? cause.message : String(cause);
-    setStoreStatus('auth_failed', { url: null, clientId: null, projectId: null, revision: null, error });
-    return { state: 'auth_failed', error };
+    const message = cause instanceof Error ? cause.message : String(cause);
+    const issue = agentLinkIssue(rejected && httpStatus === 403 ? 'cors' : rejected ? 'auth' : 'not_configured', url || null, rejected ? `HTTP ${httpStatus}` : undefined);
+    setStoreStatus('auth_failed', { url: null, clientId: null, projectId: null, revision: null, error: message, issue });
+    return { state: 'auth_failed', error: message };
   }
+
+  // Remember the credential before probing: if the Agent is still starting
+  // and every attempt fails, "Reconnect" (or a reload) can retry with it
+  // instead of the page silently losing the launcher hand-off it scrubbed from the URL.
+  saveSessionConnection(storage, connection);
+  saveSessionExpiry(storage, sessionExpiresAt);
 
   const maxAttempts = Math.max(1, options.maxAttempts || 8);
   let lastError = 'Flovart Agent 暂时不可用。';
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    if (!isCurrent()) return { state: 'offline', connection, error: 'superseded' };
     try {
       await authenticate(connection, options);
-      saveSessionConnection(storage, connection);
-      saveSessionExpiry(storage, sessionExpiresAt);
+      if (!isCurrent()) return { state: 'offline', connection, error: 'superseded' };
       saveAutoActivation(storage, params.autoActivate);
       setBrowserWorkflowBinding(connection);
       return { state: 'ready', connection };
     } catch (cause) {
       lastError = cause instanceof Error ? cause.message : String(cause);
       if ((cause as Error & { code?: string })?.code === 'AUTH_FAILED') {
+        if (!isCurrent()) return { state: 'offline', connection, error: 'superseded' };
         clearSessionConnection(storage);
         saveAutoActivation(storage, false);
         setBrowserWorkflowBinding(null);
-        setStoreStatus('auth_failed', { url: connection.url, clientId: null, projectId: null, revision: null, error: lastError });
+        const issue = agentLinkIssue('auth', connection.url, 'HTTP 401');
+        setStoreStatus('auth_failed', { url: connection.url, clientId: null, projectId: null, revision: null, error: lastError, issue });
         return { state: 'auth_failed', connection, error: lastError };
       }
       if (attempt + 1 < maxAttempts) await new Promise(resolve => setTimeout(resolve, options.retryDelayMs || 350));
     }
   }
-  setStoreStatus('offline', { url: connection.url, error: lastError });
+  const issue = await classifyFailure(options, connection.url, connection.token, 'unreachable');
+  if (!isCurrent()) return { state: 'offline', connection, error: 'superseded' };
+  setStoreStatus('offline', { url: connection.url, error: agentLinkIssueMessage(issue), issue });
   return { state: 'offline', connection, error: lastError };
 }
 
-export function bootstrapLocalAgentConnection(options: AgentConnectionBootstrapOptions = {}) {
-  if (inFlight) return inFlight;
-  inFlight = runBootstrap(options).finally(() => { inFlight = null; });
-  return inFlight;
+/**
+ * Implicit calls (app start) share one in-flight run. A call that carries its
+ * own credential (`location` — the DSH embed's fresh one-time token) or
+ * `force` (user pressed Reconnect) always starts a new run and supersedes the
+ * older one; otherwise a stale session retry would swallow the fresh token and
+ * the page would end on "credential expired" even though a valid one arrived.
+ */
+export function bootstrapLocalAgentConnection(options: AgentConnectionBootstrapOptions & { force?: boolean } = {}) {
+  if (inFlight && !options.location && !options.force) return inFlight;
+  const runId = ++generation;
+  const run = runBootstrap(options, runId).finally(() => { if (inFlight === run) inFlight = null; });
+  inFlight = run;
+  return run;
 }
 
 export function resetAgentConnectionBootstrapForTests() {
   inFlight = null;
+  generation = 0;
 }
 
 export function consumeBrowserWriterAutoActivation(storage: StorageLike | null = sessionStore()) {
