@@ -99,7 +99,7 @@ try {
   const web = await waitFor('web-discovery', async () => existsSync(env.FLOVART_WEB_DISCOVERY) && probeWebUi(readJson(env.FLOVART_WEB_DISCOVERY).url, { timeoutMs: 800 }).catch(() => null), 90_000);
   const agent = await waitFor('agent-config', () => existsSync(env.FLOVART_AGENT_CONFIG) && readJson(env.FLOVART_AGENT_CONFIG)?.token ? readJson(env.FLOVART_AGENT_CONFIG) : null);
   const bootstrapUrl = buildBrowserBootstrapUrl(web, { ...agent, bootstrapToken: await issueBrowserBootstrapToken(agent) }, '#/app');
-  browser = await chromium.launchPersistentContext(join(testRoot, 'chrome-profile'), { headless: true, executablePath: process.env.FLOVART_CHROME_PATH || chromium.executablePath(), args: ['--no-first-run', '--no-default-browser-check'] });
+  browser = await chromium.launchPersistentContext(join(testRoot, 'chrome-profile'), { headless: true, locale: 'zh-CN', executablePath: process.env.FLOVART_CHROME_PATH || chromium.executablePath(), args: ['--no-first-run', '--no-default-browser-check'] });
   page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const consoleErrors = [];
   page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text().slice(0, 300)); });
@@ -307,6 +307,18 @@ try {
   const finalUrl = page.url().toLowerCase();
   trace.checks.secretInBrowserUrl = finalUrl.includes('agenttoken=') || finalUrl.includes('token=');
   if (scenario === 'success') {
+    // 自动产物回执（2026-11-15 评测第 4 项）：node.run 成功后，经同一 CLI / Agent 会话路径读 receipts.list，
+    // 必须有一条 externalRef = run:<runId> 的 artifact 回执。
+    const runResult = runResults[0]?.json;
+    const runId = findDeep(runResult, v => typeof v.runId === 'string' && v.runId)?.runId || null;
+    const listed = await cli(['receipts.list', '--project-id', projectId]);
+    const receipts = findDeep(listed.json, v => Array.isArray(v.receipts))?.receipts || [];
+    trace.checks.receipts = {
+      runId,
+      count: receipts.length,
+      forRun: receipts.filter(r => runId && r.externalRef === 'run:' + runId).map(r => ({ kind: r.kind, title: r.title, summary: r.summary, nodeIds: r.nodeIds, externalRef: r.externalRef })),
+    };
+    step('receipts-listed', { count: receipts.length });
     // Refresh and read the node back: the result must survive a reload.
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('body[data-flovart-mounted="1"]').waitFor({ state: 'attached', timeout: 120_000 });
@@ -323,7 +335,7 @@ try {
   const node = trace.checks.node;
   const submits = trace.checks.submitCount;
   const expectations = {
-    success: { submitsOnce: submits === 1, nodeSucceeded: node.status === 'success', saved: Boolean(node.storageKey), survivesReload: trace.checks.afterReload?.storageKey === node.storageKey && trace.checks.afterReload?.status === 'success' },
+    success: { submitsOnce: submits === 1, nodeSucceeded: node.status === 'success', saved: Boolean(node.storageKey), survivesReload: trace.checks.afterReload?.storageKey === node.storageKey && trace.checks.afterReload?.status === 'success', runIdReturned: Boolean(trace.checks.receipts?.runId), oneArtifactReceiptForRun: trace.checks.receipts?.forRun?.length === 1 && trace.checks.receipts.forRun[0].kind === 'artifact' && trace.checks.receipts.forRun[0].nodeIds?.includes(nodeId) },
     cancel: { noSubmit: submits === 0, nodeNotLoading: node.status !== 'loading' },
     double: { submitsOnce: submits === 1, noSecondCard: !trace.checks.secondPlanCardShown },
     submit_lost: { noResubmit: submits === 1, appIssuedOneSubmit: trace.checks.appFetchVideoPosts === 1, notReportedSuccess: node.status !== 'success', showsSubmitUnknown: /提交结果未知/.test(node.error || '') },

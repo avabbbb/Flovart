@@ -125,9 +125,18 @@
 - **修复**：源码目录改为「当前目录是源码仓库 → 用当前目录；否则用 CLI 自身所在的仓库」，`start` 在该目录下执行；`ensure` 接收 `--web` / `--source`，找不到源码仓库时也按源码模式启动；前端已就绪且在 loopback 上时把端口作为 `--web-port=<port>` 交给 `start`，复用现有 WebUI、只补起 Agent。CLI 帮助补上 `--web`。
 - **测试**：`tests/flovartEnsure.test.js` 新增 4 个用例：仓库外解析到 CLI 所在仓库；前端已在 40123 端口时，仓库外 `ensure --web` 发出 `start --source --web --web-port=40123 --json --no-open` 且在仓库目录执行；找不到仓库时 `--web` 仍走源码模式；非 loopback 地址不传端口。真实复现（沙箱）：修复后在 `/tmp` 执行同一命令返回 `agent: ready`（`browser: offline` 是因为沙箱没有真实浏览器连接，属预期）。
 
+### 15. 自动产物回执（第 4 项）补端到端验证
+
+- **现象**：第 4 项的修复只有 `agentRunReceipts` 单元测试，没有经过真实 Agent / CLI / 画布链路确认。
+- **根因**：不是缺陷，是验证缺口：单元测试直接调用 `appendRunArtifactReceipts`，没有覆盖「CLI → Agent HTTP → 浏览器 Workflow 执行 → 结果回传 → 会话写回执 → CLI `receipts.list`」整条路径。
+- **修复（验证）**：
+  - 集成测试 `tests/agentRunReceiptsIntegration.test.ts`：真实启动 `agent/index.js`（隔离的 `FLOVART_AGENT_HOME`、随机端口），浏览器侧经 SSE `/events` 与 `/workflow/result` 接入，并用页面同一份 `services/workflowDispatcher.ts` 执行 `tool_call`（生成执行器为不联网的 fake）；真实的 `flovart` CLI 进程发 `workflow.node.run` 与 `receipts.list`。断言单节点运行后有一条 `artifact` 回执（`externalRef = run:<runId>`、`nodeIds`、`artifactId`），同一幂等键重放不重复执行也不重复写回执，批量两节点各一条。临时去掉 `session.js` 里的写回执调用，两个用例都会失败。
+  - 真实浏览器画布：`scripts/e2e-provider-trace.mjs success` 增加回执检查（并把浏览器 locale 固定为 `zh-CN`，脚本按中文界面定位按钮）。2026-11-15 在沙箱用 Playwright Chromium headless shell（`FLOVART_CHROME_PATH` 指向 headless_shell；完整版 Chrome 在该沙箱启动即 SIGTRAP）+ 本地 fake provider 跑通：Settings 界面添加服务 → CLI 建节点 → `workflow.node.run` → 画布确认计划卡 → 提交 1 次、节点成功并持久化 → `receipts.list` 返回 1 条 `kind: artifact`、`externalRef: run:<runId>`、`nodeIds` 为该节点的回执 → 刷新后结果仍在。全部 expectations 为真。
+- **仍需 owner 手动确认**：真实 RunningHub 账号（扣费）下的回执，以及桌面版 Chrome 有界面模式下的同一流程；沙箱里没有真实 Provider 账号，也没有可见桌面。
+
 ## 仍未修复
 
-- 自动产物回执（第 4 项）只经单元测试验证，尚未在真实画布上确认。
+- 无代码层面的遗留项。需要真实账号或桌面环境才能确认的部分：Seedream 实际出图比例（第 12 节）与真实 Provider 下的自动回执（第 15 节）。
 
 ## 验证
 
