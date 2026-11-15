@@ -965,7 +965,3 @@ textarea.agent-ask__control { resize: vertical; min-height: 56px; }
 @media (prefers-reduced-motion: reduce) {
   .prompt-orb__sphere, .prompt-orb.is-loading .prompt-orb__dots, .prompt-orb.is-loading .prompt-orb__dots i, .prompt-glass-editor [data-placeholder]::before, .prompt-glass-editor .is-editor-empty::before { animation: none; }
 }
-/* 打字浮现：新键入的字符由模糊、半透明、轻微下沉过渡到清晰 */
-.prompt-glass-editor .pm-fresh { display: inline-block; animation: prompt-char-in .45s cubic-bezier(.2,.7,.2,1) both; }
-@keyframes prompt-char-in { from { opacity: .15; filter: blur(5px); transform: translateY(2px); } to { opacity: 1; filter: blur(0); transform: none; } }
-@media (prefers-reduced-motion: reduce) { .prompt-glass-editor .pm-fresh { animation: none; } }
