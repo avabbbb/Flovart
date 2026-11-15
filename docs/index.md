@@ -45,6 +45,7 @@
 
 质量与开发日志：
 - [真实 API 验收步骤](quality/real-api-acceptance.md)：导入 → 计划卡 → 提交 → 查询 → 保存 → 播放 → 导出 → 刷新重读
+- [2026-11-15 基础功能评测](quality/2026-11-15-basic-function-eval.md)：Agent 经 CLI 驱动画布，trace、定位与修复记录
 - [2026-11-12 Agent / 工具链迭代 · 第二份](quality/2026-11-12-agent-tool-eval-2.md)
 - [2026-11-11 Agent / 工具链迭代](quality/2026-11-11-agent-tool-eval.md)
 - [2026-11-03 浏览器插件 × 网页画布](blog/2026-11-03-extension-web-canvas-bridge.md)

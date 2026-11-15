@@ -49,11 +49,14 @@ Browser Workflow 是稳定 Agent operation 的可见权威；迁移 authority �
 UI / Agent / Host entry → same generation/business function → Provider adapter → durable artifact/version → Workflow / Reverse / Host consumer
 ```
 
+- **RunningHub 保持内置**（含预设模型与核验线路），正式商业化前不移除、不隐藏；其他第三方站点优先做成用户自定义脚本。
+- 用户自定义脚本、服务地址与模型映射必须随配置导出。
+
 素材需要稳定来源、版本与校验；临时 URL、聊天消息、base64 不能冒充 durable artifact。晚到任务不能覆盖用户已选的新版本。
 
 ### 4.1 Agent 视频流水线（PROPOSAL，`docs/design/16-agent-video-pipeline.md`）
 
-现状：P0 工具层、trace（migration 5，`flovart-state.db`）、Remotion 文字 / 字幕 / 音频轨、`capture.ui`、MCP 投影、CJK 字体、RunningHub 上的 MiniMax 配音已在 `main` 实现（16 §12）；逆向 docked 侧栏、Agent 光标、DSH 投影、直连 MiniMax 与 WhisperX 实测未完成。被接受前，相关施工遵守：
+实现进度以 16 §12 为准。被接受前，相关施工遵守：
 
 - **trace 唯一权威**：run（durable `runId`）由本地 Runtime 保存 run → step → tool call → artifact → version → review round；Step 由命令边界自动记录，不让模型自己“写日志”。会话与画布节点只存引用。
 - **主场在逆向**：run 在逆向发起与驱动；画布写入以可见 Agent 光标呈现；Canvas 抽屉只交接到同一 run（当前已有抽屉 run 卡片与“放到画布”版本分组作为轻量入口）；外部 caller 写入同一条 trace。
@@ -96,6 +99,7 @@ UI / Agent / Host entry → same generation/business function → Provider adapt
 
 ## 8. 验证与发布口径
 
+- 评测与排障按「trace 现象 → 根因 → 修复 → 测试」写进 `docs/quality/<日期>-*.md`，并在 `docs/index.md` 留指针；不另起并列报告。
 - 测试匹配改动风险：文档跑 `npm run docs:check`；代码跑相关测试；宿主 / 原生效果进真实应用。
 - 普通开发 / PR 走快速通道：只跑与改动直接相关的一轮验证；缺 SDK / 宿主 / 依赖时写 `NOT_RUN locally`，确定性验证可交给 GitHub Actions。10x critical、完整 FlovartBench、依赖审计、CodeQL、发布验证、全平台安装包属于 main / scheduled / manual / release，不作普通 PR 前置。secret audit、目标 / revision / 幂等、unknown-after-submit、未授权破坏性写入仍 fail-closed。
 - 真实支持状态只由 `SUPPORT_MATRIX.md` 升级；Provider 认证区分 Fake fixture 与真实账号、扣费、429、取消、unknown-submit。
