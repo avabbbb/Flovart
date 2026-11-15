@@ -502,8 +502,51 @@ describe('workflow node overlays', () => {
       onReplaceMedia={vi.fn()}
       onRemoveMedia={vi.fn()}
     />);
-    expect(screen.getByTestId('workflow-generation-glass')).toHaveTextContent('图片生成中');
-    expect(screen.getByTestId('workflow-generation-glass')).toHaveTextContent('42%');
+    const glass = screen.getByTestId('workflow-generation-glass');
+    expect(glass).toHaveTextContent('图片生成中');
+    expect(glass).toHaveTextContent('42%');
+    expect(within(glass).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '42');
+    // 不再整节点呼吸缩放；旧的步骤列表 / 日志也不存在。
+    expect(glass.querySelector('.flv-boot__steps, .flv-boot__log')).toBeNull();
+  });
+
+  it('shows an indeterminate line without a fake percentage and keeps the error retry', () => {
+    const onRun = vi.fn();
+    const { rerender } = render(<WorkflowNode
+      node={{ ...node, metadata: { ...node.metadata, status: 'loading', generationStartedAt: Date.now(), generationMessage: '任务已提交，等待供应商处理' } }}
+      selected={false}
+      onPointerDown={vi.fn()}
+      onConnectStart={vi.fn()}
+      onResizeStart={vi.fn()}
+      onChangeText={vi.fn()}
+      onChangeMetadata={vi.fn()}
+      onRun={onRun}
+      onContextMenu={vi.fn()}
+      onReplaceMedia={vi.fn()}
+      onRemoveMedia={vi.fn()}
+    />);
+    const glass = screen.getByTestId('workflow-generation-glass');
+    expect(glass).toHaveAttribute('data-generation-phase', 'queue');
+    expect(glass).toHaveTextContent('任务已提交，等待供应商处理');
+    expect(within(glass).getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
+    expect(glass).not.toHaveTextContent('%');
+    rerender(<WorkflowNode
+      node={{ ...node, metadata: { ...node.metadata, status: 'error', error: '供应商返回 429' } }}
+      selected={false}
+      onPointerDown={vi.fn()}
+      onConnectStart={vi.fn()}
+      onResizeStart={vi.fn()}
+      onChangeText={vi.fn()}
+      onChangeMetadata={vi.fn()}
+      onRun={onRun}
+      onContextMenu={vi.fn()}
+      onReplaceMedia={vi.fn()}
+      onRemoveMedia={vi.fn()}
+    />);
+    const error = screen.getByTestId('workflow-generation-error');
+    expect(error).toHaveTextContent('供应商返回 429');
+    fireEvent.click(within(error).getByRole('button', { name: '重试' }));
+    expect(onRun).toHaveBeenCalledTimes(1);
   });
 
   it('shows real download bytes and hides the percentage when the provider gives none', () => {

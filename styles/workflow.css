@@ -259,11 +259,6 @@
 .workflow-node__batch-collapse:hover { color: var(--wf-text); background: var(--wf-accent); }
 .workflow-node__generation-glass { border-radius: 0 0 9px 9px; }
 .workflow-node__shimmer { position: absolute; top: 0; left: 0; width: 45%; height: 2px; background: linear-gradient(90deg, transparent, var(--wf-accent,#6c64b0), transparent); pointer-events: none; z-index: 1; }
-.workflow-node__generation-meta { position: absolute; top: 6px; right: 6px; z-index: 8; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; pointer-events: none; }
-.workflow-node__generation-message { font-size: 10px; line-height: 1.3; color: rgba(255,255,255,.82); background: rgba(0,0,0,.38); backdrop-filter: blur(4px); padding: 2px 7px; border-radius: 5px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.workflow-node__generation-elapsed { font-size: 10px; font-variant-numeric: tabular-nums; color: rgba(255,255,255,.7); background: rgba(0,0,0,.32); backdrop-filter: blur(4px); padding: 1px 6px; border-radius: 4px; }
-.workflow-node__generation-stale { position: absolute; bottom: 6px; left: 8px; right: 8px; z-index: 8; font-size: 10px; line-height: 1.3; color: rgba(255,255,255,.72); background: rgba(0,0,0,.36); backdrop-filter: blur(4px); padding: 3px 7px; border-radius: 5px; text-align: center; pointer-events: none; }
-.workflow-node__generation-error { position: absolute; z-index: 7; left: 8px; right: 8px; bottom: 8px; overflow: hidden; border: 1px solid color-mix(in srgb,#e05252 45%,transparent); border-radius: 6px; padding: 6px 8px; color: #fff; background: rgba(91,27,35,.82); font-size: 10px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .workflow-node__script-card { display: flex; flex-direction: column; gap: 8px; padding: 14px; height: 100%; overflow: hidden; }
 .workflow-node__script-header { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--wf-text); }
 .workflow-node__script-stats { display: flex; gap: 12px; font-size: 11px; color: var(--wf-muted); }

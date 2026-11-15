@@ -490,7 +490,7 @@ Canvas Assistant drawer ──交给──▶ 逆向：轻量问答就地完成�
 | 空素材库 | “这里还没有资产” / “没有匹配的资产” | 区分“空”和“筛选无结果”，后者给“清除筛选” |
 | 首屏加载 | — | 骨架只画结构（节点框、行），≤ 300ms 不显示骨架，避免闪烁 |
 | 列表 / 表格加载 | — | 骨架行 + 单向扫光；有数据即替换，逐行淡入（数值见 DESIGN.md §11.3、§14） |
-| 生成中 | 节点内 `flv-generation-glass`（虚线框 + 扫光 + 呼吸状态标签 + 百分比 / 耗时） | 见 §19.6 |
+| 生成中 | 节点内 `WorkflowGenerationLoader`（`flv-gen`）：圆角方块网格按真实阶段细分 + 3px 进度线 + 一行状态 / 耗时；本地导入仍用 `flv-generation-glass` | 见 §19.6 |
 | 错误空态 | 各处不一 | 统一：图标 + 发生了什么 + 一个动作 + “诊断”文字链接 |
 
 ## 18. 参考先行（standing rule）
@@ -660,13 +660,13 @@ Canvas Assistant drawer ──交给──▶ 逆向：轻量问答就地完成�
 | N4 | Operation 节点状态文案在组件里写死中文（“旧配方结果 / 已停止 / 执行失败 / 已完成 / 执行中 / 待执行”），`Operation 配方缺失` 未翻译 | `OperationNodeCard` | 来自 i18n；状态用 §14.3 图标 + 文本 |
 | N5 | 版本条是一排 `v1 v2` 文本按钮，不能预览、不能对比 | `OperationVersionStrip` | 悬停版本即在节点画面上临时预览（松开恢复），长按 / 右键“与当前对比”打开 §19.3 对比 |
 | N6 | 批次结果在标题栏：“收起结果 N 张”按钮 + “设为主图”星标 | `WorkflowNode.tsx` batch 区 | 候选堆叠：主图在上，边缘露出 2 张；展开时以 snappy 扇出为网格（参考 R8 card packs，去掉彩纸与 3D）；“设为主图”在每张候选的悬停操作里 |
-| N7 | 生成态：虚线框 + 2px 扫光无限循环 + 状态标签 2.4s 呼吸 + 透明度 2.2s 呼吸；JS 动画绕过 reduced-motion；另有遗留 `.animate-card-neon-flow` 霓虹描边 | `WorkflowNode.tsx`、`styles/generation.css`、`styles/index.css` | 见 §19.6：按阶段显示（排队 / 上传 / 等待供应商 / 流式 / 下载 / 转码）；只在“等待供应商”时扫光；已知进度用确定进度条 |
+| N7 | ~~生成态：虚线框 + 2px 扫光无限循环 + 状态标签 2.4s 呼吸 + 透明度 2.2s 呼吸 + 整节点 1.8s 缩放呼吸；JS 动画绕过 reduced-motion~~（2026-11-16 已改，遗留 `.animate-card-neon-flow` 仍在 `styles/index.css`） | `WorkflowNode.tsx` → `WorkflowGenerationLoader.tsx`、`generationLoader.ts`、`styles/generation.css` | 已实现，见 §19.6“节点生成加载态”：网格（R20）+ 进度线（R21）+ 一行状态；阶段只来自真实信号；无百分比时为不确定短线；失败为贴底小卡 + 重试；减弱动效时全部静态 |
 | N8 | 视频节点需先点“加载视频播放器”才可播放 | `workflow-node__video-activate` | 保留懒加载（性能），但改为悬停即预取首帧 + 悬停播放静音预览，点击进入完整控件 |
 | N9 | 双击标题重命名，无可见提示 | `workflow-node__title` | 标题文字本身是可编辑字段（单击选中节点、再单击进入编辑），F2 重命名 |
 | N10 | 13px 方形缩放手柄（2px 边框、mint 填充）常驻 | `.workflow-resize` | 只在选中 / 悬停时出现，8px 圆点，命中区 24px |
 | N11 | 节点内分镜表（镜号 / 时长 / 场景 / 台词表格）在小节点里密集难读 | `ScriptNodeCard`、`WorkflowStoryboard.tsx` | 节点内只显示摘要（镜数、总时长、前 3 行），双击打开 Reverse 风格的分镜视图；流式生成时逐行揭示（R18） |
 | N12 | hover 抬起：`.storyboard-shot-card:hover translateY(-2px)`、`.motion-surface:hover scale(1.015)` | `styles/motion.css` | 只换边框 / 背景（DESIGN.md §14.4） |
-| N13 | 生成信息角标（速度、Token、耗时、陈旧提示）是 4 个独立的 `blur(4px)` 小黑块 | `workflow-node__generation-meta` 等 | 合并为一个 clear 玻璃角标（DESIGN.md §9.2 clear），点击展开详情 |
+| N13 | ~~生成信息角标（速度、Token、耗时、陈旧提示）是 4 个独立的 `blur(4px)` 小黑块~~（2026-11-16 已删除） | `workflow-node__generation-meta` 等 | 已合并进 §19.6 加载态底部的一行状态胶囊（传输明细 / 消息 + 耗时） |
 
 ### 19.6 生成动效与进度
 
@@ -686,6 +686,16 @@ Canvas Assistant drawer ──交给──▶ 逆向：轻量问答就地完成�
 | retrying | 状态条“第 2 次尝试”，保留上次失败原因可展开 | 同 running | 停止 |
 | canceled | “已停止”；若供应商可能计费，显示提示（§4.2） | 无 | 重新开始 |
 | unknown_submit | “正在确认是否已提交”，不允许重复提交 | 无 | 继续其他工作 |
+
+**节点生成加载态（已实现，2026-11-16）**：`components/workflow/WorkflowGenerationLoader.tsx` + `generationLoader.ts` + `styles/generation.css` `.flv-gen*`。
+
+- **网格**（参考 R20 Grid Reveal）：节点内铺满圆角小方块（`--isl-card` 方块、`--isl-surface-sunk` 缝、约 30% 格子用 `--isl-border` / `--isl-ink-ghost` 叠一档深浅），按**真实阶段**细分：准备 2×2 → 上传 / 排队 / 转码 4×4 → 生成 8×8 → 下载 / 写入 12×12；同一次生成内只前进不后退；格子小于 9px 的级别自动跳过（小节点少一级）。约 0.9s 一次深浅噪点重排（0.28s 交叉淡化），细分时格子从上一级尺寸收缩到位（0.2s 缓出）。用 canvas 绘制、`motion` 的 `animate()` 驱动，共享一个 0.9s 节拍。
+- **进度线**（参考 R21 Agent Handoff 的 thin progress line）：3px 胶囊轨道 + 8px 前沿圆点（3px 同色淡光晕），mint 渐变填充；**只显示上游真实百分比**（批量按张数），0.5s 缓出前进；没有百分比时是一段 28% 的短线在轨道上来回滑（1.6s），不画假进度。
+- **状态行**：底部左侧一枚胶囊：脉冲点 + 一行真实文案（传输明细 > 供应商消息 > 阶段名）+ 百分比（有时）+ 耗时（共享 100ms 计时器直接写 textContent，不触发渲染）；续接下载时前置“续接”小标。≥180s 时（≥240×190 的节点）追加“已等待较久”提示。
+- **尺寸降级（容器查询）**：节点高 <96px 只留进度线；宽 <180px 隐藏耗时与“续接”；≥240×190 放大间距与字号。
+- **完成**：loading → success 时同一实例切到完成态，方块按随机顺序在 0.6s 内淡出露出结果，进度线满格，状态“完成 · 总耗时”；约 1.1s 后整层淡出（减弱动效 0.6s、无动画）。
+- **失败**：贴底小卡（`--isl-card` 实底、coral 边）：× 图标 +“生成失败”+ 重试（下载失败时为“重新下载”，走原 `onRun` 续接逻辑）+ 两行原因。
+- **性能与减弱动效**：同屏最多 6 个节点跑网格闪动与不确定进度，其余静态；`prefers-reduced-motion` 时无节拍、无细分过渡、无滑动、无脉冲，结果直接出现。整节点不再缩放呼吸。
 
 **长视频任务进度卡**（多镜批量 / 渲染 / 归档）：在 run 岛展开面板与 trace 中显示环形或分段进度、`已完成 7 / 12 镜`、速度与剩余（有数据时）、失败数；完成时环变勾（R16 photo download UI）。
 
@@ -723,6 +733,8 @@ Canvas Assistant drawer ──交给──▶ 逆向：轻量问答就地完成�
 | R17 | [dark/light mode toggle](https://www.inspora.design/posts/dark-light-mode-toggle)（@kaolti） | 方形拇指滑动，像素日 / 月图标散开重组，边缘光由暖变冷 | 主题开关图标变形（§18） | P2 |
 | R15 | [AI agent dashboard](https://www.inspora.design/posts/ai-agent-dashboard)（@BenceRedmond） | 组件选择器：已添加项带“On home”勾，未添加项带“+” | Agent 页连接 / Skill 列表的“已添加 / 添加”状态 | P2 |
 | R19 | [github Contribution Graph](https://www.inspora.design/posts/github-contribution-graph)（@pratyusshmd） | 日历热力图，切换色板时格子整体重新着色 | Agent 页“最近 run”活动热力（只读）；主题色变更预览 | P2 |
+| R20 | [Grid Reveal animation](https://www.inspora.design/posts/1-46)（Swami，2026-11-16 打开） | 方形预览被圆角小方块铺满，2×2 → 4×4 → 8×8 → 12×12 细分并随机深浅闪动，约 5.2s 一轮，最后方块随机淡出成图；左下角胶囊状态轮换“Starting to generate / Creating image / Adding detail” | 节点生成加载态网格与完成揭示（§19.6，按真实阶段细分，不循环伪造进度） | P0（已实现） |
+| R21 | [Agent Handoff](https://www.inspora.design/posts/1-48)（Jeet，2026-11-16 打开） | 卡片里一条极细胶囊进度线 + 前沿圆点，按步骤缓出前进，完成时停在满格；底部一行“角色 · 当前消息” | 节点生成进度线与一行状态（§19.6，缩成 3px 并只用真实百分比） | P0（已实现） |
 | R7 | [line art animation](https://www.inspora.design/posts/line-art-animation)（@dhruvtwt_） | 线稿街景由日到夜缓慢过渡 | 起始页静态线稿插画（不循环）（§17） | P2 |
 | R11 | [glass slider experiment](https://www.inspora.design/posts/glass-slider-experiment)（@imsethidev） | 一排玻璃球滑动、折射图片 | 反例参考：玻璃不进入内容层；只借“激活中的滑杆拇指可变玻璃”（Apple 对 slider / toggle 的例外） | P2 |
 

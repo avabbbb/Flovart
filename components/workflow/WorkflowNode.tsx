@@ -4,7 +4,8 @@ import { ArrowLeftRight, AudioLines, Bot, Camera, Check, ChevronsDown, Clapperbo
 import { WorkflowNodeLasso } from './WorkflowNodeLasso';
 import type { LassoPoint } from './lasso';
 import { Component, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
-import { motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { WorkflowGenerationLoader } from './WorkflowGenerationLoader';
 import { getWorkflowOperationCapability } from './operationRegistry';
 import { buildCssFilter } from '../ImageFilterPanel';
 import { useWorkflowMediaUrl } from './media';
@@ -215,51 +216,6 @@ export function WorkflowNode({
   onAudioTool?: (kind: 'trim' | 'speed' | 'pitch' | 'stem-split') => void;
 }) {
   const status = node.metadata.status || 'idle';
-  // 只有上游给出的真实百分比才显示；undefined 表示没有百分比。
-  const progress = node.metadata.progress === undefined ? undefined : Math.max(0, Math.min(100, Math.round(node.metadata.progress)));
-  const generationMode = node.metadata.config?.mode || node.type;
-  const generationLabel = node.type === 'operation' ? `${node.title}中` : generationMode === 'video' ? (language === 'en' ? 'Generating video' : '视频生成中') : generationMode === 'text' ? (language === 'en' ? 'Generating text' : '文本生成中') : (language === 'en' ? 'Generating image' : '图片生成中');
-  const generationMessage = node.metadata.generationMessage;
-  const generationStartedAt = node.metadata.generationStartedAt;
-  const [elapsedSec, setElapsedSec] = useState(0);
-  useEffect(() => {
-    if (status !== 'loading' || !generationStartedAt) { setElapsedSec(0); return; }
-    const tick = () => setElapsedSec(Math.floor((Date.now() - generationStartedAt) / 1000));
-    tick();
-    const timer = window.setInterval(tick, 1000);
-    return () => window.clearInterval(timer);
-  }, [status, generationStartedAt]);
-  const elapsedLabel = elapsedSec > 0 ? `${Math.floor(elapsedSec / 60)}:${String(elapsedSec % 60).padStart(2, '0')}` : '';
-  const staleHint = status === 'loading' && elapsedSec >= 180 ? '已等待较久，如长时间无响应可点击停止' : '';
-  // 传输速度：约 1 秒滑动窗口内已传/已下载字节的增量。
-  const transfer = node.metadata.generationTransfer;
-  const transferBytesPhase = transfer?.phase === 'upload' || transfer?.phase === 'download' ? transfer.phase : undefined;
-  const transferLoaded = transferBytesPhase ? transfer?.loaded : undefined;
-  const transferSamples = useRef<{ phase: string; at: number; loaded: number }[]>([]);
-  const [transferSpeed, setTransferSpeed] = useState<number | undefined>(undefined);
-  useEffect(() => {
-    if (!transferBytesPhase || transferLoaded === undefined) {
-      transferSamples.current = [];
-      setTransferSpeed(undefined);
-      return;
-    }
-    const now = Date.now();
-    const samples = transferSamples.current.filter(sample => sample.phase === transferBytesPhase && now - sample.at <= 1000 && sample.loaded <= transferLoaded);
-    samples.push({ phase: transferBytesPhase, at: now, loaded: transferLoaded });
-    transferSamples.current = samples;
-    const first = samples[0];
-    setTransferSpeed(now > first.at ? (transferLoaded - first.loaded) / ((now - first.at) / 1000) : undefined);
-  }, [transferBytesPhase, transferLoaded]);
-  const transferBytes = transferLoaded === undefined ? '' : transfer?.total ? (transferLoaded / 1048576).toFixed(1) + ' / ' + (transfer.total / 1048576).toFixed(1) + ' MB' : formatBytes(transferLoaded);
-  const transferLabel = !transfer ? ''
-    : transfer.phase === 'upload' ? [language === 'en' ? 'Uploading references' : '上传参考', transferBytes].filter(Boolean).join(' ')
-    : transfer.phase === 'download' ? [language === 'en' ? 'Downloading result' : '下载结果', transferBytes].filter(Boolean).join(' ')
-    : transfer.phase === 'queue' || transfer.polls
-      ? (transfer.phase === 'queue' ? (language === 'en' ? 'Queued' : '排队中') : (language === 'en' ? 'Generating' : '生成中'))
-        + (transfer.polls ? (language === 'en' ? ' · poll #' + transfer.polls : ' · 第 ' + transfer.polls + ' 次查询') : '')
-      : '';
-  const speedLabel = transferSpeed && transferSpeed > 0 ? (transferSpeed / 1048576).toFixed(1) + ' MB/s' : '';
-  const tokensLabel = transfer?.tokens ? (language === 'en' ? transfer.tokens + ' tokens out' : '已输出 ' + transfer.tokens + ' tokens') : '';
   const mediaInput = useRef<HTMLInputElement>(null);
   const needPosterRef = useRef(onNeedPoster);
   needPosterRef.current = onNeedPoster;
@@ -333,9 +289,20 @@ export function WorkflowNode({
       <span className="workflow-video-preparing-hint">{language === 'en' ? 'Node is ready · generation uses the original file' : '节点可正常使用 · 生成时用原文件'}</span>
     </div>
   ) : null;
-  const isLoading = status === 'loading' || uploading;
   const [isDropTarget, setDropTarget] = useState(false);
   const reduceMotion = useReducedMotion();
+  // 生成加载态（WorkflowGenerationLoader）：loading 显示网格 + 进度线；loading → success 时网格原地淡出露出结果，约 1.1s 后整层淡出。
+  const [bootPrevStatus, setBootPrevStatus] = useState(status);
+  const [bootDoneHold, setBootDoneHold] = useState(false);
+  if (bootPrevStatus !== status) {
+    setBootPrevStatus(status);
+    setBootDoneHold(bootPrevStatus === 'loading' && status === 'success');
+  }
+  useEffect(() => {
+    if (!bootDoneHold) return;
+    const timer = window.setTimeout(() => setBootDoneHold(false), reduceMotion ? 600 : 1100);
+    return () => window.clearTimeout(timer);
+  }, [bootDoneHold, reduceMotion]);
   const [isEditingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(node.title);
   const plugin = getWorkflowNodePlugin(node.type);
@@ -422,15 +389,13 @@ export function WorkflowNode({
       tabIndex={0}
       style={{ x: node.position.x, y: node.position.y, width: node.width, height: node.height }}
       initial={{ scale: 0.85, opacity: 0 }}
-      animate={{ scale: liftMotion ? 1.04 : isLoading ? [1, 1.015, 1] : 1, rotate: liftMotion ? -1.5 : 0, opacity: 1 }}
+      animate={{ scale: liftMotion ? 1.04 : 1, rotate: liftMotion ? -1.5 : 0, opacity: 1 }}
       exit={{ scale: 0.85, opacity: 0 }}
       transition={{
         scale: liftMotion
           ? { type: 'spring', stiffness: 520, damping: 26, mass: 0.6 }
-          : isLoading
-            ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut' }
-            // 落地：阻尼偏低，略压过 1 再回弹，像纸片放回桌面。
-            : { type: 'spring', stiffness: 460, damping: 15, mass: 0.7 },
+          // 落地：阻尼偏低，略压过 1 再回弹，像纸片放回桌面。生成中不再整节点呼吸缩放（DESIGN / 01 §19.6）。
+          : { type: 'spring', stiffness: 460, damping: 15, mass: 0.7 },
         rotate: { type: 'spring', stiffness: 380, damping: 18 },
         opacity: { duration: 0.2 },
         default: { type: 'spring', stiffness: 400, damping: 22 },
@@ -635,37 +600,10 @@ export function WorkflowNode({
         {node.type === 'subgraph' && <SubgraphFrameSurface node={node} childCount={subgraphChildCount ?? 0} onToggleCollapse={onToggleCollapse} language={language} />}
           </>}
         {mediaDetails && <span className="workflow-node__media-details">{mediaDetails}</span>}
-        {status === 'loading' && (
-          <motion.div
-            className="flv-generation-glass workflow-node__generation-glass"
-            data-testid="workflow-generation-glass"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: [0.82, 1, 0.82] }}
-            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-          >
-            <motion.div
-              className="workflow-node__shimmer"
-              initial={{ x: '-120%' }}
-              animate={{ x: '120%' }}
-              transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut', repeatDelay: 0.5 }}
-            />
-            <span className='flv-generation-glass__status'>{generationLabel}{progress !== undefined && <b>{progress}%</b>}</span>
-            {(transferLabel || tokensLabel) && (
-              <div className='workflow-node__generation-meta' data-testid='workflow-generation-transfer' data-workflow-overlay>
-                {transferLabel && <span>{transferLabel}</span>}
-                {speedLabel && <span>{speedLabel}</span>}
-                {tokensLabel && <span>{tokensLabel}</span>}
-              </div>
-            )}
-            {(generationMessage || elapsedLabel) && (
-              <div className="workflow-node__generation-meta" data-workflow-overlay>
-                {generationMessage && <span className="workflow-node__generation-message">{generationMessage}</span>}
-                {elapsedLabel && <span className="workflow-node__generation-elapsed">{elapsedLabel}</span>}
-              </div>
-            )}
-            {staleHint && <div className="workflow-node__generation-stale" data-workflow-overlay>{staleHint}</div>}
-          </motion.div>
-        )}
+        <AnimatePresence initial={false}>
+          {(status === 'loading' || (bootDoneHold && status === 'success')) && <WorkflowGenerationLoader key="generation-active" node={node} mode={status === 'loading' ? 'running' : 'done'} language={language} />}
+          {status === 'error' && node.metadata.error && <WorkflowGenerationLoader key="generation-error" node={node} mode="error" language={language} onRetry={onRun} />}
+        </AnimatePresence>
         {uploading && (
           <motion.div
             className="flv-generation-glass workflow-node__generation-glass"
@@ -693,7 +631,6 @@ export function WorkflowNode({
             )}
           </motion.div>
         )}
-        {status === 'error' && node.metadata.error && <div className="workflow-node__generation-error" title={node.metadata.error}>{node.metadata.error}</div>}
       </div>
       <button type="button" className="workflow-resize" aria-label={language === 'en' ? `Resize ${node.title}` : `调整${node.title}大小`} title={language === 'en' ? 'Use arrow keys to resize' : '使用方向键调整大小'} onPointerDown={onResizeStart} onKeyDown={event => {
         const step = event.shiftKey ? 64 : 16;
