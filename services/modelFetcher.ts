@@ -135,7 +135,26 @@ function looksLikeHtmlResponse(text: string) {
     return /^\s*<(?:!doctype|html|head|body)\b/i.test(text);
 }
 
-const RUNNINGHUB_DOCS_MODEL_URL = 'https://www.runninghub.ai/page-api';
+const RUNNINGHUB_DOCS_MODEL_URLS = {
+    cn: 'https://www.runninghub.cn/page-api',
+    ai: 'https://www.runninghub.ai/page-api',
+} as const;
+
+/**
+ * 模型目录页跟随用户配置的站点：国内站（runninghub.cn）与国际站（runninghub.ai）的模型列表不同，
+ * 不能用国际站的列表去配国内站的 Key。无法判断站点时（自定义代理等）按默认 Base URL 走国内站。
+ */
+export function runningHubDocsModelUrl(baseUrl?: string): string {
+    const raw = String(baseUrl || '').trim();
+    let host = '';
+    try {
+        host = new URL(raw).hostname.toLowerCase();
+    } catch {
+        host = raw.toLowerCase();
+    }
+    if (/(^|\.)runninghub\.ai$/.test(host) || /(^|[/.])runninghub\.ai([/:]|$)/.test(host)) return RUNNINGHUB_DOCS_MODEL_URLS.ai;
+    return RUNNINGHUB_DOCS_MODEL_URLS.cn;
+}
 
 function runningHubModelToFetchedModel(id: string, model?: any): FetchedModel {
     return {
@@ -410,7 +429,7 @@ async function fetchRunningHubModels(apiKey: string, baseUrl?: string): Promise<
 
     let pageModels: FetchedModel[] = [];
     try {
-        const response = await fetchWithModelDiscoveryTimeout(RUNNINGHUB_DOCS_MODEL_URL);
+        const response = await fetchWithModelDiscoveryTimeout(runningHubDocsModelUrl(effectiveBaseUrl));
         if (response.ok) {
             pageModels = parseRunningHubPageModels(await response.text());
         }

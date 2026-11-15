@@ -97,11 +97,17 @@
 - **修复**：RunningHub 预设恢复内置模型表与 Route Catalog 已核验线路，默认 Seedream 5 Flash；「获取模型」与「验证并更新」改为合并追加；提示文案同步（中英文）。RunningHub 在正式商业化前保持内置。
 - **测试**：`tests/runningHubPresetModels.test.ts`。
 
+### 11. 「获取模型」读的是国际站模型列表
+
+- **现象**：Base URL 填国内站 `https://www.runninghub.cn/openapi/v2` 时，设置页「获取模型」列出的是国际站（runninghub.ai）的模型目录，与国内站可用模型不一致。
+- **根因**：`services/modelFetcher.ts` 的 `fetchRunningHubModels` 把模型目录页写死为 `https://www.runninghub.ai/page-api`；Key 探测用的是用户的 Base URL，目录却不跟随。
+- **修复**：新增 `runningHubDocsModelUrl(baseUrl)`：主机名是 `runninghub.ai`（含子域）时读 `https://www.runninghub.ai/page-api`，其余（国内站、无法判断的代理地址、默认值）读 `https://www.runninghub.cn/page-api`。两站目录页结构相同（`__NUXT_DATA__`），同一解析器可用；已用当日抓取的国内站页面核对能解析出约 50 个图片 / 视频模型。
+- **测试**：`tests/runningHubModelDiscoverySite.test.ts`：地址映射（含 `evil-runninghub.ai.example.com` 不被当成国际站）；国内站与国际站 Base URL 各跑一次「获取模型」，断言只请求对应站点的 `page-api`，结果里有该站独有的模型。
+
 ## 仍未修复
 
 - PromptBar 显示 1:1，而节点 `config.aspectRatio` 是 16:9：两处显示不一致。
 - Seedream 输出的宽高比不稳定，与请求的比例不总是一致。
-- 设置页「获取模型」读的是 RunningHub 国际站（global）的模型列表，而不是用户填写的国内站。
 - `--web` 模式下若前端已在运行，`ensure` 无法启动 Agent；临时办法：改用 `--source` 启动。
 - 自动产物回执（第 4 项）只经单元测试验证，尚未在真实画布上确认。
 
