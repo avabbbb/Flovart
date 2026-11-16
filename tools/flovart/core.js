@@ -91,7 +91,7 @@ export const HELP_TEXT = [
   'workflow.selection.get [--project-id <id>]      Read the current Workflow selection',
   'workflow.apply --project-id <id> --operations-json <json> --idempotency-key <key>',
   'workflow.node.run --project-id <id> --node-id <id> --idempotency-key <key>',
-  'workflow.node.run --project-id <id> --node-ids <id,id,...> --idempotency-key <key>',
+  'workflow.node.run --project-id <id> --node-ids <id,id,...> --idempotency-key <key> [--wait-seconds <n> | --no-wait]',
   '',
   'Compatibility commands remain callable and discoverable with command.list and command.schema.',
   'MCP is an optional projection; CLI + Skill is the default external-Agent path.',
@@ -457,6 +457,20 @@ export function commandsInSameNamespace(commandName) {
   return COMMANDS.filter(item => item.startsWith(namespace)).sort();
 }
 
+/** `--no-wait` = 20s; `--wait-seconds <n>` (1–960). Only workflow.node.run honours it. */
+export function workflowRunWaitMs(command, { waitSeconds, noWait } = {}) {
+  if (command !== 'workflow.node.run') return 0;
+  if (waitSeconds !== undefined && waitSeconds !== null && waitSeconds !== true && waitSeconds !== '') {
+    const seconds = Number(waitSeconds);
+    if (!Number.isFinite(seconds) || seconds < 1 || seconds > 960) {
+      throw new Error('--wait-seconds must be a number between 1 and 960');
+    }
+    return Math.round(seconds * 1000);
+  }
+  if (noWait === true || noWait === 'true') return 20_000;
+  return 0;
+}
+
 export function unknownCommandMessage(commandName) {
   const name = String(commandName || '').trim();
   const available = commandsInSameNamespace(name);
@@ -476,8 +490,12 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
       'agent-identity': legacyAgentIdentity,
       hostSessionId,
       'host-session-id': legacyHostSessionId,
+      'wait-seconds': waitSecondsOption,
+      waitSeconds: waitSecondsCamel,
+      'no-wait': noWait,
       ...commandOptions
     } = args;
+    const waitMs = workflowRunWaitMs(command, { waitSeconds: waitSecondsOption ?? waitSecondsCamel, noWait });
     const callerIdentity = agentIdentity || legacyAgentIdentity;
     const callerSession = hostSessionId || legacyHostSessionId;
     const workflowArgs = Object.fromEntries(Object.entries({
@@ -507,11 +525,28 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
       ...(callerSession ? { hostSessionId: String(callerSession) } : {}),
     } : undefined);
     if (runtime.operation) {
-      return await runtime.operation(command, workflowArgs, {
-        source,
-        ...(workflowArgs.idempotencyKey ? { idempotencyKey: workflowArgs.idempotencyKey } : {}),
-        ...(caller ? { caller } : {}),
-      });
+      try {
+        return await runtime.operation(command, workflowArgs, {
+          source,
+          ...(workflowArgs.idempotencyKey ? { idempotencyKey: workflowArgs.idempotencyKey } : {}),
+          ...(caller ? { caller } : {}),
+          ...(waitMs ? { timeoutMs: waitMs } : {}),
+        });
+      } catch (error) {
+        // --wait-seconds / --no-wait：到点还没结束不算失败。生成仍在画布里跑，
+        // 用同一个 idempotencyKey 重发同一条命令会接上这次执行（浏览器端按 key 复用在途 / 已完成的结果），不会重复提交。
+        if (waitMs && error?.code === 'WORKSPACE_TIMEOUT') {
+          return {
+            ok: true,
+            status: 'running',
+            command,
+            idempotencyKey: workflowArgs.idempotencyKey || error.details?.idempotencyKey || null,
+            waitedSeconds: Math.round(waitMs / 1000),
+            next: 'Run the same command again with the same --idempotency-key to wait for and read the result; workflow.inspect shows node progress meanwhile.',
+          };
+        }
+        throw error;
+      }
     }
     return await runtime.workflow.dispatch({
       id: args.commandId || secureId('cli_'),

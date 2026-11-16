@@ -1,0 +1,220 @@
+{
+  "rules": {
+    "主体面部与参考图为同一人": {
+      "good": [
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "bad": [
+        true,
+        true,
+        true,
+        false,
+        true
+      ]
+    },
+    "提示词要求的中文文字可读": {
+      "good": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "bad": [
+        true,
+        true,
+        false,
+        true,
+        true
+      ]
+    },
+    "画面饱和度更高": {
+      "good": [
+        true,
+        false,
+        true,
+        true,
+        false
+      ],
+      "bad": [
+        false,
+        true,
+        false,
+        false,
+        true
+      ]
+    },
+    "构图居中": {
+      "good": [
+        false,
+        true,
+        false,
+        true,
+        false
+      ],
+      "bad": [
+        true,
+        false,
+        false,
+        true,
+        false
+      ]
+    }
+  },
+  "pairs": [
+    {
+      "id": "pair-0",
+      "chosenViolates": {
+        "主体面部与参考图为同一人": false,
+        "提示词要求的中文文字可读": true,
+        "画面饱和度更高": true,
+        "构图居中": true
+      },
+      "rejectedViolates": {
+        "主体面部与参考图为同一人": false,
+        "提示词要求的中文文字可读": true,
+        "画面饱和度更高": false,
+        "构图居中": false
+      }
+    },
+    {
+      "id": "pair-1",
+      "chosenViolates": {
+        "主体面部与参考图为同一人": false,
+        "提示词要求的中文文字可读": false,
+        "画面饱和度更高": false,
+        "构图居中": false
+      },
+      "rejectedViolates": {
+        "主体面部与参考图为同一人": true,
+        "提示词要求的中文文字可读": true,
+        "画面饱和度更高": true,
+        "构图居中": true
+      }
+    },
+    {
+      "id": "pair-2",
+      "chosenViolates": {
+        "主体面部与参考图为同一人": false,
+        "提示词要求的中文文字可读": false,
+        "画面饱和度更高": true,
+        "构图居中": false
+      },
+      "rejectedViolates": {
+        "主体面部与参考图为同一人": true,
+        "提示词要求的中文文字可读": true,
+        "画面饱和度更高": false,
+        "构图居中": false
+      }
+    },
+    {
+      "id": "pair-3",
+      "chosenViolates": {
+        "主体面部与参考图为同一人": false,
+        "提示词要求的中文文字可读": false,
+        "画面饱和度更高": false,
+        "构图居中": true
+      },
+      "rejectedViolates": {
+        "主体面部与参考图为同一人": true,
+        "提示词要求的中文文字可读": true,
+        "画面饱和度更高": true,
+        "构图居中": false
+      }
+    },
+    {
+      "id": "pair-4",
+      "chosenViolates": {
+        "主体面部与参考图为同一人": false,
+        "提示词要求的中文文字可读": false,
+        "画面饱和度更高": true,
+        "构图居中": false
+      },
+      "rejectedViolates": {
+        "主体面部与参考图为同一人": false,
+        "提示词要求的中文文字可读": true,
+        "画面饱和度更高": false,
+        "构图居中": true
+      }
+    },
+    {
+      "id": "pair-5",
+      "chosenViolates": {
+        "主体面部与参考图为同一人": false,
+        "提示词要求的中文文字可读": true,
+        "画面饱和度更高": false,
+        "构图居中": false
+      },
+      "rejectedViolates": {
+        "主体面部与参考图为同一人": true,
+        "提示词要求的中文文字可读": true,
+        "画面饱和度更高": true,
+        "构图居中": false
+      }
+    },
+    {
+      "id": "pair-6",
+      "chosenViolates": {
+        "主体面部与参考图为同一人": false,
+        "提示词要求的中文文字可读": false,
+        "画面饱和度更高": true,
+        "构图居中": true
+      },
+      "rejectedViolates": {
+        "主体面部与参考图为同一人": true,
+        "提示词要求的中文文字可读": true,
+        "画面饱和度更高": false,
+        "构图居中": false
+      }
+    },
+    {
+      "id": "pair-7",
+      "chosenViolates": {
+        "主体面部与参考图为同一人": false,
+        "提示词要求的中文文字可读": false,
+        "画面饱和度更高": false,
+        "构图居中": false
+      },
+      "rejectedViolates": {
+        "主体面部与参考图为同一人": true,
+        "提示词要求的中文文字可读": true,
+        "画面饱和度更高": true,
+        "构图居中": true
+      }
+    },
+    {
+      "id": "pair-8",
+      "chosenViolates": {
+        "主体面部与参考图为同一人": false,
+        "提示词要求的中文文字可读": false,
+        "画面饱和度更高": true,
+        "构图居中": false
+      },
+      "rejectedViolates": {
+        "主体面部与参考图为同一人": false,
+        "提示词要求的中文文字可读": true,
+        "画面饱和度更高": false,
+        "构图居中": false
+      }
+    },
+    {
+      "id": "pair-9",
+      "chosenViolates": {
+        "主体面部与参考图为同一人": false,
+        "提示词要求的中文文字可读": false,
+        "画面饱和度更高": false,
+        "构图居中": true
+      },
+      "rejectedViolates": {
+        "主体面部与参考图为同一人": true,
+        "提示词要求的中文文字可读": true,
+        "画面饱和度更高": true,
+        "构图居中": false
+      }
+    }
+  ]
+}

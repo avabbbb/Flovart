@@ -126,7 +126,7 @@ describe('browser agent stream with thinking', () => {
     const { events, message } = await runStream('think-1', 'medium');
     expect(bodies).toHaveLength(1);
     expect(bodies[0]).toMatchObject({ reasoning_effort: 'medium' });
-    expect(events.map(event => event.type)).toEqual(['thinking_start', 'thinking_delta', 'thinking_delta', 'thinking_end', 'text_delta', 'done']);
+    expect(events.map(event => event.type)).toEqual(['start', 'thinking_start', 'thinking_delta', 'thinking_delta', 'thinking_end', 'text_delta', 'done']);
     expect(message.content).toEqual([{ type: 'thinking', thinking: '先看画布' }, { type: 'text', text: '好的' }]);
   });
 

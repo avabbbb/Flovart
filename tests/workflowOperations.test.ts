@@ -13,6 +13,19 @@ import { createWorkflowNode } from '../components/workflow/constants';
 import { createWorkflowProject } from '../components/workflow/store';
 
 describe('workflow operation records', () => {
+  it('keeps a user-given node title when the image node is promoted to an operation on run', async () => {
+    // 现场评测：6 个节点 run 之后标题全被改回「图片生成」，图层面板里分不清。
+    const project = createWorkflowProject('标题保留');
+    const named = createWorkflowNode('named', 'image', { x: 0, y: 0 }, { prompt: 'a', config: { mode: 'image' } });
+    named.title = '会议室 · 正面';
+    const plain = createWorkflowNode('plain', 'image', { x: 400, y: 0 }, { prompt: 'b', config: { mode: 'image' } });
+    project.nodes = [named, plain];
+    const first = await ensureWorkflowImageGenerateOperation({ project, nodeId: 'named', createId: () => 'x-' + Math.random(), now: 'Wed 2026-08-05 8:00 AM (UTC+08:00)' });
+    expect(first.project.nodes.find(node => node.id === first.operationNodeId)?.title).toBe('会议室 · 正面');
+    const second = await ensureWorkflowImageGenerateOperation({ project: first.project, nodeId: 'plain', createId: () => 'y-' + Math.random(), now: 'Wed 2026-08-05 8:00 AM (UTC+08:00)' });
+    expect(second.project.nodes.find(node => node.id === second.operationNodeId)?.title).toBe('图片生成');
+  });
+
   it('hashes semantically identical recipes to the same value', async () => {
     const base = { capabilityId: 'image.upscale@1' as const, prompt: '', productModelId: 'flovart:gpt-image-2', now: '2026-08-05T00:00:00.000Z' };
     const first = await createWorkflowOperationRecipe({ ...base, parameters: { targetLongEdge: 2048, algorithm: 'high' } });

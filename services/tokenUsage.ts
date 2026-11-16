@@ -68,7 +68,11 @@ export function extractTokenUsage(raw: unknown): TokenUsage | null {
   const output = count(usage.completion_tokens) ?? count(usage.output_tokens);
   const total = count(usage.total_tokens) ?? count(usage.token_usage?.total_tokens);
   if (input === undefined && output === undefined && total === undefined) return null;
-  const cached = count(usage.prompt_tokens_details?.cached_tokens) ?? count(usage.input_tokens_details?.cached_tokens) ?? count(usage.cache_read_input_tokens);
+  // DeepSeek 原生字段是 prompt_cache_hit_tokens（部分网关同时给 prompt_tokens_details.cached_tokens）。
+  const cachedCandidates = [usage.prompt_tokens_details?.cached_tokens, usage.prompt_cache_hit_tokens, usage.input_tokens_details?.cached_tokens, usage.cache_read_input_tokens]
+    .map(count).filter((value): value is number => value !== undefined);
+  // 网关可能同时给两个字段且其中一个是 0：取最大值，不让 0 盖掉真实命中。
+  const cached = cachedCandidates.length ? Math.max(...cachedCandidates) : undefined;
   const reasoning = count(usage.completion_tokens_details?.reasoning_tokens) ?? count(usage.output_tokens_details?.reasoning_tokens);
   return {
     inputTokens: input ?? 0,

@@ -106,7 +106,7 @@ describe('auto artifact receipts through the real Agent + CLI path', () => {
     await waitFor(async () => (await request('GET', '/health')).status === 200);
 
     // 浏览器侧：画布 store + 与页面相同的 Workflow Dispatcher；执行器不联网。
-    project.nodes = ['shot-a', 'shot-b', 'shot-c'].map((id, index) => createWorkflowNode(id, 'image', { x: index * 400, y: 0 }, {
+    project.nodes = ['shot-a', 'shot-b', 'shot-c', 'shot-slow'].map((id, index) => createWorkflowNode(id, 'image', { x: index * 400, y: 0 }, {
       prompt: '镜头 ' + id,
       config: { mode: 'image', modelId: 'flovart:gpt-image-2', count: 1 },
     }));
@@ -114,6 +114,7 @@ describe('auto artifact receipts through the real Agent + CLI path', () => {
     const executor = createWorkflowExecutor({
       runNode: async ({ nodeId }) => {
         executedNodeIds.push(nodeId);
+        if (nodeId === 'shot-slow') await new Promise(resolve => setTimeout(resolve, 3_000));
         return { status: 'completed', artifact: { kind: 'image', artifactId: 'artifact-' + nodeId, mimeType: 'image/png', name: nodeId + '.png' } } as never;
       },
     });
@@ -193,5 +194,15 @@ describe('auto artifact receipts through the real Agent + CLI path', () => {
     expect(receipts).toHaveLength(3);
     expect(receipts.slice(1).map(item => item.externalRef).sort()).toEqual(runIds.map(id => 'run:' + id).sort());
     expect(receipts.slice(1).flatMap(item => item.nodeIds).sort()).toEqual(['shot-b', 'shot-c']);
+  }, 60_000);
+
+  it('--wait-seconds returns a running receipt and the same key later joins the in-flight run', async () => {
+    const early = await cli(['workflow.node.run', '--project-id', project.id, '--node-id', 'shot-slow', '--idempotency-key', 'slow-run', '--wait-seconds', '1']);
+    expect(early, JSON.stringify(early).slice(0, 600)).toMatchObject({ ok: true });
+    expect(JSON.stringify(early)).toContain('"status":"running"');
+    const done = await cli(['workflow.node.run', '--project-id', project.id, '--node-id', 'shot-slow', '--idempotency-key', 'slow-run']);
+    expect(done.ok, JSON.stringify(done).slice(0, 600)).toBe(true);
+    expect(runIdsOf(done)).toHaveLength(1);
+    expect(executedNodeIds.filter(id => id === 'shot-slow')).toHaveLength(1);
   }, 60_000);
 });

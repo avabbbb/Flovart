@@ -166,7 +166,7 @@ the browser itself is offline.
 
 ## Building and running
 
-- “打开 Flovart” / “打开 Iris” → `ensure`, then `workflow.inspect`.
+- “打开 Flovart” → `ensure`, then `workflow.inspect`.
 - “看看当前 Workflow” → `workflow.inspect`. “当前选择” → `workflow.selection.get`.
 - Generate an image or video → one `workflow.generate` (MCP / Agent tool
   `flovart_generate`). It creates or reuses **one** generation node, writes the

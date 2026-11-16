@@ -238,4 +238,31 @@ describe('workflow media', () => {
     expect(await workflowMediaStorage.get('current-key')).not.toBeNull();
     expect(await workflowMediaStorage.get('current-key-poster')).not.toBeNull();
   });
+  it('keeps media of batch alternates reachable during prune', async () => {
+    await workflowMediaStorage.set('head-key', new Blob(['head']));
+    await workflowMediaStorage.set('alt-1', new Blob(['a1']));
+    await workflowMediaStorage.set('alt-2', new Blob(['a2']));
+    await workflowMediaStorage.set('alt-2-poster', new Blob(['a2p']));
+    await workflowMediaStorage.set('orphan-key', new Blob(['orphan']));
+    setWorkflowMediaCanonicalProjects([{
+      nodes: [{
+        id: 'head',
+        type: 'image' as const,
+        title: '图片',
+        position: { x: 0, y: 0 },
+        width: 100,
+        height: 100,
+        metadata: {
+          storageKey: 'head-key',
+          alternates: [
+            { id: 'alt-a', type: 'image' as const, metadata: { storageKey: 'alt-1', status: 'success' as const } },
+            { id: 'alt-b', type: 'video' as const, metadata: { storageKey: 'alt-2', posterStorageKey: 'alt-2-poster', status: 'success' as const } },
+          ],
+        },
+      }],
+    }]);
+    await pruneWorkflowMedia();
+    expect(await workflowMediaStorage.keys()).toEqual(expect.arrayContaining(['head-key', 'alt-1', 'alt-2', 'alt-2-poster']));
+    expect(await workflowMediaStorage.get('orphan-key')).toBeNull();
+  });
 });

@@ -75,7 +75,7 @@ describe('Flovart Agent panel', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: '发送' })).toBeEnabled());
   });
 
-  it('surfaces a product-language setup notice without an offline mode on a zero-node project', async () => {
+  it('points to a text-model key (not an offline collaborator) when the web panel has no text route', async () => {
     // Lane15 gap #15: with no managed agent AND no agent-text credential the
     // panel must not die on '仅桌面端可用'; it explains the missing host in
     // product language. The offline browsing deck was removed in 0.3.0.
@@ -84,7 +84,9 @@ describe('Flovart Agent panel', () => {
     render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} />);
 
     const card = await screen.findByTestId('agent-setup-card');
-    expect(card).toHaveTextContent('协作 Agent');
+    // 网页端缺的是文本模型 Key（不是协作方离线）：给出能直接操作的指引，不再报需要 Codex / Claude / OpenCode。
+    expect(card).toHaveTextContent('API Key');
+    expect(card).not.toHaveTextContent('OpenCode');
     expect(card).not.toHaveTextContent('spawn');
     expect(card).not.toHaveTextContent('仅桌面端');
     expect(within(card).queryByRole('button', { name: /先逛逛|离线/ })).not.toBeInTheDocument();

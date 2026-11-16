@@ -8,7 +8,8 @@ export class WorkspaceLeaseError extends Error {
     this.name = 'WorkspaceLeaseError';
     this.code = code;
     this.details = details;
-    this.retryable = code === 'LEASE_EXPIRED' || code === 'WORKSPACE_UNAVAILABLE';
+    // REVISION_CONFLICT 的补救就是重新读取后用新版本重试，属于可重试。
+    this.retryable = code === 'LEASE_EXPIRED' || code === 'WORKSPACE_UNAVAILABLE' || code === 'REVISION_CONFLICT';
   }
 
   toJSON() {
@@ -92,7 +93,7 @@ export class WorkspaceLeaseManager {
     return view(lease);
   }
 
-  validate({ leaseId, agentIdentity, hostSessionId, source, clientId, projectId, currentClientId, currentProjectId, expectedRevision, currentRevision, mutationId, mutation = false } = {}) {
+  validate({ leaseId, agentIdentity, hostSessionId, source, clientId, projectId, currentClientId, currentProjectId, expectedRevision, currentRevision, mutationId, mutation = false, deferRevision = false } = {}) {
     this.expire();
     const id = text(leaseId);
     const lease = this.byId.get(id);
@@ -121,7 +122,8 @@ export class WorkspaceLeaseManager {
       throw leaseError('LEASE_TARGET_CHANGED', '当前 Active Workflow 项目已改变。', { leaseId: id, leaseProjectId: lease.projectId, activeProjectId: text(currentProjectId) });
     }
     if (mutation && !text(mutationId)) throw leaseError('INVALID_ARGUMENT', 'Workflow mutation 必须提供 mutationId。', { leaseId: id });
-    if (expectedRevision !== undefined && expectedRevision !== null && currentRevision !== undefined && Number(expectedRevision) !== Number(currentRevision)) {
+    // deferRevision：只改 / 只跑指定节点的命令由浏览器草稿权威按节点检查（别的节点被挪动不算冲突），这里不按整体版本拦。
+    if (!deferRevision && expectedRevision !== undefined && expectedRevision !== null && currentRevision !== undefined && Number(expectedRevision) !== Number(currentRevision)) {
       throw leaseError('REVISION_CONFLICT', `Workflow 草稿版本已变化：期望 ${expectedRevision}，当前 ${currentRevision}。`, { leaseId: id, expectedRevision: Number(expectedRevision), actualRevision: Number(currentRevision) });
     }
     return this.renew(id);

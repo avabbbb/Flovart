@@ -679,3 +679,42 @@ describe('workflow dispatcher auto layout', () => {
     expect(nodeById(dependencies, 'b').position).toEqual({ x: 436, y: 280 });
   });
 });
+
+describe('workflow dispatcher per-node revision rebase', () => {
+  it('runs a node whose own state did not change even though another node moved (no false REVISION_CONFLICT)', async () => {
+    const runNode = vi.fn(async () => ({ status: 'succeeded' }));
+    const { dispatch, dependencies } = setup(createWorkflowExecutor({ runNode, stopNode: vi.fn() } as never));
+    const project = dependencies.getState().projects[0];
+    // 在界面里挪了别的节点：版本 1 → 2，只有 other-node 变了。
+    dependencies.updateProject(project.id, {
+      draftVersion: 2,
+      draftChangeSets: [{ id: 'ui-move', resultDraftVersion: 2, nodeChanges: [{ id: 'other-node' }], connectionChanges: [] }] as never,
+    });
+    const result = await dispatch({ id: 'rebased-run', command: 'workflow.node.run', args: { nodeId: 'image-1', expectedRevision: 1, confirmed: true }, source: 'cli' });
+    expect(result.error?.code).not.toBe('REVISION_CONFLICT');
+    expect(runNode).toHaveBeenCalledTimes(1);
+  });
+
+  it('still rejects when the target node itself changed, naming the changed ids', async () => {
+    const { dispatch, dependencies } = setup();
+    const project = dependencies.getState().projects[0];
+    dependencies.updateProject(project.id, {
+      draftVersion: 2,
+      draftChangeSets: [{ id: 'ui-edit', resultDraftVersion: 2, nodeChanges: [{ id: 'image-1' }], connectionChanges: [] }] as never,
+    });
+    const result = await dispatch({ id: 'stale', command: 'workflow.node.run', args: { nodeId: 'image-1', expectedRevision: 1, confirmed: true }, source: 'cli' });
+    expect(result.error).toMatchObject({ code: 'REVISION_CONFLICT', changedObjectIds: ['image-1'] });
+    expect(result.error?.message).toContain('image-1');
+  });
+
+  it('accepts --title as shorthand and rejects an empty node.update with an actionable message', async () => {
+    const { dispatch, dependencies } = setup();
+    const renamed = await dispatch({ id: 'rename', command: 'workflow.node.update', args: { nodeId: 'image-1', title: '主视觉 A' }, source: 'cli', idempotencyKey: 'rename-1' });
+    expect(renamed.ok).toBe(true);
+    expect(dependencies.getState().projects[0].nodes[0].title).toBe('主视觉 A');
+    const empty = await dispatch({ id: 'noop', command: 'workflow.node.update', args: { nodeId: 'image-1' }, source: 'cli', idempotencyKey: 'noop-1' });
+    expect(empty.ok).toBe(false);
+    expect(empty.error?.message).toContain('--patch-json');
+    expect(empty.error?.message).not.toContain('完全一致');
+  });
+});

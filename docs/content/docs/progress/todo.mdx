@@ -81,6 +81,7 @@ title: 后续待办
 - [ ] 逆向与 Canvas 用同一组 `workflow.*` 命令与明确素材引用交接，保持单一 Workflow 权威；大文件需要进度、取消和内存限制。
 - [ ] Agent 空间中接入真实外部对话/任务/产物回执，保持外部 Agent 为主入口；内置 Assistant 继续保持可选，不新增重复控制面或第二套主记忆。
 - [ ] 保留现有 Production Skill、VOX、已批准参考图与局部重跑能力；后续只补实际用到的步骤，不以完整成片平台为本轮前置。
+- [ ] 画布工具遗留（2026-11-11/12 迭代记录归档时并入）：拆分图层缺内置语义端点（LayerD / BiRefNet sidecar 或自托管 `/split-layers`）；精确帧率需 ffprobe 元数据；视频剪辑逐帧重编码偏慢（缩略图时间轴、关键帧、后台进度）；分组框 padding / 嵌套 / 组级右键菜单；Agent 不能生成自由手绘蒙版；视频反推只取首帧；音频变调用 `asetrate + atempo`，非 44.1k 源可能偏差；已从 UI 移除的标注 / 打光 / 风格 / 移动对话框代码待清理。
 - [ ] ProductionTask 继续补齐跨会话 checkpoint、恢复后的真实 scheduler tracer 与任务中心，不复制 Workflow 状态。
 
 ## Provider、社区与发行

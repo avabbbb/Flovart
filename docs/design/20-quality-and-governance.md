@@ -38,7 +38,7 @@
 
 每次运行保存机器可读结果（提交、构建、OS / GPU、宿主 / SDK / 模型版本、输入 hash、参数、次数、冷 / 热 p50 / p95、成本、失败样例）。原始记录放 `artifacts/`，真实 Key 不进证据。
 
-「假成功为 0」由 FlovartBench 硬门 `false-success-claims` 确定性度量（Agent 自报成功但最终状态不成立即整轮失败）；每个失败按漏斗层归因（`failedLayer`），细则见 [eval/README](../../eval/README.md)。
+「假成功为 0」由 FlovartBench 硬门 `false-success-claims` 确定性度量（Agent 自报成功但最终状态不成立即整轮失败）；每个失败按漏斗层归因（`failedLayer`），细则见 [eval/README](../../eval/README.md)。生成质量、方案合理性等需要推理判断的部分由 LLM-as-a-Judge 层评（六层漏斗 Rubric、Judge 与人工一致性、Auto Rubrics、准入 / 灰度 / 监控门禁），体系见 [eval/eval.md](../../eval/eval.md)。
 
 ## 4. 文档治理
 
