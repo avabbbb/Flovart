@@ -131,7 +131,7 @@ describe('Flovart Agent Kernel', () => {
         projectId: project.id,
         expectedRevision: 1,
         mutationId: 'real-draft-create-v1',
-        operations: [{ type: 'add_node', node: createWorkflowNode('draft-outline', 'text', { x: 0, y: 0 }, { content: '画布脚本' }) }],
+        operations: [{ type: 'add_node', node: createWorkflowNode('draft-outline', 'image', { x: 0, y: 0 }, { prompt: '画布主视觉' }) }],
         idempotencyKey: 'real-draft-create-v1',
       }), { stopReason: 'toolUse' }),
       fauxAssistantMessage('节点已写入同一 Workflow。'),
@@ -146,12 +146,12 @@ describe('Flovart Agent Kernel', () => {
     });
 
     await kernel.openSession({ projectId: project.id, cwd: directory });
-    await kernel.send('在当前 Workflow 创建脚本节点');
+    await kernel.send('在当前 Workflow 创建主视觉生成节点');
 
     const changed = useWorkflowStore.getState().projects[0];
     expect(changed.nodes).toHaveLength(1);
     expect(changed.nodes[0]).toMatchObject({ id: 'draft-outline', objectVersion: 1 });
-    expect(changed.nodes[0].metadata.content).toBe('画布脚本');
+    expect(changed.nodes[0].metadata.prompt).toBe('画布主视觉');
     expect(changed.draftChangeSets).toHaveLength(1);
     expect(changed.draftChangeSets?.[0]).toMatchObject({ actor: 'agent', status: 'completed' });
     await kernel.close();

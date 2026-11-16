@@ -37,22 +37,28 @@ function endpoint(connection, side) {
 export function extractCanvasSubgraph(project = {}, nodeIds = []) {
   const allNodes = Array.isArray(project.nodes) ? project.nodes : [];
   const wanted = Array.isArray(nodeIds) && nodeIds.length ? new Set(nodeIds) : null;
-  const picked = allNodes.filter(node => node && typeof node.id === 'string' && (!wanted || wanted.has(node.id))).slice(0, SKILL_DRAFT_MAX_NODES);
+  const chosen = allNodes.filter(node => node && typeof node.id === 'string' && (!wanted || wanted.has(node.id)));
+  // 文本节点是备注：不进入子图（不是步骤、不当 prompt、不连线），内容只作为作者说明。
+  const isNote = node => node.type === 'text';
+  const notes = chosen.filter(isNote)
+    .map(node => redact(String(node.metadata?.content || node.metadata?.text || '')).trim().slice(0, 1000))
+    .filter(Boolean);
+  const picked = chosen.filter(node => !isNote(node)).slice(0, SKILL_DRAFT_MAX_NODES);
   const ids = new Set(picked.map(node => node.id));
   const nodes = picked.map(node => {
     const metadata = node.metadata && typeof node.metadata === 'object' ? node.metadata : {};
     return {
       id: node.id,
-      type: String(node.type || 'text'),
+      type: String(node.type || 'unknown'),
       title: oneLine(node.title || '', 80),
-      prompt: redact(metadata.prompt || metadata.content || '').slice(0, 4000),
+      prompt: redact(typeof metadata.prompt === 'string' ? metadata.prompt : '').slice(0, 4000),
       ...(metadata.config && typeof metadata.config === 'object' ? { config: metadata.config } : {}),
     };
   });
   const connections = (Array.isArray(project.connections) ? project.connections : [])
     .map(connection => ({ from: endpoint(connection, 'from'), to: endpoint(connection, 'to') }))
     .filter(connection => ids.has(connection.from) && ids.has(connection.to));
-  return { nodes, connections };
+  return { nodes, connections, ...(notes.length ? { notes } : {}) };
 }
 
 // Kahn 拓扑排序；有环时返回 null。
@@ -160,10 +166,11 @@ export function buildSkillDraft({ id, name, description, projectId, project, rec
     '',
     ...(graphLines.length ? graphLines : ['（空）']),
     '',
+    ...(subgraph.notes?.length ? ['## 作者说明（备注，不是步骤）', '', ...subgraph.notes.map(note => '- ' + oneLine(note, 200)), ''] : []),
     '## 复跑规则',
     '',
     '1. 读取 inputs.topic，把子图里所有提示词中的原主题替换为新主题；先给出改写后的提示词清单，等待确认（gate: approve-spec）。',
-    '2. 按 references/canvas-subgraph.json 用 workflow.apply 一次性创建节点与连线，保持原有依赖顺序与模型参数。',
+    '2. 按 references/canvas-subgraph.json 复建：图片/视频生成节点用 workflow.generate（提示词写进 Prompt Bar，上游素材作 references → @引用 + 连线），其余连线与操作节点用 workflow.apply；保持原有依赖顺序与模型参数，不建文本节点承载提示词。',
     '3. 付费生成必须经过用户确认或会话预算授权；单节点失败只重跑该节点。',
     '4. 完成后返回交付契约（sessionId / projectId / canvasUrl / nodeIds）。',
     '',

@@ -153,7 +153,7 @@ describe('Flovart Agent panel', () => {
       envelope: {
         id: 'command-1',
         command: 'workflow.node.create',
-        args: { type: 'text', title: '脚本大纲' },
+        args: { type: 'image', title: '主视觉' },
         source: 'agent',
         idempotencyKey: 'agent-create-outline-v1',
       },
@@ -176,7 +176,7 @@ describe('Flovart Agent panel', () => {
 
     const card = await screen.findByRole('alertdialog', { name: 'Agent 请求确认' });
     // 一句人话：动作 + 节点标题，不再出现内部命令名或节点 ID。
-    expect(card).toHaveTextContent('删除「脚本大纲」');
+    expect(card).toHaveTextContent('删除「主视觉」');
     expect(card).not.toHaveTextContent('workflow.node.delete');
     expect(card).not.toHaveTextContent(createdId);
     // 删除是安全覆盖：只能逐次确认，不提供会话授权。
@@ -184,6 +184,20 @@ describe('Flovart Agent panel', () => {
     expect(onActivityChange).toHaveBeenCalledWith('waiting');
     fireEvent.click(screen.getByRole('button', { name: '拒绝' }));
     await waitFor(() => expect(screen.queryByRole('alertdialog', { name: 'Agent 请求确认' })).not.toBeInTheDocument());
+    expect(useWorkflowStore.getState().projects[0].nodes).toHaveLength(1);
+
+    // 文本节点是备注：Agent 来源建 text 节点被拒绝（NOTE_IS_ANNOTATION），画布不变。
+    StubEventSource.current!.emit('tool_call', {
+      requestId: 'request-3',
+      envelope: {
+        id: 'command-3',
+        command: 'workflow.node.create',
+        args: { type: 'text', title: '脚本大纲' },
+        source: 'agent',
+        idempotencyKey: 'agent-create-outline-v1',
+      },
+    });
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([, init]) => String((init as RequestInit | undefined)?.body || '').includes('NOTE_IS_ANNOTATION'))).toBe(true));
     expect(useWorkflowStore.getState().projects[0].nodes).toHaveLength(1);
   });
 
@@ -203,7 +217,7 @@ describe('Flovart Agent panel', () => {
       requestId: 'request-manual-create',
       envelope: {
         id: 'command-manual-create', command: 'workflow.node.create',
-        args: { type: 'text', title: '待确认大纲' }, source: 'agent', idempotencyKey: 'manual-create-v1',
+        args: { type: 'image', title: '待确认主视觉' }, source: 'agent', idempotencyKey: 'manual-create-v1',
       },
     });
 
@@ -216,7 +230,7 @@ describe('Flovart Agent panel', () => {
       requestId: 'request-manual-create-2',
       envelope: {
         id: 'command-manual-create-2', command: 'workflow.node.create',
-        args: { type: 'text', title: '第二个大纲' }, source: 'agent', idempotencyKey: 'manual-create-v2',
+        args: { type: 'image', title: '第二张主视觉' }, source: 'agent', idempotencyKey: 'manual-create-v2',
       },
     });
     await waitFor(() => expect(useWorkflowStore.getState().projects[0].nodes).toHaveLength(2));

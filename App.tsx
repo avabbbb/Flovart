@@ -26,12 +26,12 @@ import { getGenerationCapability, type GenerationMode } from './services/generat
 import { cancelWorkflowGeneration, findInterruptedWorkflowNodes, runWorkflowGeneration, stopOrphanedWorkflowNode, terminalGenerationPatch } from './services/workflowGeneration';
 import { loadWorkflowMediaBlob, workflowBlobToDataUrl } from './components/workflow/media';
 import { extractVideoFrame } from './services/videoFrameExtractor';
-import { setWorkflowExecutor, setWorkflowNodeToolRunner } from './services/workflowDispatcher';
+import { setWorkflowAssetLookup, setWorkflowExecutor, setWorkflowNodeToolRunner, setWorkflowUserApiKeysProvider } from './services/workflowDispatcher';
 import { createWorkflowExecutor, normalizeWorkflowExecutionError, WorkflowExecutionError, type WorkflowExecutionContext, type WorkflowRunAdapterResult, type WorkflowRunCommand } from './services/workflowExecutor';
 import type { CanonicalGenerationInput } from './components/workflow/inputResolver';
 import type { PromptIntent } from './components/workflow/promptIntent';
 import type { WorkflowNodeToolName, WorkflowNodeToolRuntime } from './services/workflowNodeTools';
-import type { WorkflowProject } from './components/workflow/types';
+import type { WorkflowNode, WorkflowProject } from './components/workflow/types';
 import { translations } from './utils/translations';
 import './styles/generation.css';
 import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from './services/routeMapping';
@@ -41,6 +41,7 @@ import { buildGenerationGateSummary, getGenerationGateDetails, requiresExternalG
 import { applyPlanChecks, buildGenerationPlanChecks } from './services/generationPlan';
 import { loadCreativeHostResource } from './services/studio/hostResourceRegistry';
 import { registerWorkflowArtifact } from './services/studio/artifactRegistry';
+import { collectWorkflowRunOutputNodes } from './services/workflowRunOutputs';
 
 const SettingsPanel = React.lazy(() => import('./components/SettingsPanel').then(m => ({ default: m.SettingsPanel })));
 
@@ -383,23 +384,38 @@ const App: React.FC = () => {
         if (!generatedNode || generatedNode.metadata.status === 'idle' || (supersededBy && context.runId && supersededBy !== context.runId)) {
             return { status: 'cancelled', canonicalInput };
         }
-        const committedArtifact = generatedNode?.metadata.storageKey && context.runId
+        const registerNodeArtifact = (resultNode: WorkflowNode, artifactId: string) => resultNode.metadata.storageKey
             ? registerWorkflowArtifact({
-                artifactId: context.runId,
-                storageKey: generatedNode.metadata.storageKey,
-                kind: generatedNode.type === 'video' ? 'video' : generatedNode.type === 'audio' ? 'audio' : 'image',
-                mimeType: generatedNode.metadata.mimeType,
-                name: generatedNode.metadata.name || generatedNode.title,
-                prompt: generatedNode.metadata.prompt,
-                modelId: generatedNode.metadata.config?.modelId,
-                taskId: generatedNode.metadata.generationProviderTaskId,
-                byteSize: generatedNode.metadata.bytes,
-                width: generatedNode.metadata.naturalWidth,
-                height: generatedNode.metadata.naturalHeight,
-                durationMs: generatedNode.metadata.durationMs,
+                artifactId,
+                storageKey: resultNode.metadata.storageKey,
+                kind: resultNode.type === 'video' ? 'video' : resultNode.type === 'audio' ? 'audio' : 'image',
+                mimeType: resultNode.metadata.mimeType,
+                name: resultNode.metadata.name || resultNode.title,
+                prompt: resultNode.metadata.prompt,
+                modelId: resultNode.metadata.config?.modelId,
+                taskId: resultNode.metadata.generationProviderTaskId,
+                byteSize: resultNode.metadata.bytes,
+                width: resultNode.metadata.naturalWidth,
+                height: resultNode.metadata.naturalHeight,
+                durationMs: resultNode.metadata.durationMs,
             })
             : undefined;
-        return { status: 'completed', canonicalInput, ...(committedArtifact ? { artifact: committedArtifact } : {}) };
+        const committedArtifact = generatedNode?.metadata.storageKey && context.runId
+            ? registerNodeArtifact(generatedNode, context.runId)
+            : undefined;
+        // 多张生成折叠成同一批次：每张都登记成可取回的产物，Agent 不再只拿到封面一张。
+        const outputNodes = collectWorkflowRunOutputNodes(project, generated, executableNodeId);
+        const outputs = outputNodes && context.runId ? {
+            ...outputNodes,
+            artifacts: outputNodes.nodeIds.flatMap((resultId, index) => {
+                const resultNode = generated.nodes.find(item => item.id === resultId);
+                const artifact = resultNode && (resultId === executableNodeId && committedArtifact
+                    ? committedArtifact
+                    : registerNodeArtifact(resultNode, index === 0 && !committedArtifact ? context.runId! : context.runId + ':' + index));
+                return artifact ? [{ ...artifact, nodeId: resultId }] : [];
+            }),
+        } : undefined;
+        return { status: 'completed', canonicalInput, ...(committedArtifact ? { artifact: committedArtifact } : {}), ...(outputs ? { outputs } : {}) };
     }, [assetLibrary.items, confirmRouteFallback, saveGenerationToHistory, userApiKeys]);
 
     const workflowExecutor = useMemo(() => createWorkflowExecutor({
@@ -534,6 +550,20 @@ const App: React.FC = () => {
         setWorkflowExecutor(workflowExecutor);
         return () => setWorkflowExecutor(undefined);
     }, [workflowExecutor]);
+
+    // Agent 的 models.list / generate 按当前 Key 判断可运行模型；media.import 从素材库取素材。只在内存里读，不进命令结果。
+    const userApiKeysRef = React.useRef(userApiKeys);
+    userApiKeysRef.current = userApiKeys;
+    const assetItemsRef = React.useRef(assetLibrary.items);
+    assetItemsRef.current = assetLibrary.items;
+    useEffect(() => {
+        setWorkflowUserApiKeysProvider(() => userApiKeysRef.current);
+        setWorkflowAssetLookup(assetId => {
+            const asset = assetItemsRef.current.find(item => item.id === assetId);
+            return asset ? { id: asset.id, name: asset.name, mimeType: asset.mimeType, width: asset.width, height: asset.height } : undefined;
+        });
+        return () => { setWorkflowUserApiKeysProvider(undefined); setWorkflowAssetLookup(undefined); };
+    }, []);
 
     const handleWorkflowNodeTool = useCallback(async (projectId: string, nodeId: string, tool: string, args: Record<string, unknown>) => {
         // 画布二次处理工具服务含 ffmpeg 等重型依赖，懒加载避免拖进主 chunk。

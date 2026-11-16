@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "d33931237d9926f6b149df78dcf450a963933de8135c47ce18361909c8a240ca",
+  "registryHash": "aaf747391b167ae0539fb0c982e65d03b92115a8414b1dc1eb2729f9406fb8c5",
   "commands": [
     {
       "name": "runtime.status",
@@ -364,12 +364,40 @@
       "availability": "available"
     },
     {
+      "name": "agent.task.start",
+      "summary": "Start a long command (agent.turn, workflow.node.run, workflow.generate, workflow.node.tool, workflow.media.import, workflow.export) as a background task in the local Agent session and return its taskId at once, so it is not bound by the per-request timeout. Same idempotencyKey replays the same task.",
+      "args": {
+        "command": "string",
+        "args": "object?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "agent.task.get",
+      "summary": "Read a background task: status (queued|running|succeeded|failed|cancelled), events after afterSeq, and the command's result or error once done.",
+      "args": {
+        "taskId": "string",
+        "afterSeq": "number?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "agent.task.cancel",
+      "summary": "Cooperatively cancel a background task; canvas generation nodes it started are asked to stop. Already-submitted provider jobs may still be billed.",
+      "args": {
+        "taskId": "string",
+        "reason": "string?"
+      },
+      "availability": "available"
+    },
+    {
       "name": "workflow.inspect",
-      "summary": "Inspect the visible Workflow graph with media and secrets redacted. Use summary=true for a light graph or nodeId for one node.",
+      "summary": "Inspect the visible Workflow graph with media and secrets redacted. Use summary=true for a light graph, nodeId for one node, or ledger=true for the project ledger (anchor codes, shot table, generated asset index).",
       "args": {
         "projectId": "string?",
         "summary": "boolean?",
-        "nodeId": "string?"
+        "nodeId": "string?",
+        "ledger": "boolean?"
       },
       "availability": "available"
     },
@@ -405,11 +433,11 @@
     },
     {
       "name": "workflow.node.create",
-      "summary": "Create one visible Workflow image/text/video/audio/config node.",
+      "summary": "Create one visible Workflow image/video/audio node (type is required). Agents must not create text notes here: use workflow.note.write for notes and workflow.generate for generation.",
       "args": {
         "projectId": "string?",
         "id": "string?",
-        "type": "image|text|video|audio",
+        "type": "image|video|audio",
         "title": "string?",
         "x": "number?",
         "y": "number?",
@@ -422,12 +450,12 @@
     },
     {
       "name": "workflow.node.create-connected",
-      "summary": "Create one visible Workflow node and connect it from an existing node atomically.",
+      "summary": "Create one visible Workflow image/video/audio node and connect it from an existing node atomically (type is required; text notes cannot be connected).",
       "args": {
         "projectId": "string?",
         "fromNodeId": "string",
         "id": "string?",
-        "type": "image|text|video|audio",
+        "type": "image|video|audio",
         "title": "string?",
         "x": "number?",
         "y": "number?",
@@ -533,7 +561,7 @@
     },
     {
       "name": "workflow.node.run",
-      "summary": "Run one Workflow config node, or a batch of independent nodes via nodeIds under one confirmation, through browser providers.",
+      "summary": "Run one image/video generation node in place (results replace the node; count>1 folds into one batch), or a batch of independent nodes via nodeIds under one confirmation. Returns runId, batch {batchId, headNodeId, memberNodeIds} and every take's artifact.",
       "args": {
         "projectId": "string?",
         "nodeId": "string?",
@@ -549,6 +577,164 @@
         "projectId": "string?",
         "nodeId": "string",
         "expectedRevision": "number?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.generate",
+      "summary": "Generate in one image/video node: create or reuse the generation node, write the prompt into its Prompt Bar, turn references into @chips plus connections (order = chip order), pick text/image-to-image or text/image/reference/first-last-frame video mode from the references, validate the model, and optionally run in place (run=true is paid and confirmed).",
+      "args": {
+        "projectId": "string?",
+        "nodeId": "string?",
+        "type": "image|video?",
+        "title": "string?",
+        "x": "number?",
+        "y": "number?",
+        "prompt": "string",
+        "references": "array?",
+        "modelId": "string?",
+        "submode": "string?",
+        "aspectRatio": "string?",
+        "resolution": "string?",
+        "quality": "string?",
+        "count": "number?",
+        "durationSec": "number?",
+        "generateAudio": "boolean?",
+        "params": "object?",
+        "shot": "object?",
+        "linkPolicy": "auto|reject?",
+        "run": "boolean?",
+        "dryRun": "boolean?",
+        "expectedRevision": "number?",
+        "mutationId": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.shortcut.list",
+      "summary": "List the slash shortcut tools (stable scene ids) shared by the canvas / menu, the Prompt Bar / popover and agents: grid tools render ONE grid image in place (count=1, split later with image.split-grid@1); single tools create ONE generation node to the right of the source image.",
+      "args": {},
+      "availability": "available"
+    },
+    {
+      "name": "workflow.shortcut.apply",
+      "summary": "Apply one slash shortcut by scene to one image node: grid tools write the template into the target node's Prompt Bar and run in place when it already has an image reference (or needs no source), otherwise create one node to the right that @-references the image; non-grid tools always create one node to the right. Always one node, count=1; run=true is paid and confirmed.",
+      "args": {
+        "projectId": "string?",
+        "scene": "string",
+        "nodeId": "string?",
+        "text": "string?",
+        "run": "boolean?",
+        "dryRun": "boolean?",
+        "expectedRevision": "number?",
+        "mutationId": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.group.create",
+      "summary": "Put two or more nodes into one group frame (subgraph with groupKind=group; members get parentId). Groups are separate from generation batches and alternates: moving the frame moves its members, collapsing hides them, workflow.group.run runs them.",
+      "args": {
+        "projectId": "string?",
+        "nodeIds": "string[]",
+        "title": "string?",
+        "expectedRevision": "number?",
+        "mutationId": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.group.run",
+      "summary": "Run every runnable generation node in a group (image/video nodes with a prompt, not locked) in dependency order, one confirmation for the whole group; downstream nodes of a failed node are skipped. dryRun returns the order only.",
+      "args": {
+        "projectId": "string?",
+        "groupId": "string",
+        "dryRun": "boolean?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.models.list",
+      "summary": "List image/video generation models from the live browser catalog (static products plus RunningHub models parsed from official docs) with per-mode configuration, reference limits, counts, aspect ratios, resolutions and durations under the user's current API keys.",
+      "args": {
+        "mode": "image|video|all?",
+        "submode": "string?",
+        "referenceKinds": "string[]?",
+        "includeUnavailable": "boolean?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.nodes.search",
+      "summary": "Search Workflow nodes by keyword (title, prompt, note text, anchor code), type, anchor (approved/pending/kind/short code such as A02), status (empty/running/done/error), shot index or subgraph; returns compact paged hits without media or secrets.",
+      "args": {
+        "projectId": "string?",
+        "query": "string?",
+        "types": "string[]?",
+        "anchorCodes": "string[]?",
+        "anchor": "string?",
+        "status": "string[]?",
+        "shotIndex": "number?",
+        "parentId": "string?",
+        "limit": "number?",
+        "offset": "number?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.note.write",
+      "summary": "Create or update a text note for people to read. Notes never connect to anything and never feed generation; only use when the user explicitly asks for a note.",
+      "args": {
+        "projectId": "string?",
+        "noteId": "string?",
+        "text": "string",
+        "title": "string?",
+        "attachToNodeId": "string?",
+        "placement": "right|below|above|left?",
+        "expectedRevision": "number?",
+        "mutationId": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.script.materialize",
+      "summary": "Materialize script storyboard rows into generation nodes: one image or video node per row, row prompt written into that node's Prompt Bar, anchors linked as @chips + connections, shot metadata attached, script rows back-linked. Creates only; never runs.",
+      "args": {
+        "projectId": "string?",
+        "scriptNodeId": "string",
+        "kind": "image|video?",
+        "rows": "string?",
+        "dryRun": "boolean?",
+        "expectedRevision": "number?",
+        "mutationId": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.media.import",
+      "summary": "Import an http(s) URL or an asset-library item onto the canvas as a durable media node; optionally connect it to a generation node as a reference and add its @chip to that node's Prompt Bar.",
+      "args": {
+        "projectId": "string?",
+        "url": "string?",
+        "assetId": "string?",
+        "title": "string?",
+        "attachToNodeId": "string?",
+        "mention": "boolean?",
+        "expectedRevision": "number?",
+        "mutationId": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.export",
+      "summary": "Export canvas content without changing the document: one media node as its original file, several nodes or a group (batchId) as a ZIP named by node title, script nodes as a shot-list CSV. Saves to the user's machine; inline=true also returns the bytes as base64 (<=20MB).",
+      "args": {
+        "projectId": "string?",
+        "nodeIds": "string[]?",
+        "groupId": "string?",
+        "fileName": "string?",
+        "save": "boolean?",
+        "inline": "boolean?"
       },
       "availability": "available"
     },
@@ -571,7 +757,22 @@
         "endSec": "number?",
         "sourceNodeIds": "string[]?",
         "position": "string?",
-        "speed": "number?"
+        "speed": "number?",
+        "currentTimeSec": "number?",
+        "audio": "full|vocals|background?",
+        "filters": "object?",
+        "maskNodeId": "string?",
+        "direction": "string?",
+        "amount": "number?",
+        "action": "string?",
+        "x": "number?",
+        "y": "number?",
+        "width": "number?",
+        "height": "number?",
+        "style": "string?",
+        "count": "number?",
+        "semitones": "number?",
+        "preset": "string?"
       },
       "availability": "available"
     },

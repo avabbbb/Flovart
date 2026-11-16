@@ -55,6 +55,43 @@ export async function extractVideoFrame(blob: Blob, position: VideoFramePosition
   }
 }
 
+/**
+ * 一次加载视频、按顺序 seek 到多个时间点，每到一帧回调 onFrame(video, time, index) 由调用方直接画。
+ * pickTimes 拿到真实时长后再决定取哪些秒数（帧网格分页要用时长）。
+ */
+export async function extractVideoFramesAt(
+  blob: Blob,
+  pickTimes: (duration: number, size: { width: number; height: number }) => number[],
+  onFrame: (video: HTMLVideoElement, time: number, index: number) => void | Promise<void>,
+): Promise<{ duration: number; width: number; height: number; times: number[] }> {
+  const url = URL.createObjectURL(blob);
+  const video = document.createElement('video');
+  video.preload = 'auto';
+  video.muted = true;
+  video.playsInline = true;
+  video.src = url;
+  try {
+    await waitForFrameData(video, LOAD_TIMEOUT_MS, '视频加载超时，无法截取帧');
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    const width = video.videoWidth || 1280;
+    const height = video.videoHeight || 720;
+    const times = pickTimes(duration, { width, height });
+    for (let index = 0; index < times.length; index += 1) {
+      const target = Math.min(Math.max(0, times[index]), Math.max(0, duration - 0.01));
+      if (Math.abs(video.currentTime - target) > SEEK_EPSILON_SEC) {
+        await seekTo(video, target);
+        await waitForFrameData(video, SEEK_TIMEOUT_MS, '视频定位超时，无法截取帧');
+      }
+      await onFrame(video, times[index], index);
+    }
+    return { duration, width, height, times };
+  } finally {
+    video.removeAttribute('src');
+    video.load();
+    URL.revokeObjectURL(url);
+  }
+}
+
 function waitForFrameData(video: HTMLVideoElement, timeoutMs: number, timeoutMessage: string): Promise<void> {
   if (video.readyState >= 2) return Promise.resolve();
   return new Promise((resolve, reject) => {

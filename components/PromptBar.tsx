@@ -19,6 +19,7 @@ export type { MentionItem } from './MentionList';
 import { extractMentions, type MentionData } from './MediaMentionExtension';
 import type { ImageReferenceChip } from './workflow/references';
 import { useWorkflowMediaUrl } from './workflow/media';
+import { regionChipBackground } from './workflow/referenceRegion';
 import { createPromptBarGenerationPolicy, PROMPT_IMAGE_MODE_ORDER, PROMPT_VIDEO_MODE_ORDER, type VideoAspectRatio } from '../services/promptBarPolicy';
 
 import { readColdMedia } from '../utils/mediaIndexedDB';
@@ -48,6 +49,8 @@ export interface PromptBarProps {
     imageReferenceChips?: ImageReferenceChip[];
     onImageReferenceReorder?: (ids: string[]) => void;
     onImageReferenceRemove?: (id: string) => void;
+    /** 打开区域引用弹层（只引用图片的一块区域）；不传则不显示入口。 */
+    onImageReferenceFocus?: (id: string) => void;
     videoAspectRatio: VideoAspectRatio;
     setVideoAspectRatio: (ratio: VideoAspectRatio) => void;
     imageAspectRatio?: VideoAspectRatio;
@@ -203,6 +206,10 @@ function ReferenceChipPreview({ chip }: { chip: ImageReferenceChip }) {
     const media = useWorkflowMediaUrl(chip.storageKey, chip.thumbnail);
     if (chip.elementType === 'audio') return <div className="flex h-full w-full items-center justify-center text-[10px] font-bold" style={{ color: 'var(--isl-mint-deep)', background: 'var(--isl-mint-bg)' }}>AU</div>;
     if (!media.url) return <div className="flex h-full w-full items-center justify-center text-[10px]">{chip.elementType === 'video' ? '🎬' : '🖼'}</div>;
+    if (chip.elementType === 'image' && chip.region) {
+        // 带区域的引用：chip 只露出被框选的部分
+        return <div role="img" aria-label={chip.label} data-testid="reference-chip-region" className="h-full w-full" style={{ backgroundImage: `url("${media.url}")`, backgroundRepeat: 'no-repeat', ...regionChipBackground(chip.region) }} />;
+    }
     return chip.elementType === 'video'
         ? <video src={media.url} className="h-full w-full object-cover" muted playsInline preload="metadata" />
         : <img src={media.url} alt={chip.label} className="h-full w-full object-cover" />;
@@ -269,6 +276,7 @@ export const PromptBar: React.FC<PromptBarProps> = ({
     imageReferenceChips,
     onImageReferenceReorder,
     onImageReferenceRemove,
+    onImageReferenceFocus,
     videoAspectRatio,
     setVideoAspectRatio,
     imageAspectRatio = '1:1',
@@ -913,6 +921,20 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                             <ReferenceChipPreview chip={chip} />
                                         </div>
                                         <span className="absolute bottom-0.5 left-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-black shadow" style={{ background: chip.mentioned ? 'var(--isl-mint-deep)' : 'var(--isl-surface)', color: chip.mentioned ? '#fff' : 'var(--isl-ink-soft)' }}>{index + 1}</span>
+                                        {onImageReferenceFocus && chip.elementType === 'image' && (
+                                            <button
+                                                type="button"
+                                                data-testid="reference-chip-focus"
+                                                onClick={event => { event.stopPropagation(); onImageReferenceFocus(chip.id); }}
+                                                onPointerDown={event => event.stopPropagation()}
+                                                className={`absolute -bottom-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full border shadow transition ${chip.region ? 'opacity-100' : imageReferenceChips.length === 1 || referencesExpanded ? 'opacity-0 group-hover:opacity-100' : 'pointer-events-none opacity-0'}`}
+                                                style={{ color: chip.region ? '#fff' : 'var(--isl-ink)', borderColor: 'var(--isl-border)', background: chip.region ? 'var(--isl-mint-deep)' : 'var(--isl-surface)' }}
+                                                title={chip.region ? ui('已只引用局部区域，点击调整', 'Using a region of this image. Click to adjust') : ui('只引用这张图的一块区域', 'Use only a region of this image')}
+                                                aria-label={ui(`框选 ${chip.label} 的区域`, `Select a region of ${chip.label}`)}
+                                            >
+                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M3 8V5a2 2 0 0 1 2-2h3" /><path d="M16 3h3a2 2 0 0 1 2 2v3" /><path d="M21 16v3a2 2 0 0 1-2 2h-3" /><path d="M8 21H5a2 2 0 0 1-2-2v-3" /></svg>
+                                            </button>
+                                        )}
                                         {onImageReferenceRemove && (
                                             <button
                                                 type="button"

@@ -1,18 +1,19 @@
 import { Type } from 'typebox';
 import { importFlovartModule, importFlovartPipelineModule } from './flovart-modules.js';
 
-const [{ AGENT_PUBLIC_COMMAND_SET }, core, pipelineCommands] = await Promise.all([
+const [{ AGENT_OPERATION_DEFINITIONS, AGENT_PUBLIC_COMMAND_SET }, agentTools, core, pipelineCommands] = await Promise.all([
   importFlovartModule('agent-surface'),
+  importFlovartModule('agent-tools'),
   importFlovartModule('core'),
   importFlovartPipelineModule('commands'),
 ]);
 const { PIPELINE_COMMAND_NAMES, PIPELINE_WRITE_COMMANDS } = pipelineCommands;
 const { COMMAND_ALIASES, COMMAND_REGISTRY } = core;
-const AGENT_WRITE_COMMANDS = new Set([
-  'workflow.apply',
-  'workflow.node.run',
-  'workflow.node.tool',
-]);
+const { getAgentToolSpecs, agentToolInputSchema } = agentTools;
+// 写命令（含 generate / note / import / stop）都要带幂等键；与 MCP、Operation Gateway 同一判定。
+const AGENT_WRITE_COMMANDS = new Set(Object.entries(AGENT_OPERATION_DEFINITIONS)
+  .filter(([command, definition]) => definition.mutation && command !== 'agent.turn')
+  .map(([command]) => command));
 
 const toolName = command => {
   const alias = Object.entries(COMMAND_ALIASES).find(([name, target]) => target === command && name.startsWith('flovart_'))?.[0];
@@ -38,21 +39,23 @@ const agentParameters = (args, write) => Type.Object({
   ...(write ? { idempotencyKey: Type.String({ minLength: 1 }) } : {}),
 }, { additionalProperties: false });
 
-/** 返回模型可调用的最小稳定面；CLI Registry 仍保留兼容命令与 discovery/debug 元数据。 */
+/** 返回模型可调用的最小稳定面（工具名与 Schema 来自统一 Agent 工具定义）；CLI Registry 仍保留兼容命令。 */
 export function getFlovartAgentTools() {
-  return Object.entries(COMMAND_REGISTRY)
-    .filter(([command, metadata]) => metadata.availability === 'available' && AGENT_PUBLIC_COMMAND_SET.has(command))
-    .map(([command, metadata]) => ({ command, name: toolName(command), metadata }));
+  return getAgentToolSpecs('local')
+    .filter(spec => COMMAND_REGISTRY[spec.command]?.availability === 'available' && AGENT_PUBLIC_COMMAND_SET.has(spec.command))
+    .map(spec => ({ command: spec.command, name: spec.name, metadata: COMMAND_REGISTRY[spec.command], spec }));
 }
 
 export function createFlovartAgentTools(callCommand) {
-  return getFlovartAgentTools().map(({ command, name, metadata }) => {
+  return getFlovartAgentTools().map(({ command, name, metadata, spec }) => {
     const write = AGENT_WRITE_COMMANDS.has(command);
     return {
       name,
       label: metadata.summary,
-      description: metadata.summary,
-      parameters: agentParameters(metadata.args, write),
+      description: spec.description,
+      parameters: Type.Unsafe(agentToolInputSchema(spec, write
+        ? { extra: { idempotencyKey: { type: 'string', minLength: 1, description: '重试时保持不变的幂等键' } }, requiredExtra: ['idempotencyKey'] }
+        : {})),
       executionMode: 'sequential',
       async execute(_toolCallId, input, signal, onUpdate) {
         if (signal?.aborted) throw new Error('Workflow 操作已取消');

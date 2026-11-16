@@ -9,6 +9,7 @@ import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from '../.
 import type { UserApiKey } from '../../types';
 import type { ScriptAsset, ScriptBreakdown, ScriptShot, WorkflowNode, WorkflowNodeMetadata } from './types';
 import { CAMERA_MOVEMENTS } from './constants';
+import { migrateScriptShot, scriptShotExplicitPrompt } from './scriptMaterialize';
 
 const BREAKDOWN_SYSTEM_PROMPT = `你是一个专业的剧本拆解助手。用户会给你一段剧本或故事描述，你需要将其拆解为结构化的分镜数据。
 
@@ -27,15 +28,18 @@ const BREAKDOWN_SYSTEM_PROMPT = `你是一个专业的剧本拆解助手。用�
       "dialogue": "台词",
       "sfx": "音效/音乐",
       "scene": "场景名",
-      "imagePromptOverride": "用于 AI 生图的英文 prompt，包含角色、场景、动作、光影、构图等静态画面细节",
-      "videoPromptOverride": "用于 AI 生视频的英文 prompt，包含主体运动、镜头运动、节奏、时序变化与结束状态"
+      "shotSize": "景别：特写/近景/中景/全景/远景",
+      "camera": "运镜：推镜/横移/手持跟拍...",
+      "lighting": "光影与氛围",
+      "imagePrompt": "用于 AI 生图的英文 prompt，包含角色、场景、动作、光影、构图等静态画面细节",
+      "videoPrompt": "用于 AI 生视频的英文 prompt，包含主体运动、镜头运动、节奏、时序变化与结束状态"
     }
   ]
 }
 
 规则：
-- 每个分镜必须有 index（从 0 开始）、action、imagePromptOverride、videoPromptOverride
-- imagePromptOverride 与 videoPromptOverride 都用英文撰写，但分别面向静态图片和动态视频生成，不得复用同一段描述
+- 每个分镜必须有 index（从 0 开始）、action、imagePrompt、videoPrompt
+- imagePrompt 与 videoPrompt 都用英文撰写，但分别面向静态图片和动态视频生成，不得复用同一段描述
 - 尽量覆盖剧本的关键画面，通常 4-12 个分镜
 - assets 列出所有出现的角色、场景和道具`;
 
@@ -53,6 +57,12 @@ const RawShot = z.object({
   dialogue: OptionalText,
   sfx: OptionalText,
   scene: OptionalText,
+  shotSize: OptionalText,
+  camera: OptionalText,
+  lighting: OptionalText,
+  imagePrompt: OptionalText,
+  videoPrompt: OptionalText,
+  // 旧字段：模型偶尔仍按旧格式输出，读入后由 migrateScriptShot 迁到 imagePrompt / videoPrompt
   imagePromptOverride: OptionalText,
   videoPromptOverride: OptionalText,
 });
@@ -81,7 +91,7 @@ function parseBreakdownResponse(text: string): BreakdownParseResult {
   if (!raw.success) return { ok: false, reason: '缺少 shots 数组' };
   const shots: ScriptShot[] = raw.data.shots.flatMap((item, position) => {
     const shot = RawShot.safeParse(item);
-    return shot.success ? [{ ...shot.data, id: nanoid(), index: shot.data.index ?? position }] : [];
+    return shot.success ? [migrateScriptShot({ ...shot.data, id: nanoid(), index: shot.data.index ?? position })] : [];
   });
   if (!shots.length) return { ok: false, reason: 'shots 为空' };
   const assets: ScriptAsset[] = raw.data.assets.flatMap((item, index) => {
@@ -330,6 +340,8 @@ function ShotCard({ shot, onChange, onDelete }: {
         {field('情绪/表情', 'emotion', '开心、悲伤...')}
         {field('动作', 'action', '角色在做什么')}
         {field('场景', 'scene', '室内/室外')}
+        {field('景别', 'shotSize', '特写、中景、全景...')}
+        {field('光影', 'lighting', '黄昏逆光、霓虹...')}
       </div>
       <div className="script-editor__fields script-editor__fields--secondary" style={{ display: 'grid', gridTemplateColumns: '76px 1fr 1fr 1fr', gap: 6, marginTop: 6 }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -366,9 +378,9 @@ function ShotCard({ shot, onChange, onDelete }: {
         <label style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span style={{ fontSize: 10, color: 'var(--wf-muted)' }}>生图 Prompt（英文）</span>
           <textarea
-            value={shot.imagePromptOverride || ''}
+            value={scriptShotExplicitPrompt(shot, 'image')}
             placeholder="A close-up still frame of..."
-            onChange={event => onChange({ imagePromptOverride: event.target.value })}
+            onChange={event => onChange({ imagePrompt: event.target.value, imagePromptOverride: undefined })}
             rows={2}
             style={{ width: '100%', resize: 'vertical', border: '1px solid var(--wf-border)', borderRadius: 8, padding: '4px 6px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 12, outline: 'none', lineHeight: 1.4 }}
           />
@@ -376,9 +388,9 @@ function ShotCard({ shot, onChange, onDelete }: {
         <label style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span style={{ fontSize: 10, color: 'var(--wf-muted)' }}>生视频 Prompt（英文）</span>
           <textarea
-            value={shot.videoPromptOverride || ''}
+            value={scriptShotExplicitPrompt(shot, 'video')}
             placeholder="A tracking shot where..."
-            onChange={event => onChange({ videoPromptOverride: event.target.value })}
+            onChange={event => onChange({ videoPrompt: event.target.value, videoPromptOverride: undefined })}
             rows={2}
             style={{ width: '100%', resize: 'vertical', border: '1px solid var(--wf-border)', borderRadius: 8, padding: '4px 6px', background: 'var(--wf-bg)', color: 'var(--wf-text)', fontSize: 12, outline: 'none', lineHeight: 1.4 }}
           />

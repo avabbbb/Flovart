@@ -1,4 +1,5 @@
 import { createWorkflowNode } from '../../components/workflow/constants';
+import { buildWorkflowPromptDocument } from '../../components/workflow/promptDocument';
 import type { ScriptBreakdown, ScriptShot, WorkflowConnection, WorkflowNode, WorkflowPoint, WorkflowShotMeta } from '../../components/workflow/types';
 import { toScriptBreakdown } from './video';
 import type { ReverseVideoProject } from './types';
@@ -82,31 +83,45 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
-// ── 镜头内容：画面提示词 + 台词
+// ── 镜头内容：每个镜头是一个 image 生成节点，画面提示词写进它的 Prompt Bar；台词等放在 shot 元数据。
+// 文本节点只是备注（硬规则），不再承载镜头；旧版逆向留下的 text 镜头节点在同步时替换为生成节点。
 interface ShotContent {
   title: string;
   prompt: string;
-  content: string;
   shot: WorkflowShotMeta;
 }
 
 function shotContent(shot: ScriptShot): ShotContent {
   const prompt = [shot.action, shot.camera ? '运镜：' + shot.camera : undefined].filter(Boolean).join('\n');
-  const content = [prompt, shot.dialogue ? '台词：' + shot.dialogue : undefined].filter(Boolean).join('\n');
   return {
     title: '镜头 ' + shot.index,
     prompt,
-    content,
     shot: { index: shot.index, durationSec: shot.durationSec, camera: shot.camera, dialogue: shot.dialogue },
   };
 }
 
 function applyShotContent(node: WorkflowNode, desired: ShotContent, key: string): WorkflowNode {
+  // 提示词没变时保留用户在 Prompt Bar 里插的 @chip；变了才按新文本重写文档。
+  const samePrompt = node.metadata.prompt === desired.prompt && node.metadata.richTextDocument;
+  const document = samePrompt ? null : buildWorkflowPromptDocument({ text: desired.prompt, targetNodeId: node.id, nodes: [], connections: [] });
+  const { content: _legacyContent, ...metadata } = node.metadata;
   return {
     ...node,
     title: desired.title,
     shot: assignOwned(node.shot ?? { index: desired.shot.index }, desired.shot),
-    metadata: { ...node.metadata, content: desired.content, prompt: desired.prompt, reverseKey: key },
+    metadata: {
+      ...metadata,
+      ...(document ? { prompt: document.prompt, richTextDocument: document.richTextDocument } : {}),
+      reverseKey: key,
+    },
+  };
+}
+
+// 脚本行回链：新建的镜头生成节点写回 imageNodeId（已有回链保持不动）。
+function linkShotNodes(breakdown: ScriptBreakdown, nodeIds: ReadonlyMap<string, string>, stale: ReadonlySet<string> = new Set()): ScriptBreakdown {
+  return {
+    ...breakdown,
+    shots: breakdown.shots.map((shot) => (nodeIds.has(shot.id) && (!shot.imageNodeId || stale.has(shot.imageNodeId)) ? { ...shot, imageNodeId: nodeIds.get(shot.id) } : shot)),
   };
 }
 
@@ -143,27 +158,29 @@ function shotPosition(origin: WorkflowPoint, row: number): WorkflowPoint {
   return { x: origin.x + PAD + SCRIPT_WIDTH + COLUMN_GAP, y: origin.y + HEADER + row * (SHOT_HEIGHT + ROW_GAP) };
 }
 
-// 逆向工程 → 新子画布：subgraph 框 + script 节点 + 每镜头一个 text 节点，script → 镜头连线。
+// 逆向工程 → 新子画布：subgraph 框 + script 节点 + 每镜头一个 image 生成节点，script → 镜头连线。
 export function reverseToSubgraph(project: ReverseVideoProject, origin: WorkflowPoint, ids?: ReverseIdFactory): ReverseSubgraphPlan {
   const keyId = keyedIds('reverse:' + project.id);
   const nextId = (key: string) => (ids ? ids() : keyId(key));
-  const breakdown = toScriptBreakdown(project);
+  const desiredBreakdown = toScriptBreakdown(project);
   const frameId = nextId('frame');
+  const scriptId = nextId(REVERSE_SCRIPT_KEY);
 
-  const script = createWorkflowNode(nextId(REVERSE_SCRIPT_KEY), 'script', { x: origin.x + PAD, y: origin.y + HEADER }, {
+  const shots = desiredBreakdown.shots.map((shot, row) => {
+    const key = shotKey(shot.id);
+    const node = createWorkflowNode(nextId(key), 'image', shotPosition(origin, row));
+    node.parentId = frameId;
+    return applyShotContent(node, shotContent(shot), key);
+  });
+  const breakdown = linkShotNodes(desiredBreakdown, new Map(desiredBreakdown.shots.map((shot, i) => [shot.id, shots[i]!.id])));
+
+  const script = createWorkflowNode(scriptId, 'script', { x: origin.x + PAD, y: origin.y + HEADER }, {
     scriptBreakdown: breakdown,
     reverseKey: REVERSE_SCRIPT_KEY,
   });
   script.title = project.title;
   script.height = scriptHeight(breakdown.shots.length);
   script.parentId = frameId;
-
-  const shots = breakdown.shots.map((shot, row) => {
-    const key = shotKey(shot.id);
-    const node = createWorkflowNode(nextId(key), 'text', shotPosition(origin, row));
-    node.parentId = frameId;
-    return applyShotContent(node, shotContent(shot), key);
-  });
 
   const children = [script, ...shots];
   const shotsBottom = shots.length ? shots.length * (SHOT_HEIGHT + ROW_GAP) - ROW_GAP : 0;
@@ -198,15 +215,48 @@ export function syncSubgraph(project: ReverseVideoProject, state: ReverseSubgrap
     if (stableStringify(before) !== stableStringify(after)) update.push(after);
   };
 
+  // 新镜头排在现有镜头列下方；没有镜头时用默认列。
+  const existingShots = state.children.filter((n) => n.metadata.reverseKey?.startsWith(REVERSE_SHOT_KEY_PREFIX));
+  const columnX = existingShots.length ? Math.min(...existingShots.map((n) => n.position.x)) : shotPosition(frame.position, 0).x;
+  let nextY = existingShots.length
+    ? Math.max(...existingShots.map((n) => n.position.y + n.height)) + ROW_GAP
+    : shotPosition(frame.position, 0).y;
+
+  const legacyTextShots: string[] = [];
+  const createdShotIds = new Map<string, string>();
+  const shotNodes = breakdown.shots.map((shot) => {
+    const key = shotKey(shot.id);
+    const desired = shotContent(shot);
+    const existing = byKey.get(key);
+    if (existing && existing.type !== 'text') {
+      const next = applyShotContent(existing, desired, key);
+      pushIfChanged(existing, next);
+      return next;
+    }
+    // 旧版逆向把镜头写成 text 节点：原位换成 image 生成节点（新 id，同 reverseKey）。
+    if (existing) legacyTextShots.push(existing.id);
+    const position = existing ? existing.position : { x: columnX, y: nextY };
+    const node = createWorkflowNode(existing ? nextId(key + ':gen') : nextId(key), 'image', position);
+    node.parentId = frame.id;
+    if (!existing) nextY += node.height + ROW_GAP;
+    const created = applyShotContent(node, desired, key);
+    add.push(created);
+    createdShotIds.set(shot.id, created.id);
+    return created;
+  });
+
   // script
   let script = byKey.get(REVERSE_SCRIPT_KEY);
   if (script) {
-    const next = applyScriptContent(script, project.title, breakdown);
+    const merged = applyScriptContent(script, project.title, breakdown);
+    const next = createdShotIds.size
+      ? { ...merged, metadata: { ...merged.metadata, scriptBreakdown: linkShotNodes(merged.metadata.scriptBreakdown!, createdShotIds, new Set(legacyTextShots)) } }
+      : merged;
     pushIfChanged(script, next);
     script = next;
   } else {
     script = createWorkflowNode(nextId(REVERSE_SCRIPT_KEY), 'script', { x: frame.position.x + PAD, y: frame.position.y + HEADER }, {
-      scriptBreakdown: breakdown,
+      scriptBreakdown: linkShotNodes(breakdown, createdShotIds),
       reverseKey: REVERSE_SCRIPT_KEY,
     });
     script.title = project.title;
@@ -215,34 +265,12 @@ export function syncSubgraph(project: ReverseVideoProject, state: ReverseSubgrap
     add.push(script);
   }
 
-  // 新镜头排在现有镜头列下方；没有镜头时用默认列。
-  const existingShots = state.children.filter((n) => n.metadata.reverseKey?.startsWith(REVERSE_SHOT_KEY_PREFIX));
-  const columnX = existingShots.length ? Math.min(...existingShots.map((n) => n.position.x)) : shotPosition(frame.position, 0).x;
-  let nextY = existingShots.length
-    ? Math.max(...existingShots.map((n) => n.position.y + n.height)) + ROW_GAP
-    : shotPosition(frame.position, 0).y;
-
-  const shotNodes = breakdown.shots.map((shot) => {
-    const key = shotKey(shot.id);
-    const desired = shotContent(shot);
-    const existing = byKey.get(key);
-    if (existing) {
-      const next = applyShotContent(existing, desired, key);
-      pushIfChanged(existing, next);
-      return next;
-    }
-    const node = createWorkflowNode(nextId(key), 'text', { x: columnX, y: nextY });
-    node.parentId = frame.id;
-    nextY += node.height + ROW_GAP;
-    const created = applyShotContent(node, desired, key);
-    add.push(created);
-    return created;
-  });
 
   const desiredKeys = new Set([REVERSE_SCRIPT_KEY, ...breakdown.shots.map((s) => shotKey(s.id))]);
-  const remove = Array.from(byKey.entries())
-    .filter(([key]) => !desiredKeys.has(key))
-    .map(([, node]) => node.id);
+  const remove = [
+    ...Array.from(byKey.entries()).filter(([key]) => !desiredKeys.has(key)).map(([, node]) => node.id),
+    ...legacyTextShots,
+  ];
   // 同 key 的重复节点（例如用户复制）不归逆向管理，保持不动。
 
   const childKeys = [REVERSE_SCRIPT_KEY, ...breakdown.shots.map((s) => shotKey(s.id))];

@@ -14,7 +14,7 @@
 1. 配对：在画布「设置 → 安全」的浏览器插件区申请配对，再在扩展 popup 的「网页画布」区点击允许。未批准前不收发任何业务消息；拒绝或断开会删除配对条目，网页可以重新申请。
 2. 发送媒体：右键「发送图片到网页画布」或「发送视频到网页画布」。单个媒体上限 64 MiB，分块传输并校验大小与 SHA-256，落到画布当前 Workflow；画布没有打开的项目时只保存媒体。
 3. Key 同步：配对批准后，画布 Vault 中的 Key 同步到扩展（首次全量，之后增量，revision 不一致时回退全量）。扩展用不可导出的 AES-GCM 密钥加密后写入 chrome.storage.local，按网页 origin 分区；撤销或拒绝配对即清空该 origin 的 Key。画布开启「退出时清除」时不会同步 Key。
-4. 插件内反推：右键「反推图片提示词」。按 Google、OpenAI、Anthropic、OpenRouter 的顺序选用已同步的 Key，都没有时退到带 Base URL 与默认模型的 OpenAI 兼容 Key。请求从扩展直接发往模型服务商（不申请额外 host 权限，依赖服务商 CORS），图片上限 20 MB。结果只保存在 chrome.storage.session（浏览器关闭即清空），可在 popup 复制，或「发送到网页画布」成为当前 Workflow 的文本节点。反推指令、请求体与响应解析和网页端共用 background/reverse-prompt-core.js。
+4. 插件内反推：右键「反推图片提示词」。按 Google、OpenAI、Anthropic、OpenRouter 的顺序选用已同步的 Key，都没有时退到带 Base URL 与默认模型的 OpenAI 兼容 Key。请求从扩展直接发往模型服务商（不申请额外 host 权限，依赖服务商 CORS），图片上限 20 MB。结果只保存在 chrome.storage.session（浏览器关闭即清空），可在 popup 复制，或「发送到网页画布」写进生成节点的 Prompt Bar：消息带 targetNodeId 时写入该图片/视频生成节点（保留原有 @引用），否则在当前 Workflow 新建一个 image 生成节点（只建不跑）。反推指令、请求体与响应解析和网页端共用 background/reverse-prompt-core.js。
 
 ## Desktop 通道本地安装
 
