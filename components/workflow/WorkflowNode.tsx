@@ -858,7 +858,7 @@ function ScriptNodeCard({ node }: { node: WorkflowNodeData }) {
                   <td className="is-index">{String(shot.index + 1).padStart(2, '0')}</td>
                   <td>{shot.durationSec ? formatShotSeconds(shot.durationSec) : '—'}</td>
                   <td>{shot.scene || '—'}</td>
-                  <td className="is-desc">{shot.action || shot.imagePromptOverride || shot.videoPromptOverride || '—'}</td>
+                  <td className="is-desc">{shot.action || shot.imagePrompt || shot.imagePromptOverride || shot.videoPrompt || shot.videoPromptOverride || '—'}</td>
                   <td>{shot.camera || '—'}</td>
                   <td>{[shot.dialogue, shot.sfx].filter(Boolean).join(' / ') || '—'}</td>
                 </tr>
