@@ -1,11 +1,13 @@
-# Iris Agent Evaluation (`FlovartBench` v0.1)
+# Flovart Agent Evaluation (`FlovartBench` v0.2)
 
-A system-level eval harness for Iris's Agent / Workflow / Runtime chain.
+> 评测体系总说明（五层评测对象、规则 / Judge / 实验三层方法、四步归因、三阶段上线治理、Auto Rubrics）见 [eval.md](eval.md)。本文件只讲规则层（L3 / L5 的确定性部分）的跑法；LLM-as-a-Judge 层在 [`judge/`](judge/)。
+
+A system-level eval harness for Flovart's Agent / Workflow / Runtime chain.
 
 It answers one question:
 
 > Can a real agent, given only a natural-language instruction and no reference
-> answer, drive Iris through the real CLI / MCP / Workflow / Runtime surfaces
+> answer, drive Flovart through the real CLI / MCP / Workflow / Runtime surfaces
 > to the correct final state - repeatedly - without writing to the wrong
 > project, double-charging a Provider, bypassing cost approval, or leaking a
 > secret?
@@ -51,6 +53,8 @@ eval/
   tasks/<suite>/*.json       the dataset
   results/<run-id>/          per-trial evidence (generated)
   reports/<run-id>/          machine-generated reports (generated)
+  judge/                     LLM-as-a-Judge layer: rubrics, judge CLI, auto rubrics, gates (see eval.md)
+  references/                reference articles for the methodology (HTML kept local only)
 ```
 
 ## Commands

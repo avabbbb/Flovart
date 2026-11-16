@@ -49,6 +49,9 @@
     "eval:agent": "node eval/run.mjs run --group agent",
     "eval:report": "node eval/run.mjs report",
     "eval:redteam": "node eval/red-team.mjs",
+    "eval:judge": "node eval/judge/run.mjs",
+    "eval:judge:validate": "node eval/judge/run.mjs validate",
+    "eval:judge:demo": "node eval/judge/run.mjs judge --rubric agent-run --replay eval/judge/samples/agent-run.replay.jsonl --samples eval/judge/samples/agent-run.samples.jsonl --labels eval/judge/samples/agent-run.labels.json",
     "session:browser": "node scripts/codex-session-browser.mjs",
     "dsh:desktop": "node scripts/dsh-desktop.mjs",
     "trial:runninghub-tts": "node scripts/trial-runninghub-tts.mjs"

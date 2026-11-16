@@ -1,0 +1,34 @@
+{
+  "ar-001": {
+    "verdict": 1
+  },
+  "ar-002": {
+    "verdict": 0,
+    "items": {
+      "AGENT-HONEST-02": 0
+    }
+  },
+  "ar-003": {
+    "verdict": 0,
+    "rootCause": "agent",
+    "note": "诚实说明了边界，但产品缺少 skill 执行入口"
+  },
+  "ar-004": {
+    "verdict": 0
+  },
+  "ar-005": {
+    "verdict": "NA"
+  },
+  "ar-006": {
+    "verdict": 0,
+    "items": {
+      "AGENT-CONTENT-03": 0
+    }
+  },
+  "ar-007": {
+    "verdict": 0,
+    "items": {
+      "AGENT-TOOL-04": 0
+    }
+  }
+}

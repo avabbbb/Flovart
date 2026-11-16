@@ -106,3 +106,9 @@ tools/flovart/evaluations/**/*.jpeg
 # local reference clones (license-incompatible, never commit)
 _ref/
 dsh-plugin/webui/
+
+# Third-party articles saved for reference only (copyright of the original authors); not redistributed.
+eval/references/*.html
+
+# Judge runs (results.jsonl / summary.json / report.md) are generated evidence.
+eval/judge/results/
