@@ -23,7 +23,7 @@ describe('pipeline versions on the canvas', () => {
     useWorkflowStore.setState({ projects: [project], activeProjectId: project.id });
   });
 
-  it('stacks every version of a run in one batch with the newest as the head, and does not duplicate', async () => {
+  it('keeps every version of a run on one node: newest is the node, older versions are its alternates, no duplicates', async () => {
     const loadBlob = vi.fn(async () => new Blob(['x'], { type: 'video/mp4' }));
     const renders = [
       { version: 1, artifactId: 'a1', preset: 'draft', verdict: 'revise' },
@@ -35,15 +35,16 @@ describe('pipeline versions on the canvas', () => {
     expect(second).toMatchObject({ ok: true, inserted: 1 });
     expect(loadBlob).toHaveBeenCalledTimes(2);
 
-    const nodes = useWorkflowStore.getState().projects[0].nodes.filter(node => node.batchId === 'pipeline-run_x');
-    expect(nodes.map(node => [node.title, node.batchIndex, node.batchGroupSource])).toEqual([
-      ['演示 · v1', 0, 'auto'],
-      ['演示 · v2', 1, 'auto'],
+    const nodes = useWorkflowStore.getState().projects[0].nodes;
+    expect(nodes).toHaveLength(1);
+    const [owner] = nodes;
+    expect(owner.type).toBe('video');
+    expect(owner.title).toBe('演示 · v2');
+    expect(owner.metadata.pipelineRender).toEqual({ runId: 'run_x', version: 2, artifactId: 'a2', preset: 'final' });
+    expect((owner.metadata.alternates || []).map(item => [item.title, item.batchId, item.metadata.pipelineRender?.version, item.metadata.pipelineRender?.artifactId])).toEqual([
+      ['演示 · v1', 'pipeline-run_x', 1, 'a1'],
     ]);
-    const root = nodes.find(node => node.batchIndex === 0)!;
-    const newest = nodes.find(node => node.metadata.pipelineRender?.version === 2)!;
-    expect(root.metadata.primaryImageId).toBe(newest.id);
-    expect(newest.metadata.pipelineRender).toEqual({ runId: 'run_x', version: 2, artifactId: 'a2', preset: 'final' });
+    expect(useWorkflowStore.getState().projects[0].selectedNodeIds).toEqual([owner.id]);
 
     const third = await insertPipelineVersionsIntoProject({ runId: 'run_x', title: '演示' }, renders, loadBlob);
     expect(third).toMatchObject({ ok: true, inserted: 0 });

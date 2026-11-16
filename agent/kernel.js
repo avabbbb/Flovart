@@ -36,7 +36,17 @@ function messageText(message) {
   if (typeof message?.content === 'string') return message.content;
   if (!Array.isArray(message?.content)) return '';
   return message.content
-    .map(block => block?.type === 'text' ? block.text : block?.type === 'thinking' ? block.thinking : '')
+    // 思考块单独走 messageThinking，不混进正文。
+    .map(block => block?.type === 'text' ? block.text : '')
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** 助手消息的思考过程（thinking 块合并）；与浏览器内核的 snapshot.thinking 同一字段。 */
+export function messageThinking(message) {
+  if (!Array.isArray(message?.content)) return '';
+  return message.content
+    .map(block => block?.type === 'thinking' && typeof block.thinking === 'string' ? block.thinking : '')
     .filter(Boolean)
     .join('\n');
 }
@@ -49,16 +59,19 @@ function snapshotMessage(entry) {
       role: 'tool',
       text: messageText(message),
       toolName: message.toolName,
+      toolCallId: message.toolCallId,
       isError: Boolean(message.isError),
       timestamp: message.timestamp,
     };
   }
+  const thinking = message.role === 'assistant' ? messageThinking(message) : '';
   return {
     id: entry.id,
     role: message.role,
     text: messageText(message),
     timestamp: message.timestamp,
     error: message.errorMessage,
+    ...(thinking ? { thinking } : {}),
   };
 }
 
@@ -248,7 +261,7 @@ export class FlovartAgentKernel {
       messages: entries
         .filter(entry => entry.type === 'message')
         .map(snapshotMessage)
-        .filter(message => message.role !== 'assistant' || message.text || message.error),
+        .filter(message => message.role !== 'assistant' || message.text || message.thinking || message.error),
       running: Boolean(this.agent?.state.isStreaming),
     };
   }

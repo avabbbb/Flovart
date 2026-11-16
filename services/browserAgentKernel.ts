@@ -29,6 +29,7 @@ import { formatGrepMatches, grepLocalFolders, LOCAL_GREP_TOOL_NAME } from './age
 import { resolveToolApproval, toolApprovalFor, type ApprovalContext } from './agentToolPolicy';
 import type { UserApiKey } from '../types';
 import { displayError } from './displayError';
+import { reasoningEchoFor, requiresEmptyReasoningContent, type ReasoningEcho } from './agentReasoning';
 import { buildReasoningParams, effectiveAgentThinkingLevel, isReasoningRejection, isReasoningUnsupported, markReasoningUnsupported, normalizeThinkingLevel, type AgentThinkingLevel } from './agentThinking';
 
 // ---------------------------------------------------------------------------
@@ -229,7 +230,14 @@ function toolResultImageParts(message: AgentMessage): Array<Record<string, unkno
   return parts;
 }
 
-function toOpenAIMessage(message: AgentMessage): Record<string, unknown> {
+/** 下一轮请求里助手消息的思考怎么回传，见 agentReasoning.reasoningEchoFor。缺省不回传。 */
+export interface OpenAIMessageOptions {
+  reasoningEcho?: ReasoningEcho;
+  /** DeepSeek：没有思考的 assistant 也补 reasoning_content: ''。 */
+  emptyReasoningContent?: boolean;
+}
+
+function toOpenAIMessage(message: AgentMessage, options: OpenAIMessageOptions = {}): Record<string, unknown> {
   if (message.role === 'toolResult') {
     return {
       role: 'tool',
@@ -239,10 +247,13 @@ function toOpenAIMessage(message: AgentMessage): Record<string, unknown> {
   }
   if (message.role === 'assistant') {
     const content: Array<Record<string, unknown>> = [];
+    const echoed: string[] = [];
     const toolCalls: Array<Record<string, unknown>> = [];
     if (hasContent(message)) {
       for (const block of message.content) {
-        if (block.type === 'text') content.push({ type: 'text', text: block.text });
+        if (block.type === 'thinking') {
+          if (block.thinking) echoed.push(block.thinking);
+        } else if (block.type === 'text') content.push({ type: 'text', text: block.text });
         else if (block.type === 'toolCall') {
           toolCalls.push({
             id: block.id,
@@ -255,6 +266,9 @@ function toOpenAIMessage(message: AgentMessage): Record<string, unknown> {
     return {
       role: 'assistant',
       content: content.length > 0 ? content : '',
+      ...(options.reasoningEcho === 'reasoning_content' && (echoed.length > 0 || options.emptyReasoningContent)
+        ? { reasoning_content: echoed.join('\n') }
+        : {}),
       ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
     };
   }
@@ -285,7 +299,7 @@ const ORPHAN_TOOL_RESULT = '已取消：本次工具调用未执行完成（用�
  * 停止、拒绝确认或刷新中断后会话里会留下没有结果的 toolCall，下一轮请求会被整体拒绝；
  * 这里在发送前补齐合成结果，不改写已持久化的会话。
  */
-export function toOpenAIMessages(messages: AgentMessage[]): Array<Record<string, unknown>> {
+export function toOpenAIMessages(messages: AgentMessage[], options: OpenAIMessageOptions = {}): Array<Record<string, unknown>> {
   const out: Array<Record<string, unknown>> = [];
   let pending: string[] = [];
   // 本批工具结果里的图片：等对应 tool 消息全部补齐后作为一条 user 消息追加，不打断 tool_calls 配对。
@@ -301,7 +315,7 @@ export function toOpenAIMessages(messages: AgentMessage[]): Array<Record<string,
     emitImages();
   };
   for (const message of messages) {
-    const converted = toOpenAIMessage(message);
+    const converted = toOpenAIMessage(message, options);
     if (converted.role === 'tool') {
       const id = String(converted.tool_call_id || '');
       if (!pending.includes(id)) continue; // 没有对应 tool_call 的孤立结果同样会被拒绝，丢弃。
@@ -332,7 +346,11 @@ export function buildBrowserAgentRequestBody(
   const reasoning = buildReasoningParams(thinkingLevel, route);
   return {
     model: route.model,
-    messages: toOpenAIMessages(context.messages),
+    // DeepSeek / Kimi 的工具循环要求原样回传 reasoning_content，其它服务不回传。
+    messages: toOpenAIMessages(context.messages, {
+      reasoningEcho: reasoningEchoFor(route),
+      emptyReasoningContent: requiresEmptyReasoningContent(route),
+    }),
     ...(context.tools?.length ? {
       tools: context.tools.map(tool => ({
         type: 'function',
@@ -695,7 +713,8 @@ function createAskTool(ask: (request: AgentAskRequest) => Promise<AgentAskResult
     label: 'ask',
     description: '向用户提出需要决定的问题。html 必须是一个 <form>，每个控件都要有 name；提交后返回 JSON。'
       + '用 radio/checkbox/select 给选项，用 text/textarea 收集自由输入；不要写 script/style/button，不要要求密钥。'
-      + '一次只问一个关键决定，表单保持简短，用 checked/selected 预选推荐项。',
+      + '一次只问一个关键决定，表单保持简短，用 checked/selected 预选推荐项。'
+      + '问题写在第一个 <p>；每组选项放进 <fieldset> 并用 <legend> 写中文标题（不要只靠英文 name），选项文字写在 <label> 里、尽量简短。',
     parameters: Type.Object({
       html: Type.String({ description: 'one HTML <form> with named controls' }),
     }),
@@ -838,6 +857,7 @@ function snapshotMessage(entry: { type: string; id: string; message?: AgentMessa
   text: string;
   thinking?: string;
   toolName?: string;
+  toolCallId?: string;
   isError?: boolean;
   timestamp?: number;
   error?: string;
@@ -849,6 +869,7 @@ function snapshotMessage(entry: { type: string; id: string; message?: AgentMessa
       role: 'tool',
       text: textBlocks(message),
       toolName: (message as { toolName?: string }).toolName,
+      toolCallId: (message as { toolCallId?: string }).toolCallId,
       isError: Boolean((message as { isError?: boolean }).isError),
       timestamp: (message as { timestamp?: number }).timestamp,
     };

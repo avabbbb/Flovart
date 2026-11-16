@@ -5,6 +5,12 @@ title: 待测试确认
 本页记录实际进入文档或代码、仍需用户确认的变更。既有实现的构建、全量测试、Rust Runtime 和响应式浏览器记录见[发行候选证据](../../../archive/2026-10-07/evidence/release-candidate/README.md)，仅适用于其对应代码与范围；本页每一节分别注明对应范围的验证结果。真实第三方宿主、账号、Provider 与公开发布仍需单独认证。
 
 > **2026-09-27 当前状态**：第一宿主仍是 Resolve Studio 21.1。main 已合入 Resolve 面板、候选导入状态与 durable artifact 的源码实现；它们仍未在 Resolve Studio 21.1 真机运行。宿主 native MCP 由 Resolve 提供，Flovart 不应再造一套 MCP Server。AE 源码/候选完整性工作保留为 Experimental evidence，不是当前第一交付 gate。
+## 画布多结果：首图节点 + 备选（2026-11-16）
+
+- 已实现：多张 / 多条生成（及流水线版本）收在一个节点上，其余结果是首图后面的斜叠卡片（总数 ≤4，可展开成 2 列网格）或节点下方可多选网格（总数 >4），画廊预览、设为首图、导出、拆成独立节点、删除；旧叠放批次加载时折叠；修复拖走批次后原位残留不可点元素。
+- 已验证（本地）：tsc（仅既有 dsh-plugin 依赖缺失）、相关 vitest、`test:critical`、`docs:check`、`build`；Chromium 对真实 `runWorkflowGeneration`（fake Provider）复现与修复对照；亮 / 暗截图。记录见 [质量记录](../../../quality/2026-11-16-batch-alternates.md)。
+- 待确认：真实 Provider 多张 / 多条生成、大量备选（数十个）的滚动与导出性能、真实旧项目（含手动连过线的叠放成员）的迁移结果。
+
 ## Resolve R1：deterministic artifact Runtime slice
 
 - 已实现：`runtime.test.fixture-image` 通过既有 Runtime task ledger 和 Worker，把仓库内固定 `public/favicon.png` 作为 PNG fixture 持久化到 Runtime Artifact 目录；提交要求幂等键，不调用 Provider，任务结果明确记录 `providerCalled: false` 与 `costMicros: 0`。

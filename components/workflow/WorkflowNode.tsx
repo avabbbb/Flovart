@@ -105,6 +105,9 @@ function resetWorkflowHandle(event: ReactPointerEvent<HTMLDivElement>) {
   event.currentTarget.style.removeProperty('--wf-handle-y');
 }
 
+/** 节点退出动画：有限时长（DESIGN §14.2 退出 120–160ms），不继承加载态的无限循环。 */
+export const WORKFLOW_NODE_EXIT = { scale: 0.85, opacity: 0, transition: { duration: 0.14, ease: [0.4, 0, 1, 1] as const } };
+
 export function WorkflowNode({
   node,
   selected,
@@ -152,6 +155,7 @@ export function WorkflowNode({
   uploadStage,
   onCancelUpload,
   onAudioTool,
+  alternatesDock,
 }: {
   node: WorkflowNodeData;
   selected: boolean;
@@ -182,6 +186,8 @@ export function WorkflowNode({
   batchCount?: number;
   isBatchPrimary?: boolean;
   onSetBatchPrimary?: () => void;
+  /** 多结果的备选条 / 网格：挂在节点盒子下方，随节点移动、选中、裁剪（画布构造，节点只负责放置）。 */
+  alternatesDock?: ReactNode;
   onDoubleClick?: () => void;
   onPreviewMedia?: (node: WorkflowNodeData) => void;
   onChangeTitle?: (title: string) => void;
@@ -390,7 +396,9 @@ export function WorkflowNode({
       style={{ x: node.position.x, y: node.position.y, width: node.width, height: node.height }}
       initial={{ scale: 0.85, opacity: 0 }}
       animate={{ scale: liftMotion ? 1.04 : 1, rotate: liftMotion ? -1.5 : 0, opacity: 1 }}
-      exit={{ scale: 0.85, opacity: 0 }}
+      // 退出必须有自己的短而有限的过渡，不沿用 transition.scale 的弹簧：AnimatePresence 等不到退出结束时，
+      // 透明的旧节点会留在原位拦截点击（“拖走 4 张批次，原位留下一张点不中的”）。
+      exit={WORKFLOW_NODE_EXIT}
       transition={{
         scale: liftMotion
           ? { type: 'spring', stiffness: 520, damping: 26, mass: 0.6 }
@@ -641,6 +649,7 @@ export function WorkflowNode({
         event.stopPropagation();
         onKeyboardResize?.(delta[0], delta[1]);
       }} />
+      {alternatesDock}
     </motion.div>
   );
 }

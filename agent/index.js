@@ -575,6 +575,7 @@ export function startHttpServer() {
         const unsubscribe = await flovart.subscribe(projectId, event => {
           const update = event.type === 'message_update' ? event.assistantMessageEvent : undefined;
           if (update?.type === 'text_delta') emit('text-delta', { delta: update.delta });
+          if (update?.type === 'thinking_delta') emit('thinking-delta', { delta: update.delta });
           if (event.type === 'agent_start') emit('status', { running: true });
           if (event.type === 'tool_execution_start') emit('tool-start', {
             id: event.toolCallId,

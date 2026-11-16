@@ -43,10 +43,27 @@ function closestLabel(input: Element): string {
   return textOf(clone);
 }
 
+function attrLabel(element: Element | null): string {
+  if (!element) return '';
+  for (const attr of ['aria-label', 'title', 'data-label']) {
+    const value = element.getAttribute(attr)?.replace(/\s+/g, ' ').trim();
+    if (value) return value;
+  }
+  return '';
+}
+
+/** 组 / 控件的人话标题：legend → fieldset 的 aria-label/title/data-label → 控件自身的同名属性 → <label for> → name。 */
 function groupLabel(control: Element, name: string): string {
   const fieldset = control.closest('fieldset');
   const legend = fieldset ? Array.from(fieldset.children).find(child => child.tagName === 'LEGEND') : undefined;
-  return textOf(legend || null) || name;
+  const id = control.getAttribute('id');
+  const forLabel = id ? Array.from(control.ownerDocument.querySelectorAll('label[for]')).find(label => label.getAttribute('for') === id) : undefined;
+  return textOf(legend || null) || attrLabel(fieldset) || attrLabel(control) || textOf(forLabel || null) || name;
+}
+
+/** 标题是否只是回退成了控件 name（模型没给人话标题）。卡片据此弱化显示。 */
+export function isFallbackLabel(field: Pick<AgentAskField, 'name' | 'label'>): boolean {
+  return field.label === field.name;
 }
 
 /** 解析 form；只接受文本/数字/日期/选择类控件，忽略隐藏域、按钮和脚本。 */

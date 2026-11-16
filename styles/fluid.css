@@ -27,11 +27,13 @@
 .agent-composer__tools > .agent-mode-control { min-width: 0; flex: 0 1 auto; }
 .agent-composer__tools > .agent-mode-control > button { min-width: 0; max-width: 100%; }
 .agent-composer__tools > .agent-mode-control > button > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.agent-composer__tools .agent-model-trigger > span { max-width: 14ch; }
+.agent-composer__tools .agent-model-trigger > span { max-width: 20ch; }
 
-/* 中等：模型名再收窄 */
+/* 中等：模型名再收窄；创作模式 / 审批模式两个 chip 变成「图标 + 下拉箭头」，全名在 title 里（不再截成「全…」「自…」） */
 @container agentcomposer (max-width: 420px) {
-  .agent-composer__tools .agent-model-trigger > span { max-width: 9ch; }
+  .agent-composer__tools .agent-model-trigger > span { max-width: 12ch; }
+  .agent-composer__tools > .agent-mode-control > button.agent-pill > span,
+  .agent-composer__tools .agent-approval-trigger > span { display: none; }
 }
 /* 窄：所有工具变成 28px 图标按钮，文字靠 title 提示 */
 @container agentcomposer (max-width: 340px) {
@@ -105,4 +107,44 @@
 /* ── 运行日志页分区（agentsection）≤360px：分区说明收起，只留标题 + 操作 ── */
 @container agentsection (max-width: 360px) {
   .agent-section-head__hint { display: none; }
+}
+
+/* ── Agent 消息列表（工具步骤卡 / 思考过程 / 运行胶囊） ── */
+.workflow-agent__messages { container: agentmsgs / inline-size; }
+/* ≤ 22rem：步骤行的状态 chip 收起（图标已表达状态），摘要换到名称下一行 */
+@container agentmsgs (max-width: 22rem) {
+  .agent-step__chip { display: none; }
+  .agent-step__summary { flex-basis: 100%; }
+}
+/* ≤ 16rem：缩略图与原始数据不再缩进，胶囊尾部用时藏起 */
+@container agentmsgs (max-width: 16rem) {
+  .agent-step__thumbs, .agent-step__raw { margin-left: 0; }
+  .agent-orb-meta { display: none; }
+}
+
+/* ── 提问表单卡 ── */
+.agent-ask { container: agentask / inline-size; }
+/* ≤ 20rem：取消 / 提交各占一半，「其他」输入框独占一行 */
+@container agentask (max-width: 20rem) {
+  .agent-ask__actions button { flex: 1 1 0; }
+  .agent-ask__other > input { flex-basis: 100%; }
+}
+
+/* ── 节点下方的多结果网格（DESIGN 01 §13.3）：按节点自身宽度降级 ── */
+.workflow-alternates { container-type: inline-size; container-name: wfalt; }
+/* 窄于 420px：批量操作只留图标，文字靠 title / aria-label */
+@container wfalt (max-width: 420px) {
+  .workflow-alternates__action-label { display: none; }
+  .workflow-alternates__action { width: 26px; padding: 0; justify-content: center; }
+}
+/* 窄于 220px：标题只留计数 */
+@container wfalt (max-width: 220px) {
+  .workflow-alternates__title-text { display: none; }
+}
+
+/* ── 斜叠卡片展开后的格子（DESIGN 01 §13.3）：按格子自身宽度降级 ── */
+/* 窄于 240px：格子上的 下载 / 设为首图 只留图标，文字靠 title / aria-label */
+@container wfaltcell (max-width: 240px) {
+  .workflow-alt-stack__label { display: none; }
+  .workflow-alt-stack__actions button { padding: 5px 6px; }
 }

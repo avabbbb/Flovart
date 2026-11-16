@@ -215,6 +215,8 @@ const inspectSummary = (project: WorkflowProject) => ({
     visible: node.isVisible !== false,
     locked: node.isLocked === true,
     status: node.metadata.status || 'idle',
+    // 多结果的备选挂在节点上（不是画布节点）；详情用 inspect nodeId 读 metadata.alternates。
+    ...(node.metadata.alternates?.length ? { alternateCount: node.metadata.alternates.length } : {}),
   })),
   connectionCount: project.connections.length,
   connections: project.connections.map(connection => ({

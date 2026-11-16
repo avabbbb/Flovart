@@ -24,6 +24,7 @@ import { localFolderHref, readLocalFolderFile, type LocalFolderEntry } from '../
 import type { AssetItem, AssetLibrary } from '../../types';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import type { WorkflowNode, WorkflowNodeMetadata, WorkflowProject } from './types';
+import { prependAlternates, promoteAlternate } from './batchAlternates';
 import { planPipelineVersionNodes, type PipelineVersionRender } from '../../services/pipelineRuns';
 import type { PromptIntent } from './promptIntent';
 import { createWorkflowHostSourceNode, findWorkflowNodeForHandoff, parseWorkflowHostHandoff, stripWorkflowHostHandoff, type WorkflowHostHandoff } from './hostLink';
@@ -122,8 +123,8 @@ export async function insertSharedMediaIntoProject(media: WorkflowSharedMedia): 
 }
 
 /**
- * Agent 视频流水线：把一个 run 各版本的渲染放到当前画布，并收进同一个批次（版本分组），叠放主图为最新版本。
- * 已在画布上的版本（按 artifactId）跳过；返回新插入的节点数。
+ * Agent 视频流水线：把一个 run 各版本的渲染放到当前画布，收在同一个节点上——最新版本是节点本身，其余版本是它的备选
+ * （DESIGN 01 §13.3，与多结果生成同一模型）。已在画布上的版本（按 artifactId）跳过；返回新插入的版本数。
  */
 export async function insertPipelineVersionsIntoProject(
   run: { runId: string; title: string },
@@ -134,7 +135,7 @@ export async function insertPipelineVersionsIntoProject(
   const activeProject = store.projects.find(project => project.id === store.activeProjectId) || null;
   if (!activeProject) return { ok: false, error: '没有可用的 Workflow 项目。' };
   const expectedProjectId = activeProject.id;
-  const { batchId, missing, latestVersion } = planPipelineVersionNodes(activeProject.nodes, run.runId, renders);
+  const { missing } = planPipelineVersionNodes(activeProject.nodes, run.runId, renders);
   if (!missing.length) return { ok: true, inserted: 0 };
   const records: Array<{ render: PipelineVersionRender; record: WorkflowMediaRecord }> = [];
   const discardAll = () => Promise.all(records.map(item => discardWorkflowMediaRecord(item.record.storageKey)));
@@ -149,31 +150,60 @@ export async function insertPipelineVersionsIntoProject(
       await discardAll();
       return { ok: false };
     }
-    const laidOut = layoutMediaNodes(records.map(({ render, record }) => {
-      const { type: _type, ...metadata } = record;
-      return {
-        type: record.type,
-        naturalWidth: record.naturalWidth,
-        naturalHeight: record.naturalHeight,
-        title: `${run.title || run.runId} · v${render.version}`,
-        metadata: { ...metadata, pipelineRender: { runId: run.runId, version: render.version, artifactId: render.artifactId, preset: render.preset } } as WorkflowNodeMetadata,
-      };
-    }), current);
-    const added = laidOut.map((node, index) => ({ ...node, batchId, batchIndex: records[index].render.version - 1, batchGroupSource: 'auto' as const }));
-    const group = [...current.nodes.filter(node => node.batchId === batchId), ...added];
-    const latest = group.find(node => node.metadata.pipelineRender?.version === latestVersion);
-    const root = group.find(node => node.batchIndex === 0) || group[0];
-    const withPrimary = (node: WorkflowNode) => (latest && root && node.id === root.id ? { ...node, metadata: { ...node.metadata, primaryImageId: latest.id } } : node);
-    const committed = commitWorkflowProjectPatch(current.id, {
-      nodes: [...current.nodes.map(withPrimary), ...added.map(withPrimary)],
-      selectedNodeIds: latest ? [latest.id] : added.map(node => node.id),
-    }, '放入流水线版本渲染');
+    // 重新规划：导入期间画布可能已变化（例如另一次插入已建好承载节点）。
+    const { batchId, ownerId } = planPipelineVersionNodes(current.nodes, run.runId, renders);
+    const label = (version: number) => `${run.title || run.runId} · v${version}`;
+    const versions = records
+      .map(({ render, record }) => {
+        const { type, ...metadata } = record;
+        const size = fitWorkflowMediaSize(type === 'video' ? 'video' : 'image', record.naturalWidth, record.naturalHeight);
+        return {
+          render,
+          alternate: {
+            id: nanoid(),
+            type: (type === 'video' ? 'video' : 'image') as 'image' | 'video',
+            title: label(render.version),
+            ...size,
+            batchId,
+            batchIndex: render.version - 1,
+            createdAt: Date.now(),
+            metadata: { ...metadata, status: 'success' as const, pipelineRender: { runId: run.runId, version: render.version, artifactId: render.artifactId, preset: render.preset } } as WorkflowNodeMetadata,
+          },
+        };
+      })
+      .sort((left, right) => right.render.version - left.render.version);
+    const owner = ownerId ? current.nodes.find(node => node.id === ownerId) : undefined;
+    let nodes = current.nodes;
+    let ownerNode: WorkflowNode;
+    if (!owner) {
+      const [newest, ...older] = versions;
+      const [laidOut] = layoutMediaNodes([{
+        type: newest.alternate.type,
+        naturalWidth: newest.alternate.metadata.naturalWidth,
+        naturalHeight: newest.alternate.metadata.naturalHeight,
+        title: newest.alternate.title,
+        metadata: newest.alternate.metadata,
+      }], current);
+      ownerNode = prependAlternates({ ...laidOut, metadata: { ...laidOut.metadata, mediaVariantId: newest.alternate.id } }, older.map(item => item.alternate));
+      nodes = [...nodes, ownerNode];
+    } else {
+      const newestOverall = Math.max(...renders.map(render => render.version));
+      ownerNode = prependAlternates(owner, versions.map(item => item.alternate));
+      // 新到的是最新版本：设为首图（节点、连线、标题之外的配方不动）。
+      const newest = versions.find(item => item.render.version === newestOverall);
+      if (newest && (owner.metadata.pipelineRender?.version ?? 0) < newestOverall) {
+        ownerNode = promoteAlternate(ownerNode, newest.alternate.id) || ownerNode;
+        ownerNode = { ...ownerNode, title: owner.title === label(owner.metadata.pipelineRender?.version ?? 0) ? newest.alternate.title! : owner.title };
+      }
+      nodes = nodes.map(node => node.id === owner.id ? ownerNode : node);
+    }
+    const committed = commitWorkflowProjectPatch(current.id, { nodes, selectedNodeIds: [ownerNode.id] }, '放入流水线版本渲染');
     if (!committed.ok) {
       await discardAll();
       return committed;
     }
     records.forEach(item => releaseWorkflowMediaRecord(item.record.storageKey));
-    return { ok: true, inserted: added.length };
+    return { ok: true, inserted: records.length };
   } catch (error) {
     await discardAll();
     return { ok: false, error: displayError(error, '流水线渲染导入失败') };

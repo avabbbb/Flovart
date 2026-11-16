@@ -44,4 +44,20 @@ describe('batch auto pick', () => {
     const bad = await session.callCommand('workflow.batch.pick', { batchId: 'nope' }, 'cli');
     expect(bad).toMatchObject({ ok: false, error: { code: 'INVALID_ARGUMENT' } });
   });
+
+  it('scores the primary node and its alternates (new model: alternates are not canvas nodes)', () => {
+    const owner = {
+      id: 'root', title: '首图', metadata: {
+        href: 'blob:root', naturalWidth: 512, naturalHeight: 512,
+        alternates: [
+          { id: 'alt-1', type: 'image', title: '备选 1', batchId: 'b9', batchIndex: 1, metadata: { href: 'blob:1', naturalWidth: 1920, naturalHeight: 1080 } },
+          { id: 'alt-2', type: 'image', title: '备选 2', batchId: 'b9', batchIndex: 2, metadata: { error: 'timeout' } },
+        ],
+      },
+    };
+    const plan = planBatchPick({ snapshot: { id: 'p2', nodes: [owner] }, batchId: 'b9' });
+    expect(plan.ranking.map(item => item.nodeId).sort()).toEqual(['alt-1', 'alt-2', 'root']);
+    expect(plan.primaryNodeId).toBe('alt-1');
+    expect(plan.operations).toEqual([{ type: 'set_batch_primary', batchId: 'b9', nodeId: 'alt-1' }]);
+  });
 });

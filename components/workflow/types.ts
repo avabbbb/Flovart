@@ -328,7 +328,15 @@ export interface WorkflowNodeMetadata {
   scriptBreakdown?: ScriptBreakdown;
   /** 设计元素（画板/矩形/椭圆/文字/钢笔路径）；仅 design 节点使用。 */
   design?: DesignElement;
+  /** 旧批次指针（已弃用）：只在迁移前的叠放批次里出现；新数据用 alternates + mediaVariantId。 */
   primaryImageId?: string;
+  /**
+   * 多结果的备选（DESIGN 01 §13.3）：同一节点多张 / 多条生成结果里，首图就是节点本身，其余存在这里，
+   * 不是画布节点。“设为首图”在节点与备选之间交换媒体字段，节点 ID、连线、prompt、配方都不动。
+   */
+  alternates?: WorkflowMediaAlternate[];
+  /** 节点当前展示的那份媒体的稳定 ID（被换下时作为备选 ID 保留）；缺省即节点 ID。 */
+  mediaVariantId?: string;
   /** 显式 Workflow Operation 的唯一可编辑配方与不可变执行记录。 */
   operation?: WorkflowOperationRecord;
   /** 媒体结果反向定位其来源 Operation 与 Take。 */
@@ -353,6 +361,22 @@ export interface WorkflowNodeMetadata {
   childKeys?: string[];
   /** 子画布内节点与逆向工程对象的稳定对应 key：'script' | 'shot:<id>' | 'slot:<id>'。 */
   reverseKey?: string;
+}
+
+/** 节点上的一份备选媒体（图片或视频，可混合）。id 稳定：来自旧的叠放兄弟节点 ID 或生成时分配。 */
+export interface WorkflowMediaAlternate {
+  id: string;
+  type: 'image' | 'video';
+  title?: string;
+  /** 作为独立节点时的画布尺寸（拆成独立节点 / 设为首图时用来保持比例）。 */
+  width?: number;
+  height?: number;
+  /** 产生它的那一批（生成批次 / 流水线 run）；Agent 的 batch pick 按它找候选。 */
+  batchId?: string;
+  batchIndex?: number;
+  createdAt?: number;
+  /** 媒体字段 + 来源（prompt、config、take / pipelineRender 等）；不含嵌套 alternates。 */
+  metadata: WorkflowNodeMetadata;
 }
 
 /** Canvas 登记的“发送到宿主”请求；宿主面板读取后经用户确认执行。 */
