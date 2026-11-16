@@ -72,7 +72,7 @@ describe('region crop at execution time', () => {
   });
 
   it('loads the mask for subject picks and fetches remote originals', async () => {
-    const cropRegion = vi.fn(async () => new Blob(['crop']));
+    const cropRegion = vi.fn(async (_source: Blob, _region: unknown, _mask: Blob | null) => new Blob(['crop']));
     const loadRemoteBlob = vi.fn(async () => new Blob(['remote']));
     const mask = new Blob(['mask']);
     await requireWorkflowResourceHref(

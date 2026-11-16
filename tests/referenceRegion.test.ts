@@ -34,3 +34,24 @@ describe('referenceRegion', () => {
     expect(regionFromDrag({ x: 0.5, y: 0.5 }, { x: 0.501, y: 0.6 })).toBeUndefined();
   });
 });
+
+import { mentionRegionsFromDocument, setMentionRegionInDocument } from '../components/workflow/referenceRegion';
+
+describe('document region helpers', () => {
+  const region = { x: 0.1, y: 0.1, w: 0.5, h: 0.5 };
+  const doc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '看 ' }, { type: 'mediaMention', attrs: { id: 'img-a', label: '图片1' } }] }] };
+
+  it('sets, reads and clears a region on an existing chip without mutating the input', () => {
+    const next = setMentionRegionInDocument(doc, 'img-a', region, { label: '图片1' });
+    expect(mentionRegionsFromDocument(next).get('img-a')).toEqual(region);
+    expect(mentionRegionsFromDocument(doc).size).toBe(0);
+    expect(mentionRegionsFromDocument(setMentionRegionInDocument(next, 'img-a', null, { label: '图片1' })).size).toBe(0);
+  });
+
+  it('appends a region chip when the node is not mentioned yet', () => {
+    const next = setMentionRegionInDocument(doc, 'img-b', region, { label: '图片2', thumbnail: 'https://x/b.png' });
+    const paragraph = next.content[0].content!;
+    expect(paragraph.at(-1)).toMatchObject({ type: 'mediaMention', attrs: { id: 'img-b', label: '图片2', region } });
+    expect(setMentionRegionInDocument(undefined, 'img-b', region, { label: '图片2' }).content[0].content![0].attrs?.id).toBe('img-b');
+  });
+});

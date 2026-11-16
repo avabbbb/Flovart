@@ -71,3 +71,55 @@ export function regionFromDrag(start: { x: number; y: number }, end: { x: number
   const y2 = clamp01(Math.max(start.y, end.y));
   return normalizeReferenceRegion({ x: x1, y: y1, w: x2 - x1, h: y2 - y1 });
 }
+
+type DocNode = { type?: string; attrs?: Record<string, unknown>; content?: DocNode[]; text?: string };
+
+/** 文档里每个被引用节点的区域（同一节点多个 chip 时取第一个带区域的）。 */
+export function mentionRegionsFromDocument(document: unknown): Map<string, WorkflowReferenceRegion> {
+  const result = new Map<string, WorkflowReferenceRegion>();
+  const walk = (node: unknown) => {
+    if (!node || typeof node !== 'object') return;
+    const value = node as DocNode;
+    if (value.type === 'mediaMention' && typeof value.attrs?.id === 'string' && !result.has(value.attrs.id)) {
+      const region = normalizeReferenceRegion(value.attrs.region);
+      if (region) result.set(value.attrs.id, region);
+    }
+    (value.content || []).forEach(walk);
+  };
+  walk(document);
+  return result;
+}
+
+/**
+ * 给某个引用设置/清除区域，返回新文档（不改入参）：已有该节点的 chip 就改它的 attrs.region；
+ * 没有 chip 时在末尾追加一个带区域的 chip（attrs 由调用方给出标签/缩略图）。
+ */
+export function setMentionRegionInDocument(
+  document: unknown,
+  nodeId: string,
+  region: WorkflowReferenceRegion | null,
+  fallbackAttrs: { label: string; thumbnail?: string; elementType?: string },
+): { type: 'doc'; content: DocNode[] } {
+  const source = (document && typeof document === 'object' ? document : { type: 'doc', content: [] }) as DocNode;
+  let found = false;
+  const clone = (node: DocNode): DocNode => {
+    if (node.type === 'mediaMention' && node.attrs?.id === nodeId) {
+      found = true;
+      return { ...node, attrs: { ...node.attrs, region: region || null } };
+    }
+    return node.content ? { ...node, content: node.content.map(clone) } : { ...node };
+  };
+  const next = clone(source) as { type: 'doc'; content: DocNode[] };
+  next.type = 'doc';
+  next.content = next.content || [];
+  if (!found && region) {
+    const chip: DocNode = {
+      type: 'mediaMention',
+      attrs: { id: nodeId, label: fallbackAttrs.label, thumbnail: fallbackAttrs.thumbnail || '', elementType: fallbackAttrs.elementType || 'image', description: '', sourceType: 'connected', assetId: null, region },
+    };
+    const last = next.content[next.content.length - 1];
+    if (last && last.type === 'paragraph') next.content[next.content.length - 1] = { ...last, content: [...(last.content || []), { type: 'text', text: ' ' }, chip] };
+    else next.content.push({ type: 'paragraph', content: [chip] });
+  }
+  return next;
+}

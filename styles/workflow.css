@@ -1026,3 +1026,16 @@
 .workflow-alt-stack__actions button:focus-visible { outline:2px solid var(--isl-mint); outline-offset:1px; }
 @media (hover: none) { .workflow-alt-stack__actions { opacity:1; } }
 @media (prefers-reduced-motion: reduce) { .workflow-alt-stack *,.workflow-alt-stack { transition:none !important; } }
+/* 区域引用弹层（P1-2） */
+.workflow-region-popover { position:fixed;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;background:rgba(15,15,20,.45); }
+.workflow-region-popover__panel { width:min(560px,92vw);max-height:90vh;display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:12px;background:var(--wf-surface,#fff);color:var(--wf-text,#111);box-shadow:0 18px 48px rgba(0,0,0,.28); }
+.workflow-region-popover__head { display:flex;flex-direction:column;gap:2px;font-size:13px; }
+.workflow-region-popover__head span { font-size:11px;color:var(--wf-muted,#666); }
+.workflow-region-popover__frame { position:relative;align-self:center;max-width:100%;cursor:crosshair;user-select:none;touch-action:none;line-height:0; }
+.workflow-region-popover__frame img { max-width:100%;max-height:62vh;display:block;border-radius:6px; }
+.workflow-region-popover__empty { width:320px;height:200px;display:flex;align-items:center;justify-content:center;line-height:1;font-size:12px;color:var(--wf-muted,#666); }
+.workflow-region-popover__box { position:absolute;border:2px solid var(--wf-accent,#6366f1);box-shadow:0 0 0 9999px rgba(0,0,0,.42);border-radius:3px;pointer-events:none; }
+.workflow-region-popover__actions { display:flex;gap:8px;align-items:center; }
+.workflow-region-popover__actions button { padding:6px 12px;border-radius:8px;border:1px solid var(--wf-border,#ddd);background:transparent;color:inherit;font-size:12px;cursor:pointer; }
+.workflow-region-popover__actions button.is-primary { background:var(--wf-accent,#6366f1);border-color:var(--wf-accent,#6366f1);color:#fff; }
+.workflow-region-popover__actions button:disabled { opacity:.45;cursor:default; }

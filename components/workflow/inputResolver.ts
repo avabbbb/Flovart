@@ -536,17 +536,18 @@ export function resolveWorkflowInputs(
       });
       return;
     }
-    if (mention.region && source.kind === 'image') {
+    let media = source as WorkflowMediaResource;
+    if (mention.region && media.kind === 'image') {
       // 区域版本只进入 references（执行时裁剪）；resources 仍保留整图，供图上下文/旧路径使用。
-      regionBaseIdentities.add(resourceIdentity(source));
-      source = withRegion(source, mention.region);
+      regionBaseIdentities.add(resourceIdentity(media));
+      media = withRegion(media, mention.region);
     }
-    const identity = resourceIdentity(source);
+    const identity = resourceIdentity(media);
     if (!mentionIdentities.has(identity)) {
       mentionIdentities.add(identity);
       mentionResourceIds.push(identity);
     }
-    addReference(references, source, mediaOrigin(source), mentionResourceIds.length - 1, diagnostics, {
+    addReference(references, media, mediaOrigin(media), mentionResourceIds.length - 1, diagnostics, {
       role: mention.role,
       label: mention.label,
     });

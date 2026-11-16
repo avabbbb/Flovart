@@ -2,12 +2,14 @@ import { BookOpen } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type { AssetFolder, AssetLibrary, UserApiKey, GenerationMode, PromptEnhanceMode, PromptEnhanceResult } from '../../types';
 import { PromptBar } from '../PromptBar';
-import { extractMentions, type MentionData } from '../MediaMentionExtension';
+import { editorJSONToText, extractMentions, type MentionData } from '../MediaMentionExtension';
 import type { AssetSuggestion } from '../MentionList';
 import type { ReferencePickerWorkflowItem } from '../studio/AssetReferencePicker';
 import { resolveWorkflowDefaultModel } from '../../services/workflowPromptPolicy';
 import { getWorkflowOperationCapability, localizeOperationLabel, localizeParameterControl, parseWorkflowOperationParameters, type WorkflowOperationCapability, type WorkflowOperationUiLanguage } from './operationRegistry';
 import { createPromptIntent, type PromptIntent, type PromptIntentAction } from './promptIntent';
+import { mentionRegionsFromDocument, setMentionRegionInDocument } from './referenceRegion';
+import { ReferenceRegionPopover } from './ReferenceRegionPopover';
 import {
   filterWorkflowInputIds,
   getOrderedImageReferences,
@@ -150,10 +152,14 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   }));
   const orderedImageRefs = getOrderedImageReferences(node, nodes, connections);
   const documentMentionIds = node.metadata.richTextDocument ? extractMentions(node.metadata.richTextDocument).map(item => item.id) : [];
-  const referenceChips = toImageReferenceChips(orderedImageRefs, keepConnectedMentions(node.metadata.prompt || '', documentMentionIds));
+  const documentRegions = mentionRegionsFromDocument(node.metadata.richTextDocument);
+  const referenceChips = toImageReferenceChips(orderedImageRefs, keepConnectedMentions(node.metadata.prompt || '', documentMentionIds))
+    .map(chip => documentRegions.has(chip.id) ? { ...chip, region: documentRegions.get(chip.id) } : chip);
+  const [regionChipId, setRegionChipId] = useState<string | null>(null);
+  const regionChip = regionChipId ? referenceChips.find(chip => chip.id === regionChipId) : undefined;
   const lastPromptIntentRef = useRef<PromptIntent | null>(null);
 
-  const promptMention = (id: string) => {
+  const promptMention = (id: string, regions = documentRegions) => {
     const item = [...mentionItems, ...referenceItems, ...(assetItems || []).map(asset => ({
       id: `asset:${asset.id}`,
       label: asset.name,
@@ -167,10 +173,12 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
     });
     const assetId = item && 'assetId' in item ? item.assetId : undefined;
     const sourceType = item && 'sourceType' in item ? item.sourceType : undefined;
-    return { id, label: item?.label, elementType: item?.elementType, assetId, sourceType };
+    const region = regions.get(id);
+    return { id, label: item?.label, elementType: item?.elementType, assetId, sourceType, ...(region ? { region } : {}) };
   };
-  const emitPromptIntent = (text: string, ids: string[], requestedAction: PromptIntentAction = 'edit') => {
-    const intent = createPromptIntent({ targetNodeId: node.id, text, mentions: ids.map(promptMention), requestedAction });
+  const emitPromptIntent = (text: string, ids: string[], requestedAction: PromptIntentAction = 'edit', document?: unknown) => {
+    const regions = document === undefined ? documentRegions : mentionRegionsFromDocument(document);
+    const intent = createPromptIntent({ targetNodeId: node.id, text, mentions: ids.map(id => promptMention(id, regions)), requestedAction });
     lastPromptIntentRef.current = intent;
     onPromptIntent?.(intent);
   };
@@ -188,7 +196,7 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
 
   const handlePromptInput = (plainText: string, document: Record<string, unknown>, mentionedElementIds: string[]) => {
     const mentionIds = keepConnectedMentions(plainText, mentionedElementIds);
-    emitPromptIntent(plainText, mentionIds);
+    emitPromptIntent(plainText, mentionIds, 'edit', document);
     onChange({ prompt: plainText, richTextDocument: document as typeof node.metadata.richTextDocument });
   };
   const latestPromptIntent = () => {
@@ -250,6 +258,17 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
     node.metadata.generationActualTokens !== undefined ? `${node.metadata.generationActualTokens.toLocaleString()} Token` : undefined,
   ].filter(Boolean).join(' · ') || undefined;
 
+  const applyRegion = (region: Parameters<typeof setMentionRegionInDocument>[2]) => {
+    if (!regionChip) return;
+    const document = setMentionRegionInDocument(node.metadata.richTextDocument, regionChip.id, region, {
+      label: regionChip.label,
+      thumbnail: regionChip.thumbnail,
+      elementType: regionChip.elementType,
+    });
+    handlePromptInput(editorJSONToText(document), document, extractMentions(document).map(item => item.id));
+    setRegionChipId(null);
+  };
+
   return (
     <div data-workflow-overlay data-testid="workflow-node-prompt-bar" data-language={language} className="inline-prompt-bar workflow-node-prompt" style={{ ['--workflow-node-prompt-width' as string]: `${width}px` }} onPointerDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
       {operationCapability && <WorkflowOperationParameterPanel
@@ -281,6 +300,7 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         imageReferenceChips={referenceChips}
         onImageReferenceReorder={handleReorder}
         onImageReferenceRemove={onDisconnectReference ? handleRemoveReference : undefined}
+        onImageReferenceFocus={node.isLocked ? undefined : setRegionChipId}
         onGenerate={handleGenerate}
         onStop={handleStop}
         onRetry={node.metadata.status === 'error' ? handleGenerate : undefined}
@@ -356,6 +376,17 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         expanded={expanded}
         onToggleExpanded={onToggleExpanded}
       />
+      {regionChip && (
+        <ReferenceRegionPopover
+          label={regionChip.label}
+          storageKey={regionChip.storageKey}
+          href={regionChip.thumbnail}
+          region={regionChip.region}
+          language={language === 'en' ? 'en' : 'zh'}
+          onConfirm={applyRegion}
+          onClose={() => setRegionChipId(null)}
+        />
+      )}
     </div>
   );
 }
