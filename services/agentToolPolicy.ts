@@ -172,6 +172,7 @@ const READ_COMMANDS = new Set([
   'workflow.project.list',
   'workflow.projection.get',
   'workflow.models.list',
+  'workflow.nodes.search',
   'flovart_workflow_media_view',
   'flovart_web_search',
   'flovart_grep',

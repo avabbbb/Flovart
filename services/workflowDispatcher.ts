@@ -13,6 +13,7 @@ import type { WorkflowConnection, WorkflowDocumentOperation, WorkflowMutationSou
 import { normalizeWorkflowExecutionError, type WorkflowExecutor, type WorkflowRunCommand, type WorkflowRunResult } from './workflowExecutor';
 import { displayError } from './displayError';
 import { buildProductionBible } from '../components/workflow/productionBible';
+import { nodeSearchQueryFromArgs, searchWorkflowNodes } from '../components/workflow/nodeSearch';
 import { buildWorkflowPromptDocument, promptDocumentMentions } from '../components/workflow/promptDocument';
 import { generateModeOf, listWorkflowModels, planWorkflowGenerate, WorkflowGenerateError } from './workflowGenerateCommand';
 import type { UserApiKey } from '../types';
@@ -135,7 +136,7 @@ const DOCUMENT_MUTATION_COMMANDS = new Set([
   'workflow.apply', 'workflow.node.create', 'workflow.node.create-connected', 'workflow.node.update',
   'workflow.node.delete', 'workflow.node.move', 'workflow.node.resize', 'workflow.connect', 'workflow.disconnect',
 ]);
-const WORKFLOW_READ_COMMANDS = new Set(['workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.models.list']);
+const WORKFLOW_READ_COMMANDS = new Set(['workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.models.list', 'workflow.nodes.search']);
 const SENSITIVE_KEY = /(?:api.?key|authorization|token|secret|password|storage.?key|file.?path|local.?path|data.?url)/i;
 const MEDIA_KEY = /^(?:href|poster|src|url)$/i;
 const LOCAL_PATH = /^(?:[a-z]:\\|\\\\|\/home\/|\/Users\/|\/tmp\/)/i;
@@ -693,6 +694,9 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
             draftVersion: project.draftVersion || 1,
           },
         };
+      } else if (command === 'workflow.nodes.search') {
+        if (!project) return error(envelope.id, 'NOT_FOUND', '当前没有可用的 Workflow 项目。');
+        result = { ok: true, commandId: envelope.id, result: { projectId: project.id, ...searchWorkflowNodes(project.nodes, nodeSearchQueryFromArgs(args)) } };
       } else if (command === 'workflow.models.list') {
         result = { ok: true, commandId: envelope.id, result: listWorkflowModels(args, dependencies.getUserApiKeys?.() || []) };
       } else if (!project) {

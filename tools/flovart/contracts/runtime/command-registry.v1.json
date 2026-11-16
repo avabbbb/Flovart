@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "833b47e3d9fdbdef1b7b082aa66f63d9d2346cd9a6e574540b4d886b0912814d",
+  "registryHash": "18650d36a4c807b313dea5aecdd9dd253b4c931ee8dbbfd53bdd2dbe43bdbe26",
   "commands": [
     {
       "name": "runtime.status",
@@ -589,6 +589,23 @@
         "submode": "string?",
         "referenceKinds": "string[]?",
         "includeUnavailable": "boolean?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.nodes.search",
+      "summary": "Search Workflow nodes by keyword (title, prompt, note text, anchor code), type, anchor (approved/pending/kind/short code such as A02), status (empty/running/done/error), shot index or subgraph; returns compact paged hits without media or secrets.",
+      "args": {
+        "projectId": "string?",
+        "query": "string?",
+        "types": "string[]?",
+        "anchorCodes": "string[]?",
+        "anchor": "string?",
+        "status": "string[]?",
+        "shotIndex": "number?",
+        "parentId": "string?",
+        "limit": "number?",
+        "offset": "number?"
       },
       "availability": "available"
     },

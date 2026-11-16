@@ -28,7 +28,7 @@ const RUN_TOOLS = new Set(['flovart_run', 'flovart_workflow_node_run'])
 const READ_TOOLS = new Set([
   'flovart_inspect', 'flovart_selection', 'flovart_status',
   'flovart_workflow_inspect', 'flovart_workflow_selection_get', 'flovart_workflow_focus_nodes',
-  'flovart_models_list', 'flovart_workflow_node_stop',
+  'flovart_models_list', 'flovart_workflow_search_nodes', 'flovart_workflow_node_stop',
 ])
 
 /** Classify a Flovart tool call; unknown Flovart tools are treated as writes. */

@@ -20,6 +20,8 @@ npm run flovart:cli -- workflow.project.use --project-id <project-id> --json
 npm run flovart:cli -- workflow.inspect --json
 npm run flovart:cli -- workflow.selection.get --json
 npm run flovart:cli -- workflow.models.list --mode image --json
+npm run flovart:cli -- workflow.nodes.search --anchor-codes A02,S01 --json
+npm run flovart:cli -- workflow.nodes.search --query 雨夜 --types video --status error --json
 npm run flovart:cli -- workflow.generate --type image --title "主视觉" --prompt "雨夜霓虹街头的产品特写" --aspect-ratio 16:9 --idempotency-key key-1 --json
 npm run flovart:cli -- workflow.generate --type video --title "图生视频" --prompt "@ref:<image-id> 镜头缓慢推进" --references '[{"nodeId":"<image-id>","role":"first_frame"}]' --duration-sec 5 --run --idempotency-key shot-1-v1 --json
 npm run flovart:cli -- workflow.media.import --url https://example.com/ref.png --attach-to-node-id <video-id> --idempotency-key import-1 --json
@@ -29,7 +31,7 @@ npm run flovart:cli -- workflow.focus.nodes --node-ids <shot-1>,<shot-2> --json
 npm run flovart:cli -- workflow.node.stop --node-id <image-id> --json
 ```
 
-The stable Agent surface is `workflow.inspect`, `workflow.selection.get`, `workflow.focus.nodes`, `workflow.apply`, `workflow.generate`, `workflow.models.list`, `workflow.media.import`, `workflow.note.write`, `workflow.node.run`, `workflow.node.stop` and `workflow.node.tool`. Tool names, descriptions and full parameter schemas are the same in the built-in Agent, the local Agent, MCP and DSH (`tools/flovart/agent-tools.js`). Granular `workflow.node.*`, connection, selection, and viewport commands remain compatibility adapters and route through the same visible Workflow contract.
+The stable Agent surface is `workflow.inspect`, `workflow.selection.get`, `workflow.focus.nodes`, `workflow.apply`, `workflow.generate`, `workflow.models.list`, `workflow.nodes.search`, `workflow.media.import`, `workflow.note.write`, `workflow.node.run`, `workflow.node.stop` and `workflow.node.tool`. Tool names, descriptions and full parameter schemas are the same in the built-in Agent, the local Agent, MCP and DSH (`tools/flovart/agent-tools.js`). Granular `workflow.node.*`, connection, selection, and viewport commands remain compatibility adapters and route through the same visible Workflow contract.
 
 ## Generating: one node, prompt in its Prompt Bar
 
@@ -43,6 +45,8 @@ The stable Agent surface is `workflow.inspect`, `workflow.selection.get`, `workf
 - Updating only `metadata.prompt` with `workflow.apply` keeps the node's existing @chips (re-linked by label, missing ones appended); use `workflow.generate` to rewrite a prompt with different references.
 
 `workflow.models.list` returns `{ models: [{ id, name, capability, source: static|runninghub-doc, available, isDefault, modes: [{ mode, configured, maxReferences }], counts, aspectRatios, resolutions, durations }], defaultModelIds }` from the browser's live catalog under the user's API keys.
+
+`workflow.nodes.search` (tool `flovart_workflow_search_nodes`) finds nodes without reading the whole canvas: `query` (title, file name, prompt, note text, anchor code; all space-separated words must match), `types`, `anchorCodes`, `anchor` (`any` | `approved` | `pending` | `character` | `scene` | `product` | `style`), `status` (`empty` | `running` | `done` | `error`), `shotIndex`, `parentId`, `limit` (default 20, max 100), `offset`. It returns `{ projectId, total, offset, limit, nextOffset?, nodes: [{ id, type, title, status, hasMedia, anchorCode?, anchor?, shotIndex?, promptPreview?, parentId?, error? }] }`. Approved anchors get short codes per kind — `A` character, `S` scene, `P` product, `F` style (A01, S02…) — numbered by approval time; use them to resolve requests such as “A02 + S02 重拍第 3 镜”.
 
 ## Node types and generation settings
 

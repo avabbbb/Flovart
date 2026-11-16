@@ -4,6 +4,7 @@ export const WORKSPACE_READ_COMMAND_NAMES = Object.freeze([
   'workflow.inspect',
   'workflow.selection.get',
   'workflow.models.list',
+  'workflow.nodes.search',
 ]);
 
 export const WORKSPACE_WRITE_COMMAND_NAMES = Object.freeze([
