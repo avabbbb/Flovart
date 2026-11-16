@@ -1,14 +1,11 @@
 /* ───────────────────────────────────────────────────────────────
    Ambient glass（原型）· 参考 Hark 的毛玻璃观感
-   0. 应用底色叠很淡的环境光，画布半透明，左右停靠面板同一张磨砂玻璃；
+   只改 Agent 对话面板，应用其余部分保持原样：
    1. 右侧 Agent 对话面板：半透明底 + 强模糊 + 白色内高光；
    2. 面板里的卡片（输入框、提示卡、生成计划卡、选中图层）改为磨砂卡，不再是实底。
    减弱透明度 / 高对比 / 不支持 backdrop-filter 时整体回退到实底。
    ─────────────────────────────────────────────────────────────── */
 :root {
-  --amb-1: rgba(25, 200, 185, .11);   /* mint */
-  --amb-2: rgba(245, 160, 110, .14);  /* peach */
-  --amb-3: rgba(150, 140, 235, .13);  /* lilac */
   --amb-shell: rgba(255, 255, 255, .46);
   --amb-shell-filter: blur(32px) saturate(115%);
   --amb-stroke: rgba(255, 255, 255, .7);
@@ -17,13 +14,9 @@
   --amb-shadow: 0 1px 2px rgba(31, 29, 26, .04), 0 18px 44px -14px rgba(31, 29, 26, .18);
   --amb-card: rgba(255, 255, 255, .58);
   --amb-card-filter: blur(20px) saturate(120%);
-  --amb-canvas: color-mix(in srgb, var(--isl-surface) 40%, transparent);
   --amb-card-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 0 0 0 .5px rgba(31, 29, 26, .06), 0 8px 22px -12px rgba(31, 29, 26, .16);
 }
 :root[data-theme='dark'] {
-  --amb-1: rgba(58, 217, 201, .13);
-  --amb-2: rgba(240, 122, 114, .10);
-  --amb-3: rgba(130, 120, 255, .14);
   --amb-shell: rgba(36, 36, 42, .5);
   --amb-shell-filter: blur(32px) saturate(115%);
   --amb-stroke: rgba(255, 255, 255, .1);
@@ -31,36 +24,12 @@
   --amb-highlight: inset 0 1px 0 rgba(255, 255, 255, .08);
   --amb-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 22px 50px -16px rgba(0, 0, 0, .7);
   --amb-card: rgba(255, 255, 255, .07);
-  --amb-canvas: color-mix(in srgb, var(--isl-surface) 62%, transparent);
   --amb-card-shadow: inset 0 1px 0 rgba(255, 255, 255, .09), 0 0 0 .5px rgba(255, 255, 255, .06), 0 10px 26px -14px rgba(0, 0, 0, .6);
 }
 
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   @media not all and (prefers-reduced-transparency: reduce) {
     @media not all and (prefers-contrast: more) {
-      /* 0. 整体：应用底色叠很淡的环境光；画布框架透明，画布本身半透明让光透出；左侧图层面板与右侧对话面板同一张玻璃 */
-      .app-shell {
-        background-image:
-          radial-gradient(90vw 90vh at 25% 45%, var(--amb-1), transparent 75%),
-          radial-gradient(80vw 90vh at 90% 30%, var(--amb-3), transparent 75%),
-          radial-gradient(100vw 80vh at 55% 105%, var(--amb-2), transparent 75%);
-        background-attachment: fixed;
-      }
-      .app-shell .studio-navigation-frame,
-      .app-shell .studio-navigation-frame__stage,
-      .app-shell .workflow-workspace,
-      .app-shell .workflow-start { background-color: transparent !important; }
-      .app-shell .studio-navigation-frame__status { background-color: color-mix(in srgb, var(--isl-surface) 55%, transparent) !important; -webkit-backdrop-filter: var(--amb-card-filter); backdrop-filter: var(--amb-card-filter); }
-      .app-shell .workflow-editor { background-color: var(--amb-canvas) !important; }
-      :root .workflow-sidebar.workflow-sidebar[data-docked].flv-glass {
-        background: var(--amb-shell) !important;
-        -webkit-backdrop-filter: var(--amb-shell-filter);
-        backdrop-filter: var(--amb-shell-filter);
-        border: 1px solid var(--amb-stroke) !important;
-        box-shadow: var(--amb-highlight), 0 0 0 .5px var(--amb-edge), var(--amb-shadow) !important;
-      }
-      :root .workflow-sidebar[data-docked] .workflow-layer-card--selected { background: var(--amb-card); box-shadow: var(--amb-card-shadow); }
-
       /* 1. 右侧 Agent 对话面板（壳） */
       /* 选择器加权：要压过 adaptive.css / glass.css 里停靠态的 !important 底色 */
       :root aside.compact-right-panel.compact-right-panel.compact-right-panel[data-open='true'] {
