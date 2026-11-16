@@ -6,17 +6,17 @@
    减弱透明度 / 高对比 / 不支持 backdrop-filter 时整体回退到实底。
    ─────────────────────────────────────────────────────────────── */
 :root {
-  --amb-1: rgba(25, 200, 185, .24);   /* mint */
-  --amb-2: rgba(245, 160, 110, .22);  /* peach */
-  --amb-3: rgba(150, 140, 235, .2);  /* lilac */
+  --amb-1: rgba(25, 200, 185, .11);   /* mint */
+  --amb-2: rgba(245, 160, 110, .14);  /* peach */
+  --amb-3: rgba(150, 140, 235, .13);  /* lilac */
   --amb-shell: rgba(255, 255, 255, .46);
-  --amb-shell-filter: blur(32px) saturate(180%);
+  --amb-shell-filter: blur(32px) saturate(115%);
   --amb-stroke: rgba(255, 255, 255, .7);
   --amb-edge: rgba(31, 29, 26, .07);
   --amb-highlight: inset 0 1px 0 rgba(255, 255, 255, .85);
   --amb-shadow: 0 1px 2px rgba(31, 29, 26, .04), 0 18px 44px -14px rgba(31, 29, 26, .18);
   --amb-card: rgba(255, 255, 255, .58);
-  --amb-card-filter: blur(20px) saturate(170%);
+  --amb-card-filter: blur(20px) saturate(120%);
   --amb-canvas: color-mix(in srgb, var(--isl-surface) 40%, transparent);
   --amb-card-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 0 0 0 .5px rgba(31, 29, 26, .06), 0 8px 22px -12px rgba(31, 29, 26, .16);
 }
@@ -25,7 +25,7 @@
   --amb-2: rgba(240, 122, 114, .10);
   --amb-3: rgba(130, 120, 255, .14);
   --amb-shell: rgba(36, 36, 42, .5);
-  --amb-shell-filter: blur(32px) saturate(150%);
+  --amb-shell-filter: blur(32px) saturate(115%);
   --amb-stroke: rgba(255, 255, 255, .1);
   --amb-edge: rgba(0, 0, 0, .5);
   --amb-highlight: inset 0 1px 0 rgba(255, 255, 255, .08);
@@ -41,9 +41,9 @@
       /* 0. 整体：应用底色叠很淡的环境光；画布框架透明，画布本身半透明让光透出；左侧图层面板与右侧对话面板同一张玻璃 */
       .app-shell {
         background-image:
-          radial-gradient(60vw 55vh at 8% 0%, var(--amb-1), transparent 70%),
-          radial-gradient(55vw 60vh at 100% 18%, var(--amb-3), transparent 70%),
-          radial-gradient(70vw 60vh at 55% 110%, var(--amb-2), transparent 70%);
+          radial-gradient(90vw 90vh at 25% 45%, var(--amb-1), transparent 75%),
+          radial-gradient(80vw 90vh at 90% 30%, var(--amb-3), transparent 75%),
+          radial-gradient(100vw 80vh at 55% 105%, var(--amb-2), transparent 75%);
         background-attachment: fixed;
       }
       .app-shell .studio-navigation-frame,
