@@ -63,6 +63,7 @@ import { referenceLineLabels, userTurnReferences } from './agentMessageRefs';
 import { abortedNoticeText, isAbortMessage, queuedNoticeText } from './agentAbort';
 import { AgentRunPlanCard } from './AgentRunPlanCard';
 import { isRunPlanRequest, runPlanApproved, runPlanNodeIds, type RunPlanDecision } from './agentRunPlan';
+import { clearRunPlans, readRunPlans, saveRunPlan } from './agentRunPlanStore';
 import { readConfirmVerdict, runPlanDenialNote, type AgentConfirmVerdict } from '../../services/runApproval';
 import { AgentScrollToLatest, AgentTurnTimeline, activeMessageScroller, messageScrollers, smoothScrollTo } from './AgentConversationNav';
 import { isAwayFromBottom, nextStickToBottom, splitConversationTurns } from './agentConversationNav';
@@ -259,6 +260,8 @@ const userApiKeysRef = useRef(userApiKeys);
     return () => scrollers.forEach(el => el.removeEventListener('scroll', onScroll));
   }, [hasMessages]);
   const [trackedPlans, setTrackedPlans] = useState<TrackedRunPlan[]>([]);
+  const trackedPlansRef = useRef<TrackedRunPlan[]>([]);
+  trackedPlansRef.current = trackedPlans;
   useLayoutEffect(() => {
     if (!stickToBottom.current) {
       const el = activeMessageScroller(messagesRef.current);
@@ -360,6 +363,8 @@ const userApiKeysRef = useRef(userApiKeys);
     if (request) {
       const tracked: TrackedRunPlan = { id: pending.id || crypto.randomUUID(), request, decision, decidedAt: Date.now(), turnIndex: pending.turnIndex ?? 0 };
       setTrackedPlans(current => [...current.filter(item => item.id !== tracked.id), tracked]);
+      // 计划卡随会话保存：切换会话、刷新后回到这段对话仍挂在原来那一轮。
+      saveRunPlan(projectRef.current.id, activeSessionIdRef.current, tracked);
     }
     if (runPlanApproved(decision)) {
       decideConfirmation(pending, true, options.session ? 'session' : 'once');
@@ -390,7 +395,7 @@ const userApiKeysRef = useRef(userApiKeys);
       presentConfirmation({ summary: request?.gates?.length ? '' : summary, resolve, request, offerMandate, blocked: planBlocked(request), turnIndex: Math.max(0, userTurnCountRef.current - 1) });
     });
   }).current;
-  // 托管 Agent 的 bridge 只认 true / false：计划卡的「不运行」选项在那里就是拒绝。
+  // 只认批准 / 拒绝的入口（托管 Agent 的可逆写入确认）用这个；bridge 的生成确认直接拿带说明的结果。
   const askConfirmationBoolean = useRef((summary: string, request?: AgentConfirmRequest): Promise<boolean> =>
     askConfirmation(summary, request).then(verdict => readConfirmVerdict(verdict).approved)).current;
   useEffect(() => {
@@ -404,17 +409,21 @@ const userApiKeysRef = useRef(userApiKeys);
   const memoryEntries = useAgentMemoryStore(state => state.byProject[project.id]);
   useEffect(() => { void useAgentMemoryStore.getState().load(project.id).catch(() => undefined); }, [project.id]);
   const [activeSessionId, setActiveSessionId] = useState('');
+  const activeSessionIdRef = useRef('');
+  activeSessionIdRef.current = activeSessionId;
   useEffect(() => { sessionGrantsRef.current.clear(); }, [activeSessionId]);
-  // 换会话 / 项目：上一段对话的计划卡与引用条不跟过来（会话 id 第一次落定时不算换）。
+  // 换会话 / 项目：引用条不跟过来（会话 id 第一次落定时不算换）；计划卡换成那段会话自己保存的。
   const previousSessionId = useRef('');
   useEffect(() => {
-    if (previousSessionId.current && previousSessionId.current !== activeSessionId) {
-      setTrackedPlans([]);
-      setQuote(null);
-    }
+    const previous = previousSessionId.current;
+    if (previous && previous !== activeSessionId) setQuote(null);
     previousSessionId.current = activeSessionId;
-  }, [activeSessionId]);
-  useEffect(() => { setTrackedPlans([]); setQuote(null); }, [project.id]);
+    if (!activeSessionId) { setTrackedPlans([]); return; }
+    // 会话 id 第一次落定前已选择的卡（例如新会话的第一轮）归到这段会话，不丢。
+    if (!previous) trackedPlansRef.current.forEach(plan => saveRunPlan(project.id, activeSessionId, plan));
+    setTrackedPlans(readRunPlans(project.id, activeSessionId));
+  }, [activeSessionId, project.id]);
+  useEffect(() => { setQuote(null); }, [project.id]);
   // Lane15 first-run UX: setupBlocker classifies a cold-open/send failure via
   // the executor taxonomy (runtimeHealth) instead of raw strings, so the panel
   // can render a real next step ('Add API key') instead of a jargon dead end.
@@ -603,7 +612,8 @@ const userApiKeysRef = useRef(userApiKeys);
           const bridge = new WorkflowAgentBridge({
             url: connection.url,
             token: connection.token,
-            confirm: askConfirmationBoolean,
+            // 计划卡的「创建后手动生成 / 调整后再创建」带说明回给托管 Agent（DEFERRED_BY_USER），不是笼统的拒绝。
+            confirm: askConfirmation,
             // 托管 Agent 的可逆写入走同一个审批解析器；删除 / 付费由 bridge 的高风险确认单独处理。
             confirmWrite: (summary, request) => {
               if (!request) return askConfirmationBoolean(summary, request);
@@ -794,6 +804,7 @@ const userApiKeysRef = useRef(userApiKeys);
     if (!kernel) return;
     try {
       await kernel.deleteSession(sessionId);
+      clearRunPlans(project.id, sessionId);
       await refreshSessions();
     } catch (error) {
       setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: errorMessage(error) }]);

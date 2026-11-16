@@ -13,6 +13,7 @@ import { getWorkflowOperationCapabilityByNodeTool } from '../components/workflow
 import { displayError } from './displayError';
 import { buildGenerationGateSummary, getGenerationGateDetails, type GenerationGateDetails } from './generationGate';
 import { planBlocked, type AgentConfirmRequest } from './agentSpendMandate';
+import { CONFIRM_DENIED_MESSAGE, readConfirmVerdict, type AgentConfirmVerdict } from './runApproval';
 import { applyPlanChecks, buildGenerationPlanChecks } from './generationPlan';
 import { setAgentModelKeysProvider } from './agentModelCatalog';
 import type { UserApiKey as GateApiKey } from '../types';
@@ -54,7 +55,11 @@ export interface WorkflowAgentBridgeOptions {
   onStatus?: (status: 'connecting' | 'connected' | 'disconnected' | 'error', reason?: WorkflowAgentBridgeErrorReason) => void;
   /** How long to wait for the `hello` event before treating the stream as stuck. */
   helloTimeoutMs?: number;
-  confirm?: (summary: string, request?: AgentConfirmRequest) => boolean | Promise<boolean>;
+  /**
+   * 用户确认。返回 true / false，或带说明的拒绝（生成计划卡的「创建后手动生成 / 调整后再创建」）：
+   * 说明会原样回给外部 Agent，让它知道节点已保留、不要重试或重复创建。
+   */
+  confirm?: (summary: string, request?: AgentConfirmRequest) => AgentConfirmVerdict | Promise<AgentConfirmVerdict>;
   confirmWrite?: (summary: string, request?: AgentConfirmRequest) => boolean | Promise<boolean>;
   workflowContract?: BrowserWorkflowContract;
 }
@@ -397,11 +402,12 @@ export class WorkflowAgentBridge {
         }
         result = await this.workflowContract.dispatch(envelope);
         if (result.confirmation?.required) {
-          const approved = await this.confirm(workflowConfirmationSummary(envelope), workflowConfirmRequest(envelope));
+          const verdict = readConfirmVerdict(await this.confirmVerdict(workflowConfirmationSummary(envelope), workflowConfirmRequest(envelope)));
+          const approved = verdict.approved;
           // 第二道确认同样可能耗时——Lease 在批准后仍需再验一次。
           const postApprovalLease = approved ? validateBrowserWorkspaceLease(envelope, this.clientId) : null;
           result = !approved
-            ? { ok: false, commandId: envelope.id, error: { code: 'DENIED', message: '用户拒绝了 Workflow 变更。' } } satisfies WorkflowCommandResult
+            ? deniedWorkflowResult(envelope.id, verdict.message)
             : postApprovalLease
               ? postApprovalLease
               : await this.workflowContract.dispatch(withWorkflowHumanApproval(envelope));
@@ -450,7 +456,12 @@ export class WorkflowAgentBridge {
     }
   }
 
-  private confirm(summary: string, request?: AgentConfirmRequest) {
+  /** 只要批准与否的确认（Runtime 命令、委派回合等）：带说明的拒绝也算拒绝。 */
+  private async confirm(summary: string, request?: AgentConfirmRequest): Promise<boolean> {
+    return readConfirmVerdict(await this.confirmVerdict(summary, request)).approved;
+  }
+
+  private async confirmVerdict(summary: string, request?: AgentConfirmRequest): Promise<AgentConfirmVerdict> {
     if (this.options.confirm) return this.options.confirm(summary, request);
     const items = request?.kind === 'generation' ? [...(request.gates ?? [])] : [];
     const blocked = planBlocked(request);
@@ -496,4 +507,15 @@ function requiresHighRiskWorkflowConfirmation(envelope: WorkflowCommandEnvelope)
   if (envelope.command !== 'workflow.node.tool') return false;
   const tool = String(envelope.args.tool || '');
   return getWorkflowOperationCapabilityByNodeTool(tool)?.confirmation !== 'none';
+}
+
+/**
+ * 外部 Agent 看到的拒绝结果。笼统拒绝保持原文案；计划卡「不运行」的选择用 DEFERRED_BY_USER，
+ * 并把给 Agent 的说明放进 message（节点已保留、不要重试或重复创建）。
+ */
+export function deniedWorkflowResult(commandId: string, message: string): WorkflowCommandResult {
+  if (!message || message === CONFIRM_DENIED_MESSAGE) {
+    return { ok: false, commandId, error: { code: 'DENIED', message: '用户拒绝了 Workflow 变更。' } } satisfies WorkflowCommandResult;
+  }
+  return { ok: false, commandId, error: { code: 'DEFERRED_BY_USER', message } } satisfies WorkflowCommandResult;
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   bindProductionDraftEnvelope,
+  deniedWorkflowResult,
   prepareRuntimeAgentEnvelope,
   redactWorkflowAgentSnapshot,
   requiresRuntimeAgentConfirmation,
@@ -126,5 +127,15 @@ describe('workflow Agent browser bridge', () => {
       source: 'agent',
       args: { projectId: project.id, draftBinding: { draftVersion: 6, sourceNodeIds: ['brief-node'] } },
     }, project)).rejects.toThrow('Draft 版本已变化');
+  });
+
+  it('tells the hosted Agent why a run plan was not run instead of a bare denial', async () => {
+    const { CONFIRM_DENIED_MESSAGE, readConfirmVerdict, runPlanDenialNote } = await import('../services/runApproval');
+    expect(deniedWorkflowResult('c1', readConfirmVerdict(false).message)).toEqual({ ok: false, commandId: 'c1', error: { code: 'DENIED', message: '用户拒绝了 Workflow 变更。' } });
+    expect(deniedWorkflowResult('c1', CONFIRM_DENIED_MESSAGE).error?.code).toBe('DENIED');
+    const note = runPlanDenialNote('manual', 3);
+    const deferred = deniedWorkflowResult('c2', readConfirmVerdict({ approved: false, note }).message);
+    expect(deferred).toEqual({ ok: false, commandId: 'c2', error: { code: 'DEFERRED_BY_USER', message: note } });
+    expect(deferred.error?.message).toContain('3 个节点已保留');
   });
 });
