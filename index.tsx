@@ -10,6 +10,7 @@ import { AppErrorBoundary } from './components/AppErrorBoundary';
 import './styles/index.css';
 import './styles/adaptive.css';
 import './styles/dshEmbed.css';
+import './styles/ambientGlass.css';
 
 installCrashLog();
 installDshEmbedBridge();
