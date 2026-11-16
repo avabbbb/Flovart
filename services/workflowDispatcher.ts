@@ -648,7 +648,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         let requested: string[];
         try { requested = workflowRunNodeIds(args); } catch (cause) { return error(envelope.id, 'BAD_REQUEST', displayError(cause)); }
         const approval = planRunApproval(runProject.nodes, requested);
-        if (!approval.ok) return { ok: false, commandId: envelope.id, error: { code: approval.code, message: approval.message, details: { nodeIds: approval.nodeIds } } };
+        if (approval.ok === false) return { ok: false, commandId: envelope.id, error: { code: approval.code, message: approval.message, details: { nodeIds: approval.nodeIds } } };
       }
     }
     if (requiresWorkflowConfirmation(envelope) && !hasWorkflowHumanApproval(envelope)) {

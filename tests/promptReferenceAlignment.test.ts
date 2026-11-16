@@ -26,7 +26,7 @@ describe('alignPromptReferences', () => {
   it('reports ambiguous and unknown names with candidates', () => {
     const ambiguous = alignPromptReferences({ text: '@"街景"', targetNodeId: 'gen', nodes, connections: [], referenceIds: [] });
     expect(ambiguous).toMatchObject({ ok: false, code: 'AMBIGUOUS_NODE_NAME' });
-    expect((ambiguous as { details: { candidates: Array<{ nodeId: string }> } }).details.candidates.map(item => item.nodeId)).toEqual(['b', 'c']);
+    expect((ambiguous as unknown as { details: { candidates: Array<{ nodeId: string }> } }).details.candidates.map(item => item.nodeId)).toEqual(['b', 'c']);
     expect(alignPromptReferences({ text: '@"不存在"', targetNodeId: 'gen', nodes, connections: [], referenceIds: [] })).toMatchObject({ ok: false, code: 'NODE_NAME_NOT_FOUND' });
   });
 

@@ -277,7 +277,7 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
     referenceIds: explicitReferences.map(reference => reference.nodeId),
     policy: linkPolicy,
   });
-  if (!alignment.ok) throw new WorkflowGenerateError(alignment.code, alignment.message, alignment.details);
+  if (alignment.ok === false) throw new WorkflowGenerateError(alignment.code, alignment.message, alignment.details);
   prompt = alignment.text;
   const references: GenerateReference[] = [
     ...explicitReferences,

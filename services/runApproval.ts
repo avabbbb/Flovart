@@ -21,7 +21,7 @@ export type RunApprovalPlan =
 export function runnableModeOf(node: WorkflowNode): 'image' | 'video' | null {
   const operation = node.metadata?.operation;
   if (operation) return operation.capabilityId === 'image.generate@1' ? 'image' : null;
-  if (node.type === 'image' || node.type === 'video') return node.type;
+  if (node.type === 'image' || node.type === 'video') return node.type as 'image' | 'video';
   return null;
 }
 
