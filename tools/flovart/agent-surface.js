@@ -12,6 +12,7 @@ export const AGENT_PUBLIC_COMMANDS = Object.freeze([
   'workflow.models.list',
   'workflow.note.write',
   'workflow.media.import',
+  'workflow.script.materialize',
   'workflow.node.run',
   'workflow.node.stop',
   'workflow.node.tool',
@@ -44,6 +45,8 @@ export const AGENT_OPERATION_DEFINITIONS = Object.freeze({
   'workflow.models.list': Object.freeze({ sideEffects: 'read', risk: 'none', permissions: Object.freeze(['workflow.read']), idempotent: true, mutation: false, requiredCapabilities: Object.freeze(['browser-workflow']) }),
   'workflow.note.write': Object.freeze({ sideEffects: 'workflow.write', risk: 'reversible', permissions: Object.freeze(['workflow.write']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow']) }),
   'workflow.media.import': Object.freeze({ sideEffects: 'workflow.write', risk: 'reversible', permissions: Object.freeze(['workflow.write']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow']) }),
+  // 分镜行 → 生成节点：只建不跑，可撤销写入。
+  'workflow.script.materialize': Object.freeze({ sideEffects: 'workflow.write', risk: 'reversible', permissions: Object.freeze(['workflow.write']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow']) }),
   'workflow.node.stop': Object.freeze({ sideEffects: 'generation.stop', risk: 'none', permissions: Object.freeze(['workflow.run']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow']) }),
   'workflow.node.run': Object.freeze({ sideEffects: 'generation.maybe', risk: 'cost-and-generation', permissions: Object.freeze(['workflow.run']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow', 'provider-gate']) }),
   // 画布二次处理（裁剪 / 放大 / 去背景 / 剪辑 / 抽帧 / 反推提示词…）：付费工具在浏览器侧仍需人工确认。

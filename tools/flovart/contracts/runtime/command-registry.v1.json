@@ -608,6 +608,20 @@
       "availability": "available"
     },
     {
+      "name": "workflow.script.materialize",
+      "summary": "Materialize script storyboard rows into generation nodes: one image or video node per row, row prompt written into that node's Prompt Bar, anchors linked as @chips + connections, shot metadata attached, script rows back-linked. Creates only; never runs.",
+      "args": {
+        "projectId": "string?",
+        "scriptNodeId": "string",
+        "kind": "image|video?",
+        "rows": "string?",
+        "dryRun": "boolean?",
+        "expectedRevision": "number?",
+        "mutationId": "string?"
+      },
+      "availability": "available"
+    },
+    {
       "name": "workflow.media.import",
       "summary": "Import an http(s) URL or an asset-library item onto the canvas as a durable media node; optionally connect it to a generation node as a reference and add its @chip to that node's Prompt Bar.",
       "args": {

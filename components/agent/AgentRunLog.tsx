@@ -38,6 +38,7 @@ const COMMAND_LABELS: Record<string, [string, string]> = {
   'workflow.models.list': ['查看模型', 'List models'],
   'workflow.note.write': ['写备注', 'Write note'],
   'workflow.media.import': ['导入素材', 'Import media'],
+  'workflow.script.materialize': ['分镜建节点', 'Materialize shots'],
   'workflow.node.tool': ['节点工具', 'Node tool'],
   'workflow.connect': ['连接节点', 'Connect nodes'],
   'workflow.disconnect': ['断开连接', 'Disconnect nodes'],

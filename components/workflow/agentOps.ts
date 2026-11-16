@@ -19,6 +19,7 @@ export const WORKFLOW_MUTATION_COMMANDS = new Set([
   'workflow.generate',
   'workflow.note.write',
   'workflow.media.import',
+  'workflow.script.materialize',
 ]);
 
 export const workflowCommandSummary = (command: string, args: Record<string, unknown>) => {

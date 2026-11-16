@@ -14,6 +14,7 @@ import { normalizeWorkflowExecutionError, type WorkflowExecutor, type WorkflowRu
 import { displayError } from './displayError';
 import { buildProductionBible } from '../components/workflow/productionBible';
 import { buildWorkflowPromptDocument, promptDocumentMentions } from '../components/workflow/promptDocument';
+import { buildScriptMaterializeOps, ScriptMaterializeError } from '../components/workflow/scriptMaterialize';
 import { generateModeOf, listWorkflowModels, planWorkflowGenerate, WorkflowGenerateError } from './workflowGenerateCommand';
 import type { UserApiKey } from '../types';
 
@@ -856,6 +857,55 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         const committed = commitDocument(envelope, project, [operation], { mutationId, expectedRevision, intent: noteId ? '更新备注：' + noteId : '写备注' });
         if (!committed.ok) return committed;
         result = { ok: true, commandId: envelope.id, result: { projectId: project.id, noteId: targetNoteId, created: !noteId, draftVersion: (committed.result as { draftVersion?: number }).draftVersion } };
+      } else if (command === 'workflow.script.materialize') {
+        const scriptNodeId = typeof args.scriptNodeId === 'string' ? args.scriptNodeId.trim() : '';
+        if (!scriptNodeId) throw new Error('scriptNodeId 不能为空');
+        const kind = args.kind === undefined || args.kind === '' ? 'image' : args.kind;
+        if (kind !== 'image' && kind !== 'video') throw new Error('kind 只能是 image 或 video');
+        const script = project.nodes.find(node => node.id === scriptNodeId);
+        if (!script) return error(envelope.id, 'NOT_FOUND', '脚本节点不存在：' + scriptNodeId);
+        if (script.type === 'text') return error(envelope.id, 'NOTE_IS_ANNOTATION', NOTE_IS_ANNOTATION_MESSAGE);
+        const mutationId = String(args.mutationId || envelope.idempotencyKey || '').trim() || 'materialize-' + envelope.id;
+        const expectedRevision = args.expectedRevision === undefined ? (project.draftVersion || 1) : finiteNumber(args.expectedRevision, 'expectedRevision');
+        let sequence = 0;
+        let plan: ReturnType<typeof buildScriptMaterializeOps>;
+        try {
+          plan = buildScriptMaterializeOps(script, {
+            kind,
+            rows: Array.isArray(args.rows) ? args.rows.map(Number) : typeof args.rows === 'number' ? String(args.rows) : args.rows as string | undefined,
+            nodes: project.nodes,
+            connections: project.connections,
+            // 同一 mutationId 重放得到相同节点 id（幂等）
+            createId: () => stableShortId('shot-', mutationId + ':' + (sequence++)),
+          });
+        } catch (cause) {
+          if (cause instanceof ScriptMaterializeError) return error(envelope.id, cause.code === 'NOT_SCRIPT' ? 'UNSUPPORTED_TARGET' : cause.code, cause.message);
+          throw cause;
+        }
+        const dryRun = args.dryRun === true || args['dry-run'] === true;
+        const summary = {
+          projectId: project.id,
+          scriptNodeId,
+          kind,
+          nodeIds: plan.created.map(item => item.nodeId),
+          created: plan.created,
+          skipped: plan.skipped,
+          diagnostics: plan.diagnostics,
+          ...(plan.batchId ? { batchId: plan.batchId } : {}),
+          ran: false,
+          next: plan.created.length ? '节点已建好、未运行。确认后用 flovart_workflow_node_run 的 nodeIds 运行（可分批）。' : '没有需要新建的分镜节点。',
+        };
+        if (dryRun || !plan.operations.length) {
+          result = { ok: true, commandId: envelope.id, result: { ...summary, dryRun, applied: false, draftVersion: project.draftVersion || 1 } };
+        } else {
+          const committed = commitDocument(envelope, project, tagWorkflowNodeOrigin(plan.operations, envelope.source), {
+            mutationId,
+            expectedRevision,
+            intent: `分镜建${kind === 'image' ? '图片' : '视频'}生成节点：${plan.created.map(item => item.row).join(',')}`,
+          });
+          if (!committed.ok) return committed;
+          result = { ok: true, commandId: envelope.id, result: { ...summary, applied: true, draftVersion: (committed.result as { draftVersion?: number }).draftVersion } };
+        }
       } else if (command === 'workflow.media.import') {
         const url = typeof args.url === 'string' ? args.url.trim() : '';
         const assetId = typeof args.assetId === 'string' ? args.assetId.trim() : '';

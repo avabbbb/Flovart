@@ -279,3 +279,61 @@ describe('workflow.apply reorder_connections', () => {
     expect(stray.ok).toBe(false);
   });
 });
+
+describe('workflow.script.materialize', () => {
+  const withScript = () => {
+    const ctx = setup();
+    const script = createWorkflowNode('script-1', 'script', { x: 600, y: 0 }, {
+      scriptBreakdown: {
+        assets: [],
+        shots: [
+          { id: 's1', index: 0, action: '推门', imagePrompt: '@ref:img-a 推门而入', characterRefs: ['img-a'] },
+          { id: 's2', index: 1, action: '回头', imagePromptOverride: 'turns around' },
+          { id: 's3', index: 2, action: '奔跑' },
+        ],
+      },
+    });
+    ctx.project().nodes.push(script);
+    return ctx;
+  };
+
+  it('creates one generation node per requested row without running, and is idempotent per mutation', async () => {
+    const { dispatch, project, runNode } = withScript();
+    const result = await dispatch({ id: 'm1', command: 'workflow.script.materialize', source: 'agent', idempotencyKey: 'mat-1', args: { scriptNodeId: 'script-1', kind: 'image', rows: '1-2' } });
+    expect(result.ok).toBe(true);
+    const body = result.result as { nodeIds: string[]; created: Array<{ row: number; references: string[] }>; ran: boolean; applied: boolean };
+    expect(body).toMatchObject({ ran: false, applied: true });
+    expect(body.created.map(item => item.row)).toEqual([1, 2]);
+    expect(body.created[0].references).toEqual(['img-a']);
+    expect(runNode).not.toHaveBeenCalled();
+    const first = project().nodes.find(node => node.id === body.nodeIds[0])!;
+    expect(first).toMatchObject({ type: 'image', shot: expect.objectContaining({ index: 1, scriptShotId: 's1' }) });
+    expect(first.metadata.prompt).toBe('@图片1 推门而入');
+    expect(extractMentions(first.metadata.richTextDocument).map(item => item.id)).toEqual(['img-a']);
+    expect(project().connections.some(c => c.fromNodeId === 'img-a' && c.toNodeId === first.id)).toBe(true);
+    const shots = project().nodes.find(node => node.id === 'script-1')!.metadata.scriptBreakdown!.shots;
+    expect(shots.map(shot => shot.imageNodeId)).toEqual([...body.nodeIds, undefined]);
+    expect(project().nodes.some(node => node.type === 'text' && node.id !== 'note-1')).toBe(false);
+
+    const replay = await dispatch({ id: 'm1b', command: 'workflow.script.materialize', source: 'agent', idempotencyKey: 'mat-1', args: { scriptNodeId: 'script-1', kind: 'image', rows: '1-2' } });
+    expect((replay.result as { nodeIds: string[] }).nodeIds).toEqual(body.nodeIds);
+    const again = await dispatch({ id: 'm2', command: 'workflow.script.materialize', source: 'agent', idempotencyKey: 'mat-2', args: { scriptNodeId: 'script-1', rows: 'all' } });
+    expect((again.result as { created: Array<{ row: number }> }).created.map(item => item.row)).toEqual([3]);
+  });
+
+  it('dry-runs without writing and reports structured errors', async () => {
+    const { dispatch, project } = withScript();
+    const before = project().nodes.length;
+    const dry = await dispatch({ id: 'd', command: 'workflow.script.materialize', source: 'agent', args: { scriptNodeId: 'script-1', kind: 'video', dryRun: true } });
+    expect(dry.ok).toBe(true);
+    expect(dry.result).toMatchObject({ dryRun: true, applied: false });
+    expect(project().nodes).toHaveLength(before);
+    const bad = await dispatch({ id: 'b', command: 'workflow.script.materialize', source: 'agent', args: { scriptNodeId: 'script-1', rows: '9' } });
+    expect(bad.ok).toBe(false);
+    expect(bad.error?.code).toBe('BAD_REQUEST');
+    const notScript = await dispatch({ id: 'n', command: 'workflow.script.materialize', source: 'agent', args: { scriptNodeId: 'img-a' } });
+    expect(notScript.error?.code).toBe('UNSUPPORTED_TARGET');
+    const note = await dispatch({ id: 'n2', command: 'workflow.script.materialize', source: 'agent', args: { scriptNodeId: 'note-1' } });
+    expect(note.error?.code).toBe('NOTE_IS_ANNOTATION');
+  });
+});

@@ -29,7 +29,7 @@ describe('one Agent tool definition, four hosts', () => {
     for (const host of AGENT_TOOL_HOSTS) {
       expect(names(host)).toEqual(expect.arrayContaining([
         'flovart_generate', 'flovart_models_list', 'flovart_note_write', 'flovart_workflow_node_stop', 'flovart_media_import',
-        'flovart_workflow_inspect', 'flovart_workflow_apply', 'flovart_workflow_node_run', 'flovart_workflow_node_tool',
+        'flovart_script_materialize', 'flovart_workflow_inspect', 'flovart_workflow_apply', 'flovart_workflow_node_run', 'flovart_workflow_node_tool',
       ]));
     }
   });
