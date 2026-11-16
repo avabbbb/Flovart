@@ -74,7 +74,7 @@ function versionConnection(before: WorkflowConnection | undefined, after: Workfl
 }
 
 /** expectedRevision 之后被改动过的节点/连线 id（用于冲突说明与按节点重放判断）。 */
-function objectsChangedSince(project: WorkflowProject, revision: number): Set<string> {
+export function objectsChangedSince(project: WorkflowProject, revision: number): Set<string> {
   const changed = new Set<string>();
   for (const changeSet of project.draftChangeSets || []) {
     if (changeSet.resultDraftVersion <= revision) continue;

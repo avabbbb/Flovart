@@ -8,6 +8,7 @@ import { createBrowserWorkflowContract, type BrowserWorkflowContract } from './b
 import { AgentRuntimeError, getBrowserAgentRuntime } from './browserAgentRuntime';
 import { redactWorkflowAgentValue, withWorkflowHumanApproval, type WorkflowCommandEnvelope, type WorkflowCommandResult } from './workflowDispatcher';
 import { workflowCommandSummary } from '../components/workflow/agentOps';
+import { checkRevision, revisionConflictMessage } from '../components/workflow/revisionRebase';
 import { getWorkflowOperationCapabilityByNodeTool } from '../components/workflow/operationRegistry';
 import { displayError } from './displayError';
 import { buildGenerationGateSummary, getGenerationGateDetails, type GenerationGateDetails } from './generationGate';
@@ -175,9 +176,12 @@ export function validateBrowserWorkspaceLease(envelope: WorkflowCommandEnvelope,
   }
   if (!project) return { ok: false, commandId: envelope.id, error: { code: 'WORKSPACE_UNAVAILABLE', message: 'Workflow 项目已经不可用。' } };
   const expectedRevision = envelope.args.expectedRevision;
-  const currentRevision = project.draftVersion || 1;
-  if (expectedRevision !== undefined && Number(expectedRevision) !== currentRevision) {
-    return { ok: false, commandId: envelope.id, error: { code: 'REVISION_CONFLICT', message: `Workflow 草稿版本已变化：期望 ${expectedRevision}，当前 ${currentRevision}。`, expectedRevision: Number(expectedRevision), actualRevision: currentRevision } };
+  if (expectedRevision !== undefined) {
+    // 按节点检查：期间只改了别的节点（例如在界面里挪了一下）时放行，由草稿权威在最新版本上执行。
+    const check = checkRevision(project, envelope.command, envelope.args, Number(expectedRevision));
+    if (!check.ok) {
+      return { ok: false, commandId: envelope.id, error: { code: 'REVISION_CONFLICT', message: revisionConflictMessage(check), retryable: true, expectedRevision: check.expectedRevision, actualRevision: check.actualRevision, changedObjectIds: check.changedObjectIds } };
+    }
   }
   return null;
 }

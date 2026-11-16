@@ -12,6 +12,7 @@ import type { WorkflowConnection, WorkflowDocumentOperation, WorkflowMutationSou
 import { normalizeWorkflowExecutionError, type WorkflowExecutor, type WorkflowRunCommand, type WorkflowRunResult } from './workflowExecutor';
 import { displayError } from './displayError';
 import { buildProductionBible } from '../components/workflow/productionBible';
+import { checkRevision, revisionConflictMessage } from '../components/workflow/revisionRebase';
 
 export interface WorkflowCommandEnvelope {
   id: string;
@@ -49,7 +50,7 @@ export interface WorkflowCommandResult {
   commandId: string;
   result?: unknown;
   confirmation?: { required: boolean; summary: string; code?: 'CONFIRMATION_REQUIRED' };
-  error?: { code: string; message: string; expectedRevision?: number; actualRevision?: number; changedObjectIds?: string[] };
+  error?: { code: string; message: string; expectedRevision?: number; actualRevision?: number; changedObjectIds?: string[]; retryable?: boolean };
 }
 
 export interface WorkflowDispatcherDependencies {
@@ -508,8 +509,10 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
           return error(envelope.id, 'RUNNER_UNAVAILABLE', command === 'workflow.node.run' ? 'Workflow 生成适配器尚未连接。' : 'Workflow 停止适配器尚未连接。');
         }
         const expectedRevision = args.expectedRevision === undefined ? undefined : finiteNumber(args.expectedRevision, 'expectedRevision');
-        if (expectedRevision !== undefined && expectedRevision !== (project.draftVersion || 1)) {
-          return error(envelope.id, 'REVISION_CONFLICT', 'Workflow 草稿版本已变化：期望 ' + expectedRevision + '，当前 ' + (project.draftVersion || 1) + '。');
+        if (expectedRevision !== undefined) {
+          // 只跑这些节点：它们自 expectedRevision 以来没被改动就照常运行，别的节点被挪动不算冲突。
+          const check = checkRevision(project, command, args, expectedRevision);
+          if (!check.ok) return error(envelope.id, 'REVISION_CONFLICT', revisionConflictMessage(check), { expectedRevision: check.expectedRevision, actualRevision: check.actualRevision, changedObjectIds: check.changedObjectIds });
         }
         const surface = envelope.source === 'agent' ? 'browser-agent' : envelope.source === 'operator' ? 'runtime' : envelope.source;
         const runCommandFor = (nodeId: string): WorkflowRunCommand => ({ projectId: project.id, nodeId, ...(expectedRevision === undefined ? {} : { expectedRevision }) });
@@ -612,8 +615,11 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
           if (args.x === undefined && args.y === undefined) node.position = autoPlaceWorkflowNode(project.nodes, node, [fromNodeId]);
           operation = { type: 'create_connected_node', fromNodeId, node };
         } else if (command === 'workflow.node.update') {
-          const patch = recordArg(args.patch || args.updates, 'patch');
+          const patch: Record<string, unknown> = { ...recordArg(args.patch || args.updates, 'patch') };
+          // 常用字段的简写：--title 等价于 --patch-json '{"title":…}'（以前被静默忽略，报「写入内容与当前节点完全一致」）。
+          if (args.title !== undefined && patch.title === undefined) patch.title = requiredString(args.title, 'title');
           if ('id' in patch) throw new Error('patch 不能修改节点 id');
+          if (Object.keys(patch).length === 0) throw new Error('workflow.node.update 缺少要修改的内容：用 --patch-json \'{"title":"新标题"}\'（或 --title）指定要改的字段。');
           operation = { type: 'update_node', id: requiredString(requestedNodeId, 'nodeId'), patch: patch as never };
         } else if (command === 'workflow.node.delete') {
           operation = { type: 'delete_nodes', ids: [requiredString(requestedNodeId, 'nodeId')] };

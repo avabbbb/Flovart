@@ -1,5 +1,5 @@
 import { canonicalize } from 'json-canonicalize';
-import { createWorkflowNode } from './constants';
+import { WORKFLOW_NODE_SPECS, createWorkflowNode } from './constants';
 import { useWorkflowStore } from './store';
 import {
   getWorkflowOperationCapability,
@@ -437,6 +437,9 @@ export async function ensureWorkflowImageGenerateOperation(input: {
     config: { ...source.metadata.config, ...operation.metadata.config },
   };
   operation.objectVersion = (source.objectVersion || 0) + 1;
+  // 原位升级成 Operation 时保留用户起的名字，不把每个节点都改回「图片生成」。
+  const defaultTitle = (WORKFLOW_NODE_SPECS as Record<string, { title: string } | undefined>)[source.type]?.title;
+  if (source.title?.trim() && source.title !== defaultTitle) operation.title = source.title;
 
   // 有媒体：隐藏输入节点（isVisible:false）保留原图 + 原节点原位替换成 operation
   const hiddenInput = sourceHasMedia

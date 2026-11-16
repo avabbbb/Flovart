@@ -17,6 +17,8 @@ const LEASED_WORKFLOW_COMMANDS = new Set([
   'workflow.node.move', 'workflow.node.resize', 'workflow.node.tool', 'workflow.connect', 'workflow.disconnect',
   'workflow.select', 'workflow.viewport.set',
 ]);
+// 与 components/workflow/revisionRebase.ts 的 NODE_REBASE_COMMANDS 一致：这些命令的版本冲突交给浏览器按节点判断。
+const NODE_REBASE_COMMANDS = new Set(['workflow.node.update', 'workflow.node.run', 'workflow.apply']);
 
 export class WorkflowAgentSessionError extends Error {
   constructor(code, message, details = {}) {
@@ -254,6 +256,7 @@ export class WorkflowAgentSession {
           mutationId,
           mutation,
           expectedRevision: args.expectedRevision,
+        deferRevision: NODE_REBASE_COMMANDS.has(command),
         })
         : this.workspaceLease.acquire({
           agentIdentity: identity,
@@ -272,6 +275,7 @@ export class WorkflowAgentSession {
         mutationId,
         mutation,
         expectedRevision: args.expectedRevision,
+        deferRevision: NODE_REBASE_COMMANDS.has(command),
       });
     } catch (cause) {
       if (cause instanceof WorkspaceLeaseError) throw sessionError(cause.code, cause.message, cause.details);
