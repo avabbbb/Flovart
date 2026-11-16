@@ -51,6 +51,6 @@ describe('extractNodeRefs', () => {
     const result = extractNodeRefs('@P09 和 @"镜头"', nodes);
     expect(result.text).toBe('@P09 和 @"镜头"');
     expect(result.unresolved).toEqual(['@P09']);
-    expect(result.ambiguous[0].candidates.map(item => item.nodeId) : []).toEqual(['v-1', 'v-3']);
+    expect(result.ambiguous[0].candidates.map(item => item.nodeId)).toEqual(['v-1', 'v-3']);
   });
 });
