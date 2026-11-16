@@ -340,3 +340,18 @@
 .agent-conversation__body > .agent-plan-wrap, .workflow-agent__body > .agent-plan-wrap { margin: 0 0 8px; max-height: 60%; overflow: auto; }
 @keyframes agent-plan-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .agent-plan__progress--running i { animation: none; } .agent-turn-rail__tick { transition: none; } }
+
+/* 2026-11-16 窄宽度控件行不再互相压叠：图标按钮保持 28px 不被挤扁；
+   ≤360px 思考强度胶囊去掉图标、文字收窄；≤250px 工具换到两行，发送按钮始终贴右下。 */
+.agent-conversation .agent-composer .agent-composer__tools > * { flex-shrink: 0; }
+.agent-conversation .agent-composer .agent-composer__tools > .agent-thinking-select { min-width: 0; flex-shrink: 1; }
+.agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select select { min-width: 0; text-overflow: ellipsis; }
+@container agentcomposer (max-width: 360px) {
+  .agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select { gap: 0; padding: 0 2px 0 6px; }
+  .agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select > svg { display: none; }
+  .agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select select { max-width: 64px; padding: 0 2px; }
+}
+@container agentcomposer (max-width: 250px) {
+  .agent-conversation .agent-composer .agent-composer__controls { align-items: flex-end; }
+  .agent-conversation .agent-composer .agent-composer__tools { flex-wrap: wrap; row-gap: 4px; }
+}
