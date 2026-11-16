@@ -11,6 +11,7 @@ import { STUDIO_MEDIA_BATCH_DRAG_TYPE } from '../components/studio/StudioMediaBr
 import type { WorkflowProject } from '../components/workflow/types';
 import { getGenerationCapability } from '../services/generationCapabilities';
 import { installWorkflowNodePlugin, uninstallWorkflowNodePlugin } from '../components/workflow/nodePluginSdk';
+import { useClipboardStore } from '../stores/useClipboardStore';
 
 const makeProject = (): WorkflowProject => ({
   id: 'project-1',
@@ -79,6 +80,8 @@ describe('InfiniteWorkflow surface interactions', () => {
   });
 
   afterEach(() => {
+    // 画布剪贴板是跨项目的全局 store：每个用例后清空，避免串用例。
+    useClipboardStore.getState().clear();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });

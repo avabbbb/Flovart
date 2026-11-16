@@ -66,6 +66,7 @@ import { WorkflowAudioToolDialogs, type WorkflowAudioToolConfirmation, type Work
 import { ScriptNodeEditor } from './ScriptNodeEditor';
 import { SlashMenu } from './SlashMenu';
 import { buildShortcutApplyOps, type SlashShortcut } from './slashShortcuts';
+import { copyWorkflowSelection, pasteWorkflowClip } from './canvasClipboard';
 import { WorkflowToolbar, type WorkflowTool } from './WorkflowToolbar';
 import { deriveWorkflowRunStates, planWorkflowStaleRerun } from './runState';
 import { deriveWorkflowPresence } from './presence';
@@ -473,7 +474,8 @@ export function InfiniteWorkflow({
   const focusAnimRef = useRef<number | null>(null);
   const spacePressedRef = useRef(false);
   const createMenuOpenerRef = useRef<HTMLElement | null>(null);
-  const clipboardRef = useRef<WorkflowNodeData[]>([]);
+  // 画布剪贴板放在 useClipboardStore（切项目不清空、跨项目可粘贴）；这里只留一个引用方便同步读取。
+  const clipboardRef = useRef<WorkflowNodeData[]>(useClipboardStore.getState().workflowClip?.nodes || []);
   const mountedRef = useRef(true);
   const mousePosRef = useRef({ x: 0, y: 0 });
   const replaceSequenceRef = useRef(new Map<string, number>());
@@ -618,8 +620,7 @@ export function InfiniteWorkflow({
     videoControls.reset();
     audioControls.reset();
     setActiveMedia(null);
-    clipboardRef.current = [];
-    setClipboardVersion(version => version + 1);
+    // 剪贴板不随项目切换清空（P1-6）：媒体按 durable artifact 引用，跨项目粘贴仍可用。
     replaceSequenceRef.current.clear();
     createMenuOpenerRef.current = null;
     interactionRef.current = null;
@@ -2211,23 +2212,35 @@ export function InfiniteWorkflow({
     })();
   }, []);
 
-  const copySelection = useCallback(() => {
-    clipboardRef.current = projectRef.current.nodes.filter(node => selectedIdsRef.current.includes(node.id));
+  const copyNodesToClipboard = useCallback((ids: readonly string[]) => {
+    const current = projectRef.current;
+    const clip = copyWorkflowSelection({ projectId: current.id, nodes: current.nodes, connections: current.connections, ids });
+    useClipboardStore.getState().setWorkflowClip(clip);
+    clipboardRef.current = clip?.nodes || [];
     setClipboardVersion(version => version + 1);
-    syncToSharedClipboard(clipboardRef.current);
+    if (clip) syncToSharedClipboard(clip.nodes.filter(node => ids.includes(node.id)));
   }, [syncToSharedClipboard]);
+
+  const copySelection = useCallback(() => {
+    copyNodesToClipboard(selectedIdsRef.current);
+  }, [copyNodesToClipboard]);
 
   const pasteSelection = useCallback(async () => {
     const expectedProjectId = projectRef.current.id;
-    if (clipboardRef.current.length > 0) {
-      const nodes = clipboardRef.current.map(node => ({
-        ...node,
-        id: nanoid(),
-        position: { x: node.position.x + 32, y: node.position.y + 32 },
-        metadata: { ...node.metadata },
-      }));
-      commitFrame([...projectRef.current.nodes, ...nodes], projectRef.current.connections);
-      selectNodes(nodes.map(node => node.id));
+    const workflowClip = useClipboardStore.getState().workflowClip;
+    if (workflowClip && workflowClip.nodes.length > 0) {
+      // 同项目：原位偏移 32；跨项目：放到鼠标位置（不在画布内则视口中心）。连线、分组、@chip 一并重映射 id。
+      const sameProject = workflowClip.sourceProjectId === expectedProjectId;
+      let anchor: { x: number; y: number } | undefined;
+      if (!sameProject) {
+        const rect = rootRef.current?.getBoundingClientRect();
+        const mouse = mousePosRef.current;
+        const inBounds = rect && mouse.x >= rect.left && mouse.x <= rect.right && mouse.y >= rect.top && mouse.y <= rect.bottom;
+        anchor = inBounds ? screenToWorkflow(mouse.x, mouse.y) : viewportCenter();
+      }
+      const pasted = pasteWorkflowClip(workflowClip, { createId: nanoid, ...(anchor ? { anchor } : {}) });
+      commitFrame([...projectRef.current.nodes, ...pasted.nodes], [...projectRef.current.connections, ...pasted.connections]);
+      selectNodes(pasted.nodes.filter(node => !node.parentId).map(node => node.id));
       return;
     }
     const clipItems = useClipboardStore.getState().items;
@@ -3455,7 +3468,7 @@ export function InfiniteWorkflow({
           <WorkflowNodeToolbar
             nodes={selectedNodeData}
             language={language}
-            onCopy={ids => { const nodes = projectRef.current.nodes.filter(node => ids.includes(node.id)); clipboardRef.current = nodes; setClipboardVersion(version => version + 1); syncToSharedClipboard(nodes); }}
+            onCopy={ids => copyNodesToClipboard(ids)}
             onDelete={ids => applyOps([{ type: 'delete_nodes', ids }])}
             onExport={nodes => { void exportSelectedMedia(nodes); }}
             onRun={id => runNodeWithKeyGuide(id)}
