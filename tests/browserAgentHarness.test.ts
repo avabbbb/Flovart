@@ -74,6 +74,26 @@ describe('browser agent harness', () => {
     expect(systemOf(bodies[1])).toContain('本会话已读技能：demo');
   });
 
+  it('puts a bound user Skill (not in the catalog) into the system prompt instead of a forced read', async () => {
+    const { useUserSkillsStore } = await import('../stores/useUserSkillsStore');
+    const { userSkillAttachment } = await import('../services/userSkillContext');
+    const skill = { id: 'user-oral', name: '口播', description: '', prompt: '用口语化短句，每句不超过 12 字。', enabled: true } as never;
+    const previous = useUserSkillsStore.getState().skills;
+    useUserSkillsStore.setState({ skills: [skill] });
+    try {
+      const bodies: Body[] = [];
+      vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => { bodies.push(JSON.parse(String(init.body))); return reply('好的'); }));
+      kernel = make();
+      await kernel.openSession();
+      await kernel.send('写一段口播', [], userSkillAttachment(skill));
+      const system = systemOf(bodies[0]);
+      expect(system).toContain('用口语化短句，每句不超过 12 字。');
+      expect(bodies[0].messages.filter(message => message.role === 'tool')).toHaveLength(0);
+    } finally {
+      useUserSkillsStore.setState({ skills: previous });
+    }
+  });
+
   it('dedupes model-initiated skill reads and keeps the read list across compaction and reopen', async () => {
     const bodies: Body[] = [];
     const script: Array<() => Response> = [
