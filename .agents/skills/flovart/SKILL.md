@@ -210,6 +210,29 @@ Talk about the canvas, not the machinery behind it.
 - Report what was added or changed, what is running, and what finished.
   Mention a structured error code only when the user must act on it.
 
+### Ask everything up front (before spending credits)
+
+Before a video, storyboard or multi-shot job, collect in **one** ask (built-in
+Agent: `flovart_ask` with `questions`; other hosts: your host's ask tool)
+every item below that the request or canvas does not already answer. Skip what
+is already known; never ask the same thing twice in a task.
+
+| id | Ask about | Typical options |
+| --- | --- | --- |
+| `duration` | Total length | 5s / 10s / 15s / 30s |
+| `aspect_ratio` | Frame | 9:16 vertical / 16:9 horizontal / 1:1 |
+| `resolution` | Resolution / tier | 480p draft first, then upgrade / 720p / 1080p |
+| `subtitles` | Subtitle language | none / Chinese / English / bilingual |
+| `characters` | Character references | use @-referenced images / generate anchors first / none |
+| `segments` | How many segments | 1 / 3 × 5s / per-shot |
+| `outline` | Where the outline comes from | user's script / Agent drafts it for approval / from reference video |
+
+- Write options as **complete plans** the user can accept in one click
+  (for example “15s vertical 9:16, 3 segments × 5s, 480p draft first”), mark
+  the recommended one, and let the “Other” box take anything else.
+- One ask, up to 12 questions; then work without further check-ins until a
+  cost confirmation or a real blocker.
+
 ## Ending a task: the outcome claim
 
 When a task is finished, stopped or refused, make the very last line of your
