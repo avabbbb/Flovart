@@ -16,7 +16,7 @@ const LEASED_WORKFLOW_COMMANDS = new Set([
   'workflow.inspect', 'workflow.selection.get', 'workflow.apply', 'workflow.node.run', 'workflow.node.stop',
   'workflow.node.create', 'workflow.node.create-connected', 'workflow.node.update', 'workflow.node.delete',
   'workflow.node.move', 'workflow.node.resize', 'workflow.node.tool', 'workflow.connect', 'workflow.disconnect',
-  'workflow.select', 'workflow.viewport.set', 'workflow.generate', 'workflow.models.list', 'workflow.shortcut.list', 'workflow.shortcut.apply', 'workflow.group.create', 'workflow.group.run', 'workflow.note.write',
+  'workflow.select', 'workflow.viewport.set', 'workflow.generate', 'workflow.models.list', 'workflow.nodes.search', 'workflow.shortcut.list', 'workflow.shortcut.apply', 'workflow.group.create', 'workflow.group.run', 'workflow.note.write',
   'workflow.media.import', 'workflow.script.materialize', 'workflow.export',
 ]);
 

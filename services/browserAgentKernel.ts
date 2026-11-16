@@ -22,7 +22,8 @@ import { agentToolInputSchema, getAgentToolSpecs } from '../tools/flovart/agent-
 import { createTodoTool, TODO_TOOL_NAME } from '../agent/todo.js';
 import type { ImageContent } from '@earendil-works/pi-ai';
 import type { WorkflowNode } from '../components/workflow/types';
-import { loadAgentNodeMedia, type AgentVideoFrame } from './agentMediaView';
+import { loadAgentNodeMedia, type AgentVideoFrame, type AgentVideoLayout } from './agentMediaView';
+import { buildAgentAskForm, type AgentAskForm, type AgentAskSpec } from '../components/agent/agentAskForm';
 import { WORKFLOW_OPERATION_CAPABILITIES, WORKFLOW_OPERATION_CAPABILITY_IDS, WORKFLOW_OPERATION_NODE_TOOLS } from '../components/workflow/operationRegistry';
 import { formatSearchSources, searchAgentWeb, WEB_SEARCH_TOOL_NAME, type AgentSearchCredential, type SearchRecency } from './agentWebSearch';
 import { formatGrepMatches, grepLocalFolders, LOCAL_GREP_TOOL_NAME } from './agentLocalGrep';
@@ -518,8 +519,10 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
 // ---------------------------------------------------------------------------
 
 export interface AgentAskRequest {
-  /** 与 omp ask 相同：一个 HTML <form>，控件必须带 name。 */
-  html: string;
+  /** 兼容旧契约（omp ask）：一个 HTML <form>，控件必须带 name。 */
+  html?: string;
+  /** 结构化提问（推荐）：宿主直接渲染成受控表单。 */
+  form?: AgentAskForm;
 }
 
 export type AgentAskResult =
@@ -708,20 +711,45 @@ export const ASK_TOOL_NAME = 'flovart_ask';
 
 /** omp ask 的浏览器版：模型给一个 <form>，宿主渲染并回传 JSON。 */
 function createAskTool(ask: (request: AgentAskRequest) => Promise<AgentAskResult>): AgentTool {
+  const option = Type.Object({
+    value: Type.Optional(Type.String({ description: '回传值，缺省用 label' })),
+    label: Type.String({ description: '选项标题，最好是一句完整方案，如「15 秒竖屏 9:16，分 3 段」' }),
+    description: Type.Optional(Type.String({ description: '方案细节' })),
+    recommended: Type.Optional(Type.Boolean({ description: '推荐项，默认选中' })),
+  });
+  const question = Type.Object({
+    id: Type.String({ description: '回传 JSON 的键，字母/数字/下划线，如 duration' }),
+    question: Type.String({ description: '中文问题' }),
+    type: Type.Optional(Type.Union([Type.Literal('single'), Type.Literal('multi'), Type.Literal('text')], { description: 'single 单选（有 options 时默认）/ multi 多选 / text 自由输入' })),
+    options: Type.Optional(Type.Array(option, { description: '最多 8 个；卡片自动带「其他」输入框，不用自己加' })),
+    required: Type.Optional(Type.Boolean({ description: '默认 true' })),
+    placeholder: Type.Optional(Type.String()),
+    multiline: Type.Optional(Type.Boolean()),
+  });
   return {
     name: ASK_TOOL_NAME,
     label: 'ask',
-    description: '向用户提出需要决定的问题。html 必须是一个 <form>，每个控件都要有 name；提交后返回 JSON。'
-      + '用 radio/checkbox/select 给选项，用 text/textarea 收集自由输入；不要写 script/style/button，不要要求密钥。'
-      + '一次只问一个关键决定，表单保持简短，用 checked/selected 预选推荐项。'
-      + '问题写在第一个 <p>；每组选项放进 <fieldset> 并用 <legend> 写中文标题（不要只靠英文 name），选项文字写在 <label> 里、尽量简短。',
+    description: '向用户提问并等待回答，返回 { ok, data: { <id>: 答案 } }（多选是数组）。'
+      + '用 questions 结构化提问：每题一个 id + 中文 question；single/multi 给 options，选项尽量写成完整方案（时长+画幅+分段这类组合），用 recommended 标推荐项；'
+      + '卡片自动提供「其他」输入框。开工前把会改变结果的关键信息一次问齐（同一张卡最多 12 题），不要分多轮追问。'
+      + '不要询问 API Key、Token 等秘密。旧的 html 表单参数仍兼容，但不要再用。',
     parameters: Type.Object({
-      html: Type.String({ description: 'one HTML <form> with named controls' }),
+      title: Type.Optional(Type.String({ description: '卡片标题：为什么要问' })),
+      context: Type.Optional(Type.Array(Type.String(), { description: '补充说明' })),
+      questions: Type.Optional(Type.Array(question)),
+      html: Type.Optional(Type.String({ description: '（兼容）one HTML <form> with named controls' })),
     }),
     execute: async (_toolCallId, params) => {
-      const request = params as AgentAskRequest;
-      if (typeof request.html !== 'string' || !request.html.trim()) {
-        throw new Error('ask 需要一个非空的 html 表单。');
+      const input = params as AgentAskSpec & { html?: string };
+      let request: AgentAskRequest;
+      if (Array.isArray(input.questions) && input.questions.length) {
+        const built = buildAgentAskForm(input);
+        if ('error' in built) throw new Error(built.error);
+        request = { form: built.form };
+      } else if (typeof input.html === 'string' && input.html.trim()) {
+        request = { html: input.html };
+      } else {
+        throw new Error('ask 需要 questions（推荐）或 html 表单。');
       }
       const result = await ask(request);
       if (!result.ok && 'cancelled' in result) throw new Error('用户取消了提问。');
@@ -740,14 +768,24 @@ function createMediaViewTool(getNodes: () => readonly WorkflowNode[]): AgentTool
   return {
     name: MEDIA_VIEW_TOOL_NAME,
     label: 'workflow.media.view',
-    description: '查看图片/视频节点的真实画面：图片缩到长边 ≤1024px；视频默认抽首/中/尾 3 帧（frames 可选 first/middle/last），也可以用 times 指定任意秒数（如 [4.2, 13]）；单次最多 6 张。',
+    description: '查看图片/视频节点的真实画面：图片缩到长边 ≤1024px。视频默认拼成一张帧网格（每格左上角标 #序号 时间码，左上→右下按时间排列）：'
+      + '均匀取 count 帧（默认 9，最多 16），可用 start/end 限定秒数窗口，窗口超过 30s 时分页，用 page 翻页；times 指定任意秒数时按这些秒数拼网格。'
+      + '需要单帧大图时用 layout=frames（配合 frames: first/middle/last 或 times）。单次最多 6 张图。',
     parameters: Type.Object({
       nodeIds: Type.Array(Type.String()),
       frames: Type.Optional(Type.Array(frame)),
       times: Type.Optional(Type.Array(Type.Number(), { description: '视频抽帧的秒数列表，例如 [0, 6.5, 13]；给了 times 就忽略 frames。' })),
+      layout: Type.Optional(Type.Union([Type.Literal('grid'), Type.Literal('frames')], { description: 'grid（默认）：拼成一张带时间码的帧网格；frames：每帧单独一张图' })),
+      count: Type.Optional(Type.Number({ description: '帧网格每页帧数，默认 9，范围 1–16' })),
+      start: Type.Optional(Type.Number({ description: '帧网格窗口起点（秒）' })),
+      end: Type.Optional(Type.Number({ description: '帧网格窗口终点（秒）' })),
+      page: Type.Optional(Type.Number({ description: '窗口超过 30s 时的页码，从 1 开始' })),
     }),
     execute: async (_toolCallId, params) => {
-      const { nodeIds, frames, times } = params as { nodeIds: string[]; frames?: AgentVideoFrame[]; times?: number[] };
+      const { nodeIds, frames, times, layout, count, start, end, page } = params as {
+        nodeIds: string[]; frames?: AgentVideoFrame[]; times?: number[]; layout?: AgentVideoLayout;
+        count?: number; start?: number; end?: number; page?: number;
+      };
       const nodes = getNodes();
       const found: WorkflowNode[] = [];
       const missing: string[] = [];
@@ -756,7 +794,7 @@ function createMediaViewTool(getNodes: () => readonly WorkflowNode[]): AgentTool
         if (node) found.push(node);
         else missing.push(id + '：节点不存在');
       }
-      const view = await loadAgentNodeMedia(found, { frames, times });
+      const view = await loadAgentNodeMedia(found, { frames, times, layout, grid: { count, start, end, page } });
       const notes = [...view.notes, ...missing];
       const content: Array<{ type: 'text'; text: string } | ImageContent> = [{ type: 'text', text: notes.join('\n') || '没有可查看的画面' }, ...view.images];
       return { content, details: { nodeIds, imageCount: view.images.length } };
@@ -772,11 +810,12 @@ export { BROWSER_DEFAULT_SYSTEM_PROMPT };
 const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，Flovart 生成式 AI 图像/视频无限画布（Workflow）里的创作搭档：理解用户的创作目标，把它落成用户当前可见画布上的节点、连线与生成任务，并清楚说明画布还能做什么。
 
 ## 你能直接调用的工具
-- flovart_workflow_inspect：读取当前项目的节点、连线、配置与 revision。处理项目前先调用，不得猜测项目、节点或连接 ID。媒体地址在结果里会被脱敏为 [media]，这不代表节点没有内容。
+- flovart_workflow_inspect：读取当前项目的节点、连线、配置与 revision。处理项目前先调用，不得猜测项目、节点或连接 ID。媒体地址在结果里会被脱敏为 [media]，这不代表节点没有内容。ledger=true 返回项目账本（锚点速查、镜头表、已生成资产索引）：多步任务中途、或觉得记不清已做了什么时先回读它，用锚点编号（A02/S01）指代锚点。
 - flovart_workflow_selection_get：读取用户当前选中的节点。
 - flovart_generate：生成图片/视频的唯一入口。只建或复用一个生成节点，prompt 直接写进它的 Prompt Bar，references 同时变成 @chip 与连线（顺序即 chip 顺序），按引用自动选文生/图生/首尾帧/全能参考；run=true 时原位运行（扣费，会请用户确认），返回批次与每张产物。
 - flovart_shortcut_list / flovart_shortcut_apply：Slash 快捷工具（九机位宫格、角色三视图、四格 / 25 格分镜、光影矫正、人像增强）。apply 永远只动一个节点、count=1：宫格类在已有参考的节点上原地出一张宫格图，目标只是一张图时右侧新建一个节点引用它；非宫格类右侧新建一个节点。单格需要时再 image.split-grid@1，不要自己建 N 个节点。
 - flovart_group_create / flovart_group_run：分组框（与生成批次、备选无关）与整组执行（按依赖顺序、只确认一次费用）。
+- flovart_workflow_search_nodes：按关键字 / 类型 / 锚点编号（A 角色、S 场景、P 道具、F 风格，如 A02）/ 状态（empty/running/done/error）/ 镜号查节点，只返回精简结果并分页。画布大时先用它定位，再对少数节点 inspect；用户说“A02”“第 3 镜”“失败的视频”时用它解析成节点 id。
 - flovart_models_list：列出模型的真实能力（各生成方式是否已配置、参考上限、张数、比例、分辨率、时长，含 RunningHub 动态模型）。选/换模型前先调，不要猜 modelId 或逐个试。
 - flovart_workflow_node_run：重跑已写好提示词的生成节点（nodeId 或 nodeIds 批量，一次确认费用），返回 batch 与 takes。
 - flovart_workflow_node_stop：停止某个节点正在进行的生成。
@@ -786,8 +825,8 @@ const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，Flovart 生成式 
 - flovart_note_write：写给人看的备注（文本节点）。只在用户明确要求写备注时使用；备注不连线、不参与生成。
 - flovart_workflow_apply：结构化修改画布（移动、连线、分组、改标题、调整参考顺序 reorder_connections 等）。operations 只允许 add_node、create_connected_node、update_node、delete_nodes、delete_connections、connect_nodes、move_nodes、reorder_nodes、reorder_connections、group_nodes、ungroup_nodes、set_batch_primary。不要用它建文本节点。
 - flovart_workflow_node_tool：在节点上执行后处理工具（截取视频任意秒数的帧、剪辑、音视频分离、拼接、裁剪、放大、去背景等），结果作为新节点写回画布。
-- flovart_ask：需要用户在几个方案里做选择或补充关键信息时，用 HTML <form> 结构化提问（控件必须带 name；一次只问一个关键决定）。不要用它询问 API Key、Token 等秘密，也不要在正文里堆长问题让用户再回一轮。
-- flovart_workflow_media_view：查看图片/视频节点的真实画面（nodeIds；视频可用 frames: first/middle/last 或 times: [秒数] 指定任意时间点）。inspect 里的 [media] 只是脱敏占位；需要判断构图、风格或检查生成结果时调用它。用户 @引用的图片/视频会自动附带画面。用户粘贴的截图、拖入的视频会作为本轮图片内容直接附上。
+- flovart_ask：需要用户在几个方案里做选择或补充关键信息时，用 questions 结构化提问（每题 id + question；single/multi 给 options，选项写成完整方案并用 recommended 标推荐；text 收自由输入；卡片自带「其他」输入框）。开工前把会改变结果的信息一次问齐（见 Skill 的「开工前问齐」清单），不要分多轮追问；不要用它询问 API Key、Token 等秘密，也不要在正文里堆长问题让用户再回一轮。
+- flovart_workflow_media_view：查看图片/视频节点的真实画面（nodeIds）。视频默认返回一张带时间码的帧网格（count 帧数、start/end 窗口、长视频用 page 翻页；times: [秒数] 指定时间点）；需要单帧大图用 layout=frames。inspect 里的 [media] 只是脱敏占位；需要判断构图、风格或检查生成结果时调用它。用户 @引用的图片/视频会自动附带画面。用户粘贴的截图、拖入的视频会作为本轮图片内容直接附上。
 - flovart_web_search：联网搜索（Parallel 公共 MCP，免 Key，失败回退 DeepSeek）。需要外部资料、竞品信息、风格参考或事实核对时调用；结果给出来源 URL，引用时要带上。
 - flovart_grep：在用户连接过的本地文件夹里搜文本文件（正则）。用户说“我本地的素材/文档里有…”时先用它；只能搜已授权文件夹，读不到任意路径。
 - flovart_todo：多步制作的任务清单。

@@ -270,7 +270,8 @@ const userApiKeysRef = useRef(userApiKeys);
     if (nextActivity) activity.current(nextActivity);
   };
   const presentAsk = (request: AgentAskRequest): Promise<AgentAskResult> => {
-    const parsed = parseAgentAskHtml(request.html);
+    // 结构化提问已在内核里校验成表单；旧的 html 契约仍按受控字段解析。
+    const parsed = request.form ? { ok: true as const, form: request.form } : parseAgentAskHtml(request.html || '');
     if ('error' in parsed) return Promise.resolve({ ok: false, error: parsed.error });
     askRef.current?.resolve({ ok: false, error: '新的提问替换了本次提问。' });
     return new Promise(resolve => {

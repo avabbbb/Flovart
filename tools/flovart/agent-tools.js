@@ -105,7 +105,8 @@ const DEFINITIONS = [
     name: 'flovart_workflow_inspect',
     aliases: ['flovart_inspect'],
     surfaces: ALL,
-    description: '读取可见 Workflow 图（媒体与密钥已脱敏）。summary=true 只给轻量图；nodeId 只看一个节点与它的上下游。',
+    description: '读取可见 Workflow 图（媒体与密钥已脱敏）。summary=true 只给轻量图；nodeId 只看一个节点与它的上下游；'
+      + 'ledger=true 返回项目账本（锚点速查 A/S/P/F 编号、镜头表、已生成资产索引，含紧凑文字版），长任务中途或上下文被压缩后先回读它。',
   },
   {
     command: 'workflow.selection.get',
@@ -239,6 +240,25 @@ const DEFINITIONS = [
     fields: {
       groupId: { type: 'string', minLength: 1, description: '分组框 id（flovart_group_create 返回，或 inspect 里 type=subgraph 且 metadata.groupKind=group 的节点）' },
       dryRun: { type: 'boolean', description: 'true 时只返回执行顺序' },
+    },
+  },
+  {
+    command: 'workflow.nodes.search',
+    name: 'flovart_workflow_search_nodes',
+    surfaces: ALL,
+    description: '按条件查节点，只返回精简结果（id、类型、标题、状态、是否有产物、锚点编号、镜号、提示词前 80 字），分页。'
+      + '画布大时先用它代替整张 inspect；用户说“A02”“S01”“第 3 镜”“失败的视频”时用它解析成节点 id。'
+      + '锚点编号：已批准锚点按种类编号，A 角色 / S 场景 / P 道具 / F 风格。',
+    fields: {
+      query: { type: 'string', description: '关键字，匹配标题、文件名、提示词、备注内容、锚点编号；空格分隔的多个词需全部命中' },
+      types: { type: 'array', items: { type: 'string' }, description: '节点类型，如 ["image","video"]' },
+      anchorCodes: { type: 'array', items: { type: 'string' }, description: '锚点编号，如 ["A02","S01"]' },
+      anchor: { type: 'string', enum: ['any', 'approved', 'pending', 'character', 'scene', 'product', 'style'], description: '只看锚点：全部 / 已批准 / 待批准 / 某个种类' },
+      status: { type: 'array', items: { type: 'string', enum: ['empty', 'running', 'done', 'error'] }, description: '节点状态：empty 未生成 / running 生成中 / done 有产物 / error 失败' },
+      shotIndex: { type: 'number', description: '镜号' },
+      parentId: { type: 'string', description: '只看某个子画布（分组）里的节点' },
+      limit: { type: 'number', description: '每页条数，默认 20，最多 100' },
+      offset: { type: 'number', description: '分页偏移，用上一页返回的 nextOffset' },
     },
   },
   {

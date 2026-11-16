@@ -175,6 +175,7 @@ const READ_COMMANDS = new Set([
   // 导出只读文档，保存位置由用户在另存为里决定。
   'workflow.export',
   'workflow.shortcut.list',
+  'workflow.nodes.search',
   'flovart_workflow_media_view',
   'flovart_web_search',
   'flovart_grep',

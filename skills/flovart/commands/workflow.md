@@ -20,6 +20,8 @@ npm run flovart:cli -- workflow.project.use --project-id <project-id> --json
 npm run flovart:cli -- workflow.inspect --json
 npm run flovart:cli -- workflow.selection.get --json
 npm run flovart:cli -- workflow.models.list --mode image --json
+npm run flovart:cli -- workflow.nodes.search --anchor-codes A02,S01 --json
+npm run flovart:cli -- workflow.nodes.search --query 雨夜 --types video --status error --json
 npm run flovart:cli -- workflow.generate --type image --title "主视觉" --prompt "雨夜霓虹街头的产品特写" --aspect-ratio 16:9 --idempotency-key key-1 --json
 npm run flovart:cli -- workflow.generate --type video --title "图生视频" --prompt "@ref:<image-id> 镜头缓慢推进" --references '[{"nodeId":"<image-id>","role":"first_frame"}]' --duration-sec 5 --run --idempotency-key shot-1-v1 --json
 npm run flovart:cli -- workflow.shortcut.list --json
@@ -38,7 +40,7 @@ npm run flovart:cli -- workflow.node.stop --node-id <image-id> --json
 npm run flovart:cli -- workflow.script.materialize --script-node-id <script-id> --kind image --rows 1-5 --idempotency-key shots-1 --json
 ```
 
-The stable Agent surface is `workflow.inspect`, `workflow.selection.get`, `workflow.focus.nodes`, `workflow.apply`, `workflow.generate`, `workflow.models.list`, `workflow.shortcut.list`, `workflow.shortcut.apply`, `workflow.group.create`, `workflow.group.run`, `workflow.media.import`, `workflow.script.materialize`, `workflow.export`, `workflow.note.write`, `workflow.node.run`, `workflow.node.stop` and `workflow.node.tool`. Tool names, descriptions and full parameter schemas are the same in the built-in Agent, the local Agent, MCP and DSH (`tools/flovart/agent-tools.js`). Granular `workflow.node.*`, connection, selection, and viewport commands remain compatibility adapters and route through the same visible Workflow contract.
+The stable Agent surface is `workflow.inspect`, `workflow.selection.get`, `workflow.focus.nodes`, `workflow.apply`, `workflow.generate`, `workflow.models.list`, `workflow.nodes.search`, `workflow.shortcut.list`, `workflow.shortcut.apply`, `workflow.group.create`, `workflow.group.run`, `workflow.media.import`, `workflow.script.materialize`, `workflow.export`, `workflow.note.write`, `workflow.node.run`, `workflow.node.stop` and `workflow.node.tool`. Tool names, descriptions and full parameter schemas are the same in the built-in Agent, the local Agent, MCP and DSH (`tools/flovart/agent-tools.js`). Granular `workflow.node.*`, connection, selection, and viewport commands remain compatibility adapters and route through the same visible Workflow contract.
 
 ## Generating: one node, prompt in its Prompt Bar
 
@@ -67,6 +69,8 @@ The stable Agent surface is `workflow.inspect`, `workflow.selection.get`, `workf
 ## Groups
 
 A group is a frame node (`type: "subgraph"`, `metadata.groupKind: "group"`) whose members carry `parentId`; it is not a generation batch (`batchId` with `batchGroupSource: "auto"`) and not the alternates on a node. `workflow.group.create { nodeIds, title? }` returns `{ groupId, memberIds }`; Ctrl+G does the same on the canvas, Ctrl+Shift+G ungroups. `workflow.group.run { groupId, dryRun? }` runs the runnable members (image/video nodes with a prompt, not locked) in dependency order after one confirmation and returns `{ order, runs, failed }`; nodes downstream of a failure are skipped with `UPSTREAM_FAILED`. Legacy manual groups (`batchGroupSource: "manual"`) are migrated into group frames on load.
+
+`workflow.nodes.search` (tool `flovart_workflow_search_nodes`) finds nodes without reading the whole canvas: `query` (title, file name, prompt, note text, anchor code; all space-separated words must match), `types`, `anchorCodes`, `anchor` (`any` | `approved` | `pending` | `character` | `scene` | `product` | `style`), `status` (`empty` | `running` | `done` | `error`), `shotIndex`, `parentId`, `limit` (default 20, max 100), `offset`. It returns `{ projectId, total, offset, limit, nextOffset?, nodes: [{ id, type, title, status, hasMedia, anchorCode?, anchor?, shotIndex?, promptPreview?, parentId?, error? }] }`. `workflow.inspect --ledger` returns the project ledger derived from the same workflow (no note nodes): `{ ledger: { anchors: [{ code, nodeId, title, kind }], pendingAnchors, shots: [{ index, nodeId, title, durationSec?, anchorCodes, status }], assets: [{ nodeId, type, title, anchorCode?, shotIndex?, promptPreview?, alternateCount?, generated }], totals, issues }, text }`; `text` is a compact Chinese summary to re-read after context compaction. Approved anchors get short codes per kind — `A` character, `S` scene, `P` product, `F` style (A01, S02…) — numbered by approval time; use them to resolve requests such as “A02 + S02 重拍第 3 镜”.
 
 ## Node types and generation settings
 

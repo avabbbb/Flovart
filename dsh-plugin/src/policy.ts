@@ -28,7 +28,7 @@ const RUN_TOOLS = new Set(['flovart_run', 'flovart_workflow_node_run', 'flovart_
 const READ_TOOLS = new Set([
   'flovart_inspect', 'flovart_selection', 'flovart_status',
   'flovart_workflow_inspect', 'flovart_workflow_selection_get', 'flovart_workflow_focus_nodes',
-  'flovart_models_list', 'flovart_shortcut_list', 'flovart_workflow_node_stop',
+  'flovart_models_list', 'flovart_workflow_search_nodes', 'flovart_shortcut_list', 'flovart_workflow_node_stop',
   'flovart_export', 'flovart_task_get', 'flovart_task_cancel',
 ])
 

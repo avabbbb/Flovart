@@ -199,3 +199,104 @@ export function collectAgentAskAnswers(
   }
   return { ok: true, data };
 }
+
+// ---------------------------------------------------------------------------
+// 结构化提问：模型给 questions[]，这里直接转成受控表单，不再让模型写 HTML。
+// ---------------------------------------------------------------------------
+
+export type AgentAskQuestionType = 'single' | 'multi' | 'text';
+
+export interface AgentAskQuestionOption {
+  /** 回传给模型的值；缺省用 label */
+  value?: string;
+  /** 选项标题；可以是一句完整方案，例如「15 秒竖屏 9:16，3 段，每段 5 秒」 */
+  label: string;
+  /** 方案细节，显示在标题后 */
+  description?: string;
+  /** 推荐项，默认选中 */
+  recommended?: boolean;
+}
+
+export interface AgentAskQuestion {
+  /** 回传 JSON 的键，如 duration、aspect_ratio */
+  id: string;
+  /** 中文问题 */
+  question: string;
+  /** single 单选（默认，有 options 时）/ multi 多选 / text 自由输入（无 options 时默认） */
+  type?: AgentAskQuestionType;
+  options?: AgentAskQuestionOption[];
+  required?: boolean;
+  placeholder?: string;
+  /** text 时是否多行 */
+  multiline?: boolean;
+}
+
+export interface AgentAskSpec {
+  /** 卡片标题：为什么要问 */
+  title?: string;
+  /** 补充说明，每项一段 */
+  context?: string[];
+  questions: AgentAskQuestion[];
+}
+
+const MAX_OPTIONS = 8;
+const ID_PATTERN = /^[A-Za-z0-9_.-]{1,40}$/;
+
+function cleanText(value: unknown): string {
+  return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+}
+
+/** questions[] → AgentAskForm；校验 id 唯一、选项非空、推荐项预选（单选只认第一个推荐项）。 */
+export function buildAgentAskForm(spec: AgentAskSpec): AgentAskParseResult {
+  const questions = Array.isArray(spec?.questions) ? spec.questions : [];
+  if (!questions.length) return { ok: false, error: 'questions 至少需要一个问题。' };
+  if (questions.length > MAX_FIELDS) return { ok: false, error: '一次最多问 ' + MAX_FIELDS + ' 个问题。' };
+  const context: string[] = [];
+  const title = cleanText(spec.title);
+  if (title) context.push(title);
+  for (const item of spec.context || []) {
+    const text = cleanText(item);
+    if (text && !context.includes(text)) context.push(text);
+    if (context.length >= MAX_CONTEXT_ITEMS) break;
+  }
+  const seen = new Set<string>();
+  const fields: AgentAskField[] = [];
+  for (const [index, question] of questions.entries()) {
+    const id = cleanText(question?.id);
+    const label = cleanText(question?.question);
+    if (!ID_PATTERN.test(id)) return { ok: false, error: '第 ' + (index + 1) + ' 个问题的 id 需要是 1–40 位字母、数字、下划线。' };
+    if (seen.has(id)) return { ok: false, error: '问题 id「' + id + '」重复。' };
+    seen.add(id);
+    if (!label) return { ok: false, error: '问题「' + id + '」缺少 question 文本。' };
+    const rawOptions = Array.isArray(question.options) ? question.options : [];
+    const type: AgentAskQuestionType = question.type ?? (rawOptions.length ? 'single' : 'text');
+    const required = question.required ?? true;
+    if (type === 'text') {
+      const placeholder = cleanText(question.placeholder) || undefined;
+      fields.push(question.multiline
+        ? { kind: 'textarea', name: id, label, placeholder, required, value: '', rows: 3 }
+        : { kind: 'text', name: id, label, inputType: 'text', placeholder, required, value: '' });
+      continue;
+    }
+    if (!rawOptions.length) return { ok: false, error: '问题「' + id + '」是 ' + type + '，需要 options。' };
+    if (rawOptions.length > MAX_OPTIONS) return { ok: false, error: '问题「' + id + '」最多 ' + MAX_OPTIONS + ' 个选项。' };
+    const options: AgentAskOption[] = [];
+    const values = new Set<string>();
+    let recommendedTaken = false;
+    for (const option of rawOptions) {
+      const optionLabel = cleanText(option?.label);
+      if (!optionLabel) return { ok: false, error: '问题「' + id + '」有空选项。' };
+      const value = cleanText(option.value) || optionLabel;
+      if (values.has(value)) return { ok: false, error: '问题「' + id + '」的选项「' + value + '」重复。' };
+      values.add(value);
+      const description = cleanText(option.description);
+      const checked = Boolean(option.recommended) && (type === 'multi' || !recommendedTaken);
+      if (checked) recommendedTaken = true;
+      options.push({ value, label: description ? optionLabel + ' — ' + description : optionLabel, checked });
+    }
+    fields.push(type === 'multi'
+      ? { kind: 'checkbox', name: id, label, required, options }
+      : { kind: 'radio', name: id, label, required, options });
+  }
+  return { ok: true, form: { context, fields } };
+}

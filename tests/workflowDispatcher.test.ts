@@ -75,6 +75,31 @@ describe('workflow dispatcher', () => {
     expect(dependencies.getState().projects[0].draftVersion).toBe(beforeRevision);
   });
 
+  it('searches nodes with compact, redacted hits and anchor codes', async () => {
+    const { dispatch, dependencies } = setup();
+    const project = dependencies.getState().projects[0];
+    project.nodes[0].anchor = { kind: 'character', approved: true };
+    const beforeRevision = project.draftVersion;
+    const result = await dispatch({ id: 'search', command: 'workflow.nodes.search', args: { anchorCodes: 'a1', limit: '5' }, source: 'agent' });
+    expect(result).toMatchObject({
+      ok: true,
+      result: { projectId: project.id, total: 1, limit: 5, nodes: [{ id: 'image-1', anchorCode: 'A01', status: 'done', hasMedia: true }] },
+    });
+    expect(JSON.stringify(result.result)).not.toContain('base64,SECRET');
+    expect(JSON.stringify(result.result)).not.toContain('private-key');
+    expect(dependencies.getState().projects[0].draftVersion).toBe(beforeRevision);
+  });
+
+  it('returns the project ledger from inspect without media', async () => {
+    const { dispatch, dependencies } = setup();
+    dependencies.getState().projects[0].nodes[0].anchor = { kind: 'scene', approved: true };
+    const result = await dispatch({ id: 'ledger', command: 'workflow.inspect', args: { ledger: true }, source: 'agent' });
+    expect(result).toMatchObject({ ok: true, result: { ledger: { anchors: [{ code: 'S01', nodeId: 'image-1' }] } } });
+    expect((result.result as { text: string }).text).toContain('S01');
+    expect(JSON.stringify(result.result)).not.toContain('base64,SECRET');
+    expect(JSON.stringify(result.result)).not.toContain('private-key');
+  });
+
   it('does not cache selection reads under a reused Agent turn key', async () => {
     const { dispatch, dependencies } = setup();
     const project = dependencies.getState().projects[0];

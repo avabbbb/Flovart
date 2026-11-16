@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "95751c53f7ce0b88bdea8067ab8f497faede4ad0bb4b333827b79f299a35c4cc",
+  "registryHash": "aaf747391b167ae0539fb0c982e65d03b92115a8414b1dc1eb2729f9406fb8c5",
   "commands": [
     {
       "name": "runtime.status",
@@ -392,11 +392,12 @@
     },
     {
       "name": "workflow.inspect",
-      "summary": "Inspect the visible Workflow graph with media and secrets redacted. Use summary=true for a light graph or nodeId for one node.",
+      "summary": "Inspect the visible Workflow graph with media and secrets redacted. Use summary=true for a light graph, nodeId for one node, or ledger=true for the project ledger (anchor codes, shot table, generated asset index).",
       "args": {
         "projectId": "string?",
         "summary": "boolean?",
-        "nodeId": "string?"
+        "nodeId": "string?",
+        "ledger": "boolean?"
       },
       "availability": "available"
     },
@@ -660,6 +661,23 @@
         "submode": "string?",
         "referenceKinds": "string[]?",
         "includeUnavailable": "boolean?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.nodes.search",
+      "summary": "Search Workflow nodes by keyword (title, prompt, note text, anchor code), type, anchor (approved/pending/kind/short code such as A02), status (empty/running/done/error), shot index or subgraph; returns compact paged hits without media or secrets.",
+      "args": {
+        "projectId": "string?",
+        "query": "string?",
+        "types": "string[]?",
+        "anchorCodes": "string[]?",
+        "anchor": "string?",
+        "status": "string[]?",
+        "shotIndex": "number?",
+        "parentId": "string?",
+        "limit": "number?",
+        "offset": "number?"
       },
       "availability": "available"
     },

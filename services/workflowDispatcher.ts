@@ -16,6 +16,8 @@ import type { WorkflowConnection, WorkflowDocumentOperation, WorkflowMutationSou
 import { normalizeWorkflowExecutionError, type WorkflowExecutor, type WorkflowRunCommand, type WorkflowRunResult } from './workflowExecutor';
 import { displayError } from './displayError';
 import { buildProductionBible } from '../components/workflow/productionBible';
+import { nodeSearchQueryFromArgs, searchWorkflowNodes } from '../components/workflow/nodeSearch';
+import { buildProjectLedger, renderProjectLedger } from '../components/workflow/projectLedger';
 import { buildWorkflowPromptDocument, promptDocumentMentions } from '../components/workflow/promptDocument';
 import { buildScriptMaterializeOps, ScriptMaterializeError } from '../components/workflow/scriptMaterialize';
 import { generateModeOf, listWorkflowModels, planWorkflowGenerate, WorkflowGenerateError } from './workflowGenerateCommand';
@@ -157,7 +159,7 @@ const DOCUMENT_MUTATION_COMMANDS = new Set([
   'workflow.apply', 'workflow.node.create', 'workflow.node.create-connected', 'workflow.node.update',
   'workflow.node.delete', 'workflow.node.move', 'workflow.node.resize', 'workflow.connect', 'workflow.disconnect',
 ]);
-const WORKFLOW_READ_COMMANDS = new Set(['workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.models.list', 'workflow.shortcut.list']);
+const WORKFLOW_READ_COMMANDS = new Set(['workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.models.list', 'workflow.shortcut.list', 'workflow.nodes.search']);
 const SENSITIVE_KEY = /(?:api.?key|authorization|token|secret|password|storage.?key|file.?path|local.?path|data.?url)/i;
 const MEDIA_KEY = /^(?:href|poster|src|url)$/i;
 const LOCAL_PATH = /^(?:[a-z]:\\|\\\\|\/home\/|\/Users\/|\/tmp\/)/i;
@@ -709,7 +711,11 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         if (!project) return error(envelope.id, 'NOT_FOUND', '当前没有可用的 Workflow 项目。');
         const summary = args.summary === true || args.view === 'summary' || args.mode === 'summary';
         const nodeId = typeof args.nodeId === 'string' ? args.nodeId.trim() : '';
-        if (nodeId) {
+        if (args.ledger === true || args.ledger === 'true' || args.view === 'ledger') {
+          // 项目账本：锚点速查 + 镜头表 + 资产索引，从同一份 workflow 推导，不落画布文本节点。
+          const ledger = buildProjectLedger(project);
+          result = { ok: true, commandId: envelope.id, result: { projectId: project.id, title: project.title, draftVersion: project.draftVersion || 1, ledger, text: renderProjectLedger(ledger) } };
+        } else if (nodeId) {
           const scoped = inspectNode(project, nodeId);
           if (!scoped) return error(envelope.id, 'NOT_FOUND', `节点不存在：${nodeId}`);
           result = { ok: true, commandId: envelope.id, result: scoped };
@@ -754,6 +760,9 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
           }
           throw cause;
         }
+      } else if (command === 'workflow.nodes.search') {
+        if (!project) return error(envelope.id, 'NOT_FOUND', '当前没有可用的 Workflow 项目。');
+        result = { ok: true, commandId: envelope.id, result: { projectId: project.id, ...searchWorkflowNodes(project.nodes, nodeSearchQueryFromArgs(args)) } };
       } else if (command === 'workflow.models.list') {
         result = { ok: true, commandId: envelope.id, result: listWorkflowModels(args, dependencies.getUserApiKeys?.() || []) };
       } else if (command === 'workflow.shortcut.list') {
