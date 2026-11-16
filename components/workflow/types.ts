@@ -220,7 +220,20 @@ export interface WorkflowReferenceRegion {
   y: number;
   w: number;
   h: number;
+  /** 与框同尺寸的 RGBA PNG：alpha=255 为主体、alpha=0 为排除（执行层按 alpha 做 destination-in）。 */
   mask?: { storageKey?: string; href?: string };
+  /** 点选主体的提示（弹层重开时恢复点位用）；不参与身份键。 */
+  pick?: WorkflowReferenceRegionPick;
+}
+
+/** 点选主体的提示：点 / 框都是相对原图的 0-1 坐标；label 1 = 包含，0 = 排除。 */
+export interface WorkflowReferenceRegionPick {
+  points: Array<{ x: number; y: number; label: 0 | 1 }>;
+  box?: { x: number; y: number; w: number; h: number };
+  /** 采用的候选蒙版序号（模型通常给 3 个）。 */
+  candidate?: number;
+  /** 产生蒙版的引擎标识，如 `slimsam-77-uniform`。 */
+  engine?: string;
 }
 
 export interface WorkflowResource {

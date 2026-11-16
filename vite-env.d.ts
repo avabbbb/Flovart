@@ -7,6 +7,10 @@ interface ImportMetaEnv {
   readonly VITE_LLM_PROXY?: string;
   // 逗号分隔的 Flovart 浏览器插件 ID（商店 ID 与本地旁加载 ID 可同时填写）。
   readonly VITE_FLOVART_EXTENSION_IDS?: string;
+  /** 点选主体模型仓库根地址（默认 https://huggingface.co/；大陆可用 https://hf-mirror.com/ 或自托管）。 */
+  readonly VITE_SEGMENTATION_MODEL_BASE_URL?: string;
+  /** onnxruntime-web wasm 文件目录（默认 jsDelivr CDN）。 */
+  readonly VITE_SEGMENTATION_WASM_BASE_URL?: string;
 }
 
 interface ImportMeta {

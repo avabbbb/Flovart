@@ -1,5 +1,5 @@
 // 区域引用（P1-2）的纯函数：校验/归一化、身份键、chip 缩略图背景、区域像素尺寸。
-import type { WorkflowReferenceRegion } from './types';
+import type { WorkflowReferenceRegion, WorkflowReferenceRegionPick } from './types';
 
 const round = (value: number) => Math.round(value * 10000) / 10000;
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
@@ -26,14 +26,57 @@ export function validateReferenceRegion(value: unknown): RegionValidation {
     else if (typeof href === 'string' && href) region.mask = { href };
     else return { error: 'region.mask 需要 storageKey 或 href' };
   }
+  const pick = validateRegionPick(raw.pick);
+  if (pick.error) return { error: pick.error };
+  if (pick.pick) region.pick = pick.pick;
   return { region };
+}
+
+/** 点选提示的点数上限。 */
+export const MAX_PICK_POINTS = 16;
+
+const isUnit = (value: number) => Number.isFinite(value) && value >= 0 && value <= 1;
+
+/** 校验并归一化 region.pick（点选主体的提示）。null/undefined → 无；未知字段丢弃。 */
+function validateRegionPick(value: unknown): { pick?: WorkflowReferenceRegionPick; error?: string } {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== 'object' || Array.isArray(value)) return { error: 'region.pick 必须是 {points, box?, candidate?, engine?}' };
+  const raw = value as Record<string, unknown>;
+  if (!Array.isArray(raw.points)) return { error: 'region.pick.points 必须是点的数组' };
+  if (raw.points.length > MAX_PICK_POINTS) return { error: `region.pick.points 最多 ${MAX_PICK_POINTS} 个点` };
+  const points: WorkflowReferenceRegionPick['points'] = [];
+  for (const item of raw.points) {
+    if (!item || typeof item !== 'object') return { error: 'region.pick.points 的每一项必须是 {x,y,label}' };
+    const point = item as Record<string, unknown>;
+    const x = Number(point.x);
+    const y = Number(point.y);
+    if (!isUnit(x) || !isUnit(y)) return { error: 'region.pick.points 的 x/y 必须在 0-1 之间（相对原图的比例）' };
+    const label = point.label === undefined ? 1 : Number(point.label);
+    if (label !== 0 && label !== 1) return { error: 'region.pick.points 的 label 只能是 1（包含）或 0（排除）' };
+    points.push({ x: round(x), y: round(y), label });
+  }
+  const pick: WorkflowReferenceRegionPick = { points };
+  if (raw.box !== undefined && raw.box !== null) {
+    const box = raw.box as Record<string, unknown>;
+    const values = typeof box === 'object' ? (['x', 'y', 'w', 'h'] as const).map(key => Number(box[key])) : [];
+    if (values.length !== 4 || !values.every(isUnit) || values[2] <= 0 || values[3] <= 0) return { error: 'region.pick.box 必须是 0-1 归一化的 {x,y,w,h}' };
+    const [x, y, w, h] = values;
+    pick.box = { x: round(x), y: round(y), w: round(Math.min(w, 1 - x)), h: round(Math.min(h, 1 - y)) };
+  }
+  if (raw.candidate !== undefined && raw.candidate !== null) {
+    const candidate = Number(raw.candidate);
+    if (!Number.isInteger(candidate) || candidate < 0) return { error: 'region.pick.candidate 必须是非负整数' };
+    pick.candidate = candidate;
+  }
+  if (typeof raw.engine === 'string' && raw.engine.trim()) pick.engine = raw.engine.trim().slice(0, 64);
+  return { pick };
 }
 
 export function normalizeReferenceRegion(value: unknown): WorkflowReferenceRegion | undefined {
   return validateReferenceRegion(value).region;
 }
 
-/** 区域身份键：同一节点不同区域是不同引用；mask 参与身份。 */
+/** 区域身份键：同一节点不同区域是不同引用；mask 参与身份，pick（点选提示）不参与。 */
 export function referenceRegionKey(region: WorkflowReferenceRegion | undefined | null): string {
   if (!region) return '';
   const base = [region.x, region.y, region.w, region.h].map(round).join(',');

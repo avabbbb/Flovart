@@ -49,12 +49,16 @@ export default defineConfig(() => {
         // /node_modules/.vite/deps/worker.js —— 这个 chunk 不会生成（404），
         // 于是 worker 起不来、ffmpeg.load() 永不 settle，所有视频/音频工具
         // 都会静默卡死。排除后直接加载包内真实 ESM 文件，路径才成立。
-        exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
+        // @huggingface/transformers（点选主体，只在分割 worker 里懒加载）同理：它和 onnxruntime-web
+        // 按 import.meta.url 定位 wasm / 子模块，预打包后路径会错。
+        exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util', '@huggingface/transformers'],
         esbuildOptions: {
           target: 'es2022',
           treeShaking: true,
         },
       },
+      // 分割 worker 里要动态 import transformers.js（代码分割），IIFE 格式不支持，用 ES module worker。
+      worker: { format: 'es' as const },
       resolve: {
         // 优先加载 .tsx/.ts 源文件，避免陈旧未跟踪 .js 副本遮蔽源码
         extensions: ['.tsx', '.ts', '.jsx', '.js', '.json', '.mjs'],
