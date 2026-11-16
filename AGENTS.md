@@ -99,7 +99,7 @@ UI / Agent / Host entry → same generation/business function → Provider adapt
 
 ## 8. 验证与发布口径
 
-- 评测与排障按「trace 现象 → 根因 → 修复 → 测试」写进 `docs/quality/<日期>-*.md`，并在 `docs/index.md` 留指针；不另起并列报告。
+- 评测总纲是 `eval/eval.md`（评什么、怎么评、Rubric 与 Judge、上线门禁）；新口径改 eval.md 与 `eval/judge/rubrics/`，不另起方法文档。单轮评测与排障按「trace 现象 → 根因 → 修复 → 测试」写进 `docs/quality/<日期>-*.md`，并在 `docs/index.md` 留指针；不另起并列报告。
 - 测试匹配改动风险：文档跑 `npm run docs:check`；代码跑相关测试；宿主 / 原生效果进真实应用。
 - 普通开发 / PR 走快速通道：只跑与改动直接相关的一轮验证；缺 SDK / 宿主 / 依赖时写 `NOT_RUN locally`，确定性验证可交给 GitHub Actions。10x critical、完整 FlovartBench、依赖审计、CodeQL、发布验证、全平台安装包属于 main / scheduled / manual / release，不作普通 PR 前置。secret audit、目标 / revision / 幂等、unknown-after-submit、未授权破坏性写入仍 fail-closed。
 - 真实支持状态只由 `SUPPORT_MATRIX.md` 升级；Provider 认证区分 Fake fixture 与真实账号、扣费、429、取消、unknown-submit。
