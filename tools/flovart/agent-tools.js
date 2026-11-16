@@ -54,7 +54,8 @@ const DEFINITIONS = [
     name: 'flovart_workflow_inspect',
     aliases: ['flovart_inspect'],
     surfaces: ALL,
-    description: '读取可见 Workflow 图（媒体与密钥已脱敏）。summary=true 只给轻量图；nodeId 只看一个节点与它的上下游。',
+    description: '读取可见 Workflow 图（媒体与密钥已脱敏）。summary=true 只给轻量图；nodeId 只看一个节点与它的上下游；'
+      + 'ledger=true 返回项目账本（锚点速查 A/S/P/F 编号、镜头表、已生成资产索引，含紧凑文字版），长任务中途或上下文被压缩后先回读它。',
   },
   {
     command: 'workflow.selection.get',

@@ -14,6 +14,7 @@ import { normalizeWorkflowExecutionError, type WorkflowExecutor, type WorkflowRu
 import { displayError } from './displayError';
 import { buildProductionBible } from '../components/workflow/productionBible';
 import { nodeSearchQueryFromArgs, searchWorkflowNodes } from '../components/workflow/nodeSearch';
+import { buildProjectLedger, renderProjectLedger } from '../components/workflow/projectLedger';
 import { buildWorkflowPromptDocument, promptDocumentMentions } from '../components/workflow/promptDocument';
 import { generateModeOf, listWorkflowModels, planWorkflowGenerate, WorkflowGenerateError } from './workflowGenerateCommand';
 import type { UserApiKey } from '../types';
@@ -670,7 +671,11 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         if (!project) return error(envelope.id, 'NOT_FOUND', '当前没有可用的 Workflow 项目。');
         const summary = args.summary === true || args.view === 'summary' || args.mode === 'summary';
         const nodeId = typeof args.nodeId === 'string' ? args.nodeId.trim() : '';
-        if (nodeId) {
+        if (args.ledger === true || args.ledger === 'true' || args.view === 'ledger') {
+          // 项目账本：锚点速查 + 镜头表 + 资产索引，从同一份 workflow 推导，不落画布文本节点。
+          const ledger = buildProjectLedger(project);
+          result = { ok: true, commandId: envelope.id, result: { projectId: project.id, title: project.title, draftVersion: project.draftVersion || 1, ledger, text: renderProjectLedger(ledger) } };
+        } else if (nodeId) {
           const scoped = inspectNode(project, nodeId);
           if (!scoped) return error(envelope.id, 'NOT_FOUND', `节点不存在：${nodeId}`);
           result = { ok: true, commandId: envelope.id, result: scoped };

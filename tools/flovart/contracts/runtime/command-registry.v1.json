@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "18650d36a4c807b313dea5aecdd9dd253b4c931ee8dbbfd53bdd2dbe43bdbe26",
+  "registryHash": "dfffa6787cb235e2174b413b96409aabf995ba8addd979d0cc698cd2affb0c7d",
   "commands": [
     {
       "name": "runtime.status",
@@ -365,11 +365,12 @@
     },
     {
       "name": "workflow.inspect",
-      "summary": "Inspect the visible Workflow graph with media and secrets redacted. Use summary=true for a light graph or nodeId for one node.",
+      "summary": "Inspect the visible Workflow graph with media and secrets redacted. Use summary=true for a light graph, nodeId for one node, or ledger=true for the project ledger (anchor codes, shot table, generated asset index).",
       "args": {
         "projectId": "string?",
         "summary": "boolean?",
-        "nodeId": "string?"
+        "nodeId": "string?",
+        "ledger": "boolean?"
       },
       "availability": "available"
     },
