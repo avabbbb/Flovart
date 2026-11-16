@@ -38,16 +38,23 @@
     @media not all and (prefers-contrast: more) {
       /* 1. 右侧 Agent 对话面板（壳） */
       /* 选择器加权：要压过 adaptive.css / glass.css 里停靠态的 !important 底色 */
+      /* 底色与模糊画在 ::before 上（见 adaptive.css）：壳本身带 backdrop-filter 会成为 backdrop root，
+         面板里的 Skill / @ 浮层与预览卡就糊不到背后的聊天文字。壳只保留描边与阴影。 */
       :root aside.compact-right-panel.compact-right-panel.compact-right-panel[data-open='true'] {
+        background: transparent !important;
+        -webkit-backdrop-filter: none !important;
+        backdrop-filter: none !important;
+        border: 1px solid var(--amb-stroke) !important;
+        box-shadow: var(--amb-highlight), 0 0 0 .5px var(--amb-edge), var(--amb-shadow) !important;
+      }
+      :root aside.compact-right-panel.compact-right-panel.compact-right-panel[data-open='true']::before {
         background:
           radial-gradient(120% 45% at 15% 0%, var(--amb-p1), transparent 70%),
           radial-gradient(70% 45% at 100% 45%, var(--amb-p2), transparent 70%),
           radial-gradient(120% 40% at 50% 100%, var(--amb-p3), transparent 70%),
-          var(--amb-shell) !important;
+          var(--amb-shell);
         -webkit-backdrop-filter: var(--amb-shell-filter);
         backdrop-filter: var(--amb-shell-filter);
-        border: 1px solid var(--amb-stroke) !important;
-        box-shadow: var(--amb-highlight), 0 0 0 .5px var(--amb-edge), var(--amb-shadow) !important;
       }
 
       /* 2. 卡：输入框、提示卡、生成计划卡 */
