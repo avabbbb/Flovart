@@ -1,4 +1,5 @@
 import { checkReferenceCount, describeReferenceFix, getReferenceConstraints, suggestReferenceCandidates, type ReferenceKind } from './referenceConstraints';
+import { alignPromptReferences } from '../components/workflow/promptReferenceAlignment';
 import { nanoid } from 'nanoid';
 import { createWorkflowNode } from '../components/workflow/constants';
 import { applyWorkflowOps } from '../components/workflow/ops';
@@ -202,6 +203,8 @@ export interface GeneratePlan {
   references: Array<{ nodeId: string; label: string; kind: string; role?: WorkflowGenerationReferenceRole; mentioned: boolean }>;
   promptIntent: PromptIntent;
   diagnostics: GenerateDiagnostic[];
+  /** prompt 引用了但原本没连线、本次自动连上的节点（P0-2）。 */
+  autoLinked: string[];
 }
 
 function stableNodeId(mutationId: string) {
@@ -238,7 +241,7 @@ function compatibleModels(mode: GenerateMode, submode: ProductModelMode, kinds: 
 export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
   const { args, keys } = input;
   const diagnostics: GenerateDiagnostic[] = [];
-  const prompt = typeof args.prompt === 'string' ? args.prompt : '';
+  let prompt = typeof args.prompt === 'string' ? args.prompt : '';
   if (!prompt.trim()) throw new WorkflowGenerateError('BAD_REQUEST', 'prompt 不能为空：提示词直接写进生成节点的 Prompt Bar');
   const requestedId = text(args.nodeId);
   let target: WorkflowNode | undefined;
@@ -263,7 +266,23 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
   }
   const nodeId = target?.id || stableNodeId(input.mutationId);
 
-  const references = parseGenerateReferences(args.references);
+  const explicitReferences = parseGenerateReferences(args.references);
+  // P0-2：prompt 里的 @ref / @"名字" 与连线必须一致——没连线的按策略自动补进 references 或拒绝。
+  const linkPolicy = args.linkPolicy === 'reject' ? 'reject' : 'auto';
+  const alignment = alignPromptReferences({
+    text: prompt,
+    targetNodeId: nodeId,
+    nodes: input.nodes,
+    connections: input.connections,
+    referenceIds: explicitReferences.map(reference => reference.nodeId),
+    policy: linkPolicy,
+  });
+  if (!alignment.ok) throw new WorkflowGenerateError(alignment.code, alignment.message, alignment.details);
+  prompt = alignment.text;
+  const references: GenerateReference[] = [
+    ...explicitReferences,
+    ...alignment.autoLinked.map(nodeId => ({ nodeId })),
+  ];
   const referenceNodes = references.map(reference => {
     const node = input.nodes.find(item => item.id === reference.nodeId);
     if (!node) throw new WorkflowGenerateError('NOT_FOUND', '参考节点不存在：' + reference.nodeId);
@@ -490,5 +509,6 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
     })),
     promptIntent,
     diagnostics,
+    autoLinked: alignment.autoLinked,
   };
 }

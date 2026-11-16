@@ -160,6 +160,9 @@ the browser itself is offline.
   Never build a text node (or a "prompt/config node") and connect it to a
   generation node: text nodes are notes for people and are never generation
   input. Shot order is `shot.index`, not a chain of connections.
+- In `workflow.generate` prompts, refer to inputs as `@ref:<nodeId>` or
+  `@"Node name"`; anything mentioned gets connected (`autoLinked`), and
+  disconnecting a source removes its chip (`prunedMentions`).
 - Pick or change a model → `workflow.models.list` first (live catalog with
   per-mode configuration and reference min/max). On `MODE_UNSUPPORTED`,
   `REFERENCE_COUNT_OUT_OF_RANGE` or `REFERENCE_LIMIT`, switch to one of the

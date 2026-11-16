@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "833b47e3d9fdbdef1b7b082aa66f63d9d2346cd9a6e574540b4d886b0912814d",
+  "registryHash": "4c92aab1bba179b79c678a7d6a8d4c9ebac3457bdb31fa5521dd94f661c69837",
   "commands": [
     {
       "name": "runtime.status",
@@ -574,6 +574,7 @@
         "generateAudio": "boolean?",
         "params": "object?",
         "shot": "object?",
+        "linkPolicy": "auto|reject?",
         "run": "boolean?",
         "dryRun": "boolean?",
         "expectedRevision": "number?",

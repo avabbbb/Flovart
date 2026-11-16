@@ -1,3 +1,4 @@
+import { planMentionPrunes, type MentionPrune } from '../components/workflow/promptReferenceAlignment';
 import { WORKFLOW_NODE_PATCH_FIELDS, WORKFLOW_OPERATION_FIELDS } from '../tools/flovart/workflow-operation-schema.js';
 import { nanoid } from 'nanoid';
 import { WORKFLOW_MUTATION_COMMANDS, workflowCommandSummary } from '../components/workflow/agentOps';
@@ -787,6 +788,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
           prompt: plan.prompt,
           model: plan.model,
           references: plan.references,
+          autoLinked: plan.autoLinked,
           diagnostics: plan.diagnostics,
         };
         if (args.dryRun === true || args['dry-run'] === true) {
@@ -1040,6 +1042,23 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         }
         if (agentTextNodeViolation(envelope.source, operations || [operation!])) return error(envelope.id, 'NOTE_IS_ANNOTATION', NOTE_IS_ANNOTATION_MESSAGE);
         operations = tagWorkflowNodeOrigin(operations || [operation!], envelope.source);
+        // P0-2：断开/删除上游时，同步清掉下游 Prompt Bar 里对应的 @chip，并在结果里告诉调用方。
+        let mentionPrunes: MentionPrune[] = [];
+        if (operations.some(op => op.type === 'delete_connections' || op.type === 'delete_nodes')) {
+          const projected = applyWorkflowOps({
+            projectId: project.id, title: project.title, nodes: project.nodes, connections: project.connections,
+            selectedNodeIds: project.selectedNodeIds, viewport: project.viewport,
+          }, operations);
+          if (!projected.rejections.length) {
+            mentionPrunes = planMentionPrunes(project, projected.snapshot);
+            operations = [...operations, ...mentionPrunes.map(prune => ({
+              type: 'update_node' as const,
+              id: prune.nodeId,
+              metadata: { prompt: prune.prompt, richTextDocument: prune.richTextDocument },
+            }))];
+          }
+        }
+        const prunedMentions = mentionPrunes.map(prune => ({ nodeId: prune.nodeId, removedReferenceIds: prune.removedIds, prompt: prune.prompt }));
         if (command === 'workflow.apply' && (args.dryRun === true || args['dry-run'] === true)) {
           const preview = applyWorkflowOps({
             projectId: project.id,
@@ -1069,6 +1088,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
               removedNodeIds: [...beforeNodeIds].filter(id => !afterNodeIds.has(id)),
               connectionIds: [...afterConnectionIds].filter(id => !beforeConnectionIds.has(id)),
               removedConnectionIds: [...beforeConnectionIds].filter(id => !afterConnectionIds.has(id)),
+              ...(prunedMentions.length ? { prunedMentions } : {}),
             },
           };
           cache(cacheKey, result);
@@ -1091,6 +1111,9 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
           expectedObjectVersions,
         });
         if (!result.ok) return result;
+        if (prunedMentions.length && result.result && typeof result.result === 'object') {
+          result = { ...result, result: { ...(result.result as Record<string, unknown>), prunedMentions } };
+        }
       }
 
       cache(cacheKey, result);

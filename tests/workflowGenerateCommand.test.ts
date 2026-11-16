@@ -158,6 +158,30 @@ describe('workflow.generate', () => {
     expect(fl).toMatchObject({ minReferences: { image: 2 }, requires: ['media'] });
   });
 
+  it('auto-links nodes mentioned by @"name" and reports them; rejects ambiguous names', async () => {
+    const { dispatch, project } = setup();
+    const result = await dispatch({ id: 'al', command: 'workflow.generate', source: 'agent', args: { type: 'image', prompt: '让 @"女主" 换成水彩风', modelId: 'flovart:gemini-3-pro-image' } });
+    expect(result.ok).toBe(true);
+    const body = result.result as { nodeId: string; autoLinked: string[]; references: Array<{ nodeId: string; mentioned: boolean }> };
+    expect(body.autoLinked).toEqual(['img-a']);
+    expect(body.references).toMatchObject([{ nodeId: 'img-a', mentioned: true }]);
+    expect(project().connections.some(connection => connection.fromNodeId === 'img-a' && connection.toNodeId === body.nodeId)).toBe(true);
+    const rejected = await dispatch({ id: 'rj', command: 'workflow.generate', source: 'agent', args: { type: 'image', prompt: '参考 @ref:img-b', linkPolicy: 'reject' } });
+    expect(rejected.error?.code).toBe('REFERENCE_NOT_LINKED');
+  });
+
+  it('clears the @chip in the downstream Prompt Bar when its connection is removed, and says so', async () => {
+    const { dispatch, project } = setup();
+    const generated = await dispatch({ id: 'g2', command: 'workflow.generate', source: 'agent', args: { type: 'image', prompt: '把 @ref:img-a 放进 @ref:img-b', references: ['img-a', 'img-b'] } });
+    const nodeId = (generated.result as { nodeId: string }).nodeId;
+    const connection = project().connections.find(item => item.fromNodeId === 'img-a' && item.toNodeId === nodeId)!;
+    const result = await dispatch({ id: 'dc', command: 'workflow.disconnect', source: 'agent', args: { connectionId: connection.id } });
+    expect(result.ok).toBe(true);
+    expect((result.result as { prunedMentions: unknown[] }).prunedMentions).toMatchObject([{ nodeId, removedReferenceIds: ['img-a'] }]);
+    const node = project().nodes.find(item => item.id === nodeId)!;
+    expect(JSON.stringify(node.metadata.richTextDocument)).not.toContain('"img-a"');
+  });
+
   it('dry-runs without touching the canvas and replays the same key without duplicating', async () => {
     const { dispatch, project } = setup();
     const dry = await dispatch({ id: 'dry', command: 'workflow.generate', source: 'cli', args: { type: 'video', prompt: '慢推', references: ['img-a'], dryRun: true } });
