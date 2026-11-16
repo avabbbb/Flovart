@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "09f59b85c686cf5e727ebeec63a359cda264d5d69fa213868795aefd77cf027c",
+  "registryHash": "d2beda5877ec2dfbf2d52417d798adb4d94472fd411b55042f163607a1f92f6a",
   "commands": [
     {
       "name": "runtime.status",
@@ -360,6 +360,33 @@
         "prompt": "string",
         "policy": "read-only|workspace-write",
         "mutationId": "string"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "agent.task.start",
+      "summary": "Start a long command (agent.turn, workflow.node.run, workflow.generate, workflow.node.tool, workflow.media.import, workflow.export) as a background task in the local Agent session and return its taskId at once, so it is not bound by the per-request timeout. Same idempotencyKey replays the same task.",
+      "args": {
+        "command": "string",
+        "args": "object?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "agent.task.get",
+      "summary": "Read a background task: status (queued|running|succeeded|failed|cancelled), events after afterSeq, and the command's result or error once done.",
+      "args": {
+        "taskId": "string",
+        "afterSeq": "number?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "agent.task.cancel",
+      "summary": "Cooperatively cancel a background task; canvas generation nodes it started are asked to stop. Already-submitted provider jobs may still be billed.",
+      "args": {
+        "taskId": "string",
+        "reason": "string?"
       },
       "availability": "available"
     },

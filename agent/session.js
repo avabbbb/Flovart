@@ -5,6 +5,7 @@ import { buildPlanCard, PAID_COMMANDS, SESSION_CONTROL_COMMANDS, SessionBudget }
 import { planBatchPick } from './batch-pick.js';
 import { importFlovartPipelineModule } from './flovart-modules.js';
 import { appendRunArtifactReceipts } from './receipts.js';
+import { AGENT_TASK_COMMAND_SET, createAgentTaskLayer } from './task-layer.js';
 
 const { PIPELINE_COMMANDS } = await importFlovartPipelineModule('commands');
 
@@ -67,7 +68,7 @@ export const LONG_RUNNING_COMMANDS = new Set([
 ]);
 
 export class WorkflowAgentSession {
-  constructor({ timeoutMs = 60000, longRunningTimeoutMs = 900_000, isKnownAgentIdentity, workspaceLease, webUrl = null, budget } = {}) {
+  constructor({ timeoutMs = 60000, longRunningTimeoutMs = 900_000, taskTimeoutMs = 30 * 60_000, isKnownAgentIdentity, workspaceLease, webUrl = null, budget } = {}) {
     this.timeoutMs = timeoutMs;
     this.longRunningTimeoutMs = longRunningTimeoutMs;
     this.clients = new Map();
@@ -83,6 +84,13 @@ export class WorkflowAgentSession {
     this.webUrl = webUrl;
     // 会话预算 / 暂停 / dry-run（P1）：只做硬上限，不绕过浏览器里的人工确认。
     this.budget = budget || new SessionBudget();
+    // 异步任务层（agent.task.*）：后台执行长命令，外部 Agent 轮询 get(afterSeq)。
+    this.tasks = createAgentTaskLayer({
+      run: (command, args, source, idempotencyKey, signal, caller, runOptions) => this.callCommand(command, args, source, idempotencyKey, signal, caller, runOptions),
+      stop: (command, args, source, caller) => this.callCommand(command, args, source, undefined, undefined, caller),
+      taskTimeoutMs,
+      onEvent: (taskId, event) => this.emit('agent_task', { taskId, ...event }),
+    });
   }
 
   health() {
@@ -417,8 +425,10 @@ export class WorkflowAgentSession {
     });
   }
 
-  async callCommand(command, args = {}, source = 'mcp', idempotencyKey, signal, caller) {
+  async callCommand(command, args = {}, source = 'mcp', idempotencyKey, signal, caller, runOptions = {}) {
     if (command === 'status') return this.dispatchCommand(command, args, source, idempotencyKey, signal, caller);
+    // 异步任务层：start 立即返回 taskId，子命令在后台以任务超时执行（不受 60s 限制）。
+    if (AGENT_TASK_COMMAND_SET.has(command)) return this.tasks.handle(command, args, { source, idempotencyKey, caller });
     if (PIPELINE_COMMANDS.has(command)) return this.callPipeline(command, args, source, idempotencyKey, signal, caller);
     if (command === 'workflow.batch.pick') return this.batchPick(args, source, idempotencyKey, signal, caller);
     if (SESSION_CONTROL_COMMANDS.has(command)) {
@@ -437,7 +447,7 @@ export class WorkflowAgentSession {
     if (blocked) return blocked;
     const entry = this.recordActivity({ command, source, caller, args });
     try {
-      const result = await this.dispatchCommand(command, args, source, idempotencyKey, signal, caller);
+      const result = await this.dispatchCommand(command, args, source, idempotencyKey, signal, caller, runOptions);
       const failed = Boolean(result) && typeof result === 'object' && result.ok === false;
       if (!failed && !result?.confirmation?.required && PAID_COMMANDS.has(command)) this.budget.consume(command, args);
       if (!failed && command === 'workflow.node.run') await this.recordRunReceipts(result, args, caller);
@@ -521,7 +531,7 @@ export class WorkflowAgentSession {
     });
   }
 
-  async dispatchCommand(command, args = {}, source = 'mcp', idempotencyKey, signal, caller) {
+  async dispatchCommand(command, args = {}, source = 'mcp', idempotencyKey, signal, caller, runOptions = {}) {
     if (command === 'status') {
       return {
         ok: true,
@@ -584,7 +594,9 @@ export class WorkflowAgentSession {
         cleanup();
         reject(sessionError('CANCELLED', 'Workflow 操作已取消', { command, requestId }));
       };
-      const timeoutMs = LONG_RUNNING_COMMANDS.has(command) ? this.longRunningTimeoutMs : this.timeoutMs;
+      const timeoutMs = runOptions.timeoutMs > 0
+        ? runOptions.timeoutMs
+        : LONG_RUNNING_COMMANDS.has(command) ? this.longRunningTimeoutMs : this.timeoutMs;
       const timer = setTimeout(() => {
         this.pending.delete(requestId);
         cleanup();

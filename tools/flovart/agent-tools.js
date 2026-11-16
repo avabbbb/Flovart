@@ -47,7 +47,37 @@ const DEFINITIONS = [
     command: 'agent.turn',
     name: 'flovart_agent_turn',
     surfaces: EXTERNAL,
-    description: '把一轮对话委派给用户的内置 Flovart Agent（同步，返回摘要、用到的工具与草稿版本）。',
+    description: '把一轮对话委派给用户的内置 Flovart Agent（同步，返回摘要、用到的工具与草稿版本）。同步调用有超时；可能超过 1 分钟的委派请改用 flovart_task_start。',
+  },
+  {
+    command: 'agent.task.start',
+    name: 'flovart_task_start',
+    surfaces: EXTERNAL,
+    description: '把可能超过 1 分钟的命令放到后台执行，立即返回 taskId；之后用 flovart_task_get 轮询。可包装：agent.turn、workflow.node.run、workflow.generate、workflow.node.tool、workflow.media.import、workflow.export。被包装命令的确认、预算与 Seedance 预检照常生效；同一 idempotencyKey 重放返回同一个任务。',
+    fields: {
+      command: { type: 'string', enum: ['agent.turn', 'workflow.node.run', 'workflow.generate', 'workflow.node.tool', 'workflow.media.import', 'workflow.export'], description: '要在后台执行的命令' },
+      args: { type: 'object', additionalProperties: true, description: '该命令自己的参数（与直接调用时相同）' },
+    },
+  },
+  {
+    command: 'agent.task.get',
+    name: 'flovart_task_get',
+    surfaces: EXTERNAL,
+    description: '读取后台任务：status（queued/running/succeeded/failed/cancelled）、afterSeq 之后的增量事件；done=true 时带 result 或 error。建议每 5–10 秒轮询一次，并把上次返回的 seq 作为 afterSeq。',
+    fields: {
+      taskId: { type: 'string', minLength: 1 },
+      afterSeq: { type: 'number', description: '只返回序号大于它的事件，默认 0' },
+    },
+  },
+  {
+    command: 'agent.task.cancel',
+    name: 'flovart_task_cancel',
+    surfaces: EXTERNAL,
+    description: '取消后台任务；它在画布上启动的生成节点会被请求停止。已经提交给模型服务的任务可能仍会计费。',
+    fields: {
+      taskId: { type: 'string', minLength: 1 },
+      reason: { type: 'string' },
+    },
   },
   {
     command: 'workflow.inspect',

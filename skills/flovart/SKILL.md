@@ -62,6 +62,17 @@ flovart agent.turn --prompt "给镜头 1 写一版提示词" --policy read-only 
   unless you pass `--policy workspace-write`, which asks the user first. Pass a
   stable `mutationId`: the same id replays the same result instead of running
   twice, and a busy Agent returns `AGENT_BUSY`.
+- Anything that may take longer than a minute (`agent.turn`, a paid
+  `workflow.node.run` / `workflow.generate`, `workflow.node.tool`,
+  `workflow.media.import`, `workflow.export`) can run as a background task:
+  `agent.task.start --command <command> --args '<json>' --idempotency-key <key>`
+  returns a `taskId` at once; poll `agent.task.get --task-id <id> --after-seq
+  <last seq>` every 5–10 s until `done` is true, then read `result` or
+  `error`. `agent.task.cancel --task-id <id>` stops it and asks the canvas to
+  stop nodes it started (already-submitted provider jobs may still be billed).
+  Confirmations, budget and pre-checks of the wrapped command still apply.
+  Tasks live in the local Agent process; after a restart `get` returns
+  `NOT_FOUND`.
 
 - `--agent-identity` names your host (`codex`, `claude-code`, `opencode`,
   `workbuddy`). Pass the same value on `workflow.inspect` and on every write
