@@ -232,7 +232,7 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
                     <div
                       key={node.id}
                       draggable={editingId !== node.id}
-                      data-drop={dropHint?.id === node.id ? dropHint.zone : undefined}
+                      data-drop={dropHint && dropHint.id === node.id ? dropHint.zone : undefined}
                       data-off={node.isVisible === false ? 'true' : undefined}
                       onDragStart={event => { event.dataTransfer.setData('text/plain', node.id); event.dataTransfer.effectAllowed = 'move'; setDraggedId(node.id); }}
                       onDragOver={event => {

@@ -31,4 +31,16 @@ describe('update_node guards', () => {
     const result = applyWorkflowOps({ nodes: [node], connections: [], selectedNodeIds: [] } as never, ops as never);
     expect(result.snapshot.nodes[0].metadata.prompt).toBe('新');
   });
+
+  // 2026-11-16 内置 Agent 实测 P0-1：Agent 的新节点不带 id。
+  it('gives id-less add_node / create_connected_node nodes a fresh id and rejects nodes without type', () => {
+    const ops = documentOperationsArg([
+      { type: 'create_connected_node', fromNodeId: 'img', node: { type: 'config', title: '生成' } },
+      { type: 'add_node', node: { id: 'keep-me', type: 'text' } },
+    ]) as Array<{ node: { id: string } }>;
+    expect(typeof ops[0].node.id).toBe('string');
+    expect(ops[0].node.id.length).toBeGreaterThan(0);
+    expect(ops[1].node.id).toBe('keep-me');
+    expect(() => documentOperationsArg([{ type: 'add_node', node: { title: 'x' } }])).toThrow('add_node.node 必须是带 type 的对象');
+  });
 });

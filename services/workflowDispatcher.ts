@@ -407,6 +407,15 @@ export function documentOperationsArg(value: unknown): WorkflowDocumentOperation
         throw new Error('operations[' + index + '] ' + operation.type + ' 不支持字段 ' + unknownFields.join('、') + '；可用字段：' + allowed.join('、'));
       }
     }
+    if (operation.type === 'add_node' || operation.type === 'create_connected_node') {
+      const node = operation.node;
+      if (!isRecord(node) || typeof node.type !== 'string' || !node.type.trim()) {
+        throw new Error('operations[' + index + '] ' + operation.type + '.node 必须是带 type 的对象');
+      }
+      // 新节点没给 id 时由系统生成（结果的 nodeIds 会带回）；绝不落一个 id 为空的节点。
+      if (typeof node.id === 'string' && node.id.trim()) return operation as unknown as WorkflowDocumentOperation;
+      return { ...operation, node: { ...node, id: nanoid() } } as unknown as WorkflowDocumentOperation;
+    }
     if (operation.type !== 'update_node') return operation as unknown as WorkflowDocumentOperation;
     // Agent 常把节点 id 写成 nodeId：归一化为 id；缺失时显式报错，不再落成静默空操作。
     const { nodeId, ...rest } = operation;

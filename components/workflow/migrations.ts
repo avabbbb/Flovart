@@ -37,14 +37,29 @@ function viewportOf(value: unknown): WorkflowViewport {
   };
 }
 
-function nodeOf(value: unknown, index: number): WorkflowNode {
-  if (!isRecord(value) || typeof value.id !== 'string' || typeof value.type !== 'string') {
-    throw new Error(`工作流迁移失败：第 ${index + 1} 个节点缺少 id 或 type`);
+/**
+ * 解析单个持久化节点。缺 type 或不是对象的节点无法还原，返回 null 由调用方丢弃；
+ * 只缺 id 的节点（历史上 Agent 写入过）补一个稳定的修复 id，保住用户内容。绝不抛错——
+ * 一个坏节点不能让整个工作流（乃至全部工作流）无法加载。
+ */
+function nodeOf(value: unknown, index: number, takenIds: Set<string>): WorkflowNode | null {
+  if (!isRecord(value) || typeof value.type !== 'string' || !value.type.trim()) {
+    console.warn(`[Workflow] 丢弃无法还原的第 ${index + 1} 个节点（缺少 type）`);
+    return null;
   }
+  let id = typeof value.id === 'string' && value.id.trim() ? value.id : '';
+  if (!id || takenIds.has(id)) {
+    const base = id ? `${id}-dup` : `repaired-node-${index + 1}`;
+    let candidate = base;
+    for (let n = 2; takenIds.has(candidate); n += 1) candidate = `${base}-${n}`;
+    console.warn(`[Workflow] 第 ${index + 1} 个节点${id ? ' id 重复' : '缺少 id'}，已修复为 ${candidate}`);
+    id = candidate;
+  }
+  takenIds.add(id);
   const position = isRecord(value.position) ? value.position : {};
   return {
     ...value,
-    id: value.id,
+    id,
     type: value.type,
     title: typeof value.title === 'string' && value.title.trim() ? value.title : '未命名节点',
     position: { x: finite(position.x) ? position.x : 0, y: finite(position.y) ? position.y : 0 },
@@ -56,6 +71,15 @@ function nodeOf(value: unknown, index: number): WorkflowNode {
     isLocked: value.isLocked === true,
     ...('parentId' in value ? { parentId: typeof value.parentId === 'string' && value.parentId ? value.parentId : undefined } : {}),
   } as WorkflowNode;
+}
+
+function nodesOf(value: unknown): WorkflowNode[] {
+  if (!Array.isArray(value)) return [];
+  const takenIds = new Set<string>();
+  return value.flatMap((item, index) => {
+    const node = nodeOf(item, index, takenIds);
+    return node ? [node] : [];
+  });
 }
 
 function connectionOf(value: unknown, index: number, nodeIds: Set<string>): WorkflowConnection | null {
@@ -74,7 +98,9 @@ function snapshotsOf(value: unknown): WorkflowNamedSnapshot[] {
   return value.flatMap((item): WorkflowNamedSnapshot[] => {
     if (!isRecord(item) || typeof item.id !== 'string' || !Array.isArray(item.nodes)) return [];
     try {
-      const nodes = item.nodes.map(nodeOf);
+      const nodes = nodesOf(item.nodes);
+      // 快照是还原点：有节点无法还原就整份丢弃，不能还原出缺节点的半份快照。
+      if (nodes.length !== item.nodes.length) return [];
       const nodeIds = new Set(nodes.map(node => node.id));
       const connections = (Array.isArray(item.connections) ? item.connections : [])
         .map((connection, index) => connectionOf(connection, index, nodeIds))
@@ -178,10 +204,11 @@ function migrateLegacyManualGroups(nodes: WorkflowNode[]): WorkflowNode[] {
 }
 
 export function migrateWorkflowProject(value: unknown, now = new Date().toISOString()): WorkflowProject {
-  if (!isRecord(value) || typeof value.id !== 'string' || typeof value.title !== 'string') {
-    throw new Error('工作流迁移失败：项目缺少 id 或 title');
+  if (!isRecord(value) || typeof value.id !== 'string' || !value.id) {
+    throw new Error('工作流迁移失败：项目缺少 id');
   }
-  const parsedNodes = Array.isArray(value.nodes) ? value.nodes.map(nodeOf) : [];
+  const title = typeof value.title === 'string' && value.title.trim() ? value.title : '未命名工作流';
+  const parsedNodes = nodesOf(value.nodes);
   const nodeIds = new Set(parsedNodes.map(node => node.id));
   // parentId 指向不存在的子画布时退回顶层节点。
   const nodes = parsedNodes.map(node => (node.parentId && !nodeIds.has(node.parentId) ? { ...node, parentId: undefined } : node));
@@ -201,7 +228,7 @@ export function migrateWorkflowProject(value: unknown, now = new Date().toISOStr
   return {
     ...value,
     id: value.id,
-    title: value.title,
+    title,
     nodes: migratedNodes,
     connections: noteMigration.connections,
     selectedNodeIds: selectedNodeIds.filter(id => survivingIds.has(id)),
@@ -220,6 +247,32 @@ export function migrateWorkflowProject(value: unknown, now = new Date().toISOStr
   };
 }
 
+export const WORKFLOW_QUARANTINE_KEY = 'flovart:workflow:projects:quarantine';
+
+/**
+ * 逐个迁移项目：某个项目迁移抛错时只隔离它（原始数据写入隔离键，不丢），其它项目照常打开。
+ * 持久化水合（zustand merge）与版本迁移都走这里。
+ */
+export function migrateWorkflowProjectsSafely(value: unknown, now?: string): WorkflowProject[] {
+  if (!Array.isArray(value)) return [];
+  const quarantined: unknown[] = [];
+  const projects = value.flatMap(project => {
+    try {
+      return [migrateWorkflowProject(project, now)];
+    } catch (error) {
+      console.warn('[Workflow] 隔离一个无法加载的工作流，其它工作流照常打开。', error);
+      quarantined.push(project);
+      return [];
+    }
+  });
+  if (quarantined.length) {
+    void workflowStorage.get<unknown[]>(WORKFLOW_QUARANTINE_KEY)
+      .then(previous => workflowStorage.set(WORKFLOW_QUARANTINE_KEY, [...(Array.isArray(previous) ? previous : []), ...quarantined].slice(-20)))
+      .catch(() => undefined);
+  }
+  return projects;
+}
+
 export async function migrateWorkflowPersistedState(
   value: unknown,
   version = 0,
@@ -228,7 +281,7 @@ export async function migrateWorkflowPersistedState(
   if (version < WORKFLOW_PERSISTENCE_VERSION) {
     await workflowStorage.set(WORKFLOW_BACKUP_KEY, { version, state: value, createdAt: new Date().toISOString() });
   }
-  const projects = Array.isArray(source.projects) ? source.projects.map(project => migrateWorkflowProject(project)) : [];
+  const projects = migrateWorkflowProjectsSafely(source.projects);
   const projectIds = new Set(projects.map(project => project.id));
   const activeProjectId = typeof source.activeProjectId === 'string' && projectIds.has(source.activeProjectId)
     ? source.activeProjectId

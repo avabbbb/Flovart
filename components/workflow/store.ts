@@ -4,7 +4,7 @@ import { persist, type PersistStorage, type StorageValue } from 'zustand/middlew
 import { INITIAL_WORKFLOW_VIEWPORT } from './constants';
 import { pruneWorkflowMedia, setWorkflowMediaCanonicalProjects, setWorkflowMediaPruneGuard } from './media';
 import { isWorkflowWriter, notifyWorkflowPersisted, startWorkflowWriterElection, whenWorkflowWriterDecided } from './writerLock';
-import { migrateWorkflowPersistedState, migrateWorkflowProject, WORKFLOW_BACKUP_KEY, WORKFLOW_PERSISTENCE_VERSION } from './migrations';
+import { migrateWorkflowPersistedState, migrateWorkflowProject, migrateWorkflowProjectsSafely, WORKFLOW_BACKUP_KEY, WORKFLOW_QUARANTINE_KEY, WORKFLOW_PERSISTENCE_VERSION } from './migrations';
 import { workflowStorage } from './storage';
 import type { WorkflowProject } from './types';
 
@@ -249,17 +249,30 @@ export const useWorkflowStore = create<WorkflowStore>()(
       migrate: (persisted, version) => migrateWorkflowPersistedState(persisted, version),
       merge: (persisted, current) => {
         const state = persisted as Partial<PersistedWorkflowState> | undefined;
-        const projects = Array.isArray(state?.projects) ? state.projects.map(normalizeWorkflowProject) : current.projects;
+        // 逐项目容错：单个坏项目被隔离，不让整个 store 水合失败（否则所有工作流都停在「正在加载」）。
+        const projects = Array.isArray(state?.projects) ? migrateWorkflowProjectsSafely(state.projects) : current.projects;
         setWorkflowMediaCanonicalProjects(projects);
         return {
           ...current,
           projects,
-          activeProjectId: typeof state?.activeProjectId === 'string' || state?.activeProjectId === null
-            ? state.activeProjectId
-            : current.activeProjectId,
+          activeProjectId: typeof state?.activeProjectId === 'string'
+            ? (projects.some(project => project.id === state.activeProjectId) ? state.activeProjectId : projects[0]?.id || null)
+            : state?.activeProjectId === null ? null : current.activeProjectId,
         };
       },
-      onRehydrateStorage: () => state => state?.setHydrated(true),
+      // 水合出错时 state 为 undefined：仍然标记已水合，让界面打开（空列表 / 已加载部分），不永远卡在加载中。
+      // 原始数据先完整备份到隔离键，再以空状态打开，避免后续写入覆盖掉无法解析的旧数据。
+      onRehydrateStorage: () => (state, error) => {
+        if (state && !error) {
+          state.setHydrated(true);
+          return;
+        }
+        console.warn('[Workflow] 水合失败，原始数据已备份，按空状态打开。', error);
+        void workflowStorage.get(WORKFLOW_STORE_KEY)
+          .then(raw => (raw ? workflowStorage.set(WORKFLOW_QUARANTINE_KEY + ':store', { raw, createdAt: new Date().toISOString() }) : undefined))
+          .catch(() => undefined)
+          .finally(() => useWorkflowStore.getState().setHydrated(true));
+      },
     },
   ),
 );

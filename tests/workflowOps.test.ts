@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createWorkflowNode } from '../components/workflow/constants';
 import { createWorkflowOperationNode } from '../components/workflow/operations';
 import { applyWorkflowOps, validateWorkflowConnection } from '../components/workflow/ops';
-import type { WorkflowSnapshot } from '../components/workflow/types';
+import type { WorkflowNode, WorkflowSnapshot } from '../components/workflow/types';
 
 vi.mock('nanoid', () => ({ nanoid: vi.fn() }));
 
@@ -91,6 +91,31 @@ describe('applyWorkflowOps', () => {
     expect(result.snapshot.connections[0]).toMatchObject({ fromNodeId: source.id, toNodeId: created.id });
     expect(result.snapshot.selectedNodeIds).toEqual([created.id]);
     expect(result.rejections).toEqual([]);
+  });
+
+  // 2026-11-16 内置 Agent 实测 P0-1：Agent 的 create_connected_node 不带 node.id，曾写入 id 为 undefined 的节点和悬空连线。
+  it('assigns an id when create_connected_node / add_node omit it and never writes a dangling connection', () => {
+    mockedNanoid.mockReset();
+    mockedNanoid.mockReturnValueOnce('a').mockReturnValueOnce('agent-node').mockReturnValueOnce('agent-edge').mockReturnValueOnce('agent-node-2');
+    const bare = { type: 'config', title: '空会议室', position: { x: 420, y: 140 }, metadata: { prompt: 'p' } } as unknown as WorkflowNode;
+    const result = applyWorkflowOps(snapshot(), [
+      { type: 'create_connected_node', fromNodeId: 'a', node: bare },
+      { type: 'add_node', node: { ...bare, title: '第二个' } },
+    ]);
+    expect(result.rejections).toEqual([]);
+    const created = result.snapshot.nodes.slice(3);
+    expect(created.map(node => node.id)).toEqual(['agent-node', 'agent-node-2']);
+    expect(result.snapshot.connections).toEqual([{ id: 'agent-edge', fromNodeId: 'a', toNodeId: 'agent-node' }]);
+    expect(result.snapshot.nodes.every(node => typeof node.id === 'string' && node.id)).toBe(true);
+  });
+
+  it('drops connections without endpoints that an op would otherwise introduce', () => {
+    const result = applyWorkflowOps(snapshot(), [
+      { type: 'reorder_connections', ids: [] },
+    ]);
+    expect(result.snapshot.connections).toEqual([]);
+    const withBroken = applyWorkflowOps({ ...snapshot(), connections: [{ id: 'x', fromNodeId: 'a' } as never] }, [{ type: 'select_nodes', ids: ['a'] }]);
+    expect(withBroken.snapshot.connections).toEqual([]);
   });
 
   it('does not add any state and reports why create-and-connect validation failed', () => {

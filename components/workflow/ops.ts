@@ -40,6 +40,12 @@ function createsCycle(connections: WorkflowConnection[], fromNodeId: string, toN
   return false;
 }
 
+function createUniqueNodeId(nodes: WorkflowNode[]): string {
+  let id = nanoid();
+  while (nodes.some(node => node.id === id)) id = nanoid();
+  return id;
+}
+
 function createUniqueConnectionId(connections: WorkflowConnection[]): string {
   let id = nanoid();
   while (connections.some(connection => connection.id === id)) id = nanoid();
@@ -204,9 +210,11 @@ export function applyWorkflowOps(initial: WorkflowSnapshot, ops: WorkflowOp[]): 
  * downstream code can rely on `node.metadata` existing — same defaults the
  * workflow.node.create adapter fills via validatedNode().
  */
-function normalizeDocumentNode(node: WorkflowNode): WorkflowNode {
+function normalizeDocumentNode(node: WorkflowNode, existing: WorkflowNode[]): WorkflowNode {
   const metadata = (node.metadata || {}) as WorkflowNodeMetadata;
-  const normalized = createWorkflowNode(node.id, node.type, node.position, metadata);
+  // 外部调用方（Agent）可能不给 id：这里补一个唯一 id，绝不写入 id 为空的节点（否则图层面板与刷新水合都会崩）。
+  const id = typeof node.id === 'string' && node.id.trim() ? node.id : createUniqueNodeId(existing);
+  const normalized = createWorkflowNode(id, node.type, node.position, metadata);
   if (node.title !== undefined) normalized.title = node.title;
   if (node.width !== undefined) normalized.width = node.width;
   if (node.height !== undefined) normalized.height = node.height;
@@ -224,7 +232,7 @@ function normalizeDocumentNode(node: WorkflowNode): WorkflowNode {
 
   ops.forEach((op, opIndex) => {
     if (op.type === 'add_node') {
-      const node = normalizeDocumentNode(op.node);
+      const node = normalizeDocumentNode(op.node, snapshot.nodes);
       if (!snapshot.nodes.some(item => item.id === node.id)) {
         snapshot = { ...snapshot, nodes: [...snapshot.nodes, node], selectedNodeIds: [node.id] };
       } else {
@@ -233,7 +241,7 @@ function normalizeDocumentNode(node: WorkflowNode): WorkflowNode {
       return;
     }
     if (op.type === 'create_connected_node') {
-      const node = normalizeDocumentNode(op.node);
+      const node = normalizeDocumentNode(op.node, snapshot.nodes);
       const duplicateNode = snapshot.nodes.some(item => item.id === node.id);
       const candidate = duplicateNode ? snapshot : { ...snapshot, nodes: [...snapshot.nodes, node] };
       const validation = validateWorkflowConnection(candidate, op.fromNodeId, node.id);
@@ -452,6 +460,17 @@ function normalizeDocumentNode(node: WorkflowNode): WorkflowNode {
       : '未知 Workflow operation');
   });
 
+  // 兜底：本次写入不留下端点为空的连线，也不新增端点不存在的悬空连线（坏数据会让画布和刷新水合崩溃）。
+  const liveNodeIds = new Set(snapshot.nodes.map(node => node.id));
+  const initialConnections = new Set(initial.connections);
+  const dangling = (connection: WorkflowConnection) => (
+    typeof connection.fromNodeId !== 'string' || !connection.fromNodeId
+    || typeof connection.toNodeId !== 'string' || !connection.toNodeId
+    || (!initialConnections.has(connection) && (!liveNodeIds.has(connection.fromNodeId) || !liveNodeIds.has(connection.toNodeId)))
+  );
+  if (snapshot.connections.some(dangling)) {
+    snapshot = { ...snapshot, connections: snapshot.connections.filter(connection => !dangling(connection)) };
+  }
   return { snapshot, rejections };
 }
 

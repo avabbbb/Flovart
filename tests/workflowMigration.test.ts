@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { migrateWorkflowPersistedState, WORKFLOW_BACKUP_KEY, WORKFLOW_PERSISTENCE_VERSION } from '../components/workflow/migrations';
+import { migrateWorkflowPersistedState, migrateWorkflowProjectsSafely, WORKFLOW_BACKUP_KEY, WORKFLOW_PERSISTENCE_VERSION, WORKFLOW_QUARANTINE_KEY } from '../components/workflow/migrations';
 import { useWorkflowStore, workflowPersistStorage, WORKFLOW_STORE_KEY } from '../components/workflow/store';
 import { workflowStorage } from '../components/workflow/storage';
 
@@ -75,9 +75,10 @@ describe('workflow persistence migrations', () => {
     });
   });
 
-  it('writes the backup before a migration exception and leaves source state untouched', async () => {
-    const legacyState = { projects: [{ ...legacyProject, nodes: [{ id: 'broken', type: null }] }], activeProjectId: 'legacy-a' };
-    await expect(migrateWorkflowPersistedState(legacyState, 0)).rejects.toThrow('缺少 id 或 type');
+  it('writes the backup and drops an unrecoverable node instead of failing the whole migration', async () => {
+    const legacyState = { projects: [{ ...legacyProject, nodes: [{ id: 'broken', type: null }, legacyProject.nodes[0]] }], activeProjectId: 'legacy-a' };
+    const result = await migrateWorkflowPersistedState(legacyState, 0);
+    expect(result.projects[0].nodes.map(node => node.id)).toEqual(['plugin-node']);
     expect(await workflowStorage.get(WORKFLOW_BACKUP_KEY)).toMatchObject({ version: 0, state: legacyState });
   });
 
@@ -149,5 +150,52 @@ describe('workflow persistence migrations', () => {
     expect(useWorkflowStore.getState().projects[0].nodes[0].type).toBe('plugin:storyboard');
     const persisted = await workflowStorage.get<{ version: number }>(WORKFLOW_STORE_KEY);
     expect(persisted?.version).toBe(WORKFLOW_PERSISTENCE_VERSION);
+  });
+
+  // 2026-11-16 内置 Agent 实测 P0-1：Agent 写入无 id 节点 + 悬空连线后，刷新永远停在「正在加载 Workflow...」。
+  // 形状取自 .tmp/eval/sim-bricked-project.json（当前版本 4 的信封，走 merge 而非 migrate）。
+  const brickedProject = {
+    id: '4S-q5Xm0r5VmOPBeWEnLn',
+    title: '未命名工作流',
+    nodes: [
+      { id: 'PiC0NQuw4TTxoezyWPZAR', type: 'image', title: '图片 1', position: { x: 72, y: 140 }, width: 240, height: 320, isVisible: true, isLocked: false, metadata: { status: 'success', storageKey: 'workflow-media-x', mimeType: 'image/webp' }, objectVersion: 3 },
+      { type: 'config', title: '空会议室·风格参考生成', position: { x: 420, y: 140 }, width: 360, height: 260, isVisible: true, isLocked: false, metadata: { prompt: '空会议室', status: 'idle', config: { mode: 'image', resolution: '1K', count: 2 }, origin: 'agent' }, objectVersion: 1 },
+    ],
+    connections: [{ id: 'FDHX7zcnSOrOfJ2H3JfUp', fromNodeId: 'PiC0NQuw4TTxoezyWPZAR', objectVersion: 1 }],
+    selectedNodeIds: [null],
+    viewport: { x: 0, y: 0, k: 1 },
+    draftVersion: 5,
+  };
+
+  it('opens every workflow after a bricked agent write: repairs the id-less node and drops the dangling edge', async () => {
+    await workflowStorage.set(WORKFLOW_STORE_KEY, {
+      state: { projects: [brickedProject, { ...legacyProject, id: 'healthy' }, { title: '没有 id 的项目', nodes: [] }], activeProjectId: brickedProject.id },
+      version: WORKFLOW_PERSISTENCE_VERSION,
+    });
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await useWorkflowStore.persist.rehydrate();
+    const state = useWorkflowStore.getState();
+    expect(state.hydrated).toBe(true);
+    expect(state.projects.map(project => project.id)).toEqual([brickedProject.id, 'healthy']);
+    expect(state.activeProjectId).toBe(brickedProject.id);
+    const repaired = state.projects[0];
+    expect(repaired.nodes).toHaveLength(2);
+    expect(repaired.nodes.every(node => typeof node.id === 'string' && node.id.length > 0)).toBe(true);
+    expect(repaired.nodes[1]).toMatchObject({ type: 'config', title: '空会议室·风格参考生成', metadata: { prompt: '空会议室' } });
+    expect(repaired.connections).toEqual([]);
+    expect(repaired.selectedNodeIds).toEqual([]);
+  });
+
+  it('keeps unrecoverable projects in quarantine instead of discarding them', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const projects = migrateWorkflowProjectsSafely([{ title: 'no id' }, { ...legacyProject, id: 'ok' }]);
+    expect(projects.map(project => project.id)).toEqual(['ok']);
+    await vi.waitFor(async () => expect(await workflowStorage.get(WORKFLOW_QUARANTINE_KEY)).toContainEqual({ title: 'no id' }));
+  });
+
+  it('repairs duplicate node ids instead of collapsing two nodes into one', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const [project] = migrateWorkflowProjectsSafely([{ ...legacyProject, nodes: [legacyProject.nodes[0], legacyProject.nodes[0]] }]);
+    expect(new Set(project.nodes.map(node => node.id)).size).toBe(2);
   });
 });
