@@ -17,6 +17,8 @@ interface AgentConfirmCardProps {
   mandateTasks: number;
   onMandateTasksChange: (value: number) => void;
   onDecide: (approved: boolean, scope: AgentConfirmScope) => void;
+  /** 排在后面、尚未展示的确认数（并行工具调用）。 */
+  queued?: number;
 }
 
 /**
@@ -24,7 +26,7 @@ interface AgentConfirmCardProps {
  * 计划明细、费用拆分与授权上限都收进「详情」，窄侧栏里也不会挤成一团。
  */
 export function AgentConfirmCard({
-  summary, request, offerMandate, blocked, nodes, language, planMandateNote, mandateTasks, onMandateTasksChange, onDecide,
+  summary, request, offerMandate, blocked, nodes, language, planMandateNote, mandateTasks, onMandateTasksChange, onDecide, queued = 0,
 }: AgentConfirmCardProps) {
   const L = (zho: string, en: string) => (language === 'en' ? en : zho);
   const copy = describeAgentConfirmation(request, nodes, language, summary);
@@ -54,7 +56,7 @@ export function AgentConfirmCard({
         onDecide(false, 'once');
       }}
     >
-      <div className="agent-confirm__eyebrow"><ShieldCheck size={13} aria-hidden="true" />{L('需要你确认', 'Needs your approval')}</div>
+      <div className="agent-confirm__eyebrow"><ShieldCheck size={13} aria-hidden="true" />{L('需要你确认', 'Needs your approval')}{queued > 0 && <span className="agent-confirm__queue">{L(`还有 ${queued} 项`, `${queued} more`)}</span>}</div>
       <p className="agent-confirm__title">{copy.title}</p>
       {copy.detail && <p className="agent-confirm__detail">{copy.detail}</p>}
       {blocked && <p className="agent-confirm__blocked">{L('计划里有无法运行的项，展开详情查看原因。', 'Something in this plan cannot run. See details.')}</p>}

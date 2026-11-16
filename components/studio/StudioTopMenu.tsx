@@ -9,6 +9,7 @@ import { toLocalLinkPublicStatus } from '../../tools/flovart/public-status';
 import { AuthModal } from '../auth/AuthModal';
 import type { ThemeMode } from '../../types';
 import '../../styles/studio.css';
+import { canvasSwitchOriginFromEvent, type CanvasSwitchOrigin } from './canvasSwitchTransition';
 
 export interface StudioMenuStatus {
   tone: 'ready' | 'warning';
@@ -43,7 +44,8 @@ export interface StudioMenuModel {
     create: () => void;
     remove: () => void;
     rename: (newTitle: string) => void;
-    setActiveByIndex: (index: number) => void;
+    /** origin：点击点（键盘触发时为切换器中心），驱动切换画布的冲击波揭示。 */
+    setActiveByIndex: (index: number, origin?: CanvasSwitchOrigin | null) => void;
   };
 }
 
@@ -230,7 +232,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
                     onChange={event => setProjectQuery(event.target.value)}
                     onKeyDown={event => {
                       if (event.key === 'Enter' && filteredProjects[0]) {
-                        projectActions!.setActiveByIndex(filteredProjects[0].index);
+                        if (filteredProjects[0].index !== projectIndex) projectActions!.setActiveByIndex(filteredProjects[0].index, canvasSwitchOriginFromEvent({ currentTarget: projectMenuRef.current }));
                         closeProjectMenu();
                       }
                     }}
@@ -251,7 +253,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
                         aria-checked={isActive}
                         className={'isl-opt flex w-full items-center gap-2' + (isActive ? ' isl-opt--active' : '')}
                         title={project.title}
-                        onClick={() => { if (!isActive) projectActions!.setActiveByIndex(index); closeProjectMenu(); }}
+                        onClick={event => { if (!isActive) projectActions!.setActiveByIndex(index, canvasSwitchOriginFromEvent(event)); closeProjectMenu(); }}
                       >
                         <span aria-hidden='true' className='h-1.5 w-1.5 shrink-0 rounded-full' style={{ background: isActive ? 'var(--isl-mint)' : 'var(--isl-ink-ghost)' }} />
                         <span className='min-w-0 flex-1 truncate text-left text-xs font-bold'>{project.title || (isChinese ? '未命名工作流' : 'Untitled workflow')}</span>

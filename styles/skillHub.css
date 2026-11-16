@@ -1,0 +1,602 @@
+/* Skill Hub 选择器（components/agent/ProductionSkillDeck.tsx）。
+   参照 Inspora「AI agent dashboard」Add widgets 面板（@BenceRedmond）：
+   https://www.inspora.design/posts/ai-agent-dashboard
+   浮动 chrome：外壳近不透明 + 轻模糊，只用 DESIGN.md token；按自身宽度用 @container 降级。 */
+
+.agent-skill-picker.skill-hub {
+  position: absolute;
+  z-index: 70;
+  left: 12px;
+  right: 12px;
+  bottom: calc(100% + 12px);
+  width: auto;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  container: skill-hub / inline-size;
+  border: 1px solid var(--isl-border);
+  border-radius: var(--isl-r-lg);
+  /* 不再半透明：聊天文字不能透过标题和搜索框（2026-11-16 截图问题）。 */
+  background: color-mix(in srgb, var(--isl-surface) 97%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
+  box-shadow: var(--isl-shadow-lg);
+  color: var(--isl-ink);
+  isolation: isolate;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .agent-skill-picker.skill-hub { background: var(--isl-surface); }
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .agent-skill-picker.skill-hub { background: var(--isl-surface); border-color: var(--isl-border-strong); }
+}
+
+.skill-hub__header {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 4px 14px;
+}
+
+.skill-hub__header > .skill-hub__icon-btn:first-child { margin-left: -6px; }
+
+.skill-hub__title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-hub__create,
+.skill-hub__close {
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid var(--isl-border);
+  border-radius: var(--isl-r);
+  padding: 0 9px;
+  color: var(--isl-ink-soft);
+  background: var(--isl-card);
+  box-shadow: var(--isl-shadow-sm);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
+}
+
+.skill-hub__close { width: 28px; padding: 0; }
+.skill-hub__create:hover,
+.skill-hub__close:hover { color: var(--isl-ink); border-color: var(--isl-border-strong); }
+
+.skill-hub__search {
+  display: flex;
+  height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  margin: 2px 12px 4px;
+  border: 1px solid var(--isl-border);
+  border-radius: var(--isl-r);
+  padding: 0 6px 0 10px;
+  color: var(--isl-ink-ghost);
+  background: var(--isl-surface-sunk);
+  transition: border-color var(--motion-fast) var(--ease-standard);
+}
+
+.skill-hub__search:focus-within { border-color: var(--isl-mint); }
+
+.skill-hub__search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  color: var(--isl-ink);
+  background: transparent;
+  font-size: 12px;
+}
+
+.skill-hub__search input::placeholder { color: var(--isl-ink-ghost); }
+
+.skill-hub__search-clear {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-content: center;
+  border: 0;
+  border-radius: var(--isl-r-sm);
+  color: var(--isl-ink-ghost);
+  background: transparent;
+  cursor: pointer;
+}
+
+.skill-hub__list,
+.skill-hub__detail,
+.skill-hub__editor {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.skill-hub__list { padding: 0 6px 8px; }
+
+.skill-hub__section + .skill-hub__section { margin-top: 2px; }
+
+.skill-hub__label-row { display: flex; align-items: center; gap: 6px; padding-right: 8px; }
+
+.skill-hub__label {
+  margin: 0;
+  padding: 10px 8px 4px;
+  color: var(--isl-ink-ghost);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.skill-hub__count {
+  margin-top: 6px;
+  color: var(--isl-ink-ghost);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 扁平透明行：只有图标方块和「+」是凸起的。 */
+.skill-hub__row {
+  display: flex;
+  min-width: 0;
+  min-height: 52px;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--isl-r);
+  padding-right: 4px;
+  color: inherit;
+  transition: background-color var(--motion-fast) var(--ease-standard);
+}
+
+.skill-hub__row:hover,
+.skill-hub__row.is-highlighted { background: color-mix(in srgb, var(--isl-ink) 5%, transparent); }
+.skill-hub__row.is-highlighted { box-shadow: inset 0 0 0 1px var(--isl-border-strong); }
+.skill-hub__row[data-disabled] .skill-hub__text,
+.skill-hub__row[data-disabled] .agent-skill-mark { opacity: .55; }
+
+.skill-hub__row-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 11px;
+  border: 0;
+  border-radius: var(--isl-r);
+  padding: 7px 6px;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.skill-hub__row-main.is-static { cursor: default; }
+.skill-hub__row-main:disabled { cursor: default; }
+
+.skill-hub__text { display: block; min-width: 0; flex: 1; }
+
+.skill-hub__text strong {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.skill-hub__text strong > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.skill-hub__text em {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--isl-ink-ghost);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-hub__text small {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--isl-ink-soft);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 凸起的圆角方块图标（DESIGN §10 radius-lg），图形按 tone 着色。 */
+.agent-skill-mark {
+  --skill-tone: var(--isl-mint-deep);
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  place-content: center;
+  border: 1px solid var(--isl-border);
+  border-radius: var(--isl-r-lg);
+  color: var(--skill-tone);
+  background: linear-gradient(180deg, var(--isl-card), color-mix(in srgb, var(--skill-tone) 7%, var(--isl-card)));
+  box-shadow: var(--isl-shadow-sm), inset 0 1px 0 color-mix(in srgb, var(--isl-card) 70%, transparent);
+}
+
+.agent-skill-mark.is-large { width: 44px; height: 44px; }
+.agent-skill-mark[data-tone='sun'] { --skill-tone: color-mix(in srgb, var(--isl-sun) 72%, var(--isl-ink)); }
+.agent-skill-mark[data-tone='coral'] { --skill-tone: var(--isl-coral-deep); }
+.agent-skill-mark[data-tone='ink'] { --skill-tone: var(--isl-ink-soft); }
+.agent-skill-mark img { display: block; width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+
+/* 右侧状态：已添加 = 低调绿勾；使用中 = 薄荷底；停用 = 幽灵灰。 */
+.skill-hub__state {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+  color: var(--isl-mint-deep);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.skill-hub__state.is-added { opacity: .8; }
+.skill-hub__state.is-active { border-radius: var(--isl-r-sm); padding: 3px 7px; background: var(--isl-mint-bg); font-weight: 600; opacity: 1; }
+.skill-hub__state.is-off { color: var(--isl-ink-ghost); }
+
+.skill-hub__icon-btn {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  place-content: center;
+  border: 0;
+  border-radius: var(--isl-r-sm);
+  color: var(--isl-ink-ghost);
+  background: transparent;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard);
+}
+
+.skill-hub__icon-btn:hover { color: var(--isl-ink); background: color-mix(in srgb, var(--isl-ink) 6%, transparent); }
+.skill-hub__favorite { opacity: 0; }
+.skill-hub__favorite.is-on { color: var(--isl-mint-deep); opacity: 1; }
+.skill-hub__row:hover .skill-hub__favorite,
+.skill-hub__row:focus-within .skill-hub__favorite { opacity: 1; }
+
+@media (hover: none) {
+  .skill-hub__favorite { opacity: 1; }
+}
+
+/* 凸起的「+」：悬停抬起 1px（snappy），减弱动效时不位移。 */
+.skill-hub__add {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid var(--isl-border);
+  border-radius: var(--isl-r);
+  padding: 0;
+  color: var(--isl-ink);
+  background: var(--isl-card);
+  box-shadow: var(--isl-shadow-sm);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    transform var(--spring-snappy-duration) var(--spring-snappy),
+    box-shadow var(--spring-snappy-duration) var(--spring-snappy),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.skill-hub__add.is-wide { width: auto; padding: 0 9px; }
+.skill-hub__add.is-failed { color: var(--isl-coral-deep); border-color: color-mix(in srgb, var(--isl-coral) 45%, var(--isl-border)); }
+.skill-hub__add.is-busy { color: var(--isl-ink-ghost); cursor: progress; }
+.skill-hub__add:not(.is-busy):hover { transform: translateY(-1px); border-color: var(--isl-border-strong); box-shadow: var(--isl-shadow); }
+.skill-hub__add:not(.is-busy):active { transform: translateY(0); box-shadow: var(--isl-shadow-sm); }
+
+.skill-hub__row-main:focus-visible,
+.skill-hub__icon-btn:focus-visible,
+.skill-hub__add:focus-visible,
+.skill-hub__create:focus-visible,
+.skill-hub__close:focus-visible,
+.skill-hub__primary:focus-visible,
+.skill-hub__ghost:focus-visible { outline: 2px solid var(--isl-mint); outline-offset: 1px; }
+
+.skill-hub__hub-config {
+  display: flex;
+  min-width: 0;
+  gap: 6px;
+  padding: 2px 8px 6px;
+}
+
+.skill-hub__hub-config input {
+  min-width: 0;
+  height: 28px;
+  flex: 1;
+  border: 1px solid var(--isl-border);
+  border-radius: var(--isl-r-sm);
+  outline: 0;
+  padding: 0 8px;
+  color: var(--isl-ink);
+  background: var(--isl-surface-sunk);
+  font-size: 11px;
+}
+
+.skill-hub__hub-config input:focus { border-color: var(--isl-mint); }
+
+.skill-hub__hub-config button {
+  display: inline-flex;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--isl-border);
+  border-radius: var(--isl-r-sm);
+  padding: 0 9px;
+  color: var(--isl-ink-soft);
+  background: var(--isl-card);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.skill-hub__hub-config button:disabled { opacity: .45; cursor: default; }
+
+.skill-hub__empty,
+.skill-hub__hint {
+  padding: 8px 8px 10px;
+  color: var(--isl-ink-ghost);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.skill-hub__empty { padding: 14px 8px; text-align: center; }
+
+.skill-hub__inline-empty {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  border: 1px dashed var(--isl-border-strong);
+  border-radius: var(--isl-r);
+  padding: 0 12px;
+  color: var(--isl-ink-soft);
+  background: transparent;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.skill-hub__inline-empty > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skill-hub__inline-empty:hover { color: var(--isl-ink); border-color: var(--isl-mint); }
+
+.skill-hub__error {
+  margin: 4px 8px;
+  border-radius: var(--isl-r-sm);
+  padding: 6px 8px;
+  color: var(--isl-coral-deep);
+  background: color-mix(in srgb, var(--isl-coral) 10%, transparent);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.skill-hub__skeletons { display: grid; gap: 6px; padding: 4px 6px 6px; }
+.skill-hub__skeletons span {
+  height: 40px;
+  border-radius: var(--isl-r);
+  background: color-mix(in srgb, var(--isl-ink) 5%, transparent);
+  animation: skill-hub-pulse 1.4s var(--ease-standard) infinite;
+}
+
+@keyframes skill-hub-pulse { 50% { opacity: .45; } }
+
+.skill-hub .is-spinning { animation: skill-hub-spin 1.2s linear infinite; }
+
+@keyframes skill-hub-spin { to { transform: rotate(360deg); } }
+
+/* 详情 / 编辑：同一浮层内切换，窄面板不需要第二层弹窗。 */
+.skill-hub__detail { padding: 4px 14px 14px; }
+.skill-hub__detail-head { display: flex; min-width: 0; align-items: center; gap: 12px; padding: 4px 0 8px; }
+.skill-hub__detail-head .skill-hub__text strong { font-size: 14px; }
+.skill-hub__detail-desc { margin: 0 0 10px; color: var(--isl-ink-soft); font-size: 12px; line-height: 18px; }
+
+.skill-hub__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 6px; }
+.skill-hub__actions.is-end { justify-content: flex-end; margin-top: 10px; }
+
+.skill-hub__primary,
+.skill-hub__ghost,
+.skill-hub__danger {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--isl-border);
+  border-radius: var(--isl-r);
+  padding: 0 10px;
+  color: var(--isl-ink-soft);
+  background: var(--isl-card);
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.skill-hub__primary { border-color: var(--isl-mint-deep); color: var(--isl-card); background: var(--isl-mint-deep); }
+.skill-hub__primary:disabled { opacity: .55; cursor: default; }
+.skill-hub__ghost:hover { color: var(--isl-ink); border-color: var(--isl-border-strong); }
+.skill-hub__ghost.is-danger:hover { color: var(--isl-coral-deep); }
+.skill-hub__danger { border-color: var(--isl-coral-deep); color: var(--isl-card); background: var(--isl-coral-deep); }
+.skill-hub__danger:disabled { opacity: .55; }
+
+.skill-hub__confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 8px;
+  border: 1px solid color-mix(in srgb, var(--isl-coral) 35%, var(--isl-border));
+  border-radius: var(--isl-r);
+  padding: 8px;
+  background: color-mix(in srgb, var(--isl-coral) 6%, transparent);
+  font-size: 12px;
+}
+
+.skill-hub__confirm > span { min-width: 0; flex: 1 1 140px; }
+
+.skill-hub__switch { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.skill-hub__switch input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.skill-hub__switch > span {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: var(--isl-border-strong);
+  transition: background-color var(--motion-fast) var(--ease-standard);
+}
+.skill-hub__switch > span::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--isl-card);
+  box-shadow: var(--isl-shadow-sm);
+  transition: transform var(--spring-snappy-duration) var(--spring-snappy);
+}
+.skill-hub__switch input:checked + span { background: var(--isl-mint); }
+.skill-hub__switch input:checked + span::after { transform: translateX(12px); }
+.skill-hub__switch input:focus-visible + span { outline: 2px solid var(--isl-mint); outline-offset: 2px; }
+.skill-hub__switch em { color: var(--isl-ink-soft); font-size: 11px; font-style: normal; font-weight: 600; }
+
+.skill-hub__detail .skill-hub__label { padding: 10px 0 4px; }
+
+.skill-hub__meta {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 3px 12px;
+  margin: 4px 0;
+  font-size: 11px;
+  line-height: 16px;
+}
+.skill-hub__meta dt { color: var(--isl-ink-ghost); }
+.skill-hub__meta dd { min-width: 0; margin: 0; overflow-wrap: anywhere; color: var(--isl-ink-soft); }
+
+.skill-hub__chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.skill-hub__chips span { border-radius: var(--isl-r-sm); padding: 2px 6px; color: var(--isl-ink-soft); background: var(--isl-surface-2); font-size: 10px; }
+
+.skill-hub__files { margin: 0; padding: 0; list-style: none; color: var(--isl-ink-soft); font-size: 11px; line-height: 18px; }
+.skill-hub__files li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.skill-hub__code {
+  max-height: 180px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid var(--isl-border);
+  border-radius: var(--isl-r);
+  padding: 8px 10px;
+  color: var(--isl-ink-soft);
+  background: var(--isl-surface-sunk);
+  font-size: 11px;
+  line-height: 17px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.skill-hub__editor { display: grid; align-content: start; gap: 10px; padding: 4px 14px 14px; }
+.skill-hub__field { display: grid; gap: 4px; }
+.skill-hub__field > span { color: var(--isl-ink-ghost); font-size: 11px; font-weight: 500; }
+.skill-hub__field input,
+.skill-hub__field textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--isl-border);
+  border-radius: var(--isl-r);
+  outline: 0;
+  padding: 7px 9px;
+  color: var(--isl-ink);
+  background: var(--isl-surface-sunk);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  resize: vertical;
+}
+.skill-hub__field input:focus,
+.skill-hub__field textarea:focus { border-color: var(--isl-mint); }
+
+.skill-hub__undo {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  margin: 0 8px 8px;
+  border-radius: var(--isl-r);
+  padding: 7px 8px 7px 12px;
+  color: var(--isl-card);
+  background: var(--isl-ink);
+  font-size: 12px;
+}
+.skill-hub__undo > span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skill-hub__undo button { border: 0; border-radius: var(--isl-r-sm); padding: 3px 8px; color: var(--isl-mint); background: transparent; font-size: 12px; font-weight: 600; cursor: pointer; }
+
+/* 弹性降级（DESIGN §15）：文字 → 截断 → 图标 + title → 收纳。 */
+@container skill-hub (max-width: 400px) {
+  .skill-hub__state > span,
+  .skill-hub__text em { display: none; }
+  .skill-hub__state.is-active { padding: 3px 5px; }
+}
+
+@container skill-hub (max-width: 320px) {
+  .skill-hub__create > span,
+  .skill-hub__hub-config button > span { display: none; }
+  .skill-hub__create { width: 28px; padding: 0; }
+  .skill-hub__external { display: none; }
+  .skill-hub__row-main { gap: 9px; padding: 6px 4px; }
+  .agent-skill-mark { width: 30px; height: 30px; }
+  .skill-hub__favorite:not(.is-on) { display: none; }
+}
+
+@container skill-hub (max-width: 250px) {
+  .skill-hub__text small { display: none; }
+  .skill-hub__row { min-height: 42px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skill-hub__add,
+  .skill-hub__add:not(.is-busy):hover { transform: none; transition-duration: .01ms; }
+  .skill-hub__skeletons span,
+  .skill-hub .is-spinning { animation: none; }
+  .skill-hub__switch > span::after { transition-duration: .01ms; }
+}

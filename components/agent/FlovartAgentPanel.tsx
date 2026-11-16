@@ -40,7 +40,8 @@ import { AgentEmptyState, CreationModeControl, creationModeLabel, type AgentMode
 import { AgentModelPicker } from './AgentModelPicker';
 import { applyAgentTurnPreamble, recipeFromNodes, skillFromRecipe, type AgentCreationMode } from '../../services/canvasSkillRecipe';
 import { useAgentGroupInboxStore, type AgentGroupPayload } from '../../stores/useAgentGroupInboxStore';
-import { useMineSkillsStore } from './mineSkills';
+import { useUserSkillsStore } from '../../stores/useUserSkillsStore';
+import { isUserSkillAttachment, skillSystemContext } from '../../services/userSkillContext';
 import { AgentReferenceChip } from './AgentReferenceChip';
 import { AgentTodoCard } from './AgentTodoCard';
 import { copyToClipboard, transcriptMarkdown } from './agentTranscript';
@@ -68,7 +69,7 @@ import { readConfirmVerdict, runPlanDenialNote, type AgentConfirmVerdict } from 
 import { AgentScrollToLatest, AgentTurnTimeline, activeMessageScroller, messageScrollers, smoothScrollTo } from './AgentConversationNav';
 import { isAwayFromBottom, nextStickToBottom, splitConversationTurns } from './agentConversationNav';
 import { quotePreview, withQuote } from './agentQuote';
-import { activityAfterConfirmation, agentLayerReducer, blockerAfterCredentialSignal, closedLayers, needsCredential, replacePendingConfirmation, useAgentTurn } from './agentPanelState';
+import { activityAfterConfirmation, advanceConfirmation, agentLayerReducer, blockerAfterCredentialSignal, closedLayers, enqueueConfirmation, needsCredential, rejectAllConfirmations, useAgentTurn, type ConfirmationQueue } from './agentPanelState';
 
 interface FlovartAgentPanelProps {
   project: WorkflowProject;
@@ -201,7 +202,8 @@ const userApiKeysRef = useRef(userApiKeys);
   // 审批模式（OMP approval mode）：always-ask / write（默认）/ yolo，存本机；旧的 manual/auto 自动迁移。
   const [initialMode] = useState<ApprovalMode>(() => readApprovalMode());
   const modeRef = useRef<ApprovalMode>(initialMode);
-  const confirmationRef = useRef<PendingConfirmation | undefined>(undefined);
+  const confirmationRef = useRef<ConfirmationQueue<PendingConfirmation>>({ current: undefined, waiting: [] });
+  const [queuedConfirmations, setQueuedConfirmations] = useState(0);
   const askRef = useRef<PendingAsk | undefined>(undefined);
   // 自动模式付费授权：第一次生成时确认上限，之后上限内的生成自动批准。
   const mandateRef = useRef<AgentSpendMandate | null>(null);
@@ -307,18 +309,33 @@ const userApiKeysRef = useRef(userApiKeys);
   const [groupBanner, setGroupBanner] = useState<(AgentGroupPayload & { saved?: boolean; installed?: boolean; evaluationNote?: string }) | null>(null);
   const presentConfirmation = (next: PendingConfirmation) => {
     const pending = next.id ? next : { ...next, id: crypto.randomUUID() };
-    replacePendingConfirmation(confirmationRef, pending); // a newer request supersedes; never leave the agent waiting
+    // 并行工具调用的确认排队逐张出，不顶替（顶替会把前一张静默判成拒绝）。
+    const shown = enqueueConfirmation(confirmationRef.current, pending);
+    setQueuedConfirmations(confirmationRef.current.waiting.length);
+    if (!shown) return;
     setConfirmation(pending);
     dispatchTurn({ type: 'confirmRequested' });
     activity.current('waiting');
   };
   const settleConfirmation = (pending: PendingConfirmation, approved: AgentConfirmVerdict) => {
+    if (confirmationRef.current.current !== pending) return;
     const nextActivity = activityAfterConfirmation(turnRef.current.phase);
-    confirmationRef.current = undefined;
     pending.resolve(approved);
-    setConfirmation(undefined);
+    // 刚授予的本会话授权覆盖排队里的同类调用：直接放行，不再弹同一张卡。
+    const following = advanceConfirmation(confirmationRef.current, item => {
+      const key = confirmGrantKey(item.request);
+      return Boolean(key && !item.blocked && confirmScopesFor(item.request).includes('session') && sessionGrantsRef.current.has(key));
+    });
+    setQueuedConfirmations(confirmationRef.current.waiting.length);
+    setConfirmation(following);
+    if (following) return;
     dispatchTurn({ type: 'confirmResolved' });
     if (nextActivity) activity.current(nextActivity);
+  };
+  const rejectConfirmations = () => {
+    rejectAllConfirmations(confirmationRef.current);
+    setQueuedConfirmations(0);
+    setConfirmation(undefined);
   };
   const presentAsk = (request: AgentAskRequest): Promise<AgentAskResult> => {
     // 结构化提问已在内核里校验成表单；旧的 html 契约仍按受控字段解析。
@@ -668,7 +685,7 @@ const userApiKeysRef = useRef(userApiKeys);
     return () => {
       active = false;
       abort.current?.abort();
-      replacePendingConfirmation(confirmationRef, undefined);
+      rejectConfirmations();
       workspaceBridge.current?.disconnect();
       workspaceBridge.current = undefined;
       unsubscribeRef.current?.();
@@ -1058,13 +1075,16 @@ const userApiKeysRef = useRef(userApiKeys);
       } else {
         turnAttachments.forEach(releaseComposerAttachment);
         // 托管 Agent 的 /turn 只收文本，无法随消息带图片；明确告知而不是假装看过画面。
-        const managedText = turnAttachments.length
+        const mediaText = turnAttachments.length
           ? requestText + '\n\n注意：本轮附带的本地媒体（' + turnAttachments.map(item => item.name).join('、') + '）无法通过当前托管通道传给 Agent，请先让用户上传到画布或改用内置 Agent。'
           : requestText;
+        // 我的 Skill 只存在浏览器里，本机 Agent 的包注册表解析不到：把指令随本轮文本带过去，不绑定包。
+        const userSkill = isUserSkillAttachment(skillAttachment);
+        const managedText = userSkill && skillAttachment ? skillSystemContext(skillAttachment) + '\n\n' + mediaText : mediaText;
         await client.current!.turn(project.id, managedText, event => {
           if ((event.type === 'error' && !isAbortMessage(event.message)) || (event.type === 'snapshot' && latestTurnFailed(event.snapshot))) failed = true;
           handleEvent(event, assistantId);
-        }, controller.signal, skillAttachment);
+        }, controller.signal, userSkill ? undefined : skillAttachment);
       }
       activity.current(failed ? 'error' : 'done');
     } catch (error) {
@@ -1097,8 +1117,7 @@ const userApiKeysRef = useRef(userApiKeys);
     // 停止就是结束这一轮：排队中的消息一起丢弃（内核的插话队列在 cancel 里清空）。
     queuedTurns.current.forEach(item => item.attachments.forEach(releaseComposerAttachment));
     queuedTurns.current = [];
-    replacePendingConfirmation(confirmationRef, undefined);
-    setConfirmation(undefined);
+    rejectConfirmations();
     askRef.current?.resolve({ ok: false, cancelled: true });
     askRef.current = undefined;
     setPendingAsk(undefined);
@@ -1168,7 +1187,7 @@ const userApiKeysRef = useRef(userApiKeys);
     try {
       const recipe = recipeFromNodes(project, groupBanner.nodeIds);
       const skill = skillFromRecipe(recipe, { name: groupBanner.label, slug: groupBanner.label, description: language === 'zho' ? `画布分组「${groupBanner.label}」的操作流程（${recipe.steps.length} 步）` : `Canvas group "${groupBanner.label}" (${recipe.steps.length} steps)` });
-      await useMineSkillsStore.getState().save(skill);
+      await useUserSkillsStore.getState().save(skill);
       setGroupBanner(current => (current ? { ...current, saved: true } : current));
       // 有本地 Agent 服务时同时编译成标准 Skill 包（带验收），外部 Agent 与 Skill Hub 都能用；没有服务时只留「我的」配方。
       const registry = await createLocalSkillRegistry().catch(() => null);
@@ -1402,6 +1421,7 @@ const userApiKeysRef = useRef(userApiKeys);
           planMandateNote={confirmation.request ? describeMandateDenial(mandate, confirmation.request) : undefined}
           mandateTasks={mandateTasks}
           onMandateTasksChange={setMandateTasks}
+          queued={queuedConfirmations}
           onDecide={(approved, scope) => decideConfirmation(confirmation, approved, scope)}
         />}
         <div

@@ -4,6 +4,7 @@ import { downloadWorkflowProjects, parseWorkflowProjectFile } from './projectTra
 import { useWorkflowStore } from './store';
 import { displayError } from '../../services/displayError';
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
+import { canvasSwitchOriginFromEvent, runCanvasSwitch } from '../studio/canvasSwitchTransition';
 
 export function WorkflowProjectList({ compact = false }: { compact?: boolean }) {
   const language = useWorkspaceStore(state => state.language);
@@ -108,7 +109,7 @@ export function WorkflowProjectList({ compact = false }: { compact?: boolean }) 
             {editingId === project.id ? (
               <input value={draft} autoFocus onChange={event => setDraft(event.target.value)} onBlur={finishRename} onKeyDown={event => { if (event.key === 'Enter') finishRename(); }} />
             ) : (
-              <button type="button" className="workflow-project__open" onClick={() => setActiveProject(project.id)}>{project.title}</button>
+              <button type="button" className="workflow-project__open" onClick={event => { if (project.id !== activeProjectId) void runCanvasSwitch(() => setActiveProject(project.id), { origin: canvasSwitchOriginFromEvent(event) }); }}>{project.title}</button>
             )}
             {!compact && <button type="button" aria-label={copy.rename(project.title)} onClick={() => beginRename(project.id, project.title)}><Pencil size={13} /></button>}
             {!compact && <button type="button" aria-label={copy.delete(project.title)} onClick={event => { deleteTriggerRef.current = event.currentTarget; setDeleteId(project.id); }}><Trash2 size={13} /></button>}

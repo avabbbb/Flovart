@@ -15,6 +15,7 @@ import { resolveAgentTextRoutes } from './agentTextRoutes';
 import { createBrowserWorkflowContract } from './browserWorkflowContract';
 import { withWorkflowHumanApproval, workflowCommandNeedsConfirmation } from './workflowDispatcher';
 import type { ProductionSkillAttachment } from './productionSkillCatalog';
+import { isUserSkillAttachment, skillSystemContext } from './userSkillContext';
 import { workflowConfirmRequest } from './workflowAgentBridge';
 import type { AgentConfirmRequest } from './agentSpendMandate';
 import { readConfirmVerdict, type AgentConfirmVerdict } from './runApproval';
@@ -1328,7 +1329,10 @@ export class BrowserAgentKernel {
         memory = '';
       }
     }
-    return [this.systemPrompt, skills, memory].filter(Boolean).join('\n\n');
+    // 我的 Skill 只存在浏览器里、不在技能目录中，无法走 flovart_skill_read：绑定时把指令直接拼进系统提示词。
+    const bound = this.boundProductionSkill;
+    const userSkill = bound && isUserSkillAttachment(bound) && !resolveSkillEntry(entries, bound.id) ? skillSystemContext(bound) : '';
+    return [this.systemPrompt, skills, userSkill, memory].filter(Boolean).join('\n\n');
   }
 
   /** 用当前 session + route 构建 PI Agent 实例；会话切换后复用。 */

@@ -63,6 +63,37 @@ export function useAgentTurn() {
 
 interface Resolvable { resolve: (approved: boolean) => void }
 
+// 同一轮里模型可能并行发起多个需要确认的工具调用：后到的排队，等前一张卡决定后再出，
+// 不能顶替（顶替会把前一个静默判成「用户拒绝」——2026-11-16 在 dev 线束里复现）。
+export interface ConfirmationQueue<T extends Resolvable> { current: T | undefined; waiting: T[] }
+
+/** 返回 true 表示立刻展示；false 表示已排队。 */
+export function enqueueConfirmation<T extends Resolvable>(queue: ConfirmationQueue<T>, next: T): boolean {
+  if (!queue.current) { queue.current = next; return true; }
+  queue.waiting.push(next);
+  return false;
+}
+
+/** 当前卡已决定：取下一张（autoApprove 为真的直接批准，例如刚授予了本会话授权）。 */
+export function advanceConfirmation<T extends Resolvable>(queue: ConfirmationQueue<T>, autoApprove: (item: T) => boolean = () => false): T | undefined {
+  queue.current = undefined;
+  while (queue.waiting.length) {
+    const next = queue.waiting.shift()!;
+    if (autoApprove(next)) { next.resolve(true); continue; }
+    queue.current = next;
+    return next;
+  }
+  return undefined;
+}
+
+/** 停止 / 切换项目 / 卸载：当前与排队中的确认都以 false 结束。 */
+export function rejectAllConfirmations<T extends Resolvable>(queue: ConfirmationQueue<T>): void {
+  const all = [queue.current, ...queue.waiting];
+  queue.current = undefined;
+  queue.waiting = [];
+  all.forEach(item => item?.resolve(false));
+}
+
 // 新确认顶替旧确认时，旧的必须以 false 结束，不能让 Agent 一直等。
 export function replacePendingConfirmation<T extends Resolvable>(slot: { current: T | undefined }, next: T | undefined): void {
   const previous = slot.current;

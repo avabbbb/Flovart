@@ -13,6 +13,7 @@ import { requestUiConfirm } from './services/uiConfirm';
 import { AppShell } from './components/AppShell';
 import { StudioTopMenu, type StudioMenuModel } from './components/studio/StudioTopMenu';
 import { StudioNavigationFrame } from './components/studio/StudioNavigationFrame';
+import { runCanvasSwitch, type CanvasSwitchOrigin } from './components/studio/canvasSwitchTransition';
 import { StudioRightDrawer } from './components/studio/StudioRightDrawer';
 import { StudioMediaBrowser } from './components/studio/StudioMediaBrowser';
 import { FlovartAgentPanel } from './components/agent/FlovartAgentPanel';
@@ -683,7 +684,12 @@ const App: React.FC = () => {
             create: () => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow'),
             remove: () => { if (activeWorkflowProjectId) workflowDeleteProjects([activeWorkflowProjectId]); },
             rename: (newTitle: string) => { if (activeWorkflowProjectId) workflowRenameProject(activeWorkflowProjectId, newTitle); },
-            setActiveByIndex: (index: number) => { const target = workflowProjects[index]; if (target) workflowSetActiveProject(target.id); },
+            setActiveByIndex: (index: number, origin?: CanvasSwitchOrigin | null) => {
+                const target = workflowProjects[index];
+                if (!target) return;
+                if (target.id === activeWorkflowProjectId) return;
+                void runCanvasSwitch(() => workflowSetActiveProject(target.id), { origin });
+            },
         },
     }), [activeView, canvasView, activeWorkflowTitle, resolvedTheme, themeMode, language, setActiveView, setThemeMode, setLanguage, studioRuntimeStatus, workflowProjects, activeWorkflowIndex, activeWorkflowProjectId, workflowCreateProject, workflowDeleteProjects, workflowRenameProject, workflowSetActiveProject]);
 

@@ -67,6 +67,9 @@ export interface UserSkillRecord {
   prompt: string;
   recipe?: CanvasRecipe;
   createdAt: string;
+  /** 用户可停用；缺省（旧数据）视为启用。 */
+  enabled?: boolean;
+  updatedAt?: string;
 }
 
 export interface UserSkillMeta {

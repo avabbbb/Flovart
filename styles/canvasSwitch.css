@@ -1,0 +1,73 @@
+/* 切换画布的冲击波揭示（components/studio/canvasSwitchTransition.ts，01 §10.x / DESIGN §14.6）。 */
+
+.canvas-switch-ring {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+
+.canvas-switch-ring__wave {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 2.5px solid var(--isl-mint);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--isl-mint) 35%, transparent),
+    0 0 28px 6px color-mix(in srgb, var(--isl-mint) 38%, transparent),
+    inset 0 0 22px 2px color-mix(in srgb, var(--isl-mint) 30%, transparent);
+  opacity: 0;
+}
+
+.canvas-switch-ring__flash {
+  position: absolute;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--isl-mint) 70%, transparent) 0%, color-mix(in srgb, var(--isl-mint) 22%, transparent) 45%, transparent 70%);
+  transform: translate(-50%, -50%) scale(0.35);
+  opacity: 0;
+}
+
+/* View Transitions：旧快照静止在下，新画面（活的）被 clip-path 圆展开；冲击环在最上层。 */
+:root.canvas-switching::view-transition {
+  pointer-events: none;
+}
+
+:root.canvas-switching::view-transition-old(root),
+:root.canvas-switching::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+:root.canvas-switching::view-transition-old(root) { z-index: 1; }
+:root.canvas-switching::view-transition-new(root) { z-index: 2; }
+
+:root.canvas-switching::view-transition-group(canvas-switch-ring) {
+  z-index: 3;
+  animation: none;
+}
+
+:root.canvas-switching::view-transition-old(canvas-switch-ring),
+:root.canvas-switching::view-transition-new(canvas-switch-ring) {
+  animation: none;
+}
+
+/* 减弱动效：只做 160ms 交叉淡化。 */
+:root.canvas-switch-fade::view-transition {
+  pointer-events: none;
+}
+
+:root.canvas-switch-fade::view-transition-old(root),
+:root.canvas-switch-fade::view-transition-new(root) {
+  animation-duration: 160ms;
+  animation-timing-function: var(--ease-standard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-switch-ring { display: none; }
+}

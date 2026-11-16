@@ -7,6 +7,13 @@
     --ease-soft-out: cubic-bezier(0.22, 1, 0.36, 1);
     --ease-spring-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
     --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+    /* 三档弹簧（DESIGN.md §14.3）：linear() 采样 + 落定时长；JS 侧见 components/studio/motionTokens.ts。 */
+    --spring-snappy: linear(0, 0.121, 0.331, 0.528, 0.681, 0.791, 0.866, 0.915, 0.946, 0.967, 0.98, 0.988, 0.992, 0.995, 0.997, 0.998, 1);
+    --spring-snappy-duration: 330ms;
+    --spring-smooth: linear(0, 0.119, 0.328, 0.522, 0.676, 0.787, 0.863, 0.914, 0.946, 0.966, 0.979, 0.987, 0.992, 0.995, 0.997, 0.998, 1);
+    --spring-smooth-duration: 520ms;
+    --spring-expressive: linear(0, 0.108, 0.317, 0.534, 0.713, 0.841, 0.926, 0.976, 1.002, 1.012, 1.015, 1.013, 1.01, 1.007, 1.004, 1.002, 1);
+    --spring-expressive-duration: 565ms;
     --scale-hover: 1.015;
     --scale-press: 0.985;
     --scale-enter: 0.985;
@@ -150,6 +157,9 @@
         --motion-base: 0.01ms;
         --motion-medium: 0.01ms;
         --motion-slow: 0.01ms;
+        --spring-snappy-duration: 0.01ms;
+        --spring-smooth-duration: 0.01ms;
+        --spring-expressive-duration: 0.01ms;
         --scale-hover: 1;
         --scale-press: 1;
         --scale-enter: 1;
