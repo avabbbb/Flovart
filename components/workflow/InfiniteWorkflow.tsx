@@ -81,7 +81,7 @@ import { useProductionProjectionAdapter } from './useProductionProjectionAdapter
 import { composeImageGrid } from './gridComposer';
 import { LIGHTING_PRESETS, buildRelightPrompt } from './LightingPresets';
 import { isWorkflowGenerationActive } from '../../services/workflowGeneration';
-import type { WorkflowConnection, WorkflowDocumentOperation, WorkflowNode as WorkflowNodeData, WorkflowNodeType, WorkflowPoint, WorkflowProject, WorkflowSnapshot, WorkflowViewport, SlashCommand, ScriptShot } from './types';
+import type { WorkflowConnection, WorkflowDocumentOperation, WorkflowNode as WorkflowNodeData, WorkflowNodeType, WorkflowPoint, WorkflowProject, WorkflowSnapshot, WorkflowViewport, ScriptShot } from './types';
 import {
   runWorkflowCropOperation,
   runWorkflowImageEditOperation,
