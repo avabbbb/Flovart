@@ -65,6 +65,7 @@ import { WorkflowVideoToolDialogs, type WorkflowVideoToolConfirmation, type Work
 import { WorkflowAudioToolDialogs, type WorkflowAudioToolConfirmation, type WorkflowAudioToolState } from './WorkflowAudioToolDialogs';
 import { ScriptNodeEditor } from './ScriptNodeEditor';
 import { SlashMenu } from './SlashMenu';
+import { buildShortcutApplyOps, type SlashShortcut } from './slashShortcuts';
 import { WorkflowToolbar, type WorkflowTool } from './WorkflowToolbar';
 import { deriveWorkflowRunStates, planWorkflowStaleRerun } from './runState';
 import { deriveWorkflowPresence } from './presence';
@@ -77,7 +78,7 @@ import { useProductionProjectionAdapter } from './useProductionProjectionAdapter
 import { composeImageGrid } from './gridComposer';
 import { LIGHTING_PRESETS, buildRelightPrompt } from './LightingPresets';
 import { isWorkflowGenerationActive } from '../../services/workflowGeneration';
-import type { WorkflowConnection, WorkflowDocumentOperation, WorkflowNode as WorkflowNodeData, WorkflowNodeType, WorkflowPoint, WorkflowProject, WorkflowSnapshot, WorkflowViewport, ScriptShot, SlashCommand } from './types';
+import type { WorkflowConnection, WorkflowDocumentOperation, WorkflowNode as WorkflowNodeData, WorkflowNodeType, WorkflowPoint, WorkflowProject, WorkflowSnapshot, WorkflowViewport, ScriptShot } from './types';
 import {
   runWorkflowCropOperation,
   runWorkflowImageEditOperation,
@@ -1647,60 +1648,34 @@ export function InfiniteWorkflow({
     onStopNode?.(nodeId);
   }, [markInterrupted, onStopNode, project.id]);
 
-  const handleSlashCommand = useCallback((command: SlashCommand) => {
+  const handleSlashCommand = useCallback((command: SlashShortcut, explicitTargetId?: string) => {
     setSlashMenu(null);
     const snapshot = currentSnapshot();
-    const selectedNodes = selectedIdsRef.current
-      .map(id => snapshot.nodes.find(n => n.id === id))
-      .filter((n): n is WorkflowNodeData => Boolean(n));
-    const sourceNodes = selectedNodes.filter(n => n.type === command.mode && n.metadata.status === 'success');
-    if (sourceNodes.length < command.minSources) {
-      const sourceKind = command.mode === 'image' ? (language === 'en' ? 'image' : '图片') : (language === 'en' ? 'video' : '视频');
-      setNotice(language === 'en'
-        ? 'Select at least ' + command.minSources + ' generated ' + sourceKind + ' node' + (command.minSources === 1 ? '' : 's') + ' as the source first.'
-        : '请先选择至少 ' + command.minSources + ' 个已生成的' + sourceKind + '节点作为源');
+    // 目标：显式给定（Prompt Bar 内 `/`）> 选中的第一个图片节点；宫格原地出一张图，非宫格右侧新建一个节点。
+    const targetId = explicitTargetId || selectedIdsRef.current.find(id => snapshot.nodes.find(n => n.id === id)?.type === 'image');
+    const center = viewportCenter();
+    let applied: ReturnType<typeof buildShortcutApplyOps>;
+    try {
+      applied = buildShortcutApplyOps({
+        shortcut: command,
+        nodes: snapshot.nodes,
+        connections: snapshot.connections,
+        targetId,
+        position: { x: center.x - 170, y: center.y - 120 },
+        mutationId: 'slash-' + nanoid(),
+        keys: userApiKeys,
+        place: () => ({ x: center.x - 170, y: center.y - 120 }),
+      });
+    } catch (cause) {
+      setNotice(cause instanceof Error ? cause.message : String(cause));
       return;
     }
-    const usedSources = sourceNodes.slice(0, command.maxSources);
-    const sourceIds = usedSources.map(n => n.id);
-    const nodeWidth = command.mode === 'image' ? 340 : 420;
-    const nodeHeight = command.mode === 'image' ? 240 : 236;
-    const gapX = 20;
-    const gapY = 20;
-    const cols = command.gridCols;
-    const center = viewportCenter();
-    const totalWidth = cols * (nodeWidth + gapX) - gapX;
-    const totalRows = Math.ceil(command.generateCount / cols);
-    const totalHeight = totalRows * (nodeHeight + gapY) - gapY;
-    const startX = center.x - totalWidth / 2;
-    const startY = center.y - totalHeight / 2;
-    const ops: WorkflowDocumentOperation[] = [];
-    const newNodeIds: string[] = [];
-    const batchId = nanoid();
-    const inheritedConfig = inheritGenerationConfig(command.mode, usedSources);
-    for (let i = 0; i < command.generateCount; i++) {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      const nodeId = nanoid();
-      newNodeIds.push(nodeId);
-      const prompt = command.promptBuilder(i, command.generateCount);
-      const newNode = createWorkflowNode(nodeId, command.mode, {
-        x: startX + col * (nodeWidth + gapX),
-        y: startY + row * (nodeHeight + gapY),
-      }, { prompt, status: 'idle', ...(inheritedConfig ? { config: inheritedConfig } : {}) });
-      newNode.title = `${command.label} ${i + 1}`;
-      ops.push({ type: 'add_node', node: newNode });
-      for (const sourceId of sourceIds) {
-        ops.push({ type: 'connect_nodes', fromNodeId: sourceId, toNodeId: nodeId });
-      }
-    }
-    ops.push({ type: 'group_nodes', ids: newNodeIds, batchId, source: 'auto' });
-    const success = applyOps(ops);
+    const success = applyOps(applied.plan.operations);
     if (success) {
-      newNodeIds.forEach(id => enqueueRunNode(id));
-      selectNodes(newNodeIds);
+      enqueueRunNode(applied.nodeId);
+      selectNodes([applied.nodeId]);
     }
-  }, [applyOps, currentSnapshot, enqueueRunNode, language, selectNodes, viewportCenter]);
+  }, [applyOps, currentSnapshot, enqueueRunNode, selectNodes, userApiKeys, viewportCenter]);
 
   // 媒体入库阶段/进度与取消句柄：只用于显示，不进项目数据与撤销栈。
   const [ingestStages, setIngestStages] = useState<Record<string, { stage: 'probe' | 'download' | 'transcode' | 'store'; progress?: number }>>({});

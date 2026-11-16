@@ -630,16 +630,3 @@ export interface CameraMovement {
   isCustom?: boolean;
 }
 
-export interface SlashCommand {
-  id: string;
-  label: string;
-  description: string;
-  icon: string;
-  category: 'storyboard' | 'character' | 'camera' | 'enhance';
-  mode: 'image' | 'video';
-  minSources: number;
-  maxSources: number;
-  generateCount: number;
-  gridCols: number;
-  promptBuilder: (index: number, total: number) => string;
-}
