@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { REVERSE_SUBGRAPH_TYPE, SUBGRAPH_CHILD_TITLE_CLEARANCE, SUBGRAPH_HEADER_HEIGHT, reverseToSubgraph, syncSubgraph } from '../services/reverse/canvas';
 import type { ReverseShot, ReverseVideoProject, ReverseWord } from '../services/reverse/types';
-import type { WorkflowNode } from '../components/workflow/types';
+import { applyWorkflowOps } from '../components/workflow/ops';
+import type { WorkflowDocumentOperation, WorkflowNode } from '../components/workflow/types';
 
 const words: ReverseWord[] = [
   { index: 0, text: 'Tired', startMs: 100, endMs: 400 },
@@ -45,7 +46,7 @@ function counter(prefix: string): () => string {
 const byKey = (nodes: readonly WorkflowNode[], key: string) => nodes.find((n) => n.metadata.reverseKey === key);
 
 describe('reverse canvas', () => {
-  it('creates a subgraph frame with a script node, one text node per shot, and script→shot edges', () => {
+  it('creates a subgraph frame with a script node, one image generation node per shot, and script→shot edges', () => {
     const plan = reverseToSubgraph(base(), { x: 100, y: 80 }, counter('id-'));
     expect(plan.frame.type).toBe(REVERSE_SUBGRAPH_TYPE);
     expect(plan.frame.position).toEqual({ x: 100, y: 80 });
@@ -57,9 +58,11 @@ describe('reverse canvas', () => {
     expect(script.metadata.scriptBreakdown?.shots.map((s) => s.dialogue)).toEqual(['Tired of waiting?', 'Try Brew.']);
 
     const s1 = byKey(plan.children, 'shot:s1')!;
-    expect(s1.type).toBe('text');
+    expect(s1.type).toBe('image');
     expect(s1.metadata.prompt).toBe('close-up of a sleepy face\n运镜：push in');
-    expect(s1.metadata.content).toContain('台词：Tired of waiting?');
+    expect(s1.metadata.richTextDocument).toMatchObject({ type: 'doc' });
+    expect(s1.metadata.content).toBeUndefined();
+    expect(script.metadata.scriptBreakdown?.shots[0]?.imageNodeId).toBe(s1.id);
     expect(s1.shot).toMatchObject({ index: 1, durationSec: 1, camera: 'push in', dialogue: 'Tired of waiting?' });
 
     expect(plan.connections.map((c) => [c.fromNodeId, c.toNodeId])).toEqual([
@@ -101,9 +104,9 @@ describe('reverse canvas', () => {
     expect(sync.remove).toEqual([byKey(plan.children, 'shot:s2')!.id]);
     expect(sync.add).toHaveLength(1);
     const added = sync.add[0]!;
-    expect(added).toMatchObject({ type: 'text', parentId: plan.frame.id, metadata: { reverseKey: 'shot:s3' } });
+    expect(added).toMatchObject({ type: 'image', parentId: plan.frame.id, metadata: { reverseKey: 'shot:s3' } });
     // 新镜头排在已有镜头列下方，不与之重叠。
-    const lowest = Math.max(...plan.children.filter((n) => n.type === 'text').map((n) => n.position.y + n.height));
+    const lowest = Math.max(...plan.children.filter((n) => n.type === 'image').map((n) => n.position.y + n.height));
     expect(added.position.y).toBeGreaterThan(lowest);
     expect(sync.remove).not.toContain('user-note');
     expect(sync.update.find((n) => n.id === plan.frame.id)?.metadata.childKeys).toEqual(['script', 'shot:s1', 'shot:s3']);
@@ -166,5 +169,28 @@ describe('reverse canvas', () => {
     const u1 = sync.update.find((n) => n.metadata.reverseKey === 'shot:s1')!;
     expect(u1.shot?.camera).toBeUndefined();
     expect(u1.metadata.prompt).toBe('close-up of a sleepy face');
+  });
+
+  it('T6: the plan applies through workflow ops with zero rejections (no text nodes, script→image edges)', () => {
+    const plan = reverseToSubgraph(base(), { x: 0, y: 0 }, counter('t6-'));
+    const operations: WorkflowDocumentOperation[] = [
+      ...[plan.frame, ...plan.children].map((node) => ({ type: 'add_node' as const, node })),
+      ...plan.connections.map((c) => ({ type: 'connect_nodes' as const, id: c.id, fromNodeId: c.fromNodeId, toNodeId: c.toNodeId, kind: c.kind, order: c.order })),
+    ];
+    const applied = applyWorkflowOps({ projectId: 'p', title: 't', nodes: [], connections: [], selectedNodeIds: [], viewport: { x: 0, y: 0, k: 1 } }, operations);
+    expect(applied.rejections).toEqual([]);
+    expect(applied.snapshot.nodes.some((n) => n.type === 'text')).toBe(false);
+    expect(applied.snapshot.connections).toHaveLength(2);
+  });
+
+  it('replaces legacy text shot nodes with image generation nodes on sync', () => {
+    const plan = reverseToSubgraph(base(), { x: 0, y: 0 });
+    const legacy = plan.children.map((n) => (n.metadata.reverseKey?.startsWith('shot:') ? { ...n, type: 'text', metadata: { ...n.metadata, content: 'old' } } : n));
+    const sync = syncSubgraph(base(), { frame: plan.frame, children: legacy }, counter('mig-'));
+    expect(sync.remove.sort()).toEqual(legacy.filter((n) => n.type === 'text').map((n) => n.id).sort());
+    expect(sync.add.map((n) => [n.type, n.metadata.reverseKey])).toEqual([['image', 'shot:s1'], ['image', 'shot:s2']]);
+    expect(sync.add[0]!.position).toEqual(legacy.find((n) => n.metadata.reverseKey === 'shot:s1')!.position);
+    const script = sync.update.find((n) => n.metadata.reverseKey === 'script')!;
+    expect(script.metadata.scriptBreakdown?.shots.map((s) => s.imageNodeId)).toEqual(sync.add.map((n) => n.id));
   });
 });
