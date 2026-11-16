@@ -13,6 +13,10 @@ export const AGENT_PUBLIC_COMMANDS = Object.freeze([
   'workflow.apply',
   'workflow.generate',
   'workflow.models.list',
+  'workflow.shortcut.list',
+  'workflow.shortcut.apply',
+  'workflow.group.create',
+  'workflow.group.run',
   'workflow.note.write',
   'workflow.media.import',
   'workflow.script.materialize',
@@ -50,7 +54,11 @@ export const AGENT_OPERATION_DEFINITIONS = Object.freeze({
   'agent.task.cancel': Object.freeze({ sideEffects: 'generation.stop', risk: 'none', permissions: Object.freeze(['agent.delegate']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze([]) }),
   // 只写 Prompt Bar 时是可逆写入；run=true 才产生费用（浏览器侧确认、本机预算按 run 计）。
   'workflow.generate': Object.freeze({ sideEffects: 'generation.maybe', risk: 'cost-and-generation', permissions: Object.freeze(['workflow.write', 'workflow.run']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow', 'provider-gate']) }),
+  'workflow.group.create': Object.freeze({ sideEffects: 'workflow.write', risk: 'reversible', permissions: Object.freeze(['workflow.write']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow']) }),
+  'workflow.group.run': Object.freeze({ sideEffects: 'generation.maybe', risk: 'cost-and-generation', permissions: Object.freeze(['workflow.run']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow', 'provider-gate']) }),
   'workflow.models.list': Object.freeze({ sideEffects: 'read', risk: 'none', permissions: Object.freeze(['workflow.read']), idempotent: true, mutation: false, requiredCapabilities: Object.freeze(['browser-workflow']) }),
+  'workflow.shortcut.list': Object.freeze({ sideEffects: 'read', risk: 'none', permissions: Object.freeze(['workflow.read']), idempotent: true, mutation: false, requiredCapabilities: Object.freeze(['browser-workflow']) }),
+  'workflow.shortcut.apply': Object.freeze({ sideEffects: 'generation.maybe', risk: 'cost-and-generation', permissions: Object.freeze(['workflow.write', 'workflow.run']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow', 'provider-gate']) }),
   'workflow.note.write': Object.freeze({ sideEffects: 'workflow.write', risk: 'reversible', permissions: Object.freeze(['workflow.write']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow']) }),
   'workflow.media.import': Object.freeze({ sideEffects: 'workflow.write', risk: 'reversible', permissions: Object.freeze(['workflow.write']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow']) }),
   // 分镜行 → 生成节点：只建不跑，可撤销写入。

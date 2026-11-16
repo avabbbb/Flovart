@@ -17,6 +17,8 @@ import {
 } from './references';
 import type { WorkflowConnection, WorkflowGenerationConfig, WorkflowNode, WorkflowNodeMetadata } from './types';
 import { promptAssetFromQuickPrompt } from '../../services/promptAsset';
+import { SlashMenu } from './SlashMenu';
+import { shouldOpenPromptSlashMenu, stripTrailingSlash, type SlashShortcut } from './slashShortcuts';
 
 export interface WorkflowModelOptions {
   text: string[];
@@ -67,7 +69,7 @@ const modeFor = (node: WorkflowNode, config?: WorkflowGenerationConfig): Generat
   return mode === 'text' || mode === 'video' ? mode : 'image';
 };
 
-export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme, language, userApiKeys, dynamicModelOptions, onOpenSettings, onEnhancePrompt, isEnhancingPrompt, onChange, onPromptIntent, onRun, onStop, focusSignal, onDisconnectReference, onReorderReference, assetFolders, assetItems, assetLibrary, onSelectAsset, onSelectWorkflowReference, onAddReferenceFiles, onResolvePastedMentions, onPasteUnresolvedMentions, expanded = false, onToggleExpanded, width = 880 }: {
+export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme, language, userApiKeys, dynamicModelOptions, onOpenSettings, onEnhancePrompt, isEnhancingPrompt, onChange, onPromptIntent, onRun, onStop, focusSignal, onDisconnectReference, onReorderReference, assetFolders, assetItems, assetLibrary, onSelectAsset, onSelectWorkflowReference, onAddReferenceFiles, onResolvePastedMentions, onPasteUnresolvedMentions, onSlashShortcut, expanded = false, onToggleExpanded, width = 880 }: {
   node: WorkflowNode;
   nodes: WorkflowNode[];
   connections?: WorkflowConnection[];
@@ -80,6 +82,8 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   onEnhancePrompt?: (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => Promise<PromptEnhanceResult>;
   isEnhancingPrompt?: boolean;
   onChange: (metadata: Partial<WorkflowNodeMetadata>) => void;
+  /** 在提示词里键入 `/`（开头或空格后）时弹出与画布 `/` 同一份快捷工具菜单；选中后由 Workflow 层套用到本节点。只加弹层，不改 Prompt Bar 本体。 */
+  onSlashShortcut?: (shortcut: SlashShortcut, remainingPrompt: string) => void;
   /** PromptBar 的稳定业务输出，不携带 Provider wire 字段或凭据。 */
   onPromptIntent?: (intent: PromptIntent) => void;
   onRun: () => void;
@@ -107,6 +111,7 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   width?: number;
 }) {
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [slashOpen, setSlashOpen] = useState(false);
   const operationCapability = node.metadata.operation ? getWorkflowOperationCapability(node.metadata.operation.capabilityId) : undefined;
   const isLocalOperation = operationCapability?.executor === 'local-transform';
   const config = node.metadata.config || { mode: node.type === 'text' ? 'text' : node.type === 'video' ? 'video' : 'image' };
@@ -187,6 +192,8 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   };
 
   const handlePromptInput = (plainText: string, document: Record<string, unknown>, mentionedElementIds: string[]) => {
+    const previous = node.metadata.prompt || '';
+    if (onSlashShortcut && node.type === 'image' && shouldOpenPromptSlashMenu(previous, plainText)) setSlashOpen(true);
     const mentionIds = keepConnectedMentions(plainText, mentionedElementIds);
     emitPromptIntent(plainText, mentionIds);
     onChange({ prompt: plainText, richTextDocument: document as typeof node.metadata.richTextDocument });
@@ -259,6 +266,17 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         language={language}
       />}
       {prompts.length > 0 && <button type="button" className="workflow-node-prompt__library-button" aria-label={language === 'en' ? 'Prompt library' : '提示词库'} title={language === 'en' ? 'Prompt library' : '提示词库'} onClick={() => setLibraryOpen(open => !open)}><BookOpen size={15} /></button>}
+      {slashOpen && onSlashShortcut && <div className="workflow-node-prompt__slash" data-testid="workflow-node-prompt-slash">
+        <SlashMenu
+          onClose={() => setSlashOpen(false)}
+          onSelect={shortcut => {
+            setSlashOpen(false);
+            const remaining = stripTrailingSlash(node.metadata.prompt || '');
+            if (remaining !== (node.metadata.prompt || '')) onChange({ prompt: remaining });
+            onSlashShortcut(shortcut, remaining);
+          }}
+        />
+      </div>}
       {libraryOpen && <div className="workflow-node-prompt__library" role="menu" aria-label={language === 'en' ? 'Prompt library' : '提示词库'}>{promptAssets.map(asset => <button type="button" role="menuitem" key={asset.id} onClick={() => { emitPromptIntent(asset.text, [], 'edit'); onChange({ prompt: asset.text, richTextDocument: undefined }); setLibraryOpen(false); }}><strong>{asset.title}</strong><span>{asset.text}</span></button>)}</div>}
       <PromptBar
         t={t}

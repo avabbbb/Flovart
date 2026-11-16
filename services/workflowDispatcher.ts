@@ -19,6 +19,8 @@ import { buildProductionBible } from '../components/workflow/productionBible';
 import { buildWorkflowPromptDocument, promptDocumentMentions } from '../components/workflow/promptDocument';
 import { buildScriptMaterializeOps, ScriptMaterializeError } from '../components/workflow/scriptMaterialize';
 import { generateModeOf, listWorkflowModels, planWorkflowGenerate, WorkflowGenerateError } from './workflowGenerateCommand';
+import { WorkflowGroupError, buildGroupCreateOps, groupRunOrder, isGroupFrame } from '../components/workflow/canvasGroups';
+import { SLASH_SHORTCUTS, SlashShortcutError, buildShortcutApplyOps, describeSlashShortcuts, getSlashShortcut } from '../components/workflow/slashShortcuts';
 import type { UserApiKey } from '../types';
 import { seedancePreflightForNodes } from './generationPlan';
 import { describeSeedanceFailures } from './seedancePreflight';
@@ -155,7 +157,7 @@ const DOCUMENT_MUTATION_COMMANDS = new Set([
   'workflow.apply', 'workflow.node.create', 'workflow.node.create-connected', 'workflow.node.update',
   'workflow.node.delete', 'workflow.node.move', 'workflow.node.resize', 'workflow.connect', 'workflow.disconnect',
 ]);
-const WORKFLOW_READ_COMMANDS = new Set(['workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.models.list']);
+const WORKFLOW_READ_COMMANDS = new Set(['workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.models.list', 'workflow.shortcut.list']);
 const SENSITIVE_KEY = /(?:api.?key|authorization|token|secret|password|storage.?key|file.?path|local.?path|data.?url)/i;
 const MEDIA_KEY = /^(?:href|poster|src|url)$/i;
 const LOCAL_PATH = /^(?:[a-z]:\\|\\\\|\/home\/|\/Users\/|\/tmp\/)/i;
@@ -508,7 +510,8 @@ function requiresWorkflowConfirmation(envelope: WorkflowCommandEnvelope) {
     }
   }
   // 只写 Prompt Bar 不扣费；run=true 时与 node.run 同等，需要确认。
-  if (envelope.command === 'workflow.generate') return envelope.args.run === true || envelope.args.run === 'true';
+  if (envelope.command === 'workflow.generate' || envelope.command === 'workflow.shortcut.apply') return envelope.args.run === true || envelope.args.run === 'true';
+  if (envelope.command === 'workflow.group.run') return !(envelope.args.dryRun === true || envelope.args['dry-run'] === true);
   if (!WORKFLOW_MUTATION_COMMANDS.has(envelope.command) || !isExternalAgent) return false;
   if (envelope.command === 'workflow.project.delete' || envelope.command === 'workflow.node.delete' || envelope.command === 'workflow.node.run') return true;
   if (envelope.command !== 'workflow.node.tool') return false;
@@ -753,6 +756,8 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         }
       } else if (command === 'workflow.models.list') {
         result = { ok: true, commandId: envelope.id, result: listWorkflowModels(args, dependencies.getUserApiKeys?.() || []) };
+      } else if (command === 'workflow.shortcut.list') {
+        result = { ok: true, commandId: envelope.id, result: { shortcuts: describeSlashShortcuts() } };
       } else if (!project) {
         return error(envelope.id, 'NOT_FOUND', '当前没有可用的 Workflow 项目。');
       } else if (command === 'workflow.node.run' || command === 'workflow.node.stop') {
@@ -824,26 +829,47 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
           dependencies.updateProject(project.id, draftLogPatch(latestProject, envelope, true, { nodeIds: succeeded }));
           result = { ok: true, commandId: envelope.id, result: { projectId: project.id, runs, failed: runs.length - succeeded.length } };
         }
-      } else if (command === 'workflow.generate') {
-        const mutationId = String(args.mutationId || envelope.idempotencyKey || '').trim() || 'generate-' + envelope.id;
+      } else if (command === 'workflow.generate' || command === 'workflow.shortcut.apply') {
+        const isShortcut = command === 'workflow.shortcut.apply';
+        const mutationId = String(args.mutationId || envelope.idempotencyKey || '').trim() || (isShortcut ? 'shortcut-' : 'generate-') + envelope.id;
         const expectedRevision = args.expectedRevision === undefined ? (project.draftVersion || 1) : finiteNumber(args.expectedRevision, 'expectedRevision');
         let plan: ReturnType<typeof planWorkflowGenerate>;
+        let shortcutSummary: Record<string, unknown> | undefined;
         try {
-          plan = planWorkflowGenerate({
-            nodes: project.nodes,
-            connections: project.connections,
-            args,
-            mutationId,
-            keys: dependencies.getUserApiKeys?.() || [],
-            place: (node, upstreamIds) => autoPlaceWorkflowNode(project.nodes, node, upstreamIds),
-          });
+          if (isShortcut) {
+            const scene = typeof args.scene === 'string' ? args.scene.trim() : '';
+            const shortcut = getSlashShortcut(scene);
+            if (!shortcut) return error(envelope.id, 'NOT_FOUND', '没有这个快捷工具：' + (scene || '（空）') + '；先调用 workflow.shortcut.list。可用：' + SLASH_SHORTCUTS.map(item => item.scene).join('、'));
+            const applied = buildShortcutApplyOps({
+              shortcut,
+              nodes: project.nodes,
+              connections: project.connections,
+              targetId: typeof args.nodeId === 'string' && args.nodeId.trim() ? args.nodeId.trim() : undefined,
+              text: typeof args.text === 'string' ? args.text : undefined,
+              mutationId,
+              keys: dependencies.getUserApiKeys?.() || [],
+              place: (node, upstreamIds) => autoPlaceWorkflowNode(project.nodes, node, upstreamIds),
+            });
+            plan = applied.plan;
+            shortcutSummary = { scene: shortcut.scene, placement: applied.placement, sourceIds: applied.sourceIds, ...(applied.grid ? { grid: applied.grid, splitTool: 'image.split-grid@1' } : {}) };
+          } else {
+            plan = planWorkflowGenerate({
+              nodes: project.nodes,
+              connections: project.connections,
+              args,
+              mutationId,
+              keys: dependencies.getUserApiKeys?.() || [],
+              place: (node, upstreamIds) => autoPlaceWorkflowNode(project.nodes, node, upstreamIds),
+            });
+          }
         } catch (cause) {
-          if (!(cause instanceof WorkflowGenerateError)) throw cause;
+          if (!(cause instanceof WorkflowGenerateError) && !(cause instanceof SlashShortcutError)) throw cause;
           const compatible = Array.isArray(cause.details?.compatibleModels) ? cause.details.compatibleModels as Array<{ id: string; configured?: boolean }> : [];
           const hint = compatible.length ? ' 可用模型：' + compatible.slice(0, 8).map(item => item.id + (item.configured ? '' : '（未配置）')).join('、') : '';
           return { ok: false, commandId: envelope.id, error: { code: cause.code, message: cause.message + hint, ...(cause.details ? { details: cause.details } : {}) } };
         }
         const summary = {
+          ...(shortcutSummary || {}),
           projectId: project.id,
           nodeId: plan.nodeId,
           created: plan.created,
@@ -862,7 +888,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         const committed = commitDocument(envelope, project, tagWorkflowNodeOrigin(plan.operations, envelope.source), {
           mutationId,
           expectedRevision,
-          intent: (plan.created ? '新建生成节点并写入提示词：' : '写入提示词：') + plan.nodeId,
+          intent: (isShortcut ? '快捷工具「' + String(shortcutSummary?.scene) + '」：' : '') + (plan.created ? '新建生成节点并写入提示词：' : '写入提示词：') + plan.nodeId,
         });
         if (!committed.ok) return committed;
         const draftVersion = (committed.result as { draftVersion?: number }).draftVersion;
@@ -885,6 +911,62 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
           }
           result = { ok: true, commandId: envelope.id, result: { ...summary, draftVersion, ran: true, run: workflowRunPayload(executionResult) } };
         }
+      } else if (command === 'workflow.group.create') {
+        const nodeIds = parseWorkflowNodeIdList(args.nodeIds);
+        const mutationId = String(args.mutationId || envelope.idempotencyKey || '').trim() || 'group-' + envelope.id;
+        const expectedRevision = args.expectedRevision === undefined ? (project.draftVersion || 1) : finiteNumber(args.expectedRevision, 'expectedRevision');
+        let plan: ReturnType<typeof buildGroupCreateOps>;
+        try {
+          plan = buildGroupCreateOps(project.nodes, nodeIds, { groupId: stableShortId('group-', mutationId), title: typeof args.title === 'string' ? args.title : undefined });
+        } catch (cause) {
+          if (cause instanceof WorkflowGroupError) return error(envelope.id, cause.code, cause.message);
+          throw cause;
+        }
+        const committed = commitDocument(envelope, project, plan.ops, { mutationId, expectedRevision, intent: '分组：' + plan.memberIds.length + ' 个节点' });
+        if (!committed.ok) return committed;
+        result = { ok: true, commandId: envelope.id, result: { projectId: project.id, groupId: plan.groupId, memberIds: plan.memberIds, draftVersion: (committed.result as { draftVersion?: number }).draftVersion } };
+      } else if (command === 'workflow.group.run') {
+        const groupId = requiredString(args.groupId, 'groupId');
+        if (!isGroupFrame(project.nodes.find(node => node.id === groupId))) return error(envelope.id, 'NOT_FOUND', '分组不存在：' + groupId + '（先用 workflow.group.create 建分组）');
+        const order = groupRunOrder(project.nodes, project.connections, groupId);
+        if (!order.length) return error(envelope.id, 'NOTHING_TO_RUN', '分组 ' + groupId + ' 里没有可执行的生成节点（需要写了提示词、未锁定的图片 / 视频节点）。');
+        if (args.dryRun === true || args['dry-run'] === true) {
+          result = { ok: true, commandId: envelope.id, result: { projectId: project.id, groupId, order, dryRun: true } };
+          cache(cacheKey, result);
+          return result;
+        }
+        const executor = dependencies.getExecutor?.() || dependencies.executor;
+        if (!executor) return error(envelope.id, 'RUNNER_UNAVAILABLE', 'Workflow 生成适配器尚未连接。');
+        const surface = envelope.source === 'agent' ? 'browser-agent' : envelope.source === 'operator' ? 'runtime' : envelope.source;
+        // 整组执行：一次确认覆盖整组；按依赖拓扑顺序逐个运行（下游等上游出图），上游失败时跳过依赖它的下游。
+        const failed = new Set<string>();
+        const runs: Array<{ nodeId: string; ok: boolean; skipped?: boolean; error?: { code: string; message: string } } & Record<string, unknown>> = [];
+        for (const nodeId of order) {
+          const blockedBy = project.connections.find(connection => connection.toNodeId === nodeId && failed.has(connection.fromNodeId))?.fromNodeId;
+          if (blockedBy) {
+            failed.add(nodeId);
+            runs.push({ nodeId, ok: false, skipped: true, error: { code: 'UPSTREAM_FAILED', message: '上游节点 ' + blockedBy + ' 失败，已跳过。' } });
+            continue;
+          }
+          try {
+            const executionResult = await executor.runNode({ projectId: project.id, nodeId }, { surface, correlationId: envelope.id + ':' + nodeId });
+            if (executionResult?.status === 'failed' || executionResult?.status === 'cancelled') {
+              failed.add(nodeId);
+              runs.push({ nodeId, ok: false, error: { code: executionResult.status === 'cancelled' ? 'RUN_CANCELLED' : executionResult.error?.code || 'RUN_FAILED', message: executionResult.error?.message || (executionResult.status === 'cancelled' ? '生成已停止。' : 'Workflow 生成失败。') } });
+              continue;
+            }
+            runs.push({ nodeId, ok: true, ...(executionResult ? workflowRunPayload(executionResult) : {}) });
+          } catch (cause) {
+            const normalized = normalizeWorkflowExecutionError(cause);
+            failed.add(nodeId);
+            runs.push({ nodeId, ok: false, error: { code: normalized.code, message: normalized.message } });
+          }
+        }
+        const succeeded = runs.filter(run => run.ok).map(run => run.nodeId);
+        if (!succeeded.length) return error(envelope.id, runs[0]?.error?.code || 'RUN_FAILED', '整组 ' + order.length + ' 个节点全部失败：' + (runs[0]?.error?.message || ''));
+        const latestProject = dependencies.getState().projects.find(item => item.id === project.id) || project;
+        dependencies.updateProject(project.id, draftLogPatch(latestProject, envelope, true, { nodeIds: succeeded }));
+        result = { ok: true, commandId: envelope.id, result: { projectId: project.id, groupId, order, runs, failed: runs.length - succeeded.length } };
       } else if (command === 'workflow.note.write') {
         const content = typeof args.text === 'string' ? args.text : typeof args.content === 'string' ? args.content : '';
         if (!content.trim()) throw new Error('text 不能为空');
@@ -1237,7 +1319,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
   const inFlightRuns = new Map<string, Promise<WorkflowCommandResult>>();
   return (envelope: WorkflowCommandEnvelope): Promise<WorkflowCommandResult> => {
     // 同一 idempotencyKey 的并发重复 run（Agent 重试、双击）共享一次执行；结果缓存只在完成后写入，挡不住并发。
-    const key = (envelope?.command === 'workflow.node.run' || envelope?.command === 'workflow.generate') && envelope.idempotencyKey ? envelope.source + ':' + envelope.idempotencyKey : undefined;
+    const key = (envelope?.command === 'workflow.node.run' || envelope?.command === 'workflow.generate' || envelope?.command === 'workflow.shortcut.apply' || envelope?.command === 'workflow.group.run') && envelope.idempotencyKey ? envelope.source + ':' + envelope.idempotencyKey : undefined;
     if (!key) return execute(envelope);
     const pending = inFlightRuns.get(key);
     if (pending) return pending;

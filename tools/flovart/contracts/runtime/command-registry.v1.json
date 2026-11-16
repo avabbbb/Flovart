@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "c2d5bef3733811e36139628fe1c71951dc03fdd9b15256925c69b78694611f5e",
+  "registryHash": "95751c53f7ce0b88bdea8067ab8f497faede4ad0bb4b333827b79f299a35c4cc",
   "commands": [
     {
       "name": "runtime.status",
@@ -606,6 +606,49 @@
         "dryRun": "boolean?",
         "expectedRevision": "number?",
         "mutationId": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.shortcut.list",
+      "summary": "List the slash shortcut tools (stable scene ids) shared by the canvas / menu, the Prompt Bar / popover and agents: grid tools render ONE grid image in place (count=1, split later with image.split-grid@1); single tools create ONE generation node to the right of the source image.",
+      "args": {},
+      "availability": "available"
+    },
+    {
+      "name": "workflow.shortcut.apply",
+      "summary": "Apply one slash shortcut by scene to one image node: grid tools write the template into the target node's Prompt Bar and run in place when it already has an image reference (or needs no source), otherwise create one node to the right that @-references the image; non-grid tools always create one node to the right. Always one node, count=1; run=true is paid and confirmed.",
+      "args": {
+        "projectId": "string?",
+        "scene": "string",
+        "nodeId": "string?",
+        "text": "string?",
+        "run": "boolean?",
+        "dryRun": "boolean?",
+        "expectedRevision": "number?",
+        "mutationId": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.group.create",
+      "summary": "Put two or more nodes into one group frame (subgraph with groupKind=group; members get parentId). Groups are separate from generation batches and alternates: moving the frame moves its members, collapsing hides them, workflow.group.run runs them.",
+      "args": {
+        "projectId": "string?",
+        "nodeIds": "string[]",
+        "title": "string?",
+        "expectedRevision": "number?",
+        "mutationId": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.group.run",
+      "summary": "Run every runnable generation node in a group (image/video nodes with a prompt, not locked) in dependency order, one confirmation for the whole group; downstream nodes of a failed node are skipped. dryRun returns the order only.",
+      "args": {
+        "projectId": "string?",
+        "groupId": "string",
+        "dryRun": "boolean?"
       },
       "availability": "available"
     },

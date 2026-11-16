@@ -369,6 +369,8 @@ export interface WorkflowNodeMetadata {
   };
   /** 仅 subgraph 节点：对应的逆向工程 id。 */
   reverseProjectId?: string;
+  /** 仅 subgraph 节点：'group' = 用户分组框（Ctrl+G / workflow.group.create），没有对应逆向工程；缺省为逆向子画布。 */
+  groupKind?: 'group';
   /** 仅 subgraph 节点：是否折叠（折叠时隐藏子节点及其连线）。 */
   collapsed?: boolean;
   /** 仅 subgraph 节点：子节点的稳定 reverseKey 列表。 */
@@ -650,16 +652,3 @@ export interface CameraMovement {
   isCustom?: boolean;
 }
 
-export interface SlashCommand {
-  id: string;
-  label: string;
-  description: string;
-  icon: string;
-  category: 'storyboard' | 'character' | 'camera' | 'enhance';
-  mode: 'image' | 'video';
-  minSources: number;
-  maxSources: number;
-  generateCount: number;
-  gridCols: number;
-  promptBuilder: (index: number, total: number) => string;
-}

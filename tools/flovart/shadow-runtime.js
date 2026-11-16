@@ -237,7 +237,7 @@ function dispatchShadowWorkflow(envelope, state) {
   if (!project) return fail('NOT_FOUND', 'No active Workflow project.');
   if (command === 'workflow.inspect') return done(redact(project));
   if (command === 'workflow.node.run' || command === 'workflow.node.stop' || command === 'workflow.generate'
-    || command === 'workflow.models.list' || command === 'workflow.note.write' || command === 'workflow.media.import'
+    || command === 'workflow.models.list' || command === 'workflow.shortcut.list' || command === 'workflow.shortcut.apply' || command === 'workflow.group.create' || command === 'workflow.group.run' || command === 'workflow.note.write' || command === 'workflow.media.import'
     || command === 'workflow.script.materialize'
     || command === 'workflow.export') {
     return fail('WORKSPACE_REQUIRED', 'Workflow 节点执行必须通过 Workspace Adapter 进入浏览器 WorkflowExecutor。');

@@ -195,6 +195,18 @@ the browser itself is offline.
   `REFERENCE_COUNT_OUT_OF_RANGE` or `REFERENCE_LIMIT`, switch to one of the
   returned `details.candidates` (`{modelId, mode}`) or fix the reference count
   as the message says; do not try models one by one.
+- Multi-angle 3×3 grid, character turnaround, 2×2 / 5×5 storyboard grid,
+  relight or portrait enhance → `workflow.shortcut.apply --scene <id>`
+  (Agent tool `flovart_shortcut_apply`; ids from `workflow.shortcut.list`).
+  Always one node and `count=1`: grid tools render one grid image in place
+  (or in one new node to the right of a bare image), non-grid tools create one
+  node to the right. Split a grid later with `image.split-grid@1`; never build
+  N nodes for a grid.
+- Group nodes → `workflow.group.create --node-ids a,b,c` (a group frame:
+  `subgraph` with `metadata.groupKind: "group"`, members carry `parentId`;
+  unrelated to generation batches and alternates). Run the whole group in
+  dependency order with one confirmation → `workflow.group.run --group-id <id>`
+  (`--dry-run` returns the order only).
 - Bring an image from a URL or the asset library onto the canvas →
   `workflow.media.import` (optionally `attachToNodeId` to use it as a reference).
 - Storyboard rows of a script node → `workflow.script.materialize --script-node-id

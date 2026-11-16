@@ -1,110 +1,6 @@
 import { Grid3x3, Aperture, Sun, Film, User, Search, Clapperboard } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { SlashCommand } from './types';
-
-export const SLASH_COMMANDS: SlashCommand[] = [
-  {
-    id: 'multi-camera-9',
-    label: '多机位九宫格',
-    description: '从 1 张图生成 9 个不同机位视角（3×3 网格）',
-    icon: 'grid',
-    category: 'camera',
-    mode: 'image',
-    minSources: 1,
-    maxSources: 1,
-    generateCount: 9,
-    gridCols: 3,
-    promptBuilder: index => {
-      const angles = [
-        'front view, eye-level',
-        'front-left 3/4 view, slight high angle',
-        'left side profile, eye-level',
-        'back-left 3/4 view, slight low angle',
-        'back view, eye-level',
-        'back-right 3/4 view, slight high angle',
-        'right side profile, eye-level',
-        'front-right 3/4 view, slight low angle',
-        "top-down bird's eye view",
-      ];
-      return `same subject, ${angles[index] || 'front view'}, different camera angle only, keep identical subject identity, pose, clothing, hairstyle and style, do not alter the subject itself`;
-    },
-  },
-  {
-    id: 'character-3-view',
-    label: '角色三视图',
-    description: '从 1 张角色图生成前/侧/后三视图',
-    icon: 'user',
-    category: 'character',
-    mode: 'image',
-    minSources: 1,
-    maxSources: 1,
-    generateCount: 3,
-    gridCols: 3,
-    promptBuilder: index => {
-      const views = ['front view (T-pose)', 'side profile view (T-pose)', 'back view (T-pose)'];
-      return `character turnaround sheet, ${views[index] || 'front view'}, maintain identical character design, colors, proportions, clothing and accessories, clean concept art reference background`;
-    },
-  },
-  {
-    id: 'story-4-grid',
-    label: '剧情推演四宫格',
-    description: '将描述拆为 4 格剧情演绎图（2×2 网格）',
-    icon: 'film',
-    category: 'storyboard',
-    mode: 'image',
-    minSources: 0,
-    maxSources: 1,
-    generateCount: 4,
-    gridCols: 2,
-    promptBuilder: index => {
-      const beats = ['opening scene, establishing shot', 'rising action, conflict begins', 'climax, dramatic peak moment', 'resolution, aftermath and conclusion'];
-      return `story progression, scene ${index + 1} of 4 — ${beats[index] || 'narrative beat'}, cinematic narrative, consistent characters and art style across all frames`;
-    },
-  },
-  {
-    id: 'lighting-fix',
-    label: '电影级光影矫正',
-    description: '修复不稳定光线，专业色彩分级',
-    icon: 'sun',
-    category: 'enhance',
-    mode: 'image',
-    minSources: 1,
-    maxSources: 1,
-    generateCount: 1,
-    gridCols: 1,
-    promptBuilder: () => 'cinematic lighting correction, professional color grading, balanced exposure, dramatic but natural light, remove harsh shadows and blown highlights',
-  },
-  {
-    id: 'portrait-enhance',
-    label: '人像质感增强',
-    description: '增强皮肤质感、光影细节',
-    icon: 'aperture',
-    category: 'enhance',
-    mode: 'image',
-    minSources: 1,
-    maxSources: 1,
-    generateCount: 1,
-    gridCols: 1,
-    promptBuilder: () => 'enhanced skin texture, detailed facial features, soft studio lighting, shallow depth of field, high quality portrait, preserve original identity and expression',
-  },
-  {
-    id: 'storyboard-25',
-    label: '25宫格连贯分镜',
-    description: '将描述拆为 25 帧连贯分镜（5×5 网格）',
-    icon: 'clapperboard',
-    category: 'storyboard',
-    mode: 'image',
-    minSources: 0,
-    maxSources: 1,
-    generateCount: 25,
-    gridCols: 5,
-    promptBuilder: index => {
-      const act = Math.floor(index / 7);
-      const acts = ['opening act', 'development act', 'midpoint turn', 'escalation act', 'climax and resolution'];
-      return `storyboard frame ${index + 1} of 25, ${acts[act] || 'narrative beat'}, sequential narrative progression, consistent style and characters across all frames, cinematic composition`;
-    },
-  },
-];
+import { SLASH_SHORTCUTS, SLASH_SHORTCUT_CATEGORY_LABELS, filterSlashShortcuts, type SlashShortcut } from './slashShortcuts';
 
 const ICON_MAP: Record<string, typeof Grid3x3> = {
   grid: Grid3x3,
@@ -115,32 +11,22 @@ const ICON_MAP: Record<string, typeof Grid3x3> = {
   clapperboard: Clapperboard,
 };
 
-const CATEGORY_LABELS: Record<SlashCommand['category'], string> = {
-  storyboard: '分镜',
-  character: '角色',
-  camera: '机位',
-  enhance: '增强',
-};
+const CATEGORY_LABELS = SLASH_SHORTCUT_CATEGORY_LABELS;
 
-export function SlashMenu({ onSelect, onClose }: {
-  onSelect: (command: SlashCommand) => void;
+export function SlashMenu({ onSelect, onClose, initialQuery = '', autoFocus = true }: {
+  onSelect: (command: SlashShortcut) => void;
   onClose: () => void;
+  /** Prompt Bar 里 `/` 之后已输入的字 */
+  initialQuery?: string;
+  autoFocus?: boolean;
 }) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  useEffect(() => { if (autoFocus) inputRef.current?.focus(); }, [autoFocus]);
 
-  const filtered = useMemo(() => {
-    if (!query.trim()) return SLASH_COMMANDS;
-    const lower = query.toLowerCase();
-    return SLASH_COMMANDS.filter(cmd =>
-      cmd.label.toLowerCase().includes(lower) ||
-      cmd.description.toLowerCase().includes(lower) ||
-      CATEGORY_LABELS[cmd.category].includes(query),
-    );
-  }, [query]);
+  const filtered = useMemo(() => filterSlashShortcuts(query, SLASH_SHORTCUTS), [query]);
 
   useEffect(() => { setActiveIndex(0); }, [query]);
 
@@ -184,7 +70,7 @@ export function SlashMenu({ onSelect, onClose }: {
           const Icon = ICON_MAP[command.icon] || Grid3x3;
           return (
             <button
-              key={command.id}
+              key={command.scene}
               className={`workflow-slash-menu__item ${index === activeIndex ? 'workflow-slash-menu__item--active' : ''}`}
               onMouseEnter={() => setActiveIndex(index)}
               onClick={() => onSelect(command)}

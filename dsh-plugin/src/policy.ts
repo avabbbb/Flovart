@@ -24,11 +24,11 @@ export interface FlovartToolPolicy {
 }
 
 const WRITE_TOOLS = new Set(['flovart_apply', 'flovart_workflow_apply'])
-const RUN_TOOLS = new Set(['flovart_run', 'flovart_workflow_node_run'])
+const RUN_TOOLS = new Set(['flovart_run', 'flovart_workflow_node_run', 'flovart_group_run'])
 const READ_TOOLS = new Set([
   'flovart_inspect', 'flovart_selection', 'flovart_status',
   'flovart_workflow_inspect', 'flovart_workflow_selection_get', 'flovart_workflow_focus_nodes',
-  'flovart_models_list', 'flovart_workflow_node_stop',
+  'flovart_models_list', 'flovart_shortcut_list', 'flovart_workflow_node_stop',
   'flovart_export', 'flovart_task_get', 'flovart_task_cancel',
 ])
 
@@ -63,7 +63,7 @@ export function flovartToolRisk(name: string, args: Record<string, unknown>): Fl
     return args.policy === 'workspace-write' ? 'write' : 'read'
   }
   // generate 只写 Prompt Bar 时是普通写入；run=true 才是付费运行。
-  if (name === 'flovart_generate') return args.run === true || args.run === 'true' ? 'run' : 'write'
+  if (name === 'flovart_generate' || name === 'flovart_shortcut_apply') return args.run === true || args.run === 'true' ? 'run' : 'write'
   if (READ_TOOLS.has(name)) return 'read'
   return name.startsWith('flovart_') ? 'write' : null
 }
