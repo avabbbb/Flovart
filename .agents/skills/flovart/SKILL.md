@@ -163,6 +163,9 @@ the browser itself is offline.
 - In `workflow.generate` prompts, refer to inputs as `@ref:<nodeId>` or
   `@"Node name"`; anything mentioned gets connected (`autoLinked`), and
   disconnecting a source removes its chip (`prunedMentions`).
+- Several shots: build them all with `workflow.generate` (no `run`), then
+  run the list once with `workflow.node.run --node-ids` (one approval card,
+  each node runs once).
 - Runs block until a terminal status (`succeeded` / `failed` / `timeout` /
   `unknown_after_submit`); never poll `workflow.inspect` while a run is in
   progress, and never retry `unknown_after_submit`.

@@ -1,3 +1,4 @@
+import { planRunApproval } from './runApproval';
 import { terminalFromFailure, terminalFromRunResult, type WorkflowRunTerminal } from './workflowRunTerminal';
 import { planMentionPrunes, type MentionPrune } from '../components/workflow/promptReferenceAlignment';
 import { WORKFLOW_NODE_PATCH_FIELDS, WORKFLOW_OPERATION_FIELDS } from '../tools/flovart/workflow-operation-schema.js';
@@ -639,6 +640,17 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
       && envelope.idempotencyKey && `${envelope.source}:${envelope.idempotencyKey}`;
     if (cacheKey && idempotencyCache.has(cacheKey)) return idempotencyCache.get(cacheKey)!;
     const { command, args } = envelope;
+    if (command === 'workflow.node.run' && args.nodeIds !== undefined) {
+      // 按批审批：清单里每个节点都必须是能运行的生成节点，弹卡之前就把跑不起来的项拒掉。
+      const state = dependencies.getState();
+      const runProject = state.projects.find(item => item.id === String(args.projectId || state.activeProjectId || ''));
+      if (runProject) {
+        let requested: string[];
+        try { requested = workflowRunNodeIds(args); } catch (cause) { return error(envelope.id, 'BAD_REQUEST', displayError(cause)); }
+        const approval = planRunApproval(runProject.nodes, requested);
+        if (!approval.ok) return { ok: false, commandId: envelope.id, error: { code: approval.code, message: approval.message, details: { nodeIds: approval.nodeIds } } };
+      }
+    }
     if (requiresWorkflowConfirmation(envelope) && !hasWorkflowHumanApproval(envelope)) {
       return {
         ok: true,

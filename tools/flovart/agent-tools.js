@@ -32,7 +32,7 @@ const GENERATE_DESCRIPTION = [
   'prompt 引用了没连线的节点会自动连上并在 autoLinked 里回报（linkPolicy=reject 时改为报 REFERENCE_NOT_LINKED）。断开连线/删节点时下游 Prompt Bar 的对应 chip 会被清掉，结果里有 prunedMentions。',
   '生成方式按引用自动推导（无参考=文生，有图=图生图/图生视频，首尾帧=first-last-frame，多参考/视频/音频=reference-to-video），',
   '模型不传时用与 Prompt Bar 相同的默认策略；不兼容时返回 MODE_UNSUPPORTED / REFERENCE_COUNT_OUT_OF_RANGE（含 min/max/got 与 candidates:[{modelId,mode}]）/ REFERENCE_LIMIT，直接换 candidates 里的模型或模式，不要盲试，先 flovart_models_list。',
-  'run 默认 false（只写节点，不花钱）；run=true 会扣费并请用户确认，结果原位替换，count>1 折叠成同一批次，返回 run.batch 与每张 takes。',
+  'run 默认 false（只写节点，不花钱）；多个镜头/节点时都用 run=false 建好，再用 flovart_workflow_node_run 的 nodeIds 一次审批运行；单个节点才用 run=true（会扣费并请用户确认），结果原位替换，count>1 折叠成同一批次，返回 run.batch 与每张 takes。',
   '剧本/分镜：每个镜头一个生成节点，镜头内容写进 prompt，镜号等写进 shot；不要建文本节点承载提示词。',
 ].join('');
 
@@ -176,9 +176,9 @@ const DEFINITIONS = [
   {
     command: 'workflow.node.run',
     name: 'flovart_workflow_node_run',
-    aliases: ['flovart_workflow_run', 'flovart_run'],
+    aliases: ['flovart_workflow_run', 'flovart_run', 'flovart_approve_run'],
     surfaces: ALL,
-    description: '原位运行已有的图片/视频生成节点（nodeId），或用 nodeIds 一次确认后并行运行多个。会扣费并请用户确认。会阻塞到终态再返回，不要自己轮询 inspect。终态 status 只有 succeeded / failed / timeout / unknown_after_submit：成功返回 runId、batch（batchId、headNodeId、memberNodeIds）与每张产物 takes；失败时 error.details.run 带 {status, runId, failedReason, retryable}，批量时每个 runs[] 都有 status。timeout 先 inspect 再用同一 idempotencyKey 重试；unknown_after_submit 可能已计费，禁止重试或换线路。改提示词再跑请用 flovart_generate。',
+    description: '原位运行已有的图片/视频生成节点（nodeId），或用 nodeIds 一次确认后并行运行多个（按批审批 approve_run）：建与跑分开——先用 flovart_generate（run=false）把一批节点建好，再把这批 nodeIds 交给本工具，用户在一张审批卡上看到清单与合计费用、确认一次，清单里每个节点各运行一次；清单里有文本备注或非生成节点会在弹卡前被拒绝（NOTE_IS_ANNOTATION / NOT_RUNNABLE）。会扣费。会阻塞到终态再返回，不要自己轮询 inspect。终态 status 只有 succeeded / failed / timeout / unknown_after_submit：成功返回 runId、batch（batchId、headNodeId、memberNodeIds）与每张产物 takes；失败时 error.details.run 带 {status, runId, failedReason, retryable}，批量时每个 runs[] 都有 status。timeout 先 inspect 再用同一 idempotencyKey 重试；unknown_after_submit 可能已计费，禁止重试或换线路。改提示词再跑请用 flovart_generate。',
     fields: {
       nodeIds: { type: 'array', items: { type: 'string' }, description: '批量运行的节点 id（与 nodeId 二选一）' },
     },
