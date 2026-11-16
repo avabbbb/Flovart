@@ -1039,3 +1039,18 @@
 .workflow-region-popover__actions button { padding:6px 12px;border-radius:8px;border:1px solid var(--wf-border,#ddd);background:transparent;color:inherit;font-size:12px;cursor:pointer; }
 .workflow-region-popover__actions button.is-primary { background:var(--wf-accent,#6366f1);border-color:var(--wf-accent,#6366f1);color:#fff; }
 .workflow-region-popover__actions button:disabled { opacity:.45;cursor:default; }
+/* 节点内剪辑条（P1-5） */
+.workflow-node__trim-bar { position:absolute;left:8px;right:8px;bottom:8px;z-index:3;display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:8px;background:rgba(12,12,16,.78);color:#fff;font-size:11px;outline:none;backdrop-filter:blur(6px); }
+.workflow-node__trim-bar:focus-visible { box-shadow:0 0 0 2px var(--wf-accent,#19c8b9); }
+.workflow-node__trim-track { position:relative;height:18px; }
+.workflow-node__trim-track::before { content:'';position:absolute;left:0;right:0;top:7px;height:4px;border-radius:2px;background:rgba(255,255,255,.22); }
+.workflow-node__trim-selection { position:absolute;top:5px;height:8px;border-radius:3px;background:var(--wf-accent,#19c8b9);pointer-events:none; }
+.workflow-node__trim-playhead { position:absolute;top:1px;width:2px;height:16px;margin-left:-1px;background:#fff;pointer-events:none; }
+.workflow-node__trim-track input[type=range] { position:absolute;inset:0;width:100%;margin:0;background:transparent;appearance:none;-webkit-appearance:none;pointer-events:none; }
+.workflow-node__trim-track input[type=range]::-webkit-slider-thumb { -webkit-appearance:none;pointer-events:auto;width:10px;height:18px;border-radius:3px;background:#fff;cursor:ew-resize; }
+.workflow-node__trim-track input[type=range]::-moz-range-thumb { pointer-events:auto;width:10px;height:18px;border-radius:3px;background:#fff;cursor:ew-resize;border:0; }
+.workflow-node__trim-meta { display:flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums; }
+.workflow-node__trim-length { opacity:.7; }
+.workflow-node__trim-meta button { padding:3px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.3);background:transparent;color:inherit;font-size:11px;cursor:pointer; }
+.workflow-node__trim-meta button.is-primary { background:var(--wf-accent,#19c8b9);border-color:var(--wf-accent,#19c8b9);color:#0b1b1a; }
+.workflow-node__trim-meta button:disabled { opacity:.5;cursor:default; }

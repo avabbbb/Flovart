@@ -955,14 +955,50 @@ export function InfiniteWorkflow({
     }
   }, [currentFrame, imageToolRuntime, pushHistory, videoControls]);
 
+  // 节点内剪辑（P1-5）：剪辑条直接嵌在视频节点里，不再弹 TrimDialog；产物仍是 video.trim@1 的新版本。
+  const [inlineTrim, setInlineTrim] = useState<{ projectId: string; nodeId: string } | null>(null);
+  const [inlineTrimBusy, setInlineTrimBusy] = useState(false);
+  const openInlineTrim = useCallback((nodeId: string) => {
+    if (videoControls.isLocked()) { setNotice('请先完成或关闭当前视频工具'); return; }
+    const target = projectRef.current.nodes.find(node => node.id === nodeId);
+    if (!target || target.type !== 'video' || !(target.metadata.storageKey || target.metadata.href || target.metadata.artifactRef?.taskId)) {
+      setNotice('目标视频节点缺少媒体，无法使用视频工具');
+      return;
+    }
+    if (target.metadata.status === 'loading' || target.isLocked) return;
+    setInlineTrim({ projectId: projectRef.current.id, nodeId });
+  }, [videoControls]);
+  const confirmInlineTrim = useCallback(async (nodeId: string, startSec: number, endSec: number) => {
+    const transaction = { id: nanoid(), projectId: projectRef.current.id, nodeId, frame: currentFrame() };
+    if (!videoControls.begin(transaction)) return;
+    setInlineTrimBusy(true);
+    setNotice('正在剪辑…');
+    try {
+      const result = await runWorkflowVideoTrimOperation(transaction.projectId, nodeId, { startSec, endSec }, imageToolRuntime);
+      if (!videoControls.owns(transaction)) return;
+      if (result.status === 'committed' && projectRef.current.id === transaction.projectId) {
+        pushHistory(transaction.frame);
+        setNotice('视频剪辑完成，已生成新版本');
+        setInlineTrim(null);
+      } else if (result.status === 'stale') {
+        setInlineTrim(null);
+      }
+    } catch (error) {
+      if (videoControls.owns(transaction)) setNotice(displayError(error, '视频剪辑失败'));
+    } finally {
+      setInlineTrimBusy(false);
+      videoControls.settle(transaction);
+    }
+  }, [currentFrame, imageToolRuntime, pushHistory, videoControls]);
+
   const builtInVideoTools = useMemo<WorkflowVideoToolHandlers>(() => ({
-    trim: id => openVideoTool('trim', id),
+    trim: id => openInlineTrim(id),
     avSplit: (id, audio) => { void handleAvSplit(id, audio); },
     // merge 需要携带完整选中 id 列表，确认时回传真实选中集而非全库视频。
     merge: ids => { if (ids.length > 0) openVideoTool('merge', ids[0], ids); },
     extractFrame: handleExtractFrame,
     extractFrameAt: id => openVideoTool('extract-frame', id),
-  }), [openVideoTool, handleExtractFrame, handleAvSplit]);
+  }), [openVideoTool, openInlineTrim, handleExtractFrame, handleAvSplit]);
 
   // 自动派生（默认关闭）：视频节点新进入成功状态时，按设置串行执行截帧 / 音视频分离 Operation。
   const [autoMediaDerive, setAutoMediaDerive] = useState<AutoMediaDeriveSettings>(() => loadAutoMediaDeriveSettings());
@@ -3460,6 +3496,10 @@ export function InfiniteWorkflow({
             onNeedPoster={() => requestVideoPoster(node.id)}
             onChangeTitle={title => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, patch: { title } }]); }}
             anchorCode={anchorCodes.get(node.id)}
+            trimEditing={inlineTrim?.projectId === project.id && inlineTrim.nodeId === node.id}
+            trimBusy={inlineTrimBusy}
+            onTrimConfirm={(startSec, endSec) => { void confirmInlineTrim(node.id, startSec, endSec); }}
+            onTrimCancel={() => { if (!inlineTrimBusy) setInlineTrim(null); }}
             onToggleAnchorApproval={node.anchor ? () => {
               if (node.isLocked) return;
               const patch = anchorApprovalPatch(node, new Date(), projectRef.current.nodes);

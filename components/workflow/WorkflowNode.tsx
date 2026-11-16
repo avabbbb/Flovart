@@ -17,6 +17,7 @@ import type { WorkflowNodeRunInfo, WorkflowStaleReason } from './runState';
 import type { WorkflowNodePresence } from './presence';
 import type { WorkflowLayerPreview } from './layerPreview';
 import { WorkflowLayerCandidates } from './WorkflowLayerCandidates';
+import { WorkflowVideoTrimBar } from './WorkflowVideoTrimBar';
 
 function WorkflowPluginSurface({ plugin, pluginContext }: { plugin: WorkflowNodePluginDefinition; pluginContext: WorkflowNodePluginContext }) {
   return <>
@@ -141,6 +142,10 @@ export function WorkflowNode({
   onChangeTitle,
   onToggleAnchorApproval,
   anchorCode,
+  trimEditing,
+  trimBusy,
+  onTrimConfirm,
+  onTrimCancel,
   onFocusNode,
   renameSignal,
   onNeedPoster,
@@ -163,6 +168,11 @@ export function WorkflowNode({
   /** 正被拖拽：抬起（放大、微倾、加深投影），松手后弹簧落地。 */
   lifted?: boolean;
   mediaActive?: boolean;
+  /** 节点内剪辑（替代 TrimDialog）：为 true 时视频强制展开并显示内嵌裁剪条。 */
+  trimEditing?: boolean;
+  trimBusy?: boolean;
+  onTrimConfirm?: (startSec: number, endSec: number) => void;
+  onTrimCancel?: () => void;
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onConnectStart: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   onConnectStartTarget?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
@@ -228,7 +238,7 @@ export function WorkflowNode({
   const mediaInput = useRef<HTMLInputElement>(null);
   const needPosterRef = useRef(onNeedPoster);
   needPosterRef.current = onNeedPoster;
-  const videoActive = node.type === 'video' && Boolean(mediaActive);
+  const videoActive = node.type === 'video' && (Boolean(mediaActive) || Boolean(trimEditing));
   const resolveSourceMedia = node.type !== 'video' || videoActive;
   const media = useWorkflowMediaUrl(
     resolveSourceMedia ? (node.type === 'video' && node.metadata.previewStorageKey) || node.metadata.storageKey : undefined,
@@ -557,7 +567,17 @@ export function WorkflowNode({
                   onEnded={() => setVideoPlaying(false)}
                   onClick={event => { event.stopPropagation(); void toggleVideo(); }}
                 />
-                <div className="workflow-node__video-controls" data-workflow-overlay onPointerDown={event => event.stopPropagation()}>
+                {trimEditing && onTrimConfirm && onTrimCancel ? (
+                  <WorkflowVideoTrimBar
+                    videoRef={videoRef}
+                    durationSec={videoDuration}
+                    currentTimeSec={videoCurrentTime}
+                    busy={trimBusy}
+                    language={language === 'en' ? 'en' : 'zh'}
+                    onConfirm={onTrimConfirm}
+                    onCancel={onTrimCancel}
+                  />
+                ) : <div className="workflow-node__video-controls" data-workflow-overlay onPointerDown={event => event.stopPropagation()}>
                   <button type="button" aria-label={videoPlaying ? '暂停视频' : '播放视频'} onClick={() => void toggleVideo()}>
                     {videoPlaying ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
                   </button>
@@ -592,7 +612,7 @@ export function WorkflowNode({
                       {([['first', '截取首帧'], ['last', '截取尾帧'], ['current', '截取当前帧']] as const).map(([position, label]) => <button key={position} type="button" role="menuitem" onClick={() => { onExtractFrame(position, position === 'current' ? videoCurrentTime : undefined); setFrameMenuOpen(false); }}>{label}</button>)}
                     </div>}
                   </div>}
-                </div>
+                </div>}
                 {mediaActions}
               </>
               : <div className="workflow-node__empty"><Video size={26} /><span>{videoDecodeError || mediaError || '正在加载视频'}</span>{regrantAction}{mediaActions}</div>
