@@ -26,6 +26,8 @@ npm run flovart:cli -- workflow.media.import --url https://example.com/ref.png -
 npm run flovart:cli -- workflow.export --node-ids <image-id> --json
 npm run flovart:cli -- workflow.export --group-id <batch-id> --file-name 定稿 --inline --json
 npm run flovart:cli -- workflow.node.run --node-id <image-id> --idempotency-key shot-1-v2 --json
+npm run flovart:cli -- workflow.generate --type image --prompt "主视觉" --idempotency-key a --json | npm run -s flovart:cli -- workflow.generate --type video --prompt "镜头推进" --references - --idempotency-key b --json
+npm run flovart:cli -- agent.task.start --command workflow.node.run --args '{"nodeIds":["<shot-1>","<shot-2>"]}' --idempotency-key batch-1 --wait --json
 npm run flovart:cli -- workflow.node.run --node-ids <shot-1>,<shot-2>,<shot-3> --idempotency-key batch-1-v1 --json
 npm run flovart:cli -- workflow.focus.nodes --node-ids <shot-1>,<shot-2> --json
 npm run flovart:cli -- workflow.node.stop --node-id <image-id> --json

@@ -73,6 +73,16 @@ flovart agent.turn --prompt "给镜头 1 写一版提示词" --policy read-only 
   Confirmations, budget and pre-checks of the wrapped command still apply.
   Tasks live in the local Agent process; after a restart `get` returns
   `NOT_FOUND`.
+- CLI output is pipe-friendly: each `--json` result is one line on stdout
+  (NDJSON; add `--pretty` to indent it), progress goes to stderr prefixed
+  `[flovart]`. A downstream command reads node ids from stdin with
+  `--references -` (`workflow.generate`) or `--node-ids -`
+  (`workflow.node.run`, `workflow.focus.nodes`, `workflow.export`).
+  `agent.task.start ... --wait` streams task events to stderr and prints only
+  the final result. `status` also reports `diagnostics`: the bound project and
+  writer, where the Agent credential came from (token masked), state-file
+  modification times, and `workspaceUnavailableReason` — read it first when a
+  command fails with `WORKSPACE_UNAVAILABLE`.
 
 - `--agent-identity` names your host (`codex`, `claude-code`, `opencode`,
   `workbuddy`). Pass the same value on `workflow.inspect` and on every write
