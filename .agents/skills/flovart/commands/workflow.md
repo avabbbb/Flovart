@@ -56,6 +56,8 @@ Always pass `--idempotency-key <key>` on `workflow.node.run` (paid). A repeated 
 
 Flovart does not automatically retry a failed run or switch provider routes. If the CLI times out (`WORKSPACE_TIMEOUT`), the task may still be running: run `workflow.inspect` and check the node status before doing anything, and retry with the same idempotency key. Never retry `SEEDANCE_SUBMISSION_UNKNOWN`; the upstream task may already be created and billed. After a page reload, a video node that already has a provider task ID resumes polling the same upstream task instead of submitting again.
 
+To avoid holding a session open for minutes, pass `--wait-seconds <n>` (1–960) or `--no-wait` (20 seconds) to `workflow.node.run`. If the run has not finished by then, the CLI returns `{"ok": true, "status": "running", "idempotencyKey": ...}` instead of a timeout error; the generation keeps running in the canvas. Run the same command again with the same `--idempotency-key` to wait for and read the result: it joins the in-flight run and never submits a second paid generation. Use `workflow.inspect` meanwhile to see node progress.
+
 After a successful run the Agent writes one `artifact` receipt per `runId` (read them with `receipts.list --project-id <id>`), and RunningHub runs record the actual cost reported by RunningHub.
 
 Read returned IDs directly, then use `workflow.inspect` to verify the redacted graph. Never use removed `canvas.*` or `element.*` commands.

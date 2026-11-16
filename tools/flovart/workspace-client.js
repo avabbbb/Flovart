@@ -159,7 +159,7 @@ export class FlovartWorkspaceClient {
           idempotencyKey,
           ...(envelope.caller ? { caller: envelope.caller } : {}),
         }),
-      }, longRunning ? this.longRunningTimeoutMs : this.timeoutMs);
+      }, envelope.timeoutMs || (longRunning ? this.longRunningTimeoutMs : this.timeoutMs));
       return body.result;
     } catch (error) {
       if (idempotencyKey && error instanceof WorkspaceClientError && error.code === 'WORKSPACE_TIMEOUT') {
@@ -176,6 +176,7 @@ export class FlovartWorkspaceClient {
       source,
       idempotencyKey: options.idempotencyKey,
       ...(options.caller ? { caller: options.caller } : {}),
+      ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
     });
   }
 }

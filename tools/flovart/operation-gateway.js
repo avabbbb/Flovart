@@ -102,6 +102,7 @@ export function createOperationGateway(options = {}) {
       return await getWorkspace().execute(command, operationArgs, context.source || 'mcp', {
         ...(idempotencyKey ? { idempotencyKey } : {}),
         ...(caller ? { caller } : {}),
+        ...(context.timeoutMs ? { timeoutMs: context.timeoutMs } : {}),
       });
     } catch (error) {
       if (error instanceof OperationGatewayError || error instanceof WorkspaceClientError) throw error;
