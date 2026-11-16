@@ -1,10 +1,12 @@
+import { foldResultBatches } from './batchAlternates';
 import { workflowStorage } from './storage';
 import { WORKFLOW_SNAPSHOT_LIMIT } from './snapshots';
 import type { WorkflowConnection, WorkflowNamedSnapshot, WorkflowNode, WorkflowProject, WorkflowViewport } from './types';
 
 // v2：新增 subgraph 节点与可选 parentId；旧数据无需补字段，只清理非法 / 悬空的 parentId。
 // v3：文本节点改为独立「备注」，不再作为生成 prompt 上下文；旧连线迁移为可合并目标。
-export const WORKFLOW_PERSISTENCE_VERSION = 3;
+// v4：多结果叠放批次折叠成首图节点上的备选（metadata.alternates）；升级前整份状态写入备份键。
+export const WORKFLOW_PERSISTENCE_VERSION = 4;
 export const WORKFLOW_BACKUP_KEY = 'flovart:workflow:projects:backup';
 
 export interface PersistedWorkflowStateLike {
@@ -189,14 +191,16 @@ export function migrateWorkflowProject(value: unknown, now = new Date().toISOStr
   const draftVersion = positive(value.draftVersion, positive(value.revision, 1));
   const backgroundMode = value.backgroundMode === 'lines' || value.backgroundMode === 'none' ? value.backgroundMode : 'dots';
   const noteMigration = migrateNoteSemantics(nodes, connections);
-  const migratedNodes = migrateLegacyManualGroups(noteMigration.nodes);
+  // 旧的叠放批次（生成多张时其余结果是同位叠放的独立节点）折叠成首图节点上的备选；有连线的成员改成普通节点。
+  const migratedNodes = foldResultBatches(migrateLegacyManualGroups(noteMigration.nodes), noteMigration.connections).nodes;
+  const survivingIds = new Set(migratedNodes.map(node => node.id));
   return {
     ...value,
     id: value.id,
     title: value.title,
     nodes: migratedNodes,
     connections: noteMigration.connections,
-    selectedNodeIds,
+    selectedNodeIds: selectedNodeIds.filter(id => survivingIds.has(id)),
     viewport: viewportOf(value.viewport),
     backgroundMode,
     agentSessions: Array.isArray(value.agentSessions) ? value.agentSessions : [],

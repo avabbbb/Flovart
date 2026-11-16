@@ -941,3 +941,64 @@
 @media (prefers-reduced-motion: reduce) {
   .prompt-orb__sphere, .prompt-orb.is-loading .prompt-orb__dots, .prompt-orb.is-loading .prompt-orb__dots i, .prompt-glass-editor [data-placeholder]::before, .prompt-glass-editor .is-editor-empty::before { animation: none; }
 }
+/* ── 多结果备选（DESIGN 01 §13.3）：挂在首图节点下方，宽度跟节点一致；节点附属内容 = 第 1 层实底，不用玻璃。 ── */
+.workflow-alternates { position:absolute; left:0; z-index:6; width:100%; box-sizing:border-box; display:flex; align-items:center; gap:var(--space-xs,4px); cursor:grab; }
+.workflow-alternates[data-variant='grid'] { flex-direction:column; align-items:stretch; gap:0; overflow:hidden; border:1px solid var(--isl-border); border-radius:var(--isl-r,8px); background:var(--isl-card); }
+.workflow-alternates__cell { position:relative; flex:0 0 auto; min-width:0; }
+.workflow-alternates__thumb { position:relative; display:block; width:100%; height:100%; padding:0; overflow:hidden; border:1px solid var(--isl-border); border-radius:var(--isl-r-sm,6px); background:var(--isl-surface-sunk); cursor:pointer; transition:border-color var(--motion-fast,140ms) ease; }
+.workflow-alternates__thumb:hover { border-color:var(--isl-mint); }
+.workflow-alternates__thumb:focus-visible { outline:2px solid var(--isl-mint); outline-offset:1px; }
+.workflow-alternates__media { display:block; width:100%; height:100%; object-fit:cover; pointer-events:none; user-select:none; }
+.workflow-alternates__media--empty { display:grid; place-items:center; color:var(--isl-ink-ghost); }
+.workflow-alternates__video-mark { position:absolute; left:3px; bottom:3px; display:inline-flex; align-items:center; gap:2px; padding:1px 4px; border-radius:4px; color:var(--isl-surface); background:color-mix(in srgb,var(--isl-ink) 72%,transparent); font-size:9px; line-height:12px; font-variant-numeric:tabular-nums; pointer-events:none; }
+:root[data-theme='dark'] .workflow-alternates__video-mark { color:var(--isl-ink); background:color-mix(in srgb,var(--isl-card) 78%,transparent); }
+.workflow-alternates__promote { position:absolute; top:3px; right:3px; display:grid; place-items:center; width:20px; height:20px; padding:0; border:1px solid var(--isl-border); border-radius:var(--isl-r-sm,6px); color:var(--isl-ink-soft); background:var(--isl-card); opacity:0; cursor:pointer; transition:opacity var(--motion-fast,140ms) ease,color var(--motion-fast,140ms) ease,border-color var(--motion-fast,140ms) ease; }
+.workflow-alternates__cell:hover .workflow-alternates__promote,.workflow-alternates__promote:focus-visible { opacity:1; }
+.workflow-alternates__promote:hover { color:var(--isl-mint-deep); border-color:var(--isl-mint); }
+.workflow-alternates__count { flex:0 0 auto; display:inline-flex; align-items:center; gap:4px; height:28px; padding:0 8px; border:1px solid var(--isl-border); border-radius:var(--isl-r-sm,6px); color:var(--isl-ink-soft); background:var(--isl-card); font-size:11px; font-weight:600; font-variant-numeric:tabular-nums; cursor:pointer; transition:color var(--motion-fast,140ms) ease,border-color var(--motion-fast,140ms) ease; }
+.workflow-alternates__count:hover { color:var(--isl-ink); border-color:var(--isl-mint); }
+.workflow-alternates__header { display:flex; flex-wrap:nowrap; align-items:center; gap:6px; height:32px; min-width:0; padding:0 6px 0 8px; border-bottom:1px solid var(--isl-border); }
+.workflow-alternates[data-collapsed='true'] .workflow-alternates__header { border-bottom:0; }
+.workflow-alternates__title { flex:1 1 auto; display:inline-flex; align-items:center; gap:6px; min-width:0; color:var(--isl-ink); font-size:11px; font-weight:600; }
+.workflow-alternates__title-text { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.workflow-alternates__badge { flex:0 0 auto; padding:1px 6px; border-radius:var(--isl-r-sm,6px); color:var(--isl-ink-soft); background:var(--isl-surface-2); font-size:10px; font-weight:600; line-height:14px; font-variant-numeric:tabular-nums; }
+.workflow-alternates__actions { flex:0 0 auto; display:flex; flex-wrap:nowrap; align-items:center; gap:2px; }
+.workflow-alternates__action { display:inline-flex; align-items:center; gap:4px; height:24px; padding:0 6px; border:0; border-radius:var(--isl-r-sm,6px); color:var(--isl-ink-soft); background:transparent; font-size:11px; font-weight:600; white-space:nowrap; cursor:pointer; transition:color var(--motion-fast,140ms) ease,background var(--motion-fast,140ms) ease; }
+.workflow-alternates__action:hover { color:var(--isl-ink); background:var(--isl-surface-2); }
+.workflow-alternates__action.is-danger:hover { color:var(--isl-coral-deep); }
+.workflow-alternates__action:focus-visible { outline:2px solid var(--isl-mint); outline-offset:0; }
+.workflow-alternates__collapse svg { transition:transform var(--motion-fast,140ms) ease; }
+.workflow-alternates[data-collapsed='true'] .workflow-alternates__collapse svg { transform:rotate(-90deg); }
+.workflow-alternates__grid { display:grid; gap:6px; padding:6px; overflow-y:auto; overscroll-behavior:contain; box-sizing:border-box; cursor:default; }
+.workflow-alternates__grid .workflow-alternates__cell { width:auto; height:auto; }
+.workflow-alternates__cell.is-selected .workflow-alternates__thumb { border-color:var(--isl-mint); box-shadow:0 0 0 2px var(--isl-mint-bg); }
+.workflow-alternates__index { position:absolute; right:3px; bottom:3px; padding:0 4px; border-radius:4px; color:var(--isl-ink-soft); background:color-mix(in srgb,var(--isl-card) 82%,transparent); font-size:9px; line-height:13px; font-variant-numeric:tabular-nums; pointer-events:none; }
+.workflow-alternates__check { display:grid; place-items:center; width:20px; height:20px; cursor:pointer; }
+.workflow-alternates__check input { width:13px; height:13px; margin:0; accent-color:var(--isl-mint); cursor:pointer; }
+.workflow-alternates__grid .workflow-alternates__check { position:absolute; top:3px; left:3px; border-radius:var(--isl-r-sm,6px); background:color-mix(in srgb,var(--isl-card) 86%,transparent); opacity:0; transition:opacity var(--motion-fast,140ms) ease; }
+.workflow-alternates__cell:hover .workflow-alternates__check,.workflow-alternates__cell.is-selected .workflow-alternates__check,.workflow-alternates__check:focus-within,.workflow-alternates__grid:has(.is-selected) .workflow-alternates__check { opacity:1; }
+@media (prefers-reduced-motion: reduce) { .workflow-alternates *,.workflow-alternates { transition:none !important; } }
+
+/* 画廊模式（多结果对比）：大图 + 底部缩略条；遮罩始终是深色，所以控件用浅色前景，与主题无关。 */
+.workflow-preview-modal--gallery { grid-template-rows:minmax(0,1fr) auto; gap:12px; padding:24px 24px 16px; box-sizing:border-box; }
+.workflow-preview-modal--gallery .workflow-preview-modal__media { max-height:calc(92vh - 128px); min-height:0; }
+.workflow-preview-modal--gallery .workflow-preview-modal__media img,.workflow-preview-modal--gallery .workflow-preview-modal__media video { max-height:calc(92vh - 128px); }
+.workflow-preview-modal__gallery { display:flex; flex-direction:column; align-items:center; gap:8px; width:min(920px,92vw); min-width:0; }
+.workflow-preview-modal__bar { display:flex; flex-wrap:nowrap; align-items:center; gap:8px; width:100%; min-width:0; color:color-mix(in srgb,white 88%,transparent); font-size:12px; }
+.workflow-preview-modal__nav { display:grid; place-items:center; width:32px; height:32px; padding:0; border:1px solid color-mix(in srgb,white 26%,transparent); border-radius:var(--isl-r-sm,6px); color:inherit; background:color-mix(in srgb,white 8%,transparent); cursor:pointer; transition:background var(--motion-fast,140ms) ease; }
+.workflow-preview-modal__nav:hover:not(:disabled) { background:color-mix(in srgb,white 18%,transparent); }
+.workflow-preview-modal__nav:disabled { opacity:.4; cursor:default; }
+.workflow-preview-modal__counter { flex:0 0 auto; min-width:52px; text-align:center; font-weight:600; font-variant-numeric:tabular-nums; }
+.workflow-preview-modal__name { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:color-mix(in srgb,white 64%,transparent); }
+.workflow-preview-modal__promote,.workflow-preview-modal__primary { flex:0 0 auto; display:inline-flex; align-items:center; gap:4px; height:30px; padding:0 10px; border-radius:var(--isl-r-sm,6px); font-size:11px; font-weight:600; white-space:nowrap; }
+.workflow-preview-modal__promote { border:1px solid var(--isl-mint); color:var(--isl-mint); background:transparent; cursor:pointer; transition:background var(--motion-fast,140ms) ease; }
+.workflow-preview-modal__promote:hover { background:color-mix(in srgb,var(--isl-mint) 16%,transparent); }
+.workflow-preview-modal__primary { color:var(--isl-mint); }
+.workflow-preview-modal__strip { display:flex; flex-wrap:nowrap; gap:6px; max-width:100%; padding:2px; overflow-x:auto; overscroll-behavior:contain; }
+.workflow-preview-modal__thumb { position:relative; flex:0 0 auto; width:56px; height:56px; padding:0; overflow:hidden; border:1px solid color-mix(in srgb,white 20%,transparent); border-radius:var(--isl-r-sm,6px); background:color-mix(in srgb,white 6%,transparent); opacity:.62; cursor:pointer; transition:opacity var(--motion-fast,140ms) ease,border-color var(--motion-fast,140ms) ease; }
+.workflow-preview-modal__thumb:hover { opacity:.9; }
+.workflow-preview-modal__thumb.is-active { opacity:1; border-color:var(--isl-mint); box-shadow:0 0 0 2px color-mix(in srgb,var(--isl-mint) 40%,transparent); }
+.workflow-preview-modal__thumb img { display:block; width:100%; height:100%; object-fit:cover; }
+.workflow-preview-modal__thumb-empty { display:grid; place-items:center; width:100%; height:100%; color:color-mix(in srgb,white 60%,transparent); }
+.workflow-preview-modal__thumb-video { position:absolute; left:3px; bottom:3px; display:grid; place-items:center; width:14px; height:14px; border-radius:4px; color:white; background:color-mix(in srgb,black 55%,transparent); }
+.workflow-preview-modal__nav:focus-visible,.workflow-preview-modal__thumb:focus-visible,.workflow-preview-modal__promote:focus-visible { outline:2px solid white; outline-offset:2px; }

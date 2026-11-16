@@ -16,11 +16,18 @@ function hasMedia(metadata) {
   return Boolean(metadata.href || metadata.storageKey || metadata.artifactRef || metadata.remoteUrl);
 }
 
+// 候选有两种来源：旧的叠放批次（同 batchId 的节点）；新模型下首图节点 + 它 metadata.alternates 里同 batchId 的备选
+// （备选不是画布节点，以 { id, title, metadata } 参与打分；set_batch_primary 指向备选 ID 时由 Workflow 交换媒体）。
 export function batchCandidates(snapshot, batchId) {
   const nodes = Array.isArray(snapshot?.nodes) ? snapshot.nodes : [];
-  return nodes
-    .filter(node => node && node.batchId === batchId)
-    .sort((left, right) => (left.batchIndex ?? 0) - (right.batchIndex ?? 0));
+  const candidates = nodes.filter(node => node && node.batchId === batchId);
+  for (const node of nodes) {
+    const alternates = Array.isArray(node?.metadata?.alternates) ? node.metadata.alternates.filter(item => item && item.batchId === batchId) : [];
+    if (!alternates.length) continue;
+    if (!candidates.includes(node)) candidates.push({ ...node, id: node.metadata.mediaVariantId || node.id, batchIndex: -1 });
+    for (const item of alternates) candidates.push({ id: item.id, title: item.title, batchIndex: item.batchIndex, metadata: item.metadata || {} });
+  }
+  return candidates.sort((left, right) => (left.batchIndex ?? 0) - (right.batchIndex ?? 0));
 }
 
 // 返回按分数降序的排名；失败或无产物的候选 eligible=false，永远排在后面。

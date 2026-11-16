@@ -53,6 +53,8 @@ import { WorkflowQuickToggles } from './WorkflowQuickToggles';
 import { WorkflowNode } from './WorkflowNode';
 import { workflowNodePluginContextFromProject } from './nodePluginSdk';
 import { MediaPreviewModal } from './MediaPreviewModal';
+import { WorkflowAlternatesDock, workflowAlternatesDockHeight } from './WorkflowAlternatesDock';
+import { alternateAsNode, isAlternateMediaType, nodeAlternates, primaryVariantId, removeAlternates, splitAlternates } from './batchAlternates';
 import { WorkflowNodePromptBar, type WorkflowModelOptions } from './WorkflowNodePromptBar';
 import type { PromptIntent } from './promptIntent';
 import { WorkflowNodeToolbar, type WorkflowImageToolHandlers, type WorkflowVideoToolHandlers, type WorkflowAudioToolHandlers, type WorkflowAvSplitAudio } from './WorkflowNodeToolbar';
@@ -510,6 +512,9 @@ export function InfiniteWorkflow({
   const [scriptEditorNodeId, setScriptEditorNodeId] = useState<string | null>(null);
   const [slashMenu, setSlashMenu] = useState<{ x: number; y: number } | null>(null);
   const [previewNode, setPreviewNode] = useState<WorkflowNodeData | null>(null);
+  // 多结果画廊：ownerId = 首图节点；ids 给出时只对比这些备选（首图总在第一张）。条目每次从最新数据派生。
+  const [galleryPreview, setGalleryPreview] = useState<{ ownerId: string; ids: string[] | null; index: number } | null>(null);
+  const [collapsedAlternateDocks, setCollapsedAlternateDocks] = useState<Set<string>>(() => new Set());
   const [activeMedia, setActiveMedia] = useState<{ projectId: string; nodeId: string } | null>(null);
   const [interactionPreview, setInteractionPreview] = useState<InteractionPreview | null>(null);
   const slashMenuRef = useRef<{ x: number; y: number } | null>(null);
@@ -637,8 +642,8 @@ export function InfiniteWorkflow({
   }, [activeMedia, project.id, project.nodes]);
 
   useEffect(() => {
-    if (imageTool || videoTool || audioTool || previewNode) setActiveMedia(null);
-  }, [audioTool, imageTool, previewNode, videoTool]);
+    if (imageTool || videoTool || audioTool || previewNode || galleryPreview) setActiveMedia(null);
+  }, [audioTool, galleryPreview, imageTool, previewNode, videoTool]);
 
   const currentFrame = useCallback((): Frame => ({
     nodes: projectRef.current.nodes,
@@ -2812,11 +2817,64 @@ export function InfiniteWorkflow({
       setNotice(displayError(error, '批量导出失败。'));
     }
   };
+  // ── 多结果备选：设为首图 / 删除 / 拆成独立节点。都是单次 applyOps（一步撤销），节点 ID 与连线不动。──
+  const promoteNodeAlternate = (ownerId: string, alternateId: string) => {
+    const owner = projectRef.current.nodes.find(node => node.id === ownerId);
+    const alternate = nodeAlternates(owner).find(item => item.id === alternateId);
+    if (!owner || !alternate || owner.isLocked) return false;
+    // 与 Agent 同一条操作（set_batch_primary 指向备选 ID = 交换媒体）。
+    return applyOps([{ type: 'set_batch_primary', batchId: alternate.batchId || owner.id, nodeId: alternateId }]);
+  };
+  const removeNodeAlternates = (ownerId: string, ids: string[]) => {
+    const owner = projectRef.current.nodes.find(node => node.id === ownerId);
+    if (!owner || owner.isLocked || !ids.length) return;
+    const next = removeAlternates(owner, ids);
+    if (applyOps([{ type: 'update_node', id: owner.id, metadata: next.metadata, replaceMetadata: true }])) {
+      setNotice(language === 'en' ? `Deleted ${ids.length} alternate(s). Undo with Ctrl+Z.` : `已删除 ${ids.length} 个备选，可 Ctrl+Z 撤销。`);
+    }
+  };
+  const splitNodeAlternates = (ownerId: string, ids: string[]) => {
+    const snapshot = projectRef.current;
+    const owner = snapshot.nodes.find(node => node.id === ownerId);
+    if (!owner || owner.isLocked || !ids.length) return;
+    const { primary, nodes: created } = splitAlternates(owner, ids, new Set(snapshot.nodes.map(node => node.id)), nanoid);
+    if (!created.length) return;
+    const ok = applyOps([
+      { type: 'update_node', id: owner.id, metadata: primary.metadata, replaceMetadata: true },
+      ...created.map(node => ({ type: 'add_node' as const, node })),
+    ]);
+    if (ok) selectNodes(created.map(node => node.id));
+  };
+  const galleryOwner = galleryPreview ? project.nodes.find(node => node.id === galleryPreview.ownerId) || null : null;
+  const galleryState = useMemo(() => {
+    if (!galleryPreview || !galleryOwner) return null;
+    const alternates = nodeAlternates(galleryOwner).filter(item => !galleryPreview.ids || galleryPreview.ids.includes(item.id));
+    // 首图条目用它那份媒体的稳定 ID（节点 ID 可能已作为换下去的备选 ID 出现在列表里）。
+    const primaryItem = { ...galleryOwner, id: primaryVariantId(galleryOwner) };
+    const items = [primaryItem, ...alternates.map(item => alternateAsNode(galleryOwner, item))];
+    return {
+      items,
+      index: Math.min(galleryPreview.index, items.length - 1),
+      primaryId: primaryItem.id,
+      onIndexChange: (index: number) => setGalleryPreview(current => (current ? { ...current, index } : current)),
+      onPromote: galleryOwner.isLocked ? undefined : (item: WorkflowNodeData) => {
+        const outgoingId = primaryVariantId(galleryOwner);
+        if (!promoteNodeAlternate(galleryOwner.id, item.id)) return;
+        // 换上来的那份现在是首图（第 1 张）；换下去的那份接替它在对比列表里的位置。
+        setGalleryPreview(current => (current ? { ...current, index: 0, ids: current.ids ? current.ids.map(id => (id === item.id ? outgoingId : id)) : null } : current));
+      },
+    };
+  }, [galleryOwner, galleryPreview]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    // 首图节点被删 / 失去全部备选：关闭画廊。
+    if (galleryPreview && (!galleryOwner || !nodeAlternates(galleryOwner).length)) setGalleryPreview(null);
+  }, [galleryOwner, galleryPreview]);
   const overlayBounds = selectedNodeData.length ? selectedNodeData.reduce((bounds, node) => ({
     left: Math.min(bounds.left, node.position.x),
     top: Math.min(bounds.top, node.position.y),
     right: Math.max(bounds.right, node.position.x + node.width),
-    bottom: Math.max(bounds.bottom, node.position.y + node.height),
+    // 节点下方挂着备选条 / 网格时，PromptBar 放在它下面，不压住缩略图。
+    bottom: Math.max(bounds.bottom, node.position.y + node.height + workflowAlternatesDockHeight(node, collapsedAlternateDocks.has(node.id))),
   }), { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity }) : null;
   // The workflow root already reflects the space left by docked panels. Keep
   // overlay geometry local to that measured container instead of subtracting
@@ -3368,7 +3426,20 @@ export function InfiniteWorkflow({
             onDoubleClick={node.type === 'script' ? () => setScriptEditorNodeId(node.id) : node.type === 'subgraph' ? () => openSubgraphInReverse(node) : undefined}
             subgraphChildCount={node.type === 'subgraph' ? subgraphChildren.counts.get(node.id) || 0 : undefined}
             onToggleCollapse={node.type === 'subgraph' && !node.isLocked ? () => applyOps([{ type: 'update_node', id: node.id, metadata: { collapsed: !node.metadata.collapsed } }]) : undefined}
-            onPreviewMedia={setPreviewNode}
+            onPreviewMedia={target => { if (nodeAlternates(target).length) setGalleryPreview({ ownerId: target.id, ids: null, index: 0 }); else setPreviewNode(target); }}
+            alternatesDock={isAlternateMediaType(node.type) && nodeAlternates(node).length ? (
+              <WorkflowAlternatesDock
+                node={node}
+                language={language}
+                collapsed={collapsedAlternateDocks.has(node.id)}
+                onToggleCollapsed={() => setCollapsedAlternateDocks(current => { const next = new Set(current); if (next.has(node.id)) next.delete(node.id); else next.add(node.id); return next; })}
+                onPreview={(index, ids) => setGalleryPreview({ ownerId: node.id, ids: ids || null, index })}
+                onPromote={alternateId => promoteNodeAlternate(node.id, alternateId)}
+                onRemove={ids => removeNodeAlternates(node.id, ids)}
+                onSplit={ids => splitNodeAlternates(node.id, ids)}
+                onExport={ids => { const owner = projectRef.current.nodes.find(item => item.id === node.id); if (owner) void exportSelectedMedia(nodeAlternates(owner).filter(item => ids.includes(item.id)).map(item => alternateAsNode(owner, item))); }}
+              />
+            ) : undefined}
             onNeedPoster={() => requestVideoPoster(node.id)}
             onChangeTitle={title => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, patch: { title } }]); }}
             onToggleAnchorApproval={node.anchor ? () => {
@@ -3682,7 +3753,12 @@ export function InfiniteWorkflow({
           />
         );
       })()}
-      <MediaPreviewModal node={previewNode} onClose={() => setPreviewNode(null)} language={language} />
+      <MediaPreviewModal
+        node={previewNode}
+        gallery={galleryState}
+        onClose={() => { setPreviewNode(null); setGalleryPreview(null); }}
+        language={language}
+      />
     </div>
   );
 }

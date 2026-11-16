@@ -14,6 +14,7 @@ import { usePromptHistoryStore } from '../stores/usePromptHistoryStore';
 import { refundApiUsage, reserveApiUsage, updateApiUsage } from '../utils/usageMonitor';
 import { resolveRouteMappingForSubmit, type RouteFallbackResolution } from './routeMapping';
 import { requireWorkflowResourceHref, type CreativeHostResourceLocator } from './workflowResourceResolver';
+import { alternateFromNode, prependAlternates } from '../components/workflow/batchAlternates';
 import { applySelectedTakeMedia, beginWorkflowOperationTake, completeWorkflowOperationTake, pickTakeMedia } from '../components/workflow/operations';
 import { validateWorkflowOperationOutputs } from '../components/workflow/operationRegistry';
 import type { ProviderMaterializedReference } from './providerGenerationAdapter';
@@ -525,9 +526,10 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       const liveKey = canonical(runtime, current).nodes.find(node => node.id === nodeId)?.metadata.storageKey;
       return liveKey !== previousStorageKey && liveKey !== singleMediaRecord?.storageKey;
     };
-    // 多张生成：第一张原位替换源节点，其余与它同位叠放并归入同一批次，
-    // 画布以折叠样式（叠放卡片）显示在原节点位置，展开后才平铺。
+    // 多张生成：第一张原位替换源节点（首图），其余作为首图节点的备选（metadata.alternates），不是画布节点；
+    // 画布在节点下方以缩略图条 / 网格显示（DESIGN 01 §13.3）。stackedIds 记录这些“待成为备选”的结果。
     let singleMediaPushed = false;
+    const stackedIds = new Set<string>();
     const sourcePromptMetadata = (() => {
       const source = canonical(runtime, current).nodes.find(node => node.id === nodeId) || initialNode;
       return { prompt: source.metadata.prompt, richTextDocument: source.metadata.richTextDocument };
@@ -567,8 +569,8 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       resultNode.title = mode === 'video' ? '生成视频' : '生成图片';
       preparedNodes.push(resultNode);
       if (!stillActive()) throw abortError();
-      // 同批叠放的兄弟结果不是源节点的下游，不连线（否则重跑会把它们当成输入/输出链）。
-      if (stacked) return;
+      // 同批的其余结果是首图的备选，不是源节点的下游，不连线（否则重跑会把它们当成输入/输出链）。
+      if (stacked) { stackedIds.add(resultNode.id); return; }
       preparedConnections.push({
         id: createId(), fromNodeId: nodeId, toNodeId: resultNode.id,
         kind: isImageOperation ? 'operation-output' : 'data',
@@ -824,6 +826,21 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       if (!singleMediaPushed) { singleMediaPushed = true; pushResultNode(singleMediaRecord, 0); }
     }
     if (detachedResult) {
+      // 用户中途换了媒体：所有结果另存为连线的新节点；之前按“备选”准备的结果也一样排开并连线，不叠在源节点上。
+      preparedNodes.forEach((node, index) => {
+        // 各自连线的独立结果，不再是同一节点的多份结果：不带批次字段，画布按普通节点显示。
+        node.batchId = undefined;
+        node.batchIndex = undefined;
+        if (!stackedIds.has(node.id)) return;
+        node.position = { x: executionTarget.outputTarget.x + executionTarget.outputTarget.width + 80, y: executionTarget.outputTarget.y + index * 48 };
+        preparedConnections.push({
+          id: createId(), fromNodeId: nodeId, toNodeId: node.id,
+          kind: isImageOperation ? 'operation-output' : 'data',
+          role: isImageOperation ? 'result_image' : undefined,
+          order: isImageOperation ? index : undefined,
+        });
+      });
+      stackedIds.clear();
       const latest = canonical(runtime, current);
       current = {
         ...latest,
@@ -836,6 +853,8 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
         ? fitWorkflowMediaSize(mode as 'image' | 'video', singleMediaRecord.naturalWidth, singleMediaRecord.naturalHeight)
         : undefined;
       const center = liveAnchorCenter();
+      const alternates = preparedNodes.filter(node => stackedIds.has(node.id)).map(node => alternateFromNode(node, { createdAt: Date.now() }));
+      const standalone = preparedNodes.filter(node => !stackedIds.has(node.id));
       current = {
         ...latest,
         nodes: latest.nodes.map(node => {
@@ -860,7 +879,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
               },
             };
           }
-          return {
+          const replaced: WorkflowNode = {
             ...node,
             type: mode as 'image' | 'video',
             position: { x: center.x - size.width / 2, y: center.y - size.height / 2 },
@@ -870,12 +889,16 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
               ...node.metadata,
               ...singleMediaRecord,
               href: undefined,
+              // 新的首图媒体有了自己的身份：清掉上一次“设为首图”留下的变体 ID 与旧指针。
+              mediaVariantId: undefined,
+              primaryImageId: undefined,
               ...terminalGenerationPatch({ kind: 'succeeded' }),
               ...(operationTakeId ? { operationTakeId, sourceOperationNodeId: nodeId } : {}),
             },
-            ...(batchId && preparedNodes.length > 0 ? { batchId, batchIndex: 0, batchGroupSource: 'auto' as const } : {}),
           };
-        }).concat(preparedNodes),
+          // 其余结果挂成首图的备选（新一批在前，旧备选保留）。
+          return prependAlternates(replaced, alternates);
+        }).concat(standalone),
         connections: preparedConnections.length > 0 ? [...latest.connections, ...preparedConnections] : latest.connections,
       };
     }

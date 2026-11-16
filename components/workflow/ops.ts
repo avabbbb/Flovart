@@ -1,3 +1,4 @@
+import { findAlternateOwner, promoteAlternate } from './batchAlternates';
 import { nanoid } from 'nanoid';
 import { createWorkflowNode } from './constants';
 import { resolveWorkflowInputs } from './inputResolver';
@@ -403,9 +404,17 @@ function normalizeDocumentNode(node: WorkflowNode): WorkflowNode {
       return;
     }
     if (op.type === 'set_batch_primary') {
+      // 新模型：备选挂在首图节点上，设为首图 = 交换媒体（节点 ID / 连线 / prompt 不动）。
+      const owner = findAlternateOwner(snapshot.nodes, op.nodeId);
+      if (owner) {
+        const promoted = promoteAlternate(owner.node, op.nodeId);
+        if (promoted) snapshot = { ...snapshot, nodes: snapshot.nodes.map(node => node.id === owner.node.id ? promoted : node) };
+        return;
+      }
+      // 目标已经是首图（节点自身 / 它当前那份媒体），且没有旧的叠放批次：无需改动。
       const groupNodes = snapshot.nodes.filter(node => node.batchId === op.batchId);
       const root = groupNodes.find(node => node.batchIndex === 0) || groupNodes[0];
-      if (!root) return;
+      if (!root || groupNodes.length < 2) return;
       snapshot = {
         ...snapshot,
         nodes: snapshot.nodes.map(node => node.id === root.id

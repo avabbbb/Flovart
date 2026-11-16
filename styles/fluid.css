@@ -129,3 +129,15 @@
   .agent-ask__actions button { flex: 1 1 0; }
   .agent-ask__other > input { flex-basis: 100%; }
 }
+
+/* ── 节点下方的多结果网格（DESIGN 01 §13.3）：按节点自身宽度降级 ── */
+.workflow-alternates[data-variant='grid'] { container-type: inline-size; container-name: wfalt; }
+/* 窄于 420px：批量操作只留图标，文字靠 title / aria-label */
+@container wfalt (max-width: 420px) {
+  .workflow-alternates__action-label { display: none; }
+  .workflow-alternates__action { width: 26px; padding: 0; justify-content: center; }
+}
+/* 窄于 220px：标题只留计数 */
+@container wfalt (max-width: 220px) {
+  .workflow-alternates__title-text { display: none; }
+}

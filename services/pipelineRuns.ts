@@ -139,13 +139,26 @@ export function pickVersionRenders(trace: Pick<PipelineTrace, 'versions' | 'roun
 export const pipelineBatchId = (runId: string) => `pipeline-${runId}`;
 
 /**
- * 画布版本分组：同一 run 的各版本渲染放进一个自动批次（batchId = pipeline-<runId>，batchIndex = 版本号 - 1），
- * 叠放主图指向最新版本。已经在画布上的产物（按 artifactId）不再重复插入。
+ * 画布版本分组：同一 run 的各版本渲染收在一个节点上——最新版本是节点本身（首图），其余版本是它的备选
+ * （metadata.alternates，batchId = pipeline-<runId>，batchIndex = 版本号 - 1）。已经在画布上的产物（按 artifactId，
+ * 包括备选里的）不再重复插入。ownerId 是已经承载这个 run 的节点（没有则为 undefined，需要新建）。
  */
 export function planPipelineVersionNodes(existing: Pick<WorkflowNode, 'id' | 'batchId' | 'batchIndex' | 'metadata'>[], runId: string, renders: PipelineVersionRender[]) {
   const batchId = pipelineBatchId(runId);
-  const present = new Set(existing.filter(node => node.batchId === batchId).map(node => node.metadata.pipelineRender?.artifactId).filter(Boolean));
+  const present = new Set<string>();
+  let ownerId: string | undefined;
+  for (const node of existing) {
+    const own = node.metadata.pipelineRender;
+    const alternates = Array.isArray(node.metadata.alternates) ? node.metadata.alternates : [];
+    const runAlternates = alternates.filter(item => item.batchId === batchId || item.metadata.pipelineRender?.runId === runId);
+    if (node.batchId === batchId || own?.runId === runId) {
+      if (own?.artifactId) present.add(own.artifactId);
+      ownerId = ownerId || (own?.runId === runId ? node.id : undefined);
+    }
+    if (runAlternates.length) ownerId = ownerId || node.id;
+    runAlternates.forEach(item => { if (item.metadata.pipelineRender?.artifactId) present.add(item.metadata.pipelineRender.artifactId); });
+  }
   const missing = renders.filter(render => !present.has(render.artifactId));
   const latest = renders.length ? Math.max(...renders.map(render => render.version)) : 0;
-  return { batchId, missing, latestVersion: latest };
+  return { batchId, missing, latestVersion: latest, ownerId };
 }

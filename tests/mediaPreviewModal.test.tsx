@@ -40,4 +40,31 @@ describe('MediaPreviewModal', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Close media preview' }));
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it('gallery mode shows n / N, steps with arrow keys and offers 设为首图 only on alternates', async () => {
+    const items = ['a', 'b', 'c'].map((id, index) => ({
+      ...createWorkflowNode(id, index === 2 ? 'video' : 'image', { x: 0, y: 0 }, { href: 'data:image/png;base64,AA==', mimeType: index === 2 ? 'video/mp4' : 'image/png' }),
+      title: '结果 ' + id,
+    }));
+    const onPromote = vi.fn();
+    function Gallery() {
+      const [index, setIndex] = useState(0);
+      return <MediaPreviewModal node={null} onClose={() => {}} gallery={{ items, index, onIndexChange: setIndex, primaryId: 'a', onPromote }} />;
+    }
+    render(<Gallery />);
+    const dialog = await screen.findByRole('dialog', { name: '素材预览：结果 a' });
+    expect(screen.getByText('1 / 3')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /设为首图/ })).not.toBeInTheDocument();
+    fireEvent.keyDown(dialog, { key: 'ArrowRight' });
+    expect(await screen.findByText('2 / 3')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /设为首图/ }));
+    expect(onPromote).toHaveBeenCalledWith(items[1]);
+    fireEvent.keyDown(dialog, { key: 'ArrowRight' });
+    expect(await screen.findByText('3 / 3')).toBeInTheDocument();
+    expect(dialog.querySelector('video[controls]')).not.toBeNull();
+    fireEvent.keyDown(dialog, { key: 'ArrowRight' });
+    expect(await screen.findByText('1 / 3')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^3 \/ 3/ }));
+    expect(await screen.findByText('3 / 3')).toBeInTheDocument();
+  });
 });
