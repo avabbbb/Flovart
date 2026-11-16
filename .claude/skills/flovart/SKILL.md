@@ -171,6 +171,11 @@ the browser itself is offline.
   (or in one new node to the right of a bare image), non-grid tools create one
   node to the right. Split a grid later with `image.split-grid@1`; never build
   N nodes for a grid.
+- Group nodes → `workflow.group.create --node-ids a,b,c` (a group frame:
+  `subgraph` with `metadata.groupKind: "group"`, members carry `parentId`;
+  unrelated to generation batches and alternates). Run the whole group in
+  dependency order with one confirmation → `workflow.group.run --group-id <id>`
+  (`--dry-run` returns the order only).
 - Bring an image from a URL or the asset library onto the canvas →
   `workflow.media.import` (optionally `attachToNodeId` to use it as a reference).
 - Write a note only when the user asks for one → `workflow.note.write`. Notes

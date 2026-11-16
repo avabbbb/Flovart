@@ -135,7 +135,11 @@ describe('workflow persistence migrations', () => {
     };
     const result = await migrateWorkflowPersistedState({ projects: [project], activeProjectId: project.id }, 2);
     const nodes = result.projects[0].nodes;
-    expect(nodes.filter(node => node.batchId === 'manual-legacy').every(node => node.batchGroupSource === 'manual')).toBe(true);
+    // v5：手动分组迁移成分组框，成员挂 parentId，不再占用 batchId。
+    const frame = nodes.find(node => node.type === 'subgraph' && node.metadata.groupKind === 'group')!;
+    expect(frame).toBeTruthy();
+    expect(nodes.filter(node => node.parentId === frame.id).map(node => node.id).sort()).toEqual(['legacy-a', 'legacy-b']);
+    expect(nodes.some(node => node.batchId === 'manual-legacy')).toBe(false);
     expect(nodes.filter(node => node.batchId === 'auto-legacy').every(node => node.batchGroupSource === undefined)).toBe(true);
   });
 

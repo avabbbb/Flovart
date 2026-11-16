@@ -38,6 +38,8 @@ const COMMAND_LABELS: Record<string, [string, string]> = {
   'workflow.models.list': ['查看模型', 'List models'],
   'workflow.shortcut.list': ['查看快捷工具', 'List shortcuts'],
   'workflow.shortcut.apply': ['快捷工具', 'Apply shortcut'],
+  'workflow.group.create': ['建分组', 'Create group'],
+  'workflow.group.run': ['整组执行', 'Run group'],
   'workflow.note.write': ['写备注', 'Write note'],
   'workflow.media.import': ['导入素材', 'Import media'],
   'workflow.node.tool': ['节点工具', 'Node tool'],

@@ -67,6 +67,7 @@ import { ScriptNodeEditor } from './ScriptNodeEditor';
 import { SlashMenu } from './SlashMenu';
 import { buildShortcutApplyOps, type SlashShortcut } from './slashShortcuts';
 import { copyWorkflowSelection, pasteWorkflowClip } from './canvasClipboard';
+import { buildGroupCreateOps, buildUngroupOps, enclosingGroupId, groupMemberIds, groupRunOrder, isGroupFrame } from './canvasGroups';
 import { WorkflowToolbar, type WorkflowTool } from './WorkflowToolbar';
 import { deriveWorkflowRunStates, planWorkflowStaleRerun } from './runState';
 import { deriveWorkflowPresence } from './presence';
@@ -1649,7 +1650,7 @@ export function InfiniteWorkflow({
     onStopNode?.(nodeId);
   }, [markInterrupted, onStopNode, project.id]);
 
-  const handleSlashCommand = useCallback((command: SlashShortcut, explicitTargetId?: string) => {
+  const handleSlashCommand = useCallback((command: SlashShortcut, explicitTargetId?: string, text?: string) => {
     setSlashMenu(null);
     const snapshot = currentSnapshot();
     // 目标：显式给定（Prompt Bar 内 `/`）> 选中的第一个图片节点；宫格原地出一张图，非宫格右侧新建一个节点。
@@ -1662,6 +1663,7 @@ export function InfiniteWorkflow({
         nodes: snapshot.nodes,
         connections: snapshot.connections,
         targetId,
+        ...(text !== undefined && text.trim() ? { text } : {}),
         position: { x: center.x - 170, y: center.y - 120 },
         mutationId: 'slash-' + nanoid(),
         keys: userApiKeys,
@@ -2225,6 +2227,33 @@ export function InfiniteWorkflow({
     copyNodesToClipboard(selectedIdsRef.current);
   }, [copyNodesToClipboard]);
 
+  // 分组（P1-1）：分组框 = subgraph(groupKind 'group') + 成员 parentId；不再复用 batchId。
+  const groupSelection = useCallback((ids: readonly string[]) => {
+    const current = projectRef.current;
+    const editable = ids.filter(id => !current.nodes.find(node => node.id === id)?.isLocked);
+    if (editable.length < 2) return;
+    try {
+      const plan = buildGroupCreateOps(current.nodes, editable, { groupId: 'group-' + nanoid() });
+      if (applyOps(plan.ops)) selectNodes([plan.groupId]);
+    } catch (cause) {
+      setNotice(cause instanceof Error ? cause.message : String(cause));
+    }
+  }, [applyOps, selectNodes]);
+
+  const ungroupSelection = useCallback((ids: readonly string[]) => {
+    const current = projectRef.current;
+    const frames = ids.filter(id => isGroupFrame(current.nodes.find(node => node.id === id)));
+    const ops: WorkflowDocumentOperation[] = frames.flatMap(id => buildUngroupOps(current.nodes, id));
+    // 旧的 batchId 分组（分镜 / 批量命令建的）仍按原方式解散。
+    const legacy = ids.filter(id => !frames.includes(id) && current.nodes.find(node => node.id === id)?.batchId);
+    if (legacy.length) ops.push({ type: 'ungroup_nodes', ids: legacy });
+    if (ops.length) applyOps(ops);
+  }, [applyOps]);
+  const groupSelectionRef = useRef(groupSelection);
+  groupSelectionRef.current = groupSelection;
+  const ungroupSelectionRef = useRef(ungroupSelection);
+  ungroupSelectionRef.current = ungroupSelection;
+
   const pasteSelection = useCallback(async () => {
     const expectedProjectId = projectRef.current.id;
     const workflowClip = useClipboardStore.getState().workflowClip;
@@ -2380,8 +2409,9 @@ export function InfiniteWorkflow({
       }
       if (modifier && key === 'g') {
         event.preventDefault();
-        const ids = selectedIdsRef.current;
-        if (ids.length >= 2) applyOps([{ type: 'group_nodes', ids, batchId: nanoid(), source: 'manual' }]);
+        // Ctrl+G 建分组框（与批次 / 备选无关）；Ctrl+Shift+G 解散选中的分组。
+        if (event.shiftKey) ungroupSelectionRef.current(selectedIdsRef.current);
+        else groupSelectionRef.current(selectedIdsRef.current);
         return;
       }
       // F — Frame Selection（Premiere/AE 约定）：无修饰键时把选中节点居中缩放。
@@ -3476,8 +3506,8 @@ export function InfiniteWorkflow({
             onPromptFocus={() => setPromptFocusSignal(value => value + 1)}
             onFrameSelection={frameSelection}
             onSaveMedia={onSaveWorkflowMedia}
-            onGroup={ids => applyOps([{ type: 'group_nodes', ids, batchId: nanoid(), source: 'manual' }])}
-            onUngroup={ids => applyOps([{ type: 'ungroup_nodes', ids }])}
+            onGroup={ids => groupSelection(ids)}
+            onUngroup={ids => ungroupSelection(ids)}
             onArrange={(ids, layout, gap) => {
               const next = arrangeNodePositions(projectRef.current.nodes, ids, { layout, gap });
               if (!next) { setNotice('至少需要两个未锁定的节点，或已经是该排列'); return; }
@@ -3588,7 +3618,7 @@ export function InfiniteWorkflow({
           />
         </div>
         {selectedNodeData.length === 1 && ['image', 'video', 'operation'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: promptExpanded ? 90 : 69, left: promptLeft, ...(promptAbove ? { bottom: promptBottom } : { top: promptTop }) }}>
-      <WorkflowNodePromptBar width={promptWidth} expanded={promptExpanded} onToggleExpanded={() => { const id = selectedNodeData[0].id; setExpandedPromptNodeId(current => (current === id ? null : id)); }} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onPromptIntent={intent => { promptIntentRef.current = intent; }} onRun={() => { const intent = promptIntentRef.current?.targetNodeId === selectedNodeData[0].id ? promptIntentRef.current : undefined; promptIntentRef.current = null; onRunNode(selectedNodeData[0].id, intent || undefined); }} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} onReorderReference={nextIds => handleReorderReferences(selectedNodeData[0].id, nextIds)} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} onResolvePastedMentions={mentions => handleResolvePastedMentions(mentions, selectedNodeData[0].id)} onPasteUnresolvedMentions={labels => setNotice('未能唯一匹配引用：' + labels.map(label => '@' + label).join('、') + '，已保留为普通文字。')} />
+      <WorkflowNodePromptBar width={promptWidth} expanded={promptExpanded} onToggleExpanded={() => { const id = selectedNodeData[0].id; setExpandedPromptNodeId(current => (current === id ? null : id)); }} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onPromptIntent={intent => { promptIntentRef.current = intent; }} onRun={() => { const intent = promptIntentRef.current?.targetNodeId === selectedNodeData[0].id ? promptIntentRef.current : undefined; promptIntentRef.current = null; onRunNode(selectedNodeData[0].id, intent || undefined); }} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} onReorderReference={nextIds => handleReorderReferences(selectedNodeData[0].id, nextIds)} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} onResolvePastedMentions={mentions => handleResolvePastedMentions(mentions, selectedNodeData[0].id)} onPasteUnresolvedMentions={labels => setNotice('未能唯一匹配引用：' + labels.map(label => '@' + label).join('、') + '，已保留为普通文字。')} onSlashShortcut={(shortcut, remaining) => handleSlashCommand(shortcut, selectedNodeData[0].id, remaining)} />
         </div>}
       </>}
       <WorkflowHostStrip clips={hostClips} language={language} onFocusClip={focusNode} />
@@ -3679,6 +3709,7 @@ export function InfiniteWorkflow({
       </AnimatePresence>
       {contextMenu && (() => {
           const ctxNode = contextMenu.type === 'node' ? projectRef.current.nodes.find(n => n.id === contextMenu.id) : null;
+          const ctxGroupId = contextMenu.type === 'node' ? enclosingGroupId(projectRef.current.nodes, contextMenu.id) : undefined;
           const batch = ctxNode?.batchId ? batchGroups.get(ctxNode.batchId) : null;
           const canSetPrimary = Boolean(ctxNode && ctxNode.type === 'image' && batch && batch.length > 1 && ctxNode.id !== (batch.find(n => n.batchIndex === 0)?.metadata.primaryImageId));
           return (
@@ -3695,6 +3726,21 @@ export function InfiniteWorkflow({
             if (!ctxNode?.batchId) return;
             applyOps([{ type: 'set_batch_primary', batchId: ctxNode.batchId, nodeId: ctxNode.id }]);
             setContextMenu(null);
+          }) : undefined}
+          onRunGroup={ctxGroupId ? (() => {
+            const order = groupRunOrder(projectRef.current.nodes, projectRef.current.connections, ctxGroupId);
+            setContextMenu(null);
+            if (!order.length) { setNotice('组内没有可执行的生成节点（需要写了提示词的图片 / 视频节点）'); return; }
+            order.forEach(id => enqueueRunNode(id));
+            setNotice('整组执行：按依赖顺序排队 ' + order.length + ' 个节点');
+          }) : undefined}
+          onDownloadGroup={ctxGroupId && onSaveWorkflowMedia ? (() => {
+            const media = groupMemberIds(projectRef.current.nodes, ctxGroupId)
+              .map(id => projectRef.current.nodes.find(node => node.id === id))
+              .filter((node): node is WorkflowNodeData => Boolean(node && ['image', 'video', 'audio'].includes(node.type) && (node.metadata.storageKey || node.metadata.href || node.metadata.artifactRef?.taskId)));
+            setContextMenu(null);
+            if (!media.length) { setNotice('组内没有可下载的媒体'); return; }
+            media.forEach(node => onSaveWorkflowMedia(node.id));
           }) : undefined}
           onCopy={() => { copySelection(); setContextMenu(null); }}
           onDuplicate={ctxNode && !ctxNode.isLocked ? (() => { duplicateSelection(); setContextMenu(null); }) : undefined}

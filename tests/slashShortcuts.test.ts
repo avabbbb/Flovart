@@ -107,3 +107,16 @@ describe('buildShortcutApplyOps', () => {
     expect(plan.plan.operations.filter(op => op.type === 'add_node')).toHaveLength(0);
   });
 });
+
+describe('prompt bar slash trigger', () => {
+  it('opens only for a freshly typed standalone slash', async () => {
+    const { shouldOpenPromptSlashMenu, stripTrailingSlash } = await import('../components/workflow/slashShortcuts');
+    expect(shouldOpenPromptSlashMenu('', '/')).toBe(true);
+    expect(shouldOpenPromptSlashMenu('雨夜 ', '雨夜 /')).toBe(true);
+    expect(shouldOpenPromptSlashMenu('https:', 'https:/')).toBe(false);
+    expect(shouldOpenPromptSlashMenu('', 'a/b/')).toBe(false);
+    expect(shouldOpenPromptSlashMenu('/', '//')).toBe(false);
+    expect(stripTrailingSlash('雨夜 /')).toBe('雨夜');
+    expect(stripTrailingSlash('无斜杠')).toBe('无斜杠');
+  });
+});

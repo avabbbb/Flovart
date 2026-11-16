@@ -18,6 +18,8 @@ describe('Flovart Agent tool surface', () => {
       'workflow.models.list',
       'workflow.shortcut.list',
       'workflow.shortcut.apply',
+      'workflow.group.create',
+      'workflow.group.run',
       'workflow.note.write',
       'workflow.media.import',
       'workflow.node.run',

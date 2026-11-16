@@ -26,6 +26,7 @@ export const WORKSPACE_WRITE_COMMAND_NAMES = Object.freeze([
   'workflow.focus.nodes',
   'workflow.note.write',
   'workflow.media.import',
+  'workflow.group.create',
 ]);
 
 export const WORKSPACE_EXECUTION_COMMAND_NAMES = Object.freeze([
@@ -35,6 +36,8 @@ export const WORKSPACE_EXECUTION_COMMAND_NAMES = Object.freeze([
   'workflow.generate',
   // 快捷工具：与 generate 同一条路（一个节点、count=1），run=true 时要确认与计费。
   'workflow.shortcut.apply',
+  // 整组执行：一次确认覆盖整组。
+  'workflow.group.run',
   // 委派回合：可读可写（默认只读），按执行类命令计。
   'agent.turn',
 ]);

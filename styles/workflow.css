@@ -1025,3 +1025,4 @@
 .workflow-alt-stack__actions button:focus-visible { outline:2px solid var(--isl-mint); outline-offset:1px; }
 @media (hover: none) { .workflow-alt-stack__actions { opacity:1; } }
 @media (prefers-reduced-motion: reduce) { .workflow-alt-stack *,.workflow-alt-stack { transition:none !important; } }
+.workflow-node-prompt__slash { position: absolute; z-index: 6; left: 0; bottom: calc(100% + 8px); }

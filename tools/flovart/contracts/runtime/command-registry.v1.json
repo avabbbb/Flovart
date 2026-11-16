@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "5dac3e3e05682490f6254969564dd4f674d4275d39cef7f0e723be99efd29d9e",
+  "registryHash": "691911b37a06dd553229443418f29390ad617fcc73d38b08a3eed534b36ce0d7",
   "commands": [
     {
       "name": "runtime.status",
@@ -599,6 +599,28 @@
         "dryRun": "boolean?",
         "expectedRevision": "number?",
         "mutationId": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.group.create",
+      "summary": "Put two or more nodes into one group frame (subgraph with groupKind=group; members get parentId). Groups are separate from generation batches and alternates: moving the frame moves its members, collapsing hides them, workflow.group.run runs them.",
+      "args": {
+        "projectId": "string?",
+        "nodeIds": "string[]",
+        "title": "string?",
+        "expectedRevision": "number?",
+        "mutationId": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.group.run",
+      "summary": "Run every runnable generation node in a group (image/video nodes with a prompt, not locked) in dependency order, one confirmation for the whole group; downstream nodes of a failed node are skipped. dryRun returns the order only.",
+      "args": {
+        "projectId": "string?",
+        "groupId": "string",
+        "dryRun": "boolean?"
       },
       "availability": "available"
     },

@@ -166,6 +166,30 @@ const DEFINITIONS = [
     },
   },
   {
+    command: 'workflow.group.create',
+    name: 'flovart_group_create',
+    aliases: ['flovart_workflow_group_create'],
+    surfaces: ALL,
+    description: '把 2 个以上节点放进一个分组框（和生成批次、备选无关）：拖框带动成员，折叠隐藏成员，之后可用 flovart_group_run 整组执行。返回 groupId。',
+    fields: {
+      nodeIds: { type: 'array', items: { type: 'string' }, minItems: 2, description: '要放进分组的节点 id' },
+      title: { type: 'string', description: '分组标题，例如「第一场 · 雨夜」' },
+      expectedRevision: { type: 'number' },
+      mutationId: { type: 'string', description: '幂等 id；同一 id 重放不会重复建分组' },
+    },
+  },
+  {
+    command: 'workflow.group.run',
+    name: 'flovart_group_run',
+    aliases: ['flovart_workflow_group_run'],
+    surfaces: ALL,
+    description: '整组执行：按组内依赖拓扑顺序逐个运行分组里所有可运行的生成节点（写了提示词、未锁定的图片/视频节点），整组只确认一次费用；上游失败时跳过依赖它的下游。dryRun=true 只返回执行顺序不花钱。',
+    fields: {
+      groupId: { type: 'string', minLength: 1, description: '分组框 id（flovart_group_create 返回，或 inspect 里 type=subgraph 且 metadata.groupKind=group 的节点）' },
+      dryRun: { type: 'boolean', description: 'true 时只返回执行顺序' },
+    },
+  },
+  {
     command: 'workflow.note.write',
     name: 'flovart_note_write',
     surfaces: ALL,

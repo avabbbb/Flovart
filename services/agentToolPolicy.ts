@@ -201,7 +201,8 @@ export function toolApprovalFor(command: string, args: Record<string, unknown> =
   if (command === 'workflow.node.run') return spend();
   // generate 只写 Prompt Bar 时是普通可撤销写入；run=true 才会花钱。
   if (command === 'workflow.generate' || command === 'workflow.shortcut.apply') return args.run === true || args.run === 'true' ? spend() : { tier: 'write' };
-  if (command === 'workflow.note.write' || command === 'workflow.media.import') return { tier: 'write' };
+  if (command === 'workflow.group.run') return args.dryRun === true ? { tier: 'read' } : spend();
+  if (command === 'workflow.note.write' || command === 'workflow.media.import' || command === 'workflow.group.create') return { tier: 'write' };
   if (command === 'workflow.node.delete' || command === 'workflow.project.delete') return destroy();
   if (command === 'workflow.apply') {
     const raw = args.operations || args.ops;

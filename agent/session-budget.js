@@ -3,7 +3,7 @@
 // 暂停后新的付费命令一律拒绝，已在跑的任务不受影响（取消用 task.cancel）。
 import { AGENT_SESSION_CONTROL_COMMANDS } from '../tools/flovart/agent-surface.js';
 
-export const PAID_COMMANDS = new Set(['workflow.node.run', 'workflow.generate', 'workflow.shortcut.apply', 'production.run', 'generate.image', 'generate.video']);
+export const PAID_COMMANDS = new Set(['workflow.node.run', 'workflow.generate', 'workflow.shortcut.apply', 'workflow.group.run', 'production.run', 'generate.image', 'generate.video']);
 // 命令名单定义在 agent-surface（CLI 与 Agent 共用），这里只转成 Set。
 export const SESSION_CONTROL_COMMANDS = new Set(AGENT_SESSION_CONTROL_COMMANDS);
 export const MAX_BUDGET_RUNS = 200;
@@ -25,6 +25,8 @@ export function paidUnits(command, args = {}) {
   if ((command === 'workflow.generate' || command === 'workflow.shortcut.apply') && args.run !== true && args.run !== 'true') return 0;
   // 快捷工具永远一个节点、count=1。
   if (command === 'workflow.shortcut.apply') return 1;
+  // 整组执行：成员数在浏览器里才知道，这里按调用方给的 count（缺省 1）计，浏览器端仍逐组确认。
+  if (command === 'workflow.group.run') return args.dryRun === true ? 0 : Math.max(1, Math.floor(Number(args.count || 1)) || 1);
   const nodes = listArg(args.nodeIds).length || 1;
   const count = Math.max(1, Math.floor(Number(args.count || args.batchSize || 1)) || 1);
   return Math.imul(nodes, count);

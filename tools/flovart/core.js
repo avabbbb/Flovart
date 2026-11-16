@@ -32,6 +32,8 @@ export const COMMAND_ALIASES = {
   flovart_models_list: 'workflow.models.list',
   flovart_shortcut_list: 'workflow.shortcut.list',
   flovart_shortcut_apply: 'workflow.shortcut.apply',
+  flovart_group_create: 'workflow.group.create',
+  flovart_group_run: 'workflow.group.run',
   flovart_note_write: 'workflow.note.write',
   flovart_media_import: 'workflow.media.import',
   gen: 'generate.image',
@@ -244,7 +246,7 @@ function normalizeWorkflowNodeToolArgs(args = {}) {
 }
 
 // Agent 工具 v2 的命令按注册表类型标记解析 CLI 参数（--kebab-case → camelCase，数字/布尔/JSON）。
-const REGISTRY_TYPED_WORKFLOW_COMMANDS = new Set(['workflow.generate', 'workflow.models.list', 'workflow.shortcut.list', 'workflow.shortcut.apply', 'workflow.note.write', 'workflow.media.import']);
+const REGISTRY_TYPED_WORKFLOW_COMMANDS = new Set(['workflow.generate', 'workflow.models.list', 'workflow.shortcut.list', 'workflow.shortcut.apply', 'workflow.group.create', 'workflow.group.run', 'workflow.note.write', 'workflow.media.import']);
 
 function registryTypedArgs(command, args = {}) {
   const definition = COMMAND_REGISTRY[command];

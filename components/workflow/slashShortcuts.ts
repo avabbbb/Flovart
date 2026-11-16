@@ -307,3 +307,14 @@ export function buildShortcutApplyOps(input: ShortcutApplyInput): ShortcutApplyP
     plan,
   };
 }
+
+/** Prompt Bar 里刚键入的是一个独立的 `/`（在开头或空白之后）：弹出快捷工具菜单。粘贴整段、URL 里的 / 不触发。 */
+export function shouldOpenPromptSlashMenu(previous: string, next: string): boolean {
+  if (next.length !== previous.length + 1 || !next.endsWith('/') || !next.startsWith(previous)) return false;
+  return previous === '' || /\s$/.test(previous);
+}
+
+/** 选中快捷工具后去掉触发用的那个 `/` */
+export function stripTrailingSlash(prompt: string): string {
+  return prompt.endsWith('/') ? prompt.slice(0, -1).trimEnd() : prompt;
+}
