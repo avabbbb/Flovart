@@ -166,6 +166,11 @@ the browser itself is offline.
   by one.
 - Bring an image from a URL or the asset library onto the canvas →
   `workflow.media.import` (optionally `attachToNodeId` to use it as a reference).
+- Export or download results → `workflow.export` with `nodeIds` or `groupId`
+  (a group is the nodes' `batchId`). One media node exports its original file;
+  several nodes or a group export a ZIP named by node title; script nodes
+  export a shot-list CSV. It never changes the canvas. Pass `inline: true`
+  only when you need the bytes back (≤20MB, base64).
 - Write a note only when the user asks for one → `workflow.note.write`. Notes
   never connect to anything.
 - Move, connect, disconnect, group, retitle or reorder references → one
@@ -174,7 +179,10 @@ the browser itself is offline.
 - Run a node → `workflow.node.run` after confirming the node from inspection.
   Several independent nodes → one `workflow.node.run` with `nodeIds`; the user
   agrees to the cost once and the result lists each node. Rerun only failed
-  nodes.
+  nodes. Seedance runs are pre-checked locally (image references: jpeg/png/
+  webp/bmp/tiff/gif, each side 300–6000px, aspect 0.4–2.5, <30MB); one failure
+  rejects the whole batch with `SEEDANCE_PREFLIGHT_FAILED` and lists the nodes.
+  Fix those references, then rerun the batch.
 
 ### Generation runs on the canvas
 

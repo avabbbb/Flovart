@@ -172,6 +172,20 @@ const DEFINITIONS = [
     },
   },
   {
+    command: 'workflow.export',
+    name: 'flovart_export',
+    aliases: ['flovart_workflow_export'],
+    surfaces: ALL,
+    description: '导出画布内容（不改文档）：单个图片/视频/音频节点导出原文件；多个节点或一个分组（groupId = 节点的 batchId）打包成 ZIP，文件按节点名命名；脚本节点导出分镜 CSV。文本备注不导出，会列在 skipped 里。默认保存到用户本机（桌面端弹另存为）；外部 Agent 要拿到文件内容时给 inline=true（≤20MB，返回 dataBase64）。',
+    fields: {
+      nodeIds: { type: 'array', items: { type: 'string' }, minItems: 1, description: '要导出的节点 id（与 groupId 二选一）' },
+      groupId: { type: 'string', description: '分组 id，即节点的 batchId（与 nodeIds 二选一）' },
+      fileName: { type: 'string', description: '导出文件名（不含扩展名），默认用节点名或项目名' },
+      save: { type: 'boolean', description: '是否保存到用户本机，默认 true' },
+      inline: { type: 'boolean', description: '是否在结果里附带 base64 文件内容，默认 false' },
+    },
+  },
+  {
     command: 'workflow.node.run',
     name: 'flovart_workflow_node_run',
     aliases: ['flovart_workflow_run', 'flovart_run'],

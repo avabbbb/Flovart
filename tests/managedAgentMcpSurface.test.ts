@@ -18,6 +18,7 @@ describe('Flovart Agent tool surface', () => {
       'workflow.models.list',
       'workflow.note.write',
       'workflow.media.import',
+      'workflow.export',
       'workflow.node.run',
       'workflow.node.stop',
       'workflow.node.tool',

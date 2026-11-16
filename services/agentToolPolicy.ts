@@ -172,6 +172,8 @@ const READ_COMMANDS = new Set([
   'workflow.project.list',
   'workflow.projection.get',
   'workflow.models.list',
+  // 导出只读文档，保存位置由用户在另存为里决定。
+  'workflow.export',
   'flovart_workflow_media_view',
   'flovart_web_search',
   'flovart_grep',

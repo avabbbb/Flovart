@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "833b47e3d9fdbdef1b7b082aa66f63d9d2346cd9a6e574540b4d886b0912814d",
+  "registryHash": "09f59b85c686cf5e727ebeec63a359cda264d5d69fa213868795aefd77cf027c",
   "commands": [
     {
       "name": "runtime.status",
@@ -619,6 +619,19 @@
         "mention": "boolean?",
         "expectedRevision": "number?",
         "mutationId": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.export",
+      "summary": "Export canvas content without changing the document: one media node as its original file, several nodes or a group (batchId) as a ZIP named by node title, script nodes as a shot-list CSV. Saves to the user's machine; inline=true also returns the bytes as base64 (<=20MB).",
+      "args": {
+        "projectId": "string?",
+        "nodeIds": "string[]?",
+        "groupId": "string?",
+        "fileName": "string?",
+        "save": "boolean?",
+        "inline": "boolean?"
       },
       "availability": "available"
     },

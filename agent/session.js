@@ -16,7 +16,7 @@ const LEASED_WORKFLOW_COMMANDS = new Set([
   'workflow.node.create', 'workflow.node.create-connected', 'workflow.node.update', 'workflow.node.delete',
   'workflow.node.move', 'workflow.node.resize', 'workflow.node.tool', 'workflow.connect', 'workflow.disconnect',
   'workflow.select', 'workflow.viewport.set', 'workflow.generate', 'workflow.models.list', 'workflow.note.write',
-  'workflow.media.import',
+  'workflow.media.import', 'workflow.export',
 ]);
 
 export class WorkflowAgentSessionError extends Error {
@@ -61,7 +61,7 @@ function sessionError(code, message, details) {
 // 这些命令要等真实生成或人工确认结束才回包（视频生成上限约 600s），不能套用普通 60s 超时，
 // 否则外部 Agent 会在任务仍在运行时收到「操作超时」并重复提交。
 export const LONG_RUNNING_COMMANDS = new Set([
-  'workflow.node.run', 'workflow.node.tool', 'workflow.generate', 'workflow.media.import', 'production.run', 'production.approve',
+  'workflow.node.run', 'workflow.node.tool', 'workflow.generate', 'workflow.media.import', 'workflow.export', 'production.run', 'production.approve',
   // 高风险删除在浏览器里等「允许/拒绝」弹窗，人的反应时间不受 60s 约束。
   'workflow.node.delete', 'workflow.project.delete',
 ]);

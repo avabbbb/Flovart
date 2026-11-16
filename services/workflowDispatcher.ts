@@ -18,6 +18,7 @@ import { generateModeOf, listWorkflowModels, planWorkflowGenerate, WorkflowGener
 import type { UserApiKey } from '../types';
 import { seedancePreflightForNodes } from './generationPlan';
 import { describeSeedanceFailures } from './seedancePreflight';
+import { executeWorkflowExport, planWorkflowExport, WorkflowExportError, type WorkflowExportRuntime } from '../components/workflow/nodeExport';
 
 export interface WorkflowCommandEnvelope {
   id: string;
@@ -74,6 +75,8 @@ export interface WorkflowDispatcherDependencies {
   lookupAsset?: (assetId: string) => WorkflowImportAsset | undefined;
   /** URL → durable Workflow 媒体记录；默认在浏览器里下载后走 ingestWorkflowMedia */
   importMediaUrl?: (url: string) => Promise<WorkflowImportedMedia>;
+  /** workflow.export：读媒体原文件与保存到本机；默认读 Workflow 媒体存储并走 saveBlob（桌面另存为 / 浏览器下载）。 */
+  exportRuntime?: WorkflowExportRuntime;
 }
 
 export interface WorkflowImportAsset {
@@ -93,6 +96,17 @@ export interface WorkflowImportedMedia {
   commit?: () => void;
   discard?: () => Promise<void> | void;
 }
+
+const browserExportRuntime: WorkflowExportRuntime = {
+  loadMedia: async source => {
+    const { loadWorkflowMediaBlob } = await import('../components/workflow/media');
+    return loadWorkflowMediaBlob(source.storageKey, source.href, source.artifactRef);
+  },
+  save: async (blob, fileName) => {
+    const { saveBlob } = await import('./desktopNetwork');
+    return saveBlob(blob, fileName);
+  },
+};
 
 async function browserImportMediaUrl(url: string): Promise<WorkflowImportedMedia> {
   const { ingestWorkflowMedia, fitWorkflowMediaSize, releaseWorkflowMediaRecord, discardWorkflowMediaRecord } = await import('../components/workflow/media');
@@ -695,6 +709,27 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
             draftVersion: project.draftVersion || 1,
           },
         };
+      } else if (command === 'workflow.export') {
+        // 只读文档：单媒体原文件 / 多节点或分组 ZIP / 脚本节点 CSV（P1-7）。
+        const exportProject = project;
+        if (!exportProject) return error(envelope.id, 'NOT_FOUND', '当前没有可用的 Workflow 项目。');
+        try {
+          const plan = planWorkflowExport(exportProject, {
+            nodeIds: args.nodeIds === undefined ? undefined : parseWorkflowNodeIdList(args.nodeIds),
+            groupId: typeof args.groupId === 'string' && args.groupId.trim() ? args.groupId.trim() : undefined,
+            fileName: typeof args.fileName === 'string' ? args.fileName : undefined,
+          });
+          const exported = await executeWorkflowExport(plan, dependencies.exportRuntime || browserExportRuntime, {
+            save: args.save !== false && args.save !== 'false',
+            inline: args.inline === true || args.inline === 'true',
+          });
+          result = { ok: true, commandId: envelope.id, result: { projectId: exportProject.id, ...exported } };
+        } catch (cause) {
+          if (cause instanceof WorkflowExportError) {
+            return { ok: false, commandId: envelope.id, error: { code: cause.code, message: cause.message, details: cause.details } };
+          }
+          throw cause;
+        }
       } else if (command === 'workflow.models.list') {
         result = { ok: true, commandId: envelope.id, result: listWorkflowModels(args, dependencies.getUserApiKeys?.() || []) };
       } else if (!project) {
