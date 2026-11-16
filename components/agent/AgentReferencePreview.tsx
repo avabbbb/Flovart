@@ -5,7 +5,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import type { AssetItem } from '../../types';
 import { useWorkflowMediaUrl } from '../workflow/media';
 import type { WorkflowNode } from '../workflow/types';
-import { mediaKind } from './pickerNavigation';
+import { mediaKind, previewPlacement } from './pickerNavigation';
 
 // @ 引用浮层里高亮项的预览卡：与 Skill 浮层左侧预览同一套样式（磨砂玻璃、封面 + 标题 + 规格）。
 // 放在浮层左侧；左侧没空间时翻到上方；都没有就不显示。视频用静音循环小预览（浏览器只解码这一路）。
@@ -48,8 +48,7 @@ export function ReferencePreview({ reference, nodes, assets, language = 'zho' }:
   useLayoutEffect(() => {
     const host = ref.current?.parentElement;
     if (!host) return;
-    const rect = host.getBoundingClientRect();
-    setSide(rect.left >= 260 ? 'left' : rect.top >= 240 ? 'above' : 'hidden');
+    setSide(previewPlacement(host, 244, 224));
   }, [reference.id]);
 
   if (side === 'hidden') return null;

@@ -30,7 +30,7 @@ import {
   type DeckSkill,
   type EditorDraft,
 } from './skillHubParts';
-import { nextHighlight } from './pickerNavigation';
+import { nextHighlight, previewPlacement } from './pickerNavigation';
 
 // Composer 的 Skill 浮层。结构按用户 2026-11-16 截图：标题 + 搜索 / 创建 ▾ / 更多 >，
 // 综合 / 喜欢 / 我的 三个页签，行 = 标题 + 一行说明，悬停抬起并出「详情」，
@@ -276,9 +276,10 @@ export function ProductionSkillDeck({
     if (!picker || (typeof window.matchMedia === 'function' && window.matchMedia('(hover: none)').matches)) return;
     const rect = picker.getBoundingClientRect();
     const rowRect = row.getBoundingClientRect();
-    if (rect.left >= PREVIEW_WIDTH + 16) {
+    const side = previewPlacement(picker, PREVIEW_WIDTH, 204);
+    if (side === 'left') {
       setPreview({ key: skill.key, side: 'left', top: Math.max(0, Math.min(rowRect.top - rect.top - 8, rect.height - 200)) });
-    } else if (rect.top >= 220) {
+    } else if (side === 'above') {
       setPreview({ key: skill.key, side: 'above', top: 0 });
     } else {
       setPreview(null);

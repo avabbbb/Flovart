@@ -62,3 +62,17 @@ export function matchesReference(item: { label: string; mediaType?: string }, ra
   }
   return false;
 }
+
+/**
+ * 悬停 / 键盘预览卡放哪：以最近的裁切容器（右侧 Agent 面板、画布内 Agent 窗）为界，而不是视口。
+ * 面板外壳 overflow 会裁掉越界的卡片——左侧放得下才放左边，否则放上方，都不行就不显示。
+ */
+export function previewPlacement(host: Element, width: number, height: number): 'left' | 'above' | 'hidden' {
+  const rect = host.getBoundingClientRect();
+  const clip = host.closest('.compact-right-panel, .workflow-agent, .agent-conversation')?.getBoundingClientRect();
+  const left = clip ? rect.left - clip.left : rect.left;
+  const top = clip ? rect.top - clip.top : rect.top;
+  if (left >= width + 16) return 'left';
+  if (top >= height + 16) return 'above';
+  return 'hidden';
+}
