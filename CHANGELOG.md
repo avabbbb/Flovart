@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- 分组框跟随成员自动伸缩：成员移动、改尺寸、加入 / 移出、删除后，所在分组框（含嵌套分组，由内向外）贴合成员包围盒；拖动时实时跟随，松手与成员改动记在同一个 ChangeSet 里，一步撤销。折叠的分组不动；只手动拉大框本身不会被拉回。
+- 风格锚点编号前缀统一为 T（`nodeSearch` 原来用 F，与锚点批准、类型注释不一致）；旧写法 F01 仍按 T01 解析。
+- 多结果备选：Agent `media_view` / `workflow.inspect` 能按备选 id 取到画面与来源（不再报“节点不存在”），只接受画布节点的命令遇到备选 id 时说明它属于哪个首图节点；本地副本缺失时先从 Runtime 产物或原始链接取回。
 - Agent `flovart_grep`（对齐 OMP grep 语义）：path 不存在报 `Path not found`，不再回落成“没有匹配”；没有连接文件夹、权限失效、文件夹已被移动 / 删除分别直接报错；省略 path、`.`、`./` 都表示根目录；path 支持单个文件、`;` 分隔多个范围与文件夹名前缀；遍历中途目录消失不再中断整次搜索。
 - CLI: `video.status` → `task.get`, `export.project` → `workflow.inspect`; `generate.images-batch` submits one Runtime `generate.image` per item with derived idempotency keys (no more file-state shadow).
 - Pipeline: image clips take `motion` (push / pull / pan / tilt / shake / impact, flash), rendered by Remotion; `beatGridCuts` helper.

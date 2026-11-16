@@ -288,7 +288,7 @@ export async function grepLocalFolders(options: GrepOptions): Promise<AgentGrepR
         const file = await entry.handle.getFile();
         if (file.size > LOCAL_GREP_LIMITS.maxFileBytes) { result.oversizedFiles! += 1; continue; }
         result.scannedFiles += 1;
-        const text = await file.text();
+        const text = await readFileText(file);
         if (text.includes('\u0000')) { result.binaryFiles! += 1; continue; }
         let perFile = 0;
         const lines = text.split(/\r?\n/);
@@ -345,4 +345,15 @@ async function* walkFiles(
   } catch {
     // 子目录在扫描途中被删除或无权读取：跳过它，保留已扫到的结果。
   }
+}
+
+/** File.text() 在部分运行环境（老 WebView、jsdom）里不存在；退回 FileReader。 */
+async function readFileText(file: Blob): Promise<string> {
+  if (typeof (file as Blob & { text?: unknown }).text === 'function') return file.text();
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(reader.error || new Error('读取文件失败'));
+    reader.readAsText(file);
+  });
 }
