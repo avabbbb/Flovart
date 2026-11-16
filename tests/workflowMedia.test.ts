@@ -11,6 +11,7 @@ import {
   setWorkflowMediaCanonicalProjects,
   unregisterWorkflowMediaTransientReferences,
   useWorkflowMediaUrl,
+  isGeneratedWorkflowMedia,
   workflowBlobToDataUrl,
   workflowDataUrlToBlob,
   workflowMediaType,
@@ -181,6 +182,14 @@ describe('workflow media', () => {
     const { result } = renderHook(() => useWorkflowMediaUrl('missing-key', 'https://example.com/fallback.png'));
     await waitFor(() => expect(result.current.error).toBe('媒体文件不存在，请重新选择文件'));
     expect(result.current.url).toBeNull();
+  });
+
+  // 2026-11-16 内置 Agent 实测 P1-3：生成结果被清理时不应让用户「重新选择文件」。
+  it('tells the user to regenerate when a generated result file is gone', async () => {
+    const { result } = renderHook(() => useWorkflowMediaUrl('missing-generated', undefined, undefined, { generated: true }));
+    await waitFor(() => expect(result.current.error).toBe('生成结果文件已被清理，请重新生成'));
+    expect(isGeneratedWorkflowMedia({ generationHistoryId: 'h1' })).toBe(true);
+    expect(isGeneratedWorkflowMedia({})).toBe(false);
   });
 
   it('resolves canvas IndexedDB image refs before workflow renders or imports them', async () => {

@@ -9,6 +9,16 @@ describe('displayError — error→UI jargon boundary', () => {
     expect(displayError(new Error('503 Service Unavailable'))).toBe('AI 服务暂时不可用，任务已失败，可稍后重试。');
   });
 
+  // 2026-11-16 内置 Agent 实测 P1-3：模型下线的 403 不是 Key 权限问题；纯文本模型收图不是参数错误。
+  it('distinguishes a retired / policy-blocked model from an API key permission error', () => {
+    const policy = displayError(new Error('403 {"error":{"code":"public_model_policy","message":"Select an explicit model from the public model catalog"}}'));
+    expect(policy).toContain('服务商当前不提供这个模型');
+    expect(policy).not.toContain('API Key');
+    expect(displayError(new Error('404 model_not_found: The model `x` does not exist'))).toContain('服务商当前不提供这个模型');
+    expect(displayError(new Error('403 Forbidden'))).toBe('当前 API Key 没有执行此任务的权限，请检查 AI 服务设置。');
+    expect(displayError(new Error('400 This model does not support image or file input'))).toContain('当前模型不支持图片输入');
+  });
+
   it('maps network failures to a connectivity hint', () => {
     expect(displayError(new Error('Failed to fetch'))).toBe('无法连接到该 AI 服务，请检查服务地址后重试。');
   });

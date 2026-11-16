@@ -588,7 +588,18 @@ function inspectImageElement(url: string): Promise<HTMLImageElement> {
   });
 }
 
-export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string, artifactRef?: WorkflowArtifactRef) {
+/** 节点媒体是否来自生成结果（而不是用户选择的文件）：丢失时应提示重新生成，而不是「重新选择文件」。 */
+export function isGeneratedWorkflowMedia(metadata: Pick<WorkflowNodeMetadata, 'artifactRef' | 'generationHistoryId' | 'generationProviderTaskId' | 'generationRequestId' | 'remoteUrl'> | undefined): boolean {
+  return Boolean(metadata && (metadata.artifactRef || metadata.generationHistoryId || metadata.generationProviderTaskId || metadata.generationRequestId || metadata.remoteUrl));
+}
+
+export function workflowMediaMissingMessage(generated: boolean, missing = true): string {
+  if (generated) return missing ? '生成结果文件已被清理，请重新生成' : '生成结果读取失败，请重新生成';
+  return missing ? '媒体文件不存在，请重新选择文件' : '媒体文件读取失败，请重新选择文件';
+}
+
+export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string, artifactRef?: WorkflowArtifactRef, options: { generated?: boolean } = {}) {
+  const generated = options.generated === true || Boolean(artifactRef);
   const artifactKey = artifactRef?.taskId || '';
   const mediaKey = storageKey || artifactKey || fallbackHref || '';
   const nativeRemote = shouldUseDesktopNativeFetch(fallbackHref);
@@ -631,7 +642,7 @@ export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string, 
     void loadWorkflowMediaBlob(storageKey, fallbackHref, artifactRef).then(blob => {
       if (!active) return;
       if (!blob) {
-        setState({ key: mediaKey, url: null, error: '媒体文件不存在，请重新选择文件' });
+        setState({ key: mediaKey, url: null, error: workflowMediaMissingMessage(generated) });
         return;
       }
       objectUrl = URL.createObjectURL(blob);
@@ -644,13 +655,13 @@ export function useWorkflowMediaUrl(storageKey?: string, fallbackHref?: string, 
         return;
       }
       const missing = error instanceof Error && error.message.includes('不存在');
-      setState({ key: mediaKey, url: null, error: missing ? '媒体文件不存在，请重新选择文件' : '媒体文件读取失败，请重新选择文件' });
+      setState({ key: mediaKey, url: null, error: workflowMediaMissingMessage(generated, missing) });
     });
     return () => {
       active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [artifactKey, artifactRef?.mimeType, fallbackHref, folderRevision, mediaKey, nativeRemote, storageKey]);
+  }, [artifactKey, artifactRef?.mimeType, fallbackHref, folderRevision, generated, mediaKey, nativeRemote, storageKey]);
 
   return state.key === mediaKey ? state : { url: immediateUrl, error: null, errorCode: undefined };
 }

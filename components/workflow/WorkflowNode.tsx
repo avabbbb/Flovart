@@ -8,7 +8,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { WorkflowGenerationLoader } from './WorkflowGenerationLoader';
 import { getWorkflowOperationCapability } from './operationRegistry';
 import { buildCssFilter } from '../ImageFilterPanel';
-import { useWorkflowMediaUrl } from './media';
+import { isGeneratedWorkflowMedia, useWorkflowMediaUrl } from './media';
 import { parseLocalFolderHref, requestLocalFolderPermission } from '../../services/localFolderSource';
 import { getWorkflowNodePlugin, type WorkflowNodePluginContext, type WorkflowNodePluginDefinition } from './nodePluginSdk';
 import type { WorkflowNode as WorkflowNodeData } from './types';
@@ -248,6 +248,7 @@ export function WorkflowNode({
     resolveSourceMedia ? (node.type === 'video' && node.metadata.previewStorageKey) || node.metadata.storageKey : undefined,
     resolveSourceMedia ? node.metadata.href : undefined,
     resolveSourceMedia ? node.metadata.artifactRef : undefined,
+    { generated: isGeneratedWorkflowMedia(node.metadata) },
   );
   const posterMedia = useWorkflowMediaUrl(
     node.type === 'video' ? node.metadata.posterStorageKey : undefined,

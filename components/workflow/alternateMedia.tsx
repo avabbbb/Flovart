@@ -9,6 +9,7 @@ export function useAlternatePreviewUrl(alternate: WorkflowMediaAlternate | undef
     !alternate ? undefined : video ? alternate.metadata.posterStorageKey : alternate.metadata.storageKey,
     !alternate ? undefined : video ? alternate.metadata.poster : alternate.metadata.href,
     !alternate || video ? undefined : alternate.metadata.artifactRef,
+    { generated: true },
   ).url;
 }
 

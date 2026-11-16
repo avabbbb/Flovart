@@ -18,6 +18,10 @@
 const JARGON_RULES: ReadonlyArray<{ pattern: RegExp; message: string }> = [
     // 超时类（原始中文超时文案已是产品语言）
     { pattern: /视频生成超时|连接超时|AI 服务响应超时/, message: '' },
+    // 模型下线 / 不在服务商公开目录：常以 403/404 返回，但不是 Key 权限问题，必须排在 401/403 规则之前。
+    { pattern: /public_model_policy|public model catalog|model[_ ]not[_ ]found|no such model|unknown model|model .{0,60}(?:does not exist|not exist|is not available|no longer available|not supported|has been (?:removed|deprecated))|模型(?:不存在|已下线)/i, message: '服务商当前不提供这个模型（可能已下线或不在可用目录），请在 AI 服务设置里换一个模型。' },
+    // 纯文本模型收到图片：不是参数错误，而是模型不收图。
+    { pattern: /(?:does not|doesn't|not) support (?:image|images|vision|file|multimodal)(?: or file)?(?: input)?|image input is not supported|不支持图片输入/i, message: '当前模型不支持图片输入：请换一个支持看图的模型，或把图片放到画布上，让 Agent 按节点引用。' },
     { pattern: /\b401\b|unauthori[sz]ed|invalid api key|invalid key|authentication failed/i, message: 'API Key 无效或没有访问权限，请在 AI 服务设置中检查。' },
     { pattern: /\b403\b|forbidden|permission denied/i, message: '当前 API Key 没有执行此任务的权限，请检查 AI 服务设置。' },
     { pattern: /\b429\b|rate[ _-]?limit|too many requests|quota exceeded/i, message: 'AI 服务当前限流，请稍后重试。' },
