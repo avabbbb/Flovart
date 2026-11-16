@@ -248,7 +248,7 @@ const DEFINITIONS = [
     surfaces: ALL,
     description: '按条件查节点，只返回精简结果（id、类型、标题、状态、是否有产物、锚点编号、镜号、提示词前 80 字），分页。'
       + '画布大时先用它代替整张 inspect；用户说“A02”“S01”“第 3 镜”“失败的视频”时用它解析成节点 id。'
-      + '锚点编号：已批准锚点按种类编号，A 角色 / S 场景 / P 道具 / F 风格。',
+      + '锚点编号：已批准锚点按种类编号，A 角色 / S 场景 / P 道具 / T 风格。',
     fields: {
       query: { type: 'string', description: '关键字，匹配标题、文件名、提示词、备注内容、锚点编号；空格分隔的多个词需全部命中' },
       types: { type: 'array', items: { type: 'string' }, description: '节点类型，如 ["image","video"]' },

@@ -41,7 +41,7 @@ describe('anchor codes', () => {
     expect(normalizeAnchorCode(' S007 ')).toBe('S07');
     expect(normalizeAnchorCode('X1')).toBeUndefined();
     expect(normalizeAnchorCode('A0')).toBeUndefined();
-    expect(parseAnchorReferences('A02 + S02 重拍第 3 镜，再参考 f1；shot 4')).toEqual({ codes: ['A02', 'S02', 'F01'], shots: [3, 4] });
+    expect(parseAnchorReferences('A02 + S02 重拍第 3 镜，再参考 f1；shot 4')).toEqual({ codes: ['A02', 'S02', 'T01'], shots: [3, 4] });
     expect(parseAnchorReferences('API2 和 MP4').codes).toEqual([]);
   });
 });
@@ -82,5 +82,18 @@ describe('searchWorkflowNodes', () => {
     expect(last.nodes).toHaveLength(2);
     expect(last.nextOffset).toBeUndefined();
     expect(searchWorkflowNodes(nodes, { limit: 999 }).limit).toBe(100);
+  });
+});
+
+describe('anchor code prefix (style = T)', () => {
+  it('uses one prefix table everywhere and keeps F as a legacy alias', async () => {
+    const { ANCHOR_CODE_PREFIX: approval, normalizeAnchorCode: normalizeApproval } = await import('../services/anchorApproval');
+    const search = await import('../components/workflow/nodeSearch');
+    expect(search.ANCHOR_CODE_PREFIX).toBe(approval);
+    expect(approval.style).toBe('T');
+    expect(search.normalizeAnchorCode('t3')).toBe('T03');
+    expect(search.normalizeAnchorCode('F02')).toBe('T02');
+    expect(normalizeApproval('t3')).toBe('T03');
+    expect(search.parseAnchorReferences('T01 和 F2').codes).toEqual(['T01', 'T02']);
   });
 });

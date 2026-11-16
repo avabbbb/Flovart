@@ -1,14 +1,12 @@
 // 节点搜索（workflow.nodes.search）与锚点短编号：纯函数。
 // Agent 不必每次 inspect 整张画布，按名称 / 类型 / 锚点编号 / 状态查节点，只拿精简结果；
-// 锚点编号（A01 角色 / S01 场景 / P01 道具 / F01 风格）用于“A02 + S02 重拍第 3 镜”这类引用。
+// 锚点编号（A01 角色 / S01 场景 / P01 道具 / T01 风格）用于“A02 + S02 重拍第 3 镜”这类引用。
+// 风格前缀统一为 T（与 services/anchorApproval.ts、types.ts 一致）；旧写法 F01 仍按 T01 解析。
 import type { WorkflowAnchorKind, WorkflowNode } from './types';
 
-export const ANCHOR_CODE_PREFIX: Record<WorkflowAnchorKind, string> = {
-  character: 'A',
-  scene: 'S',
-  product: 'P',
-  style: 'F',
-};
+import { ANCHOR_CODE_PREFIX } from '../../services/anchorApproval';
+
+export { ANCHOR_CODE_PREFIX };
 
 /**
  * 已批准锚点的短编号：按种类分别从 01 编号，顺序为批准时间 → 画布位置（上→下、左→右）→ id，
@@ -43,17 +41,18 @@ export function assignAnchorCodes(nodes: readonly WorkflowNode[]): Map<string, s
 
 /** "a2" / "A02" / "a002" → "A02"；不是锚点编号返回 undefined。 */
 export function normalizeAnchorCode(value: string): string | undefined {
-  const match = /^\s*([ASPF])\s*0*(\d{1,3})\s*$/i.exec(value);
+  const match = /^\s*([ASPTF])\s*0*(\d{1,3})\s*$/i.exec(value);
   if (!match) return undefined;
   const number = Number(match[2]);
   if (!number) return undefined;
-  return match[1].toUpperCase() + String(number).padStart(2, '0');
+  const prefix = match[1].toUpperCase();
+  return (prefix === 'F' ? 'T' : prefix) + String(number).padStart(2, '0');
 }
 
 /** 文本里的锚点编号与镜号，例如 "A02 + S02 重拍第 3 镜" → codes [A02, S02]，shots [3]。 */
 export function parseAnchorReferences(text: string): { codes: string[]; shots: number[] } {
   const codes: string[] = [];
-  for (const match of text.matchAll(/(?<![A-Za-z0-9])([ASPF])0*(\d{1,3})(?![A-Za-z0-9])/gi)) {
+  for (const match of text.matchAll(/(?<![A-Za-z0-9])([ASPTF])0*(\d{1,3})(?![A-Za-z0-9])/gi)) {
     const code = normalizeAnchorCode(match[1] + match[2]);
     if (code && !codes.includes(code)) codes.push(code);
   }
