@@ -861,7 +861,8 @@
 /* 2026-11-16：浮层自身带 backdrop-filter 会成为 backdrop root，它的子元素（越出浮层的预览卡、创建菜单）
    就只能采样浮层内部，背后的聊天文字没被模糊、只靠底色遮挡。玻璃挪到 ::before，子元素才能真正糊住背景。 */
 .agent-skill-picker.skill-hub,
-.agent-reference-picker.flv-frost {
+.agent-reference-picker.flv-frost,
+.agent-conversation .agent-reference-picker.flv-frost {
   isolation: isolate;
   background: transparent;
   -webkit-backdrop-filter: none;
