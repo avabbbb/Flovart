@@ -160,10 +160,20 @@ the browser itself is offline.
   Never build a text node (or a "prompt/config node") and connect it to a
   generation node: text nodes are notes for people and are never generation
   input. Shot order is `shot.index`, not a chain of connections.
+- In `workflow.generate` prompts, refer to inputs as `@ref:<nodeId>` or
+  `@"Node name"`; anything mentioned gets connected (`autoLinked`), and
+  disconnecting a source removes its chip (`prunedMentions`).
+- Several shots: build them all with `workflow.generate` (no `run`), then
+  run the list once with `workflow.node.run --node-ids` (one approval card,
+  each node runs once).
+- Runs block until a terminal status (`succeeded` / `failed` / `timeout` /
+  `unknown_after_submit`); never poll `workflow.inspect` while a run is in
+  progress, and never retry `unknown_after_submit`.
 - Pick or change a model → `workflow.models.list` first (live catalog with
-  per-mode configuration and reference limits). On `MODE_UNSUPPORTED` or
-  `REFERENCE_LIMIT`, use a model from the returned list; do not try models one
-  by one.
+  per-mode configuration and reference min/max). On `MODE_UNSUPPORTED`,
+  `REFERENCE_COUNT_OUT_OF_RANGE` or `REFERENCE_LIMIT`, switch to one of the
+  returned `details.candidates` (`{modelId, mode}`) or fix the reference count
+  as the message says; do not try models one by one.
 - Bring an image from a URL or the asset library onto the canvas →
   `workflow.media.import` (optionally `attachToNodeId` to use it as a reference).
 - Write a note only when the user asks for one → `workflow.note.write`. Notes

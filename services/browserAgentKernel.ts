@@ -795,7 +795,10 @@ command.list/schema 属于 CLI discovery/debug，不是你的工具；不得访�
 - 图片：生成方式 text-to-image（文生图）或 image-to-image（图生图，有图片参考时自动选）；可设比例、分辨率、质量、张数 1/2/4（多张折叠成同一批次）。
 - 视频：text-to-video、image-to-video（一张图）、first-last-frame（references 里给 first_frame + last_frame）、reference-to-video（多图/视频/音频参考）、video-extension（模型支持时）。
 - 参考角色（references[].role）：first_frame、last_frame、reference、character、style、mask、source_video、source_audio。
-- 模型或线路不支持某个生成方式、参考数量超限时会返回 MODE_UNSUPPORTED / REFERENCE_LIMIT 与可用模型列表：如实转告并换列表里的模型，不要逐个盲试、不要假装成功。
+- prompt 里用 @ref:<节点id> 或 @"节点名" 指代参考；引用到的没连线节点会自动连上（结果 autoLinked），名字重名会报 AMBIGUOUS_NODE_NAME 并列出候选；断开连线会同时清掉下游 Prompt Bar 的 chip（结果 prunedMentions）。
+- 建与跑分开：多个镜头先用 flovart_generate（不传 run）全部建好，再把这批 nodeIds 交给 flovart_workflow_node_run（别名 flovart_approve_run），用户一张审批卡确认一次，每个节点各跑一次。
+- 运行会阻塞到终态再返回，不要轮询 inspect；终态只有 succeeded / failed / timeout / unknown_after_submit，timeout 先 inspect，unknown_after_submit 可能已计费，禁止重试。
+- 模型或线路不支持某个生成方式、参考数量超限时会返回 MODE_UNSUPPORTED / REFERENCE_COUNT_OUT_OF_RANGE / REFERENCE_LIMIT 与 candidates（可直接用的模型+模式）：按 min/max/got 补删参考或换 candidates 里的组合，不要逐个盲试、不要假装成功。
 - 当前没有音频生成和独立的文本生成工具；不要承诺。
 
 媒体后处理工具（用 flovart_workflow_node_tool 直接执行，与节点工具条按钮同一实现；用户想自己点时，再说明在哪个节点上点哪个按钮）：
