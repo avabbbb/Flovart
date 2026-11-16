@@ -7,6 +7,7 @@ import { createUserSkill, normalizeSkillSlug, type UserSkillRecord } from '../se
 // 画布分组「保存为 Skill」、Skill Hub 面板的创建 / 编辑 / 删除、Agent 内核解析指令都读这里。
 export const MINE_SKILLS_KEY = 'flovart.skill.mine.v1';
 export const DISABLED_SKILLS_KEY = 'flovart.skill.disabled.v1';
+export const FAVORITE_SKILLS_KEY = 'flovart.skill.favorites.v1';
 
 function isUserSkill(value: unknown): value is UserSkillRecord {
   const item = value as Partial<UserSkillRecord> | null;
@@ -30,7 +31,10 @@ interface UserSkillsState {
   skills: UserSkillRecord[];
   /** 停用的内置 / 本机 / Hub Skill id（我的 Skill 用自身 enabled 字段）。 */
   disabledIds: ReadonlySet<string>;
+  /** 收藏（喜欢）的 Skill id，任何来源都可收藏。 */
+  favoriteIds: ReadonlySet<string>;
   loaded: boolean;
+  toggleFavorite: (id: string) => Promise<void>;
   load: () => Promise<void>;
   save: (skill: UserSkillRecord) => Promise<void>;
   create: (draft: UserSkillDraft) => Promise<UserSkillRecord>;
@@ -57,17 +61,28 @@ export const useUserSkillsStore = create<UserSkillsState>((set, get) => {
   return {
     skills: [],
     disabledIds: new Set(),
+    favoriteIds: new Set(),
     loaded: false,
     load: async () => {
-      const [stored, disabled] = await Promise.all([
+      const [stored, disabled, favorites] = await Promise.all([
         localforage.getItem<unknown[]>(MINE_SKILLS_KEY),
         localforage.getItem<unknown[]>(DISABLED_SKILLS_KEY),
+        localforage.getItem<unknown[]>(FAVORITE_SKILLS_KEY),
       ]);
+      const ids = (value: unknown) => new Set(Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []);
       set({
         skills: Array.isArray(stored) ? stored.filter(isUserSkill) : [],
-        disabledIds: new Set(Array.isArray(disabled) ? disabled.filter((id): id is string => typeof id === 'string') : []),
+        disabledIds: ids(disabled),
+        favoriteIds: ids(favorites),
         loaded: true,
       });
+    },
+    toggleFavorite: async id => {
+      await ensureLoaded();
+      const favoriteIds = new Set(get().favoriteIds);
+      if (favoriteIds.has(id)) favoriteIds.delete(id); else favoriteIds.add(id);
+      set({ favoriteIds });
+      await localforage.setItem(FAVORITE_SKILLS_KEY, [...favoriteIds]);
     },
     save: async skill => {
       await ensureLoaded();

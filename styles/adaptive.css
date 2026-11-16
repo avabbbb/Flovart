@@ -269,7 +269,7 @@ body,
   --agent-panel: transparent;
 }
 
-.compact-right-panel[data-docked='false'] .agent-skill-picker {
+.compact-right-panel[data-docked='false'] .agent-skill-picker:not(.skill-hub) {
   background: var(--isl-card);
 }
 

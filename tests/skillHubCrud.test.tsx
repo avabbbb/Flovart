@@ -17,7 +17,8 @@ import { DISABLED_SKILLS_KEY, MINE_SKILLS_KEY, useUserSkillsStore } from '../sto
 async function resetSkillStores() {
   await localforage.removeItem(MINE_SKILLS_KEY);
   await localforage.removeItem(DISABLED_SKILLS_KEY);
-  useUserSkillsStore.setState({ skills: [], disabledIds: new Set(), loaded: false });
+  useUserSkillsStore.setState({ skills: [], disabledIds: new Set(), favoriteIds: new Set(), loaded: false });
+  await localforage.removeItem('flovart.skill.favorites.v1');
   useSkillHubStore.setState({
     hubUrl: '', hubStatus: 'idle', hubError: undefined, hubSkills: [], localSkills: [], registryStatus: 'unavailable',
     refreshLocal: vi.fn(async () => undefined),
@@ -77,16 +78,45 @@ describe('Agent picks up user Skill changes', () => {
 });
 
 describe('Skill Hub picker UI', () => {
+  it('从模板 prefills the editor; 导入 parses SKILL.md front matter', async () => {
+    const { parseSkillImport } = await import('../components/agent/skillHubParts');
+    expect(parseSkillImport('---\nname: 分镜\ndescription: 拆镜头\n---\n# 分镜\n按镜头拆', 'SKILL.md')).toMatchObject({ name: '分镜', description: '拆镜头' });
+    expect(parseSkillImport('{"name":"口播","prompt":"写口播"}', 'x.json')).toMatchObject({ name: '口播', prompt: '写口播' });
+    expect(parseSkillImport('', 'x.md')).toBeNull();
+    renderDeck();
+    fireEvent.click(screen.getByRole('button', { name: /创建/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /从模板/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '口播脚本' }));
+    expect((screen.getByLabelText('名称') as HTMLInputElement).value).toBe('口播脚本');
+    expect((screen.getByLabelText('指令') as HTMLTextAreaElement).value).toContain('30 秒');
+  });
+
+  it('喜欢 tab lists liked Skills; liking from details persists', async () => {
+    renderDeck();
+    const bundled = listBundledProductionSkills()[0];
+    fireEvent.click(screen.getByRole('tab', { name: '喜欢' }));
+    expect(await screen.findByText('点 ♡ 喜欢的 Skill 会出现在这里')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: '综合' }));
+    fireEvent.click(await screen.findByRole('button', { name: `查看 ${bundled.displayName} 详情` }));
+    fireEvent.click(screen.getByRole('button', { name: '喜欢' }));
+    await waitFor(() => expect(useUserSkillsStore.getState().favoriteIds.has(bundled.id)).toBe(true));
+    fireEvent.click(screen.getByRole('button', { name: '返回 Skill 列表' }));
+    fireEvent.click(screen.getByRole('tab', { name: '喜欢' }));
+    expect(await screen.findByRole('group', { name: bundled.displayName })).toBeInTheDocument();
+  });
+
   beforeEach(resetSkillStores);
 
   it('创建 opens the editor and saves a new Skill that appears under 我的 Skill', async () => {
     renderDeck();
-    fireEvent.click(screen.getByRole('button', { name: '新建' }));
+    fireEvent.click(screen.getByRole('button', { name: /创建/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '新建空白' }));
     fireEvent.change(screen.getByLabelText('名称'), { target: { value: '海报文案' } });
     fireEvent.change(screen.getByLabelText('指令'), { target: { value: '写三条海报标题' } });
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
     await screen.findByText('写三条海报标题');
     fireEvent.click(screen.getByRole('button', { name: '返回 Skill 列表' }));
+    fireEvent.click(screen.getByRole('tab', { name: '我的' }));
     const mine = await screen.findByRole('region', { name: '我的 Skill' });
     expect(within(mine).getByRole('group', { name: '海报文案' })).toBeInTheDocument();
   });

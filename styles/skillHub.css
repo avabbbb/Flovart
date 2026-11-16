@@ -1,7 +1,49 @@
 /* Skill Hub 选择器（components/agent/ProductionSkillDeck.tsx）。
    参照 Inspora「AI agent dashboard」Add widgets 面板（@BenceRedmond）：
    https://www.inspora.design/posts/ai-agent-dashboard
-   浮动 chrome：外壳近不透明 + 轻模糊，只用 DESIGN.md token；按自身宽度用 @container 降级。 */
+   浮动 chrome：磨砂玻璃（--flv-frost-*），只用 DESIGN.md token；按自身宽度用 @container 降级。 */
+
+/* 高级磨砂玻璃（bleep-app 式，2026-11-16 用户更正：不用不透明底）：半透明着色 + 强模糊 + 饱和，
+   背后的聊天文字必须糊到读不出。与 @ 引用浮层、预览卡、Hub 窗口共用 --flv-frost-* 配方。 */
+:root {
+  --flv-frost-fill: color-mix(in srgb, var(--isl-surface) 68%, transparent);
+  --flv-frost-fill-strong: color-mix(in srgb, var(--isl-surface) 80%, transparent);
+  --flv-frost-fallback: color-mix(in srgb, var(--isl-surface) 95%, transparent);
+  --flv-frost-blur: blur(28px) saturate(175%);
+  --flv-frost-edge: color-mix(in srgb, var(--isl-ink) 10%, transparent);
+  --flv-frost-highlight: inset 0 1px 0 color-mix(in srgb, var(--isl-card) 55%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--isl-card) 18%, transparent);
+  --flv-frost-shadow: 0 2px 6px color-mix(in srgb, var(--isl-ink) 8%, transparent), 0 18px 48px color-mix(in srgb, var(--isl-ink) 16%, transparent);
+}
+
+:root[data-theme='dark'] {
+  --flv-frost-fill: color-mix(in srgb, var(--isl-surface) 64%, transparent);
+  --flv-frost-fill-strong: color-mix(in srgb, var(--isl-surface) 76%, transparent);
+  --flv-frost-edge: color-mix(in srgb, var(--isl-ink) 12%, transparent);
+  --flv-frost-highlight: inset 0 1px 0 color-mix(in srgb, var(--isl-ink) 10%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--isl-ink) 4%, transparent);
+  --flv-frost-shadow: 0 2px 8px color-mix(in srgb, var(--app-bg) 50%, transparent), 0 22px 56px color-mix(in srgb, var(--app-bg) 70%, transparent);
+}
+
+.flv-frost {
+  border: 1px solid var(--flv-frost-edge);
+  background: var(--flv-frost-fill);
+  -webkit-backdrop-filter: var(--flv-frost-blur);
+  backdrop-filter: var(--flv-frost-blur);
+  box-shadow: var(--flv-frost-highlight), var(--flv-frost-shadow);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .flv-frost,
+  .agent-skill-picker.skill-hub,
+  .skill-hub__preview,
+  .skill-hub__menu { background: var(--flv-frost-fallback); }
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .flv-frost,
+  .agent-skill-picker.skill-hub,
+  .skill-hub__preview,
+  .skill-hub__menu { background: var(--isl-surface); border-color: var(--isl-border-strong); }
+}
 
 .agent-skill-picker.skill-hub {
   position: absolute;
@@ -13,25 +55,14 @@
   max-width: 560px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
   container: skill-hub / inline-size;
-  border: 1px solid var(--isl-border);
+  border: 1px solid var(--flv-frost-edge);
   border-radius: var(--isl-r-lg);
-  /* 不再半透明：聊天文字不能透过标题和搜索框（2026-11-16 截图问题）。 */
-  background: color-mix(in srgb, var(--isl-surface) 97%, transparent);
-  -webkit-backdrop-filter: blur(24px) saturate(150%);
-  backdrop-filter: blur(24px) saturate(150%);
-  box-shadow: var(--isl-shadow-lg);
+  background: var(--flv-frost-fill);
+  -webkit-backdrop-filter: var(--flv-frost-blur);
+  backdrop-filter: var(--flv-frost-blur);
+  box-shadow: var(--flv-frost-highlight), var(--flv-frost-shadow);
   color: var(--isl-ink);
-  isolation: isolate;
-}
-
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .agent-skill-picker.skill-hub { background: var(--isl-surface); }
-}
-
-@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-  .agent-skill-picker.skill-hub { background: var(--isl-surface); border-color: var(--isl-border-strong); }
 }
 
 .skill-hub__header {
@@ -600,3 +631,229 @@
   .skill-hub .is-spinning { animation: none; }
   .skill-hub__switch > span::after { transition-duration: .01ms; }
 }
+
+/* ── 2026-11-16 结构（用户截图）：搜索 / 创建 ▾ / 更多 >，综合 / 喜欢 / 我的，悬停详情 + 左侧预览卡，查看更多 → ── */
+.skill-hub__head-btn {
+  display: inline-flex;
+  height: 26px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: var(--isl-r);
+  padding: 0 6px;
+  color: var(--isl-ink-soft);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.skill-hub__head-btn:hover,
+.skill-hub__head-btn.is-on { color: var(--isl-ink); background: color-mix(in srgb, var(--isl-ink) 6%, transparent); }
+
+.skill-hub__menu-anchor { position: relative; flex: 0 0 auto; }
+.skill-hub__create { gap: 3px; padding: 0 8px; }
+
+.skill-hub__menu {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  min-width: 188px;
+  max-height: 260px;
+  overflow: auto;
+  gap: 1px;
+  border: 1px solid var(--flv-frost-edge);
+  border-radius: var(--isl-r-lg);
+  padding: 4px;
+  background: var(--flv-frost-fill-strong);
+  -webkit-backdrop-filter: var(--flv-frost-blur);
+  backdrop-filter: var(--flv-frost-blur);
+  box-shadow: var(--flv-frost-highlight), var(--flv-frost-shadow);
+}
+.skill-hub__menu button {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: var(--isl-r);
+  padding: 0 8px;
+  color: var(--isl-ink);
+  background: transparent;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.skill-hub__menu button > span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skill-hub__menu button:hover { background: color-mix(in srgb, var(--isl-ink) 7%, transparent); }
+
+.skill-hub__tabs { display: flex; flex: 0 0 auto; gap: 2px; padding: 0 10px 6px; }
+.skill-hub__tabs button {
+  position: relative;
+  height: 26px;
+  border: 0;
+  border-radius: var(--isl-r);
+  padding: 0 10px;
+  color: var(--isl-ink-soft);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-standard);
+}
+.skill-hub__tabs button > span { position: relative; z-index: 1; }
+.skill-hub__tabs button.is-active { color: var(--isl-ink); font-weight: 600; }
+.skill-hub__tab-pill {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--isl-r);
+  background: color-mix(in srgb, var(--isl-card) 72%, transparent);
+  box-shadow: var(--isl-shadow-sm), inset 0 0 0 1px var(--flv-frost-edge);
+}
+
+/* 行：悬停抬起一层，右侧出「详情」。 */
+.skill-hub__row:hover,
+.skill-hub__row.is-previewed,
+.skill-hub__row.is-highlighted {
+  background: color-mix(in srgb, var(--isl-card) 62%, transparent);
+  box-shadow: var(--isl-shadow-sm), inset 0 0 0 1px var(--flv-frost-edge);
+}
+.skill-hub__details {
+  display: none;
+  height: 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--flv-frost-edge);
+  border-radius: var(--isl-r);
+  padding: 0 6px 0 8px;
+  color: var(--isl-ink);
+  background: color-mix(in srgb, var(--isl-surface-2) 80%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.skill-hub__row:hover .skill-hub__details,
+.skill-hub__row:focus-within .skill-hub__details,
+.skill-hub__row.is-highlighted .skill-hub__details { display: inline-flex; }
+.skill-hub__row:hover > .skill-hub__state.is-added,
+.skill-hub__row.is-highlighted > .skill-hub__state.is-added { display: none; }
+@media (hover: none) { .skill-hub__details { display: inline-flex; } }
+
+.skill-hub__footer {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: center;
+  border-top: 1px solid var(--flv-frost-edge);
+  padding: 4px;
+}
+.skill-hub__footer button {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: 3px;
+  border: 0;
+  border-radius: var(--isl-r);
+  padding: 0 10px;
+  color: var(--isl-ink-soft);
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+}
+.skill-hub__footer button:hover { color: var(--isl-ink); background: color-mix(in srgb, var(--isl-ink) 6%, transparent); }
+
+/* 悬停预览卡：浮在浮层左侧；左侧没空间时放上方，再没空间就不出现。 */
+.skill-hub__preview {
+  position: absolute;
+  z-index: 4;
+  width: 248px;
+  overflow: hidden;
+  border: 1px solid var(--flv-frost-edge);
+  border-radius: var(--isl-r-lg);
+  background: var(--flv-frost-fill-strong);
+  -webkit-backdrop-filter: var(--flv-frost-blur);
+  backdrop-filter: var(--flv-frost-blur);
+  box-shadow: var(--flv-frost-highlight), var(--flv-frost-shadow);
+  pointer-events: none;
+}
+.skill-hub__preview[data-side='left'] { right: calc(100% + 10px); }
+.skill-hub__preview[data-side='above'] { right: 0; bottom: calc(100% + 10px); }
+.skill-hub__preview-cover {
+  position: relative;
+  display: grid;
+  height: 128px;
+  place-items: center;
+  background:
+    radial-gradient(120% 90% at 20% 10%, color-mix(in srgb, var(--isl-mint) 26%, transparent), transparent 60%),
+    radial-gradient(90% 80% at 90% 100%, color-mix(in srgb, var(--isl-sun) 22%, transparent), transparent 65%),
+    var(--isl-surface-2);
+}
+.skill-hub__preview-cover[data-tone-seed='1'] { background: radial-gradient(120% 90% at 80% 0%, color-mix(in srgb, var(--isl-coral) 24%, transparent), transparent 60%), radial-gradient(90% 80% at 0% 100%, color-mix(in srgb, var(--isl-mint) 20%, transparent), transparent 65%), var(--isl-surface-2); }
+.skill-hub__preview-cover[data-tone-seed='2'] { background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--isl-sun) 26%, transparent), transparent 60%), var(--isl-surface-2); }
+.skill-hub__preview-cover img { width: 100%; height: 100%; object-fit: cover; }
+.skill-hub__preview-cover .agent-skill-mark { width: 52px; height: 52px; }
+.skill-hub__badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  border-radius: var(--isl-r-sm);
+  padding: 2px 6px;
+  color: var(--isl-ink);
+  background: color-mix(in srgb, var(--isl-surface) 78%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  font-size: 10px;
+  font-weight: 600;
+}
+.skill-hub__preview-like { position: absolute; top: 9px; right: 9px; color: var(--isl-coral); }
+.skill-hub__preview-body { display: grid; gap: 2px; padding: 10px 12px 12px; }
+.skill-hub__preview-body strong { font-size: 13px; font-weight: 600; line-height: 18px; }
+.skill-hub__preview-body em { color: var(--isl-ink-ghost); font-size: 10px; font-style: normal; }
+.skill-hub__preview-body p {
+  display: -webkit-box;
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: var(--isl-ink-soft);
+  font-size: 11px;
+  line-height: 17px;
+  white-space: pre-line;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+}
+.skill-hub__preview-link { display: flex; align-items: center; gap: 4px; padding: 0 12px 10px; color: var(--isl-mint-deep); font-size: 10px; }
+
+.skill-hub__ghost.is-liked { color: var(--isl-coral-deep); border-color: color-mix(in srgb, var(--isl-coral) 40%, var(--isl-border)); }
+
+@container skill-hub (max-width: 360px) {
+  .skill-hub__head-btn > span,
+  .skill-hub__create > span { display: none; }
+  .skill-hub__create { width: 28px; padding: 0; }
+  .skill-hub__create > svg:last-child { display: none; }
+  .skill-hub__details > span { display: none; }
+  .skill-hub__details { width: 24px; justify-content: center; padding: 0; }
+}
+
+/* @ 引用浮层：同一套磨砂玻璃；高亮项 + 左侧预览卡（AgentReferencePreview）。 */
+.agent-conversation .agent-reference-picker.flv-frost,
+.agent-reference-picker.flv-frost {
+  overflow: visible;
+  border: 1px solid var(--flv-frost-edge);
+  border-radius: var(--isl-r-lg);
+  background: var(--flv-frost-fill);
+  -webkit-backdrop-filter: var(--flv-frost-blur);
+  backdrop-filter: var(--flv-frost-blur);
+  box-shadow: var(--flv-frost-highlight), var(--flv-frost-shadow);
+}
+.agent-reference-picker .agent-reference-group > button.is-highlighted {
+  background: color-mix(in srgb, var(--isl-card) 62%, transparent);
+  box-shadow: var(--isl-shadow-sm), inset 0 0 0 1px var(--flv-frost-edge);
+}
+.agent-reference-picker__empty { margin: 0; padding: 22px 12px; color: var(--isl-ink-ghost); font-size: 11px; text-align: center; }
+.agent-reference-preview[data-side='left'] { top: 0; }
+.agent-reference-preview .skill-hub__preview-cover video,
+.agent-reference-preview .skill-hub__preview-cover img { width: 100%; height: 100%; object-fit: cover; }
+.agent-reference-preview__glyph { display: grid; width: 52px; height: 52px; place-items: center; border: 1px solid var(--flv-frost-edge); border-radius: var(--isl-r-lg); color: var(--isl-ink-soft); background: color-mix(in srgb, var(--isl-card) 70%, transparent); }

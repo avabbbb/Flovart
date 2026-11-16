@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { advanceConfirmation, enqueueConfirmation, rejectAllConfirmations, type ConfirmationQueue } from '../components/agent/agentPanelState';
 
-type Item = { id: string; resolve: ReturnType<typeof vi.fn> };
-const item = (id: string): Item => ({ id, resolve: vi.fn() });
+type Item = { id: string; resolve: ReturnType<typeof vi.fn<(approved: boolean) => void>> };
+const item = (id: string): Item => ({ id, resolve: vi.fn<(approved: boolean) => void>() });
 
 describe('parallel tool-call confirmations queue instead of superseding', () => {
   it('shows the first, queues the second, and never auto-denies the first', () => {

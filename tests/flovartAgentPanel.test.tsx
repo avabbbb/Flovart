@@ -113,7 +113,8 @@ describe('Flovart Agent panel', () => {
     expect(screen.getByRole('button', { name: '创作模式' })).toHaveTextContent('视频创作');
     fireEvent.click(screen.getByRole('button', { name: '选择制作 Skill' }));
     expect(screen.getByRole('dialog', { name: 'Skill' })).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: '搜索技能' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '搜索' }));
+    expect(screen.getByRole('combobox', { name: '搜索技能' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '关闭 Skill' }));
 
     fireEvent.click(screen.getByRole('button', { name: '审批模式' }));

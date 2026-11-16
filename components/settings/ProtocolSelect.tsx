@@ -3,7 +3,7 @@ import React from 'react';
 export interface ProtocolOption {
     id: string;
     label: string;
-    badge: string;
+    badge?: string;
     detail?: string;
     featured?: boolean;
 }
@@ -12,14 +12,17 @@ interface ProtocolSelectProps {
     options: ProtocolOption[];
     value: string;
     onChange: (id: string) => void;
-    recommendedLabel: string;
+    recommendedLabel?: string;
+    /** 额外类名（其它面板复用时换皮）。 */
+    className?: string;
+    ariaLabel?: string;
     disabled?: boolean;
     labelledBy?: string;
     testId?: string;
 }
 
 /** 设置抽屉里的协议选择：替代原生 select，带简称徽标、能力说明与推荐标记；键盘可用（↑↓/Enter/Esc）。 */
-export function ProtocolSelect({ options, value, onChange, recommendedLabel, disabled, labelledBy, testId }: ProtocolSelectProps) {
+export function ProtocolSelect({ options, value, onChange, recommendedLabel = '', disabled, labelledBy, testId, className, ariaLabel }: ProtocolSelectProps) {
     const [open, setOpen] = React.useState(false);
     const [active, setActive] = React.useState(0);
     const rootRef = React.useRef<HTMLDivElement>(null);
@@ -66,7 +69,7 @@ export function ProtocolSelect({ options, value, onChange, recommendedLabel, dis
     if (!selected) return null;
 
     return (
-        <div ref={rootRef} className={`settings-protocol-select${open ? ' is-open' : ''}`}>
+        <div ref={rootRef} className={`settings-protocol-select${open ? ' is-open' : ''}${className ? ' ' + className : ''}`}>
             <button
                 type="button"
                 role="combobox"
@@ -74,6 +77,7 @@ export function ProtocolSelect({ options, value, onChange, recommendedLabel, dis
                 aria-expanded={open}
                 aria-controls={listId}
                 aria-labelledby={labelledBy}
+                aria-label={ariaLabel}
                 aria-activedescendant={open ? `${listId}-${active}` : undefined}
                 disabled={disabled}
                 data-testid={testId}
@@ -81,7 +85,7 @@ export function ProtocolSelect({ options, value, onChange, recommendedLabel, dis
                 onClick={() => setOpen(current => !current)}
                 onKeyDown={onKeyDown}
             >
-                <span className="settings-protocol-select__badge" aria-hidden="true">{selected.badge}</span>
+                {selected.badge && <span className="settings-protocol-select__badge" aria-hidden="true">{selected.badge}</span>}
                 <span className="settings-protocol-select__text">
                     <strong>{selected.label}</strong>
                     {selected.detail && <small>{selected.detail}</small>}
@@ -89,7 +93,7 @@ export function ProtocolSelect({ options, value, onChange, recommendedLabel, dis
                 <svg className="settings-protocol-select__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
             </button>
             {open && (
-                <ul id={listId} role="listbox" aria-labelledby={labelledBy} className="settings-protocol-select__menu">
+                <ul id={listId} role="listbox" aria-labelledby={labelledBy} aria-label={ariaLabel} className="settings-protocol-select__menu">
                     {options.map((option, index) => (
                         <li
                             key={option.id}
@@ -101,7 +105,7 @@ export function ProtocolSelect({ options, value, onChange, recommendedLabel, dis
                             onMouseEnter={() => setActive(index)}
                             onClick={() => choose(option.id)}
                         >
-                            <span className="settings-protocol-select__badge" aria-hidden="true">{option.badge}</span>
+                            {option.badge && <span className="settings-protocol-select__badge" aria-hidden="true">{option.badge}</span>}
                             <span className="settings-protocol-select__text">
                                 <strong>
                                     {option.label}

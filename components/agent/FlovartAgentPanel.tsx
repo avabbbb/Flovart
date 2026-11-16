@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { AtSign, BookMarked, Box, Check, ChevronDown, ChevronLeft, Copy, GitBranch, Hand, Image as ImageIcon, KeyRound, LayoutGrid, Minimize2, Plus, Quote, RotateCw, Send, Square, Trash2, Video, X, Zap } from 'lucide-react';
-import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { AGENT_ATTACHMENT_MAX, composerAttachmentsToImages, createComposerAttachment, mergeComposerAttachments, releaseComposerAttachment, type AgentComposerAttachment } from '../../services/agentComposerAttachments';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
 import { isTauri } from '@tauri-apps/api/core';
@@ -51,6 +51,8 @@ import { AGENT_TODO_TOOL_NAME, latestTodoFromMessages, todoFromToolResult, type 
 import { AgentHeaderLeadingContext } from './agentHeaderSlot';
 import { DrawerChromeCollapse, DrawerChromeTabs } from '../studio/drawerChrome';
 import { AgentConfirmCard } from './AgentConfirmCard';
+import { ReferencePreview } from './AgentReferencePreview';
+import { matchesReference, nextHighlight } from './pickerNavigation';
 import { AgentAskCard } from './AgentAskCard';
 import '../../styles/agentComposer.css';
 import { parseAgentAskHtml, type AgentAskForm } from './agentAskForm';
@@ -462,19 +464,29 @@ const userApiKeysRef = useRef(userApiKeys);
   }, [language]);
 
   const referenceGroups = useMemo(() => {
-    const query = mentionQuery.trim().toLowerCase();
-    const matches = (label: string) => !query || label.toLowerCase().includes(query);
+    // @ 后实时筛选：名称子串（忽略空格）或类型词（图片 / 视频 / image…），见 pickerNavigation。
+    const matches = (item: { label: string; mediaType?: string }) => matchesReference(item, mentionQuery);
     return {
       // 图片/视频节点排在前面，方便 @ 引用画面素材。
       nodes: project.nodes
-        .filter(node => node.isVisible !== false && matches(node.title || node.id))
+        .filter(node => node.isVisible !== false)
         .map(node => ({ id: node.id, type: 'node' as const, label: node.title || '未命名节点', mediaType: node.type }))
-        .sort((a, b) => Number(a.mediaType !== 'image' && a.mediaType !== 'video') - Number(b.mediaType !== 'image' && b.mediaType !== 'video')),
+        .filter(matches)
+        .sort((a, b) => Number(a.mediaType !== 'image' && a.mediaType !== 'video') - Number(b.mediaType !== 'image' && b.mediaType !== 'video'))
+        .slice(0, 60),
       assets: (assetLibrary?.items || [])
-        .filter(item => matches(item.name || '未命名素材'))
-        .map(item => ({ id: item.id, type: 'asset' as const, label: item.name || '未命名素材', mediaType: item.mimeType })),
+        .map(item => ({ id: item.id, type: 'asset' as const, label: item.name || '未命名素材', mediaType: item.mimeType }))
+        .filter(matches)
+        .slice(0, 60),
     };
   }, [assetLibrary?.items, mentionQuery, project.nodes]);
+  const mentionItems = useMemo<AgentReference[]>(() => [...referenceGroups.nodes, ...referenceGroups.assets], [referenceGroups]);
+  const [mentionHighlight, setMentionHighlight] = useState(-1);
+  const mentionListId = useId();
+  const mentionOptionId = (reference: AgentReference) => `${mentionListId}-${reference.type}-${reference.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+  // 打开或改变筛选时默认高亮第一项（Enter 直接选中最可能的那个）。
+  useEffect(() => { setMentionHighlight(mentionItems.length ? 0 : -1); }, [mentionQuery, openLayer, mentionItems.length]);
+  const highlightedReference = mentionHighlight >= 0 ? mentionItems[mentionHighlight] : undefined;
 
   useEffect(() => { activity.current = onActivityChange; }, [onActivityChange]);
 
@@ -1473,12 +1485,19 @@ const userApiKeysRef = useRef(userApiKeys);
             searchQuery={slashQuery ?? undefined}
             keyboardRef={skillNav}
           />
-          {mentionOpen && <div className="agent-reference-picker" role="listbox" aria-label="@ 引用节点和资产">
+          {mentionOpen && <div className="agent-reference-picker flv-frost" id={mentionListId} role="listbox" aria-label="@ 引用节点和资产">
             <div className="agent-reference-picker__search"><AtSign size={14} /><span>{replaceTarget ? `替换“${replaceTarget.label}”为…` : mentionQuery ? `搜索“${mentionQuery}”` : '引用节点或我的素材'}</span></div>
             <div className="agent-reference-picker__list">
-              <ReferenceGroup label="节点" items={referenceGroups.nodes} onSelect={addReference} icon={referenceIcon} empty="没有匹配节点" />
-              <ReferenceGroup label="资产" items={referenceGroups.assets} onSelect={addReference} icon={referenceIcon} empty={assetLibrary?.items.length ? '没有匹配资产' : '我的素材为空'} />
+              {mentionItems.length ? (
+                <>
+                  <ReferenceGroup label="节点" items={referenceGroups.nodes} onSelect={addReference} icon={referenceIcon} empty="没有匹配节点" highlighted={highlightedReference} optionId={mentionOptionId} onHover={reference => setMentionHighlight(mentionItems.indexOf(reference))} />
+                  <ReferenceGroup label="资产" items={referenceGroups.assets} onSelect={addReference} icon={referenceIcon} empty={assetLibrary?.items.length ? '没有匹配资产' : '我的素材为空'} highlighted={highlightedReference} optionId={mentionOptionId} onHover={reference => setMentionHighlight(mentionItems.indexOf(reference))} />
+                </>
+              ) : (
+                <p className="agent-reference-picker__empty" role="status">{mentionQuery ? `没有匹配“${mentionQuery}”的节点或素材` : '画布上还没有节点，素材库也是空的'}</p>
+              )}
             </div>
+            {highlightedReference && <ReferencePreview reference={highlightedReference} nodes={project.nodes} assets={assetLibrary?.items || []} />}
           </div>}
           {(creationMode !== 'all' || preferredModel) && <div className="agent-reference-chips" aria-label={language === 'zho' ? '创作设置' : 'Creation settings'}>
             {creationMode !== 'all' && <span className="agent-setting-chip">{creationModeLabel(creationMode, language)}<button type="button" aria-label={language === 'zho' ? '恢复全能创作' : 'Reset mode'} onClick={() => setCreationMode('all')}><X size={11} /></button></span>}
@@ -1497,11 +1516,25 @@ const userApiKeysRef = useRef(userApiKeys);
           <textarea
             ref={textarea}
             value={prompt}
+            aria-controls={mentionOpen ? mentionListId : undefined}
+            aria-activedescendant={mentionOpen && highlightedReference ? mentionOptionId(highlightedReference) : undefined}
             onChange={event => updatePrompt(event.target.value)}
             onKeyDown={event => {
               if (event.key === 'Escape' && skillOpen) { event.preventDefault(); dispatchLayer({ type: 'close', layer: 'skill' }); return; }
               if (skillOpen && !event.nativeEvent.isComposing && skillNav.current?.(event.key)) { event.preventDefault(); return; }
               if (event.key === 'Escape' && mentionOpen) { event.preventDefault(); dispatchLayer({ type: 'close', layer: 'mention' }); setReplaceTarget(null); return; }
+              if (mentionOpen && !event.nativeEvent.isComposing) {
+                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  setMentionHighlight(index => nextHighlight(index, mentionItems.length, event.key === 'ArrowDown' ? 1 : -1));
+                  return;
+                }
+                if ((event.key === 'Enter' || event.key === 'Tab') && highlightedReference) {
+                  event.preventDefault();
+                  addReference(highlightedReference);
+                  return;
+                }
+              }
               if (event.key === 'Backspace' && !prompt && references.length) { event.preventDefault(); setReferences(current => current.slice(0, -1)); return; }
               if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
@@ -1669,9 +1702,35 @@ function ComposerAttachmentTray({ attachments, label, removeLabel, kindLabel, on
   );
 }
 
-function ReferenceGroup({ label, items, onSelect, icon, empty }: { label: string; items: AgentReference[]; onSelect: (reference: AgentReference) => void; icon: (reference: AgentReference) => React.ReactNode; empty: string }) {
+function ReferenceGroup({ label, items, onSelect, icon, empty, highlighted, optionId, onHover }: {
+  label: string;
+  items: AgentReference[];
+  onSelect: (reference: AgentReference) => void;
+  icon: (reference: AgentReference) => React.ReactNode;
+  empty: string;
+  highlighted?: AgentReference;
+  optionId: (reference: AgentReference) => string;
+  onHover: (reference: AgentReference) => void;
+}) {
   return <section className="agent-reference-group"><strong>{label}</strong>{items.length
-    ? items.slice(0, 60).map(item => <button type="button" role="option" key={item.type + ':' + item.id} onClick={() => onSelect(item)}>{icon(item)}<span>{item.label}</span><small>{item.type === 'node' ? item.mediaType : item.mediaType?.replace(/^\w+\//, '')}</small></button>)
+    ? items.map(item => {
+      const active = item === highlighted;
+      return (
+        <button
+          type="button"
+          role="option"
+          id={optionId(item)}
+          aria-selected={active}
+          className={active ? 'is-highlighted' : undefined}
+          key={item.type + ':' + item.id}
+          // 不抢输入框焦点：鼠标按下时阻止默认聚焦，点击照常选中。
+          onMouseDown={event => event.preventDefault()}
+          onMouseEnter={() => onHover(item)}
+          onClick={() => onSelect(item)}
+          ref={active ? element => element?.scrollIntoView?.({ block: 'nearest' }) : undefined}
+        >{icon(item)}<span>{item.label}</span><small>{item.type === 'node' ? item.mediaType : item.mediaType?.replace(/^\w+\//, '')}</small></button>
+      );
+    })
     : <p>{empty}</p>}</section>;
 }
 
