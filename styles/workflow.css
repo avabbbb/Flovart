@@ -71,6 +71,7 @@
 .workflow-node:hover .workflow-node__title-edit-icon { opacity: .4; }
 /* 共享 chip 基类：锚点批准 / 配置项 / 本地文件夹筛选。只在各自规则里写尺寸与圆角差异。 */
 .workflow-node__anchor-chip,.workflow-config__chip,.local-folder-chip { display:inline-flex;align-items:center;gap:4px;border:1px solid var(--wf-border);background:transparent;color:var(--wf-muted);font:inherit;font-size:10px;line-height:1; }
+.workflow-node__anchor-code { flex:none;font-size:10px;font-weight:600;letter-spacing:.02em;color:var(--wf-accent);font-variant-numeric:tabular-nums; }
 .workflow-node__anchor-chip,.local-folder-chip { cursor:pointer;transition:border-color .14s ease,color .14s ease,background .14s ease; }
 .workflow-node__anchor-chip:hover:not(:disabled),.local-folder-chip:hover { border-color:var(--wf-accent);color:var(--wf-accent); }
 .workflow-node__anchor-chip.is-approved,.local-folder-chip.is-active { border-color:var(--wf-accent);color:var(--wf-text);background:color-mix(in srgb,var(--wf-accent) 12%,transparent); }

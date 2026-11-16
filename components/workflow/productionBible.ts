@@ -1,8 +1,9 @@
 // 制作圣经（P1）：把散落在节点上的 shot / anchor 元数据汇总成一份结构化项目状态，
 // 供 workflow.inspect 返回给 Agent：锚点表、按镜号排序的镜头表、总时长与一致性问题。纯函数。
+import { deriveAnchorCodes } from '../../services/anchorApproval';
 import type { WorkflowConnection, WorkflowNode } from './types';
 
-export interface ProductionBibleAnchor { nodeId: string; title: string; kind: string; approved: boolean }
+export interface ProductionBibleAnchor { nodeId: string; title: string; kind: string; approved: boolean; code?: string }
 export interface ProductionBibleShot {
   nodeId: string;
   index: number;
@@ -30,9 +31,10 @@ export function buildProductionBible(project: { nodes?: WorkflowNode[]; connecti
   const nodes = Array.isArray(project?.nodes) ? project.nodes : [];
   const connections = Array.isArray(project?.connections) ? project.connections : [];
   const byId = new Map(nodes.map(node => [node.id, node]));
-  const anchors = nodes
+  const codes = deriveAnchorCodes(nodes);
+  const anchors: ProductionBibleAnchor[] = nodes
     .filter(node => node.anchor)
-    .map(node => ({ nodeId: node.id, title: node.title, kind: node.anchor!.kind, approved: node.anchor!.approved === true }));
+    .map(node => ({ nodeId: node.id, title: node.title, kind: node.anchor!.kind, approved: node.anchor!.approved === true, ...(codes.get(node.id) ? { code: codes.get(node.id) } : {}) }));
   const approved = new Set(anchors.filter(anchor => anchor.approved).map(anchor => anchor.nodeId));
   const issues: string[] = [];
 

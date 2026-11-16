@@ -2,7 +2,7 @@ import { FAN_SPRING, fanPose } from '../ui/ImageFan';
 import { BATCH_GRID_GAP, BATCH_STACK_SPRING, batchCellCloseTransition, batchCellOpenTransition, batchCellStackedPose } from './batchStackMotion';
 import { workflowFitOnOpen } from './templates';
 import { pickVideoFile, promptUndecodableVideo } from '../../services/undecodableVideoPrompt';
-import { anchorApprovalPatch } from '../../services/anchorApproval';
+import { anchorApprovalPatch, deriveAnchorCodes } from '../../services/anchorApproval';
 import { deriveWorkflowLayerPreview } from './layerPreview';
 import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -2777,6 +2777,7 @@ export function InfiniteWorkflow({
   } : undefined;
   const selectedNodes = useMemo(() => new Set(selectedNodeIds), [selectedNodeIds]);
   // 派生运行状态（stale 等）：纯计算，不写回项目。
+  const anchorCodes = useMemo(() => deriveAnchorCodes(project.nodes), [project.nodes]);
   const runStates = useMemo(() => deriveWorkflowRunStates({ nodes: project.nodes, connections: project.connections }), [project.nodes, project.connections]);
   const stalePlan = useMemo(() => planWorkflowStaleRerun({ nodes: project.nodes, connections: project.connections }, runStates), [project.nodes, project.connections, runStates]);
   const presenceByNode = useMemo(() => deriveWorkflowPresence({ nodes: project.nodes, draftChangeSets: project.draftChangeSets }), [project.nodes, project.draftChangeSets]);
@@ -3458,9 +3459,10 @@ export function InfiniteWorkflow({
             )) : undefined}
             onNeedPoster={() => requestVideoPoster(node.id)}
             onChangeTitle={title => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, patch: { title } }]); }}
+            anchorCode={anchorCodes.get(node.id)}
             onToggleAnchorApproval={node.anchor ? () => {
               if (node.isLocked) return;
-              const patch = anchorApprovalPatch(node);
+              const patch = anchorApprovalPatch(node, new Date(), projectRef.current.nodes);
               if (patch) applyOps([{ type: 'update_node', id: node.id, patch }]);
             } : undefined}
             renameSignal={renameSignal?.nodeId === node.id ? renameSignal.nonce : undefined}

@@ -436,6 +436,8 @@ export interface WorkflowAnchorMeta {
   kind: WorkflowAnchorKind;
   approved: boolean;
   approvedAt?: string;
+  /** 批准时分配的短编号（角色 A01 / 场景 S01 / 产品道具 P01 / 风格 T01）；取消批准后保留，保证引用稳定。 */
+  code?: string;
 }
 
 /** 节点输出契约：节点自己声明下游可消费的资源，不由 resolver 按 node.type 猜测。 */

@@ -140,6 +140,7 @@ export function WorkflowNode({
   onPreviewMedia,
   onChangeTitle,
   onToggleAnchorApproval,
+  anchorCode,
   onFocusNode,
   renameSignal,
   onNeedPoster,
@@ -193,6 +194,8 @@ export function WorkflowNode({
   onChangeTitle?: (title: string) => void;
   /** 锚点节点：批准/取消批准（画布用 update_node 写入，可撤销）。 */
   onToggleAnchorApproval?: () => void;
+  /** 锚点短编号（A01/S01/P01/T01），显示在标题前，可在 Prompt/Agent 里直接引用。 */
+  anchorCode?: string;
   onFocusNode?: () => void;
   renameSignal?: number;
   /** 视频缺少封面时通知画布按需补齐（由画布持有请求，避免节点卸载后遗留缓存）。 */
@@ -487,6 +490,7 @@ export function WorkflowNode({
           title={onChangeTitle ? (language === 'en' ? 'Double-click to rename' : '双击重命名') : undefined}
         >
           <TitleIcon size={12} />
+          {anchorCode && <span className="workflow-node__anchor-code" data-testid="anchor-code" title={language === 'en' ? 'Anchor code: reference it as @' + anchorCode : '锚点编号：可用 @' + anchorCode + ' 引用'}>{anchorCode}</span>}
           <span className="workflow-node__title-text">{localizeWorkflowNodeTitle(node.title, language)}</span>
           <Pencil className="workflow-node__title-edit-icon" size={11} />
           {mediaDimensions && <span className="workflow-node__title-meta">{mediaDimensions}</span>}

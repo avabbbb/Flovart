@@ -4,6 +4,7 @@ import { applyWorkflowOps } from '../components/workflow/ops';
 import { buildWorkflowPromptDocument, workflowPromptMentionAttrs } from '../components/workflow/promptDocument';
 import { createPromptIntent, type PromptIntent } from '../components/workflow/promptIntent';
 import { reorderReferenceOperations } from '../components/workflow/references';
+import { buildNodeRefIndex, extractNodeRefs, resolveNodeRef, type NodeRefIndex } from '../components/workflow/nodeRefResolver';
 import type {
   WorkflowConnection,
   WorkflowDocumentOperation,
@@ -213,12 +214,34 @@ function compatibleModels(mode: GenerateMode, submode: ProductModelMode, kinds: 
  * prompt 编成带 @chip 的 Prompt Bar 文档，按引用推导生成方式并校验模型能力。
  * 不兼容时抛结构化错误（带可用模型列表），绝不静默降级或换模型。
  */
+/** nodeId / references 支持节点 id、锚点编号 A01/S01/P01/T01、shot:N、节点名；重名报 AMBIGUOUS_NODE_NAME。 */
+function resolveRefOrThrow(ref: string, index: NodeRefIndex, label: string): string {
+  const result = resolveNodeRef(ref, index);
+  if (result.ok) return result.nodeId;
+  if (result.code === 'AMBIGUOUS_NODE_NAME') {
+    throw new WorkflowGenerateError('AMBIGUOUS_NODE_NAME', `${label}「${ref}」匹配到多个节点，请改用节点 id 或锚点编号：${result.candidates.map(item => item.nodeId + (item.code ? '(' + item.code + ')' : '')).join('、')}`, { candidates: result.candidates });
+  }
+  throw new WorkflowGenerateError('NOT_FOUND', `${label}不存在：${ref}`);
+}
+
 export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
   const { args, keys } = input;
   const diagnostics: GenerateDiagnostic[] = [];
-  const prompt = typeof args.prompt === 'string' ? args.prompt : '';
-  if (!prompt.trim()) throw new WorkflowGenerateError('BAD_REQUEST', 'prompt 不能为空：提示词直接写进生成节点的 Prompt Bar');
-  const requestedId = text(args.nodeId);
+  const refIndex = buildNodeRefIndex(input.nodes);
+  const rawPrompt = typeof args.prompt === 'string' ? args.prompt : '';
+  if (!rawPrompt.trim()) throw new WorkflowGenerateError('BAD_REQUEST', 'prompt 不能为空：提示词直接写进生成节点的 Prompt Bar');
+  // 提示词里的 @A01 / @shot:3 / @"节点名" 先改写成 @ref:<id>，后续按 @ref 统一处理。
+  const extracted = extractNodeRefs(rawPrompt, refIndex);
+  if (extracted.ambiguous.length) {
+    const first = extracted.ambiguous[0];
+    throw new WorkflowGenerateError('AMBIGUOUS_NODE_NAME', `prompt 里的 ${first.ref} 匹配到多个节点，请改用 @ref:<id> 或锚点编号：${first.candidates.map(item => item.nodeId).join('、')}`, { candidates: first.candidates });
+  }
+  if (extracted.unresolved.length) {
+    diagnostics.push({ code: 'UNKNOWN_NODE_REF', message: `${extracted.unresolved.join('、')} 没有对应的节点，已保留为文字。` });
+  }
+  const prompt = extracted.text;
+  const requestedRef = text(args.nodeId);
+  const requestedId = requestedRef ? resolveRefOrThrow(requestedRef, refIndex, '节点') : '';
   let target: WorkflowNode | undefined;
   let created = false;
   let mode: GenerateMode;
@@ -241,7 +264,13 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
   }
   const nodeId = target?.id || stableNodeId(input.mutationId);
 
-  const references = parseGenerateReferences(args.references);
+  const seenReferences = new Set<string>();
+  const references = parseGenerateReferences(args.references).flatMap(reference => {
+    const resolved = resolveRefOrThrow(reference.nodeId, refIndex, '参考节点');
+    if (seenReferences.has(resolved)) return [];
+    seenReferences.add(resolved);
+    return [{ ...reference, nodeId: resolved }];
+  });
   const referenceNodes = references.map(reference => {
     const node = input.nodes.find(item => item.id === reference.nodeId);
     if (!node) throw new WorkflowGenerateError('NOT_FOUND', '参考节点不存在：' + reference.nodeId);

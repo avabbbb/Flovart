@@ -157,6 +157,13 @@ the browser itself is offline.
   npm run flovart:cli -- workflow.generate --type video --title "Shot 2" --prompt "@ref:<shot-1-image> 里的人物转身走进雨里" --references '[{"nodeId":"<shot-1-image>","role":"first_frame"}]' --shot '{"index":2,"durationSec":5}' --agent-identity codex --idempotency-key <key> --json
   ```
 
+  `nodeId`, each `references[].nodeId` and `@…` in the prompt also accept an
+  approved anchor's code (characters `A01`, scenes `S01`, products/props `P01`,
+  styles `T01` — shown before the node title, listed by `workflow.inspect`),
+  `shot:N`, or a node title. A title shared by several nodes returns
+  `AMBIGUOUS_NODE_NAME` with candidates; retry with the id or code. Example:
+  `--node-id shot:3 --prompt "@A02 站在 @S02 的雨里" --references '["A02","S02"]'`.
+
   Never build a text node (or a "prompt/config node") and connect it to a
   generation node: text nodes are notes for people and are never generation
   input. Shot order is `shot.index`, not a chain of connections.

@@ -15,7 +15,7 @@ const REFERENCE_ITEM = Object.freeze({
   additionalProperties: false,
   required: ['nodeId'],
   properties: {
-    nodeId: { type: 'string', minLength: 1, description: '上游素材节点 id（image / video / audio；备注不能当参考）' },
+    nodeId: { type: 'string', minLength: 1, description: '上游素材节点：节点 id、锚点编号（A01/S01/P01/T01）、shot:N 或节点名（重名报 AMBIGUOUS_NODE_NAME）；image / video / audio，备注不能当参考' },
     role: {
       type: 'string',
       enum: ['first_frame', 'last_frame', 'reference', 'character', 'style', 'mask', 'source_video', 'source_audio'],
@@ -28,7 +28,8 @@ const GENERATE_DESCRIPTION = [
   '在画布上生成图片/视频的唯一入口：只建或复用一个生成节点，提示词直接写进它的 Prompt Bar，',
   'references 里的素材同时成为 @chip 和连线（顺序 = chip 顺序：图片1、图片2…），然后可选原位运行。',
   '不传 nodeId 时按 type=image|video 新建；传 nodeId 时复用该生成节点（不能是文本备注、脚本或音频）。',
-  'prompt 里可用 @ref:<节点id> 精确指代参考，也可写 @图片1 / @视频1；没写到的 references 会自动追加 chip。',
+  'prompt 里可用 @ref:<节点id> 精确指代参考，也可写 @图片1 / @视频1，或已批准锚点的编号 @A01 / @S01、@shot:3、@"节点名"；没写到的 references 会自动追加 chip。',
+  'nodeId 与 references 同样接受节点 id、锚点编号（角色 A、场景 S、产品道具 P、风格 T）、shot:N 或节点名；名字重名时返回 AMBIGUOUS_NODE_NAME 和候选，改用 id 或编号。',
   '生成方式按引用自动推导（无参考=文生，有图=图生图/图生视频，首尾帧=first-last-frame，多参考/视频/音频=reference-to-video），',
   '模型不传时用与 Prompt Bar 相同的默认策略；不兼容时返回 MODE_UNSUPPORTED / REFERENCE_LIMIT 和可用模型列表，不要盲试，先 flovart_models_list。',
   'run 默认 false（只写节点，不花钱）；run=true 会扣费并请用户确认，结果原位替换，count>1 折叠成同一批次，返回 run.batch 与每张 takes。',
@@ -89,7 +90,7 @@ const DEFINITIONS = [
     surfaces: ALL,
     description: GENERATE_DESCRIPTION,
     fields: {
-      nodeId: { type: 'string', description: '复用的生成节点 id；省略则按 type 新建' },
+      nodeId: { type: 'string', description: '复用的生成节点：id、shot:N、锚点编号或节点名；省略则按 type 新建' },
       type: { type: 'string', enum: ['image', 'video'], description: '新建节点的类型（省略 nodeId 时必填）' },
       title: { type: 'string', description: '新建节点的标题，例如「镜头 2 · 雨夜奔跑」' },
       x: { type: 'number', description: '新建节点位置（可省略，自动放在参考素材右侧）' },

@@ -127,6 +127,32 @@ describe('workflow.generate', () => {
     expect(project().nodes).toHaveLength(3);
   });
 
+  it('resolves anchor codes, shot:N and names in nodeId / references / prompt; reports duplicate names', async () => {
+    const { dispatch, project } = setup();
+    const base = project();
+    const nodes = base.nodes.map(node => node.id === 'img-a' ? { ...node, anchor: { kind: 'character' as const, approved: true } }
+      : node.id === 'img-b' ? { ...node, title: '街景', anchor: { kind: 'scene' as const, approved: true, code: 'S01' } } : node);
+    nodes.push({ ...createWorkflowNode('img-shot', 'image', { x: 600, y: 0 }), title: '镜头', shot: { index: 3 } });
+    nodes.push({ ...createWorkflowNode('img-dup', 'image', { x: 600, y: 400 }), title: '镜头' });
+    (project() as WorkflowProject).nodes = nodes;
+    const result = await dispatch({
+      id: 'g-ref', command: 'workflow.generate', source: 'agent',
+      args: { nodeId: 'shot:3', prompt: '@A01 站在 @S01 里重拍', references: ['A01', '街景', 'img-a'] },
+    });
+    expect(result.ok).toBe(true);
+    const body = result.result as { nodeId: string; references: Array<{ nodeId: string; mentioned: boolean }> };
+    expect(body.nodeId).toBe('img-shot');
+    expect(body.references.map(item => [item.nodeId, item.mentioned])).toEqual([['img-a', true], ['img-b', true]]);
+    const target = project().nodes.find(node => node.id === 'img-shot')!;
+    expect(target.metadata.prompt).toBe('@图片1 站在 @图片2 里重拍');
+
+    const ambiguous = await dispatch({ id: 'g-dup', command: 'workflow.generate', source: 'agent', args: { nodeId: '镜头', prompt: 'x' } });
+    expect(ambiguous.error?.code).toBe('AMBIGUOUS_NODE_NAME');
+    expect((ambiguous.error?.details?.candidates as Array<{ nodeId: string }>).map(item => item.nodeId)).toEqual(['img-shot', 'img-dup']);
+    const missing = await dispatch({ id: 'g-miss', command: 'workflow.generate', source: 'agent', args: { type: 'image', prompt: 'x', references: ['P07'] } });
+    expect(missing.error?.code).toBe('NOT_FOUND');
+  });
+
   it('reports an incompatible model with the models that would work instead of downgrading', async () => {
     const { dispatch, project } = setup();
     const result = await dispatch({ id: 'bad', command: 'workflow.generate', source: 'agent', args: { type: 'image', prompt: '改成水彩', references: ['img-a'], modelId: 'flovart:imagen-4' } });
