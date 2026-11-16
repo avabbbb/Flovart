@@ -19,7 +19,9 @@ Flovart 是给**剪辑师、创作者和他们的 Coding Agent** 用的本地创
 | Font | `Inter, Noto Sans SC, Microsoft YaHei, Segoe UI, system-ui`（未打包字体文件，按系统回退） | `--isl-font` |
 | Density | 正文 12px，控件 11px，行高 28–32px | — |
 | Radius | 6 / 8 / 10px | `--isl-r-sm` / `--isl-r` / `--isl-r-lg` |
-| Motion | 三档弹簧 snappy / smooth / expressive（§14） | `--spring-*`（目标） |
+| Motion | 三档弹簧 snappy / smooth / expressive（§14），已在 `styles/motion.css` 落地 | `--spring-snappy` / `--spring-smooth` / `--spring-expressive` + `*-duration` |
+| Frost | 浮层磨砂（Skill / @ 引用 / 预览卡 / 资源窗口），半透明，见 §9.3 | `--flv-frost-*`、`.flv-frost` |
+| Scrim | 模态窗外遮罩，亮暗都是深色，见 §9.3 | `--flv-scrim`、`--flv-scrim-blur` |
 
 ## 3. Typography roles
 
@@ -145,6 +147,24 @@ pressable 3D drop（`--isl-drop*`）已于 2026-10-30 删除；`--shadow-panel`�
 - **对比度**：玻璃上只放 `--isl-ink` / `--isl-ink-soft`；按最坏背景估算不足 4.5:1 时提高不透明度，不加文字阴影。
 - **性能**：同屏 ≤ 3 层玻璃、不嵌套；画布拖拽 / 缩放时不改 blur 半径；减弱动效时不做动态高光。
 - **现状**：代码里 blur 有 4–28px 十种（抽屉整体 `blur(24px) saturate(150%)` 78% 底、`.flv-glass-shell blur(28px)`、节点角标 `blur(4px)`），统一为 regular 20px / clear 12px 两档；抽屉正文改实底。
+
+### 9.3 磨砂浮层与遮罩（2026-11-16）
+
+用户更正：浮层与放大窗口要**半透明**的高级磨砂（参照 bleep-app，见 [references.md](references.md)），不要不透明底；窗外用 Flovart 深色遮罩，不要发白的蒙层。
+
+| Token | 亮 | 暗 | 定义处 |
+| --- | --- | --- | --- |
+| `--flv-frost-fill` | `color-mix(in srgb, var(--isl-surface) 68%, transparent)` | `… 64% …` | `styles/skillHub.css` |
+| `--flv-frost-fill-strong`（菜单） | `… 80% …` | `… 76% …` | 同上 |
+| `--flv-frost-blur` | `blur(28px) saturate(175%)` | 同 | 同上 |
+| `--flv-frost-edge` / `-highlight` / `-shadow` | 墨色 10% 发丝 + 内高光 + 双层投影 | 墨色 12% + 弱内高光 + 深投影 | 同上 |
+| `--flv-frost-fallback` | `… 95% …`（无 backdrop-filter 时） | 同 | 同上 |
+| `--flv-scrim` | `color-mix(in srgb, #0d100f 42%, transparent)` | `color-mix(in srgb, #000 56%, transparent)` | `styles/studioHub.css` |
+| `--flv-scrim-blur` | `blur(2px)` | 同 | 同上 |
+
+- 背后聊天文字必须糊到读不出：浮层的祖先不能成为 backdrop root。面板外壳的玻璃画在 `::before` 上，外壳自身不写 `backdrop-filter`、`will-change: opacity`（`styles/adaptive.css`）。
+- 回退同 §9.2：不支持 backdrop-filter、`prefers-reduced-transparency`、`prefers-contrast: more` → 实底。
+- 放大窗口（`components/studio/StudioHub.tsx`）：一个外壳，侧栏 Skills / 历史 / 素材库，窄宽度（≤760px 视口或手动收起）收成 56px 图标栏。
 
 ## 10. Shapes / radius
 
