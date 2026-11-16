@@ -49,11 +49,12 @@ describe('buildAgentTurnPreamble', () => {
 describe('recipeFromNodes', () => {
   it('orders steps by layout rows and records model, mode, params and upstream inputs', () => {
     const recipe = recipeFromNodes(project, ['video', 'image', 'outline', 'missing']);
-    expect(recipe.steps.map(step => step.nodeId)).toEqual(['outline', 'image', 'video']);
-    expect(recipe.layout).toEqual({ columns: 2 });
-    expect(recipe.steps[0]).toMatchObject({ type: 'text', title: '大纲A', prompt: '一个关于雨夜的故事', inputs: [] });
-    expect(recipe.steps[1]).toMatchObject({ model: 'seedream-4', params: { aspectRatio: '9:16' }, inputs: ['大纲A'] });
-    expect(recipe.steps[2]).toEqual({
+    // T7：文本节点是备注，不进步骤、不当输入，只作作者说明
+    expect(recipe.steps.map(step => step.nodeId)).toEqual(['image', 'video']);
+    expect(recipe.layout).toEqual({ columns: 1 });
+    expect(recipe.notes).toEqual(['一个关于雨夜的故事']);
+    expect(recipe.steps[0]).toMatchObject({ model: 'seedream-4', params: { aspectRatio: '9:16' }, inputs: [] });
+    expect(recipe.steps[1]).toEqual({
       nodeId: 'video',
       type: 'video',
       title: '视频C',
@@ -73,11 +74,14 @@ describe('skillFromRecipe', () => {
     expect(skill).toMatchObject({ id: 'mine.test', name: '雨夜短片', slug: 'rain-night', description: '三步复刻', createdAt: 'created-at-1', recipe });
     const lines = skill.prompt.split('\n');
     expect(lines[0]).toContain('雨夜短片');
-    expect(lines[1].startsWith('1. 创建文本节点「大纲A」')).toBe(true);
-    expect(lines[2]).toContain('模型 seedream-4');
-    expect(lines[3].startsWith('3. 创建视频节点「视频C」')).toBe(true);
-    expect(lines[3]).toContain('输入：图片B、外部D');
-    expect(lines[4]).toContain('2 列');
+    expect(lines[1].startsWith('1. 用 flovart_generate 建图片生成节点「图片B」')).toBe(true);
+    expect(lines[1]).toContain('模型 seedream-4');
+    expect(lines[2].startsWith('2. 用 flovart_generate 建视频生成节点「视频C」')).toBe(true);
+    expect(lines[2]).toContain('输入：图片B、外部D');
+    expect(lines[3]).toContain('1 列');
+    expect(lines[4]).toContain('作者说明');
+    expect(lines[4]).toContain('一个关于雨夜的故事');
+    expect(skill.prompt).not.toContain('文本节点「');
   });
 
   it('normalizes slugs and falls back when empty', () => {

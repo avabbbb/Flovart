@@ -41,16 +41,35 @@ describe('Flovart MCP projection', () => {
     expect(result.tools.map(tool => tool.name)).toEqual([
       'flovart_status',
       'flovart_agent_turn',
+      'flovart_task_start',
+      'flovart_task_get',
+      'flovart_task_cancel',
       'flovart_workflow_inspect',
+      'flovart_workflow_selection_get',
+      'flovart_workflow_focus_nodes',
+      'flovart_workflow_apply',
+      'flovart_generate',
+      'flovart_models_list',
+      'flovart_shortcut_list',
+      'flovart_shortcut_apply',
+      'flovart_group_create',
+      'flovart_group_run',
+      'flovart_workflow_search_nodes',
+      'flovart_note_write',
+      'flovart_media_import',
+      'flovart_script_materialize',
+      'flovart_export',
+      'flovart_workflow_node_run',
+      'flovart_workflow_node_stop',
+      'flovart_workflow_node_tool',
+      // 上一版 MCP 专用名：弃用别名，保留一个版本
       'flovart_workflow_selection',
       'flovart_workflow_focus',
-      'flovart_workflow_apply',
       'flovart_workflow_run',
-      'flovart_workflow_node_tool',
       ...PIPELINE_COMMAND_NAMES.map(command => PIPELINE_MCP_TOOL_NAMES[command]),
       ...SKILL_SURFACE_COMMAND_NAMES.map(command => SKILL_MCP_TOOL_NAMES[command]),
     ]);
-    expect(result.tools).toHaveLength(AGENT_PUBLIC_COMMANDS.length + PIPELINE_COMMAND_NAMES.length + SKILL_SURFACE_COMMAND_NAMES.length);
+    expect(result.tools).toHaveLength(AGENT_PUBLIC_COMMANDS.length + 3 + PIPELINE_COMMAND_NAMES.length + SKILL_SURFACE_COMMAND_NAMES.length);
     expect(result.tools.map(tool => tool.name).join(' ')).not.toMatch(/command\.list|command\.schema|node\.create/);
   });
 

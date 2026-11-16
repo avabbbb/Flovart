@@ -61,6 +61,7 @@ const COPY = {
 const TOOL_PHASES: Record<string, { state: AgentOrbState; copy: Copy }> = {
   flovart_workflow_inspect: { state: 'searching', copy: { zho: '正在读取画布', en: 'Reading the canvas' } },
   flovart_workflow_selection_get: { state: 'searching', copy: { zho: '正在读取选中节点', en: 'Reading the selection' } },
+  flovart_workflow_search_nodes: { state: 'searching', copy: { zho: '正在查找节点', en: 'Finding nodes' } },
   flovart_workflow_media_view: { state: 'searching', copy: { zho: '正在查看画面', en: 'Looking at the media' } },
   flovart_web_search: { state: 'searching', copy: { zho: '正在联网搜索', en: 'Searching the web' } },
   flovart_grep: { state: 'searching', copy: { zho: '正在搜索本地文件', en: 'Searching local files' } },

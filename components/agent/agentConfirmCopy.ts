@@ -3,6 +3,7 @@ import type { AgentConfirmRequest } from '../../services/agentSpendMandate';
 import { getWorkflowOperationCapabilityByNodeTool, localizeOperationLabel, parseWorkflowOperationNodeToolArguments } from '../workflow/operationRegistry';
 import { planSummaryLine } from '../GenerationPlanCard';
 import { sessionGrantKey } from '../../services/agentToolPolicy';
+import { describeRunApproval } from '../../services/runApproval';
 
 type Language = 'en' | 'zho';
 export type AgentConfirmScope = 'once' | 'session';
@@ -69,6 +70,8 @@ export function describeAgentConfirmation(
       const ids = targetIds(args);
       const gates = request.gates || [];
       const tasks = gates.reduce((sum, gate) => sum + gate.taskCount, 0);
+      // 按批审批（建与跑分离后的 approve_run）：清单上每个节点各运行一次，费用合计确认一次。
+      if (ids.length > 1) return describeRunApproval(ids.length, gates, language);
       return {
         title: en ? `Run ${nodeNames(nodes, ids, language)}` : `运行${nodeNames(nodes, ids, language)}`,
         detail: gates.length ? (en ? `${gates.length} node(s) · ${tasks} task(s) · billed by your AI service` : planSummaryLine(gates)) : undefined,

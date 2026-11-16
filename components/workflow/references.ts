@@ -1,5 +1,5 @@
 import type { MentionItem } from '../MentionList';
-import type { SeedanceReferences, WorkflowConnection, WorkflowNode } from './types';
+import type { SeedanceReferences, WorkflowConnection, WorkflowNode, WorkflowReferenceRegion } from './types';
 
 /** 上游媒体节点类型 */
 const MEDIA_TYPES = new Set(['image', 'video', 'audio']);
@@ -11,6 +11,8 @@ export interface ImageReferenceChip {
   storageKey?: string;
   elementType: 'image' | 'video' | 'audio';
   mentioned: boolean;
+  /** 带区域的引用：chip 缩略图只显示该区域。 */
+  region?: WorkflowReferenceRegion;
 }
 
 /**
@@ -138,4 +140,54 @@ export function filterSeedanceReferences(
     videoRefs: filterWorkflowInputIds(value.videoRefs, targetNodeId, connections),
     audioRefs: filterWorkflowInputIds(value.audioRefs, targetNodeId, connections),
   };
+}
+
+/**
+ * 参考顺序 = 目标节点入边在连接数组里的顺序（chip 编号、首尾帧都依赖它）。
+ * 返回 reorder_connections 需要的完整连接 id 列表：其它连接保持原位，目标节点入边按 orderedSourceIds 重排，
+ * 未列出的入边保持原相对顺序排在后面。与画布拖动 chip 排序同一规则。
+ */
+export function reorderReferenceConnectionIds(
+  connections: readonly WorkflowConnection[],
+  targetNodeId: string,
+  orderedSourceIds: readonly string[],
+): string[] {
+  const inputConnections = connections.filter(connection => connection.toNodeId === targetNodeId);
+  const inputById = new Map(inputConnections.map(connection => [connection.fromNodeId, connection]));
+  const ordered = orderedSourceIds.map(id => inputById.get(id)).filter((connection): connection is WorkflowConnection => Boolean(connection));
+  const orderedIds = new Set(ordered.map(connection => connection.id));
+  const remaining = inputConnections.filter(connection => !orderedIds.has(connection.id));
+  const others = connections.filter(connection => connection.toNodeId !== targetNodeId);
+  return [...others, ...ordered, ...remaining].map(connection => connection.id);
+}
+
+/**
+ * 用“断开再按新顺序重连”表达参考重排：Draft ChangeSet 记录的是连线增删（可撤销、可重放），
+ * 不依赖连接数组的隐式顺序变化。只动目标节点的入边；已经有序时返回空数组。
+ */
+export function reorderReferenceOperations(
+  connections: readonly WorkflowConnection[],
+  targetNodeId: string,
+  orderedSourceIds: readonly string[],
+  createId: () => string,
+): Array<{ type: 'delete_connections'; ids: string[] } | { type: 'connect_nodes'; id: string; fromNodeId: string; toNodeId: string; kind?: WorkflowConnection['kind']; role?: WorkflowConnection['role']; order?: number }> {
+  const inbound = connections.filter(connection => connection.toNodeId === targetNodeId);
+  const nextIds = reorderReferenceConnectionIds(inbound, targetNodeId, orderedSourceIds);
+  if (nextIds.join('|') === inbound.map(connection => connection.id).join('|')) return [];
+  const byId = new Map(inbound.map(connection => [connection.id, connection]));
+  return [
+    { type: 'delete_connections', ids: inbound.map(connection => connection.id) },
+    ...nextIds.map(id => {
+      const connection = byId.get(id)!;
+      return {
+        type: 'connect_nodes' as const,
+        id: createId(),
+        fromNodeId: connection.fromNodeId,
+        toNodeId: connection.toNodeId,
+        ...(connection.kind ? { kind: connection.kind } : {}),
+        ...(connection.role ? { role: connection.role } : {}),
+        ...(connection.order !== undefined ? { order: connection.order } : {}),
+      };
+    }),
+  ];
 }

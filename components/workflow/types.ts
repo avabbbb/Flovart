@@ -27,7 +27,21 @@ export interface ScriptShot {
   dialogue?: string;
   sfx?: string;
   scene?: string;
+  /** 景别：特写 / 近景 / 中景 / 全景 / 远景 …（LibTV rows.shotSize）。 */
+  shotSize?: string;
+  /** 光影与氛围（LibTV rows.lightingAndAtmosphere）。 */
+  lighting?: string;
+  /** 本镜头引用的锚点节点 id（角色/场景/道具/风格）；物化时以 @chip + 连线接到生成节点。 */
+  characterRefs?: string[];
+  /** 声音设计：音效、配乐提示（LibTV rows.audioEffects）。 */
+  audio?: string;
+  /** 物化为图片生成节点时写进其 Prompt Bar 的提示词（替代 imagePromptOverride）。 */
+  imagePrompt?: string;
+  /** 物化为视频生成节点时写进其 Prompt Bar 的提示词（替代 videoPromptOverride）。 */
+  videoPrompt?: string;
+  /** @deprecated 旧字段，只读迁移：用 scriptShotPrompt() 读取，写入用 imagePrompt。 */
   imagePromptOverride?: string;
+  /** @deprecated 旧字段，只读迁移：用 scriptShotPrompt() 读取，写入用 videoPrompt。 */
   videoPromptOverride?: string;
   /** 分镜表：镜头时长（秒），由 Agent 或编辑器填写。 */
   durationSec?: number;
@@ -197,6 +211,18 @@ export type WorkflowResourceLocator =
   | { kind: 'missing'; reason: string };
 
 /** 节点声明给下游的资源；执行层只通过 locator 解析，不猜节点 metadata。 */
+/**
+ * 带区域的引用（焦点编辑 / 镜头聚焦）：x/y/w/h 为 0-1 归一化框；点选主体时另带 mask（与框同尺寸的蒙版图），
+ * 框选只有框。提交给 Provider 前按区域裁剪（有 mask 时再叠蒙版），画布上不留中间节点。
+ */
+export interface WorkflowReferenceRegion {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  mask?: { storageKey?: string; href?: string };
+}
+
 export interface WorkflowResource {
   resourceId: string;
   title: string;
@@ -355,6 +381,8 @@ export interface WorkflowNodeMetadata {
   };
   /** 仅 subgraph 节点：对应的逆向工程 id。 */
   reverseProjectId?: string;
+  /** 仅 subgraph 节点：'group' = 用户分组框（Ctrl+G / workflow.group.create），没有对应逆向工程；缺省为逆向子画布。 */
+  groupKind?: 'group';
   /** 仅 subgraph 节点：是否折叠（折叠时隐藏子节点及其连线）。 */
   collapsed?: boolean;
   /** 仅 subgraph 节点：子节点的稳定 reverseKey 列表。 */
@@ -426,8 +454,14 @@ export interface WorkflowShotMeta {
   scene?: string;
   camera?: string;
   dialogue?: string;
+  shotSize?: string;
+  lighting?: string;
+  audio?: string;
   /** 显式指定的锚点节点；未指定时使用上游连线中的已批准锚点。 */
   anchorNodeIds?: string[];
+  /** 由脚本节点物化而来时：来源脚本节点与分镜行 id（脚本行反向保存 imageNodeId/videoNodeId）。 */
+  scriptNodeId?: string;
+  scriptShotId?: string;
 }
 
 export type WorkflowAnchorKind = 'character' | 'scene' | 'product' | 'style';
@@ -436,6 +470,8 @@ export interface WorkflowAnchorMeta {
   kind: WorkflowAnchorKind;
   approved: boolean;
   approvedAt?: string;
+  /** 批准时分配的短编号（角色 A01 / 场景 S01 / 产品道具 P01 / 风格 T01）；取消批准后保留，保证引用稳定。 */
+  code?: string;
 }
 
 /** 节点输出契约：节点自己声明下游可消费的资源，不由 resolver 按 node.type 猜测。 */
@@ -630,16 +666,3 @@ export interface CameraMovement {
   isCustom?: boolean;
 }
 
-export interface SlashCommand {
-  id: string;
-  label: string;
-  description: string;
-  icon: string;
-  category: 'storyboard' | 'character' | 'camera' | 'enhance';
-  mode: 'image' | 'video';
-  minSources: number;
-  maxSources: number;
-  generateCount: number;
-  gridCols: number;
-  promptBuilder: (index: number, total: number) => string;
-}

@@ -17,6 +17,7 @@ import type { WorkflowNodeRunInfo, WorkflowStaleReason } from './runState';
 import type { WorkflowNodePresence } from './presence';
 import type { WorkflowLayerPreview } from './layerPreview';
 import { WorkflowLayerCandidates } from './WorkflowLayerCandidates';
+import { WorkflowVideoTrimBar } from './WorkflowVideoTrimBar';
 
 function WorkflowPluginSurface({ plugin, pluginContext }: { plugin: WorkflowNodePluginDefinition; pluginContext: WorkflowNodePluginContext }) {
   return <>
@@ -48,9 +49,13 @@ class WorkflowPluginErrorBoundary extends Component<{ children: ReactNode; plugi
 function SubgraphFrameSurface({ node, childCount, onToggleCollapse, language }: { node: WorkflowNodeData; childCount: number; onToggleCollapse?: () => void; language: 'en' | 'zho' }) {
   const collapsed = node.metadata.collapsed === true;
   const en = language === 'en';
-  const toggleLabel = collapsed ? (en ? 'Expand subgraph' : '展开子画布') : (en ? 'Collapse subgraph' : '折叠子画布');
-  const hint = en ? 'Double-click to open in Reverse' : '双击在逆向中打开';
-  return <div className="workflow-subgraph" data-testid="workflow-subgraph-frame" data-collapsed={collapsed ? 'true' : 'false'}>
+  const isGroup = node.metadata.groupKind === 'group';
+  const toggleLabel = isGroup
+    ? (collapsed ? (en ? 'Expand group' : '展开分组') : (en ? 'Collapse group' : '折叠分组'))
+    : (collapsed ? (en ? 'Expand subgraph' : '展开子画布') : (en ? 'Collapse subgraph' : '折叠子画布'));
+  // 分组框没有对应的逆向工程：不显示"双击在逆向中打开"，改成右键菜单提示。
+  const hint = isGroup ? (en ? 'Right-click: run group / download all' : '右键：整组执行 / 下载全部') : (en ? 'Double-click to open in Reverse' : '双击在逆向中打开');
+  return <div className="workflow-subgraph" data-testid="workflow-subgraph-frame" data-group-kind={isGroup ? 'group' : undefined} data-collapsed={collapsed ? 'true' : 'false'}>
     <div className="workflow-subgraph-header">
       <Clapperboard size={14} />
       <span className="workflow-subgraph-count">{en ? childCount + ' nodes' : childCount + ' 个节点'}</span>
@@ -140,6 +145,11 @@ export function WorkflowNode({
   onPreviewMedia,
   onChangeTitle,
   onToggleAnchorApproval,
+  anchorCode,
+  trimEditing,
+  trimBusy,
+  onTrimConfirm,
+  onTrimCancel,
   onFocusNode,
   renameSignal,
   onNeedPoster,
@@ -162,6 +172,11 @@ export function WorkflowNode({
   /** 正被拖拽：抬起（放大、微倾、加深投影），松手后弹簧落地。 */
   lifted?: boolean;
   mediaActive?: boolean;
+  /** 节点内剪辑（替代 TrimDialog）：为 true 时视频强制展开并显示内嵌裁剪条。 */
+  trimEditing?: boolean;
+  trimBusy?: boolean;
+  onTrimConfirm?: (startSec: number, endSec: number) => void;
+  onTrimCancel?: () => void;
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
   onConnectStart: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   onConnectStartTarget?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
@@ -193,6 +208,8 @@ export function WorkflowNode({
   onChangeTitle?: (title: string) => void;
   /** 锚点节点：批准/取消批准（画布用 update_node 写入，可撤销）。 */
   onToggleAnchorApproval?: () => void;
+  /** 锚点短编号（A01/S01/P01/T01），显示在标题前，可在 Prompt/Agent 里直接引用。 */
+  anchorCode?: string;
   onFocusNode?: () => void;
   renameSignal?: number;
   /** 视频缺少封面时通知画布按需补齐（由画布持有请求，避免节点卸载后遗留缓存）。 */
@@ -225,7 +242,7 @@ export function WorkflowNode({
   const mediaInput = useRef<HTMLInputElement>(null);
   const needPosterRef = useRef(onNeedPoster);
   needPosterRef.current = onNeedPoster;
-  const videoActive = node.type === 'video' && Boolean(mediaActive);
+  const videoActive = node.type === 'video' && (Boolean(mediaActive) || Boolean(trimEditing));
   const resolveSourceMedia = node.type !== 'video' || videoActive;
   const media = useWorkflowMediaUrl(
     resolveSourceMedia ? (node.type === 'video' && node.metadata.previewStorageKey) || node.metadata.storageKey : undefined,
@@ -487,6 +504,7 @@ export function WorkflowNode({
           title={onChangeTitle ? (language === 'en' ? 'Double-click to rename' : '双击重命名') : undefined}
         >
           <TitleIcon size={12} />
+          {anchorCode && <span className="workflow-node__anchor-code" data-testid="anchor-code" title={language === 'en' ? 'Anchor code: reference it as @' + anchorCode : '锚点编号：可用 @' + anchorCode + ' 引用'}>{anchorCode}</span>}
           <span className="workflow-node__title-text">{localizeWorkflowNodeTitle(node.title, language)}</span>
           <Pencil className="workflow-node__title-edit-icon" size={11} />
           {mediaDimensions && <span className="workflow-node__title-meta">{mediaDimensions}</span>}
@@ -553,7 +571,17 @@ export function WorkflowNode({
                   onEnded={() => setVideoPlaying(false)}
                   onClick={event => { event.stopPropagation(); void toggleVideo(); }}
                 />
-                <div className="workflow-node__video-controls" data-workflow-overlay onPointerDown={event => event.stopPropagation()}>
+                {trimEditing && onTrimConfirm && onTrimCancel ? (
+                  <WorkflowVideoTrimBar
+                    videoRef={videoRef}
+                    durationSec={videoDuration}
+                    currentTimeSec={videoCurrentTime}
+                    busy={trimBusy}
+                    language={language === 'en' ? 'en' : 'zh'}
+                    onConfirm={onTrimConfirm}
+                    onCancel={onTrimCancel}
+                  />
+                ) : <div className="workflow-node__video-controls" data-workflow-overlay onPointerDown={event => event.stopPropagation()}>
                   <button type="button" aria-label={videoPlaying ? '暂停视频' : '播放视频'} onClick={() => void toggleVideo()}>
                     {videoPlaying ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
                   </button>
@@ -588,7 +616,7 @@ export function WorkflowNode({
                       {([['first', '截取首帧'], ['last', '截取尾帧'], ['current', '截取当前帧']] as const).map(([position, label]) => <button key={position} type="button" role="menuitem" onClick={() => { onExtractFrame(position, position === 'current' ? videoCurrentTime : undefined); setFrameMenuOpen(false); }}>{label}</button>)}
                     </div>}
                   </div>}
-                </div>
+                </div>}
                 {mediaActions}
               </>
               : <div className="workflow-node__empty"><Video size={26} /><span>{videoDecodeError || mediaError || '正在加载视频'}</span>{regrantAction}{mediaActions}</div>
@@ -858,7 +886,7 @@ function ScriptNodeCard({ node }: { node: WorkflowNodeData }) {
                   <td className="is-index">{String(shot.index + 1).padStart(2, '0')}</td>
                   <td>{shot.durationSec ? formatShotSeconds(shot.durationSec) : '—'}</td>
                   <td>{shot.scene || '—'}</td>
-                  <td className="is-desc">{shot.action || shot.imagePromptOverride || shot.videoPromptOverride || '—'}</td>
+                  <td className="is-desc">{shot.action || shot.imagePrompt || shot.imagePromptOverride || shot.videoPrompt || shot.videoPromptOverride || '—'}</td>
                   <td>{shot.camera || '—'}</td>
                   <td>{[shot.dialogue, shot.sfx].filter(Boolean).join(' / ') || '—'}</td>
                 </tr>

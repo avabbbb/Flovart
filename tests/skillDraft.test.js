@@ -31,8 +31,12 @@ const receipts = [
 describe('skill draft from session', () => {
   it('builds a package from receipts and a canvas subgraph and passes basic evaluation', () => {
     const draft = buildSkillDraft({ id: 'community.nawa-emoji', name: '奶蛙表情包', projectId: 'proj-1', project, receipts, nodeIds: ['ref', 'prompt', 'gen'] });
-    expect(draft.subgraph.nodes.map(node => node.id)).toEqual(['ref', 'prompt', 'gen']);
-    expect(draft.subgraph.connections).toHaveLength(2);
+    // T8：文本节点是备注，不进子图、不当 prompt，只作作者说明
+    expect(draft.subgraph.nodes.map(node => node.id)).toEqual(['ref', 'gen']);
+    expect(draft.subgraph.connections).toHaveLength(1);
+    expect(draft.subgraph.notes).toEqual(['奶蛙表情包，扁平风格']);
+    expect(draft.files['SKILL.md']).toContain('## 作者说明（备注，不是步骤）');
+    expect(draft.files['SKILL.md']).not.toMatch(/\[text\]/);
     expect(draft.files['SKILL.md']).toContain('1. 生成奶蛙 emoji 系列：图生图 4 张');
     expect(draft.files['SKILL.md']).toContain('2. （决策）选 51ae 为风格参考');
     expect(draft.files['SKILL.md']).not.toContain('不应出现在步骤里');

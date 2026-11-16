@@ -11,6 +11,7 @@ import { STUDIO_MEDIA_BATCH_DRAG_TYPE } from '../components/studio/StudioMediaBr
 import type { WorkflowProject } from '../components/workflow/types';
 import { getGenerationCapability } from '../services/generationCapabilities';
 import { installWorkflowNodePlugin, uninstallWorkflowNodePlugin } from '../components/workflow/nodePluginSdk';
+import { useClipboardStore } from '../stores/useClipboardStore';
 
 const makeProject = (): WorkflowProject => ({
   id: 'project-1',
@@ -79,6 +80,8 @@ describe('InfiniteWorkflow surface interactions', () => {
   });
 
   afterEach(() => {
+    // 画布剪贴板是跨项目的全局 store：每个用例后清空，避免串用例。
+    useClipboardStore.getState().clear();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -180,7 +183,13 @@ describe('InfiniteWorkflow surface interactions', () => {
 
     fireEvent.doubleClick(node('script'));
     fireEvent.click(screen.getByRole('button', { name: '批量生图' }));
-    expect(projectState().nodes.find(item => item.type === 'image')?.metadata.prompt).toBe('still frame with neon reflections');
+    const imageNode = projectState().nodes.find(item => item.type === 'image')!;
+    expect(imageNode.metadata.prompt).toBe('still frame with neon reflections');
+    // 同一纯函数：提示词进 Prompt Bar 文档、挂 shot 元数据、脚本行回链并迁移旧 Override
+    expect(imageNode.metadata.richTextDocument).toMatchObject({ type: 'doc' });
+    expect(imageNode.shot).toMatchObject({ index: 1, scriptNodeId: 'script', scriptShotId: 'shot-1' });
+    const migratedShot = projectState().nodes.find(item => item.id === 'script')!.metadata.scriptBreakdown!.shots[0];
+    expect(migratedShot).toMatchObject({ imageNodeId: imageNode.id, imagePrompt: 'still frame with neon reflections' });
 
     fireEvent.click(screen.getByRole('button', { name: '批量生视频' }));
     expect(projectState().nodes.find(item => item.type === 'video')?.metadata.prompt).toBe('tracking shot, the runner accelerates through rain');

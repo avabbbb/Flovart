@@ -2,12 +2,14 @@ import { BookOpen } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type { AssetFolder, AssetLibrary, UserApiKey, GenerationMode, PromptEnhanceMode, PromptEnhanceResult } from '../../types';
 import { PromptBar } from '../PromptBar';
-import { extractMentions, type MentionData } from '../MediaMentionExtension';
+import { editorJSONToText, extractMentions, type MentionData } from '../MediaMentionExtension';
 import type { AssetSuggestion } from '../MentionList';
 import type { ReferencePickerWorkflowItem } from '../studio/AssetReferencePicker';
 import { resolveWorkflowDefaultModel } from '../../services/workflowPromptPolicy';
 import { getWorkflowOperationCapability, localizeOperationLabel, localizeParameterControl, parseWorkflowOperationParameters, type WorkflowOperationCapability, type WorkflowOperationUiLanguage } from './operationRegistry';
 import { createPromptIntent, type PromptIntent, type PromptIntentAction } from './promptIntent';
+import { mentionRegionsFromDocument, setMentionRegionInDocument } from './referenceRegion';
+import { ReferenceRegionPopover } from './ReferenceRegionPopover';
 import {
   filterWorkflowInputIds,
   getOrderedImageReferences,
@@ -17,6 +19,8 @@ import {
 } from './references';
 import type { WorkflowConnection, WorkflowGenerationConfig, WorkflowNode, WorkflowNodeMetadata } from './types';
 import { promptAssetFromQuickPrompt } from '../../services/promptAsset';
+import { SlashMenu } from './SlashMenu';
+import { shouldOpenPromptSlashMenu, stripTrailingSlash, type SlashShortcut } from './slashShortcuts';
 
 export interface WorkflowModelOptions {
   text: string[];
@@ -67,7 +71,7 @@ const modeFor = (node: WorkflowNode, config?: WorkflowGenerationConfig): Generat
   return mode === 'text' || mode === 'video' ? mode : 'image';
 };
 
-export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme, language, userApiKeys, dynamicModelOptions, onOpenSettings, onEnhancePrompt, isEnhancingPrompt, onChange, onPromptIntent, onRun, onStop, focusSignal, onDisconnectReference, onReorderReference, assetFolders, assetItems, assetLibrary, onSelectAsset, onSelectWorkflowReference, onAddReferenceFiles, onResolvePastedMentions, onPasteUnresolvedMentions, expanded = false, onToggleExpanded, width = 880 }: {
+export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme, language, userApiKeys, dynamicModelOptions, onOpenSettings, onEnhancePrompt, isEnhancingPrompt, onChange, onPromptIntent, onRun, onStop, focusSignal, onDisconnectReference, onReorderReference, assetFolders, assetItems, assetLibrary, onSelectAsset, onSelectWorkflowReference, onAddReferenceFiles, onResolvePastedMentions, onPasteUnresolvedMentions, onSlashShortcut, expanded = false, onToggleExpanded, width = 880 }: {
   node: WorkflowNode;
   nodes: WorkflowNode[];
   connections?: WorkflowConnection[];
@@ -80,6 +84,8 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   onEnhancePrompt?: (payload: { prompt: string; mode: PromptEnhanceMode; stylePreset?: string }) => Promise<PromptEnhanceResult>;
   isEnhancingPrompt?: boolean;
   onChange: (metadata: Partial<WorkflowNodeMetadata>) => void;
+  /** 在提示词里键入 `/`（开头或空格后）时弹出与画布 `/` 同一份快捷工具菜单；选中后由 Workflow 层套用到本节点。只加弹层，不改 Prompt Bar 本体。 */
+  onSlashShortcut?: (shortcut: SlashShortcut, remainingPrompt: string) => void;
   /** PromptBar 的稳定业务输出，不携带 Provider wire 字段或凭据。 */
   onPromptIntent?: (intent: PromptIntent) => void;
   onRun: () => void;
@@ -107,6 +113,7 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   width?: number;
 }) {
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [slashOpen, setSlashOpen] = useState(false);
   const operationCapability = node.metadata.operation ? getWorkflowOperationCapability(node.metadata.operation.capabilityId) : undefined;
   const isLocalOperation = operationCapability?.executor === 'local-transform';
   const config = node.metadata.config || { mode: node.type === 'text' ? 'text' : node.type === 'video' ? 'video' : 'image' };
@@ -150,10 +157,14 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   }));
   const orderedImageRefs = getOrderedImageReferences(node, nodes, connections);
   const documentMentionIds = node.metadata.richTextDocument ? extractMentions(node.metadata.richTextDocument).map(item => item.id) : [];
-  const referenceChips = toImageReferenceChips(orderedImageRefs, keepConnectedMentions(node.metadata.prompt || '', documentMentionIds));
+  const documentRegions = mentionRegionsFromDocument(node.metadata.richTextDocument);
+  const referenceChips = toImageReferenceChips(orderedImageRefs, keepConnectedMentions(node.metadata.prompt || '', documentMentionIds))
+    .map(chip => documentRegions.has(chip.id) ? { ...chip, region: documentRegions.get(chip.id) } : chip);
+  const [regionChipId, setRegionChipId] = useState<string | null>(null);
+  const regionChip = regionChipId ? referenceChips.find(chip => chip.id === regionChipId) : undefined;
   const lastPromptIntentRef = useRef<PromptIntent | null>(null);
 
-  const promptMention = (id: string) => {
+  const promptMention = (id: string, regions = documentRegions) => {
     const item = [...mentionItems, ...referenceItems, ...(assetItems || []).map(asset => ({
       id: `asset:${asset.id}`,
       label: asset.name,
@@ -167,10 +178,12 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
     });
     const assetId = item && 'assetId' in item ? item.assetId : undefined;
     const sourceType = item && 'sourceType' in item ? item.sourceType : undefined;
-    return { id, label: item?.label, elementType: item?.elementType, assetId, sourceType };
+    const region = regions.get(id);
+    return { id, label: item?.label, elementType: item?.elementType, assetId, sourceType, ...(region ? { region } : {}) };
   };
-  const emitPromptIntent = (text: string, ids: string[], requestedAction: PromptIntentAction = 'edit') => {
-    const intent = createPromptIntent({ targetNodeId: node.id, text, mentions: ids.map(promptMention), requestedAction });
+  const emitPromptIntent = (text: string, ids: string[], requestedAction: PromptIntentAction = 'edit', document?: unknown) => {
+    const regions = document === undefined ? documentRegions : mentionRegionsFromDocument(document);
+    const intent = createPromptIntent({ targetNodeId: node.id, text, mentions: ids.map(id => promptMention(id, regions)), requestedAction });
     lastPromptIntentRef.current = intent;
     onPromptIntent?.(intent);
   };
@@ -187,8 +200,10 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   };
 
   const handlePromptInput = (plainText: string, document: Record<string, unknown>, mentionedElementIds: string[]) => {
+    const previous = node.metadata.prompt || '';
+    if (onSlashShortcut && node.type === 'image' && shouldOpenPromptSlashMenu(previous, plainText)) setSlashOpen(true);
     const mentionIds = keepConnectedMentions(plainText, mentionedElementIds);
-    emitPromptIntent(plainText, mentionIds);
+    emitPromptIntent(plainText, mentionIds, 'edit', document);
     onChange({ prompt: plainText, richTextDocument: document as typeof node.metadata.richTextDocument });
   };
   const latestPromptIntent = () => {
@@ -250,6 +265,17 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
     node.metadata.generationActualTokens !== undefined ? `${node.metadata.generationActualTokens.toLocaleString()} Token` : undefined,
   ].filter(Boolean).join(' · ') || undefined;
 
+  const applyRegion = (region: Parameters<typeof setMentionRegionInDocument>[2]) => {
+    if (!regionChip) return;
+    const document = setMentionRegionInDocument(node.metadata.richTextDocument, regionChip.id, region, {
+      label: regionChip.label,
+      thumbnail: regionChip.thumbnail,
+      elementType: regionChip.elementType,
+    });
+    handlePromptInput(editorJSONToText(document), document, extractMentions(document).map(item => item.id));
+    setRegionChipId(null);
+  };
+
   return (
     <div data-workflow-overlay data-testid="workflow-node-prompt-bar" data-language={language} className="inline-prompt-bar workflow-node-prompt" style={{ ['--workflow-node-prompt-width' as string]: `${width}px` }} onPointerDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}>
       {operationCapability && <WorkflowOperationParameterPanel
@@ -259,6 +285,17 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         language={language}
       />}
       {prompts.length > 0 && <button type="button" className="workflow-node-prompt__library-button" aria-label={language === 'en' ? 'Prompt library' : '提示词库'} title={language === 'en' ? 'Prompt library' : '提示词库'} onClick={() => setLibraryOpen(open => !open)}><BookOpen size={15} /></button>}
+      {slashOpen && onSlashShortcut && <div className="workflow-node-prompt__slash" data-testid="workflow-node-prompt-slash">
+        <SlashMenu
+          onClose={() => setSlashOpen(false)}
+          onSelect={shortcut => {
+            setSlashOpen(false);
+            const remaining = stripTrailingSlash(node.metadata.prompt || '');
+            if (remaining !== (node.metadata.prompt || '')) onChange({ prompt: remaining });
+            onSlashShortcut(shortcut, remaining);
+          }}
+        />
+      </div>}
       {libraryOpen && <div className="workflow-node-prompt__library" role="menu" aria-label={language === 'en' ? 'Prompt library' : '提示词库'}>{promptAssets.map(asset => <button type="button" role="menuitem" key={asset.id} onClick={() => { emitPromptIntent(asset.text, [], 'edit'); onChange({ prompt: asset.text, richTextDocument: undefined }); setLibraryOpen(false); }}><strong>{asset.title}</strong><span>{asset.text}</span></button>)}</div>}
       <PromptBar
         t={t}
@@ -281,6 +318,7 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         imageReferenceChips={referenceChips}
         onImageReferenceReorder={handleReorder}
         onImageReferenceRemove={onDisconnectReference ? handleRemoveReference : undefined}
+        onImageReferenceFocus={node.isLocked ? undefined : setRegionChipId}
         onGenerate={handleGenerate}
         onStop={handleStop}
         onRetry={node.metadata.status === 'error' ? handleGenerate : undefined}
@@ -356,6 +394,17 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
         expanded={expanded}
         onToggleExpanded={onToggleExpanded}
       />
+      {regionChip && (
+        <ReferenceRegionPopover
+          label={regionChip.label}
+          storageKey={regionChip.storageKey}
+          href={regionChip.thumbnail}
+          region={regionChip.region}
+          language={language === 'en' ? 'en' : 'zh'}
+          onConfirm={applyRegion}
+          onClose={() => setRegionChipId(null)}
+        />
+      )}
     </div>
   );
 }

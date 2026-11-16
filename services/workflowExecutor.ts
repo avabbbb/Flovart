@@ -42,6 +42,14 @@ export interface WorkflowArtifactOutput {
   name?: string;
 }
 
+/** 一次运行的全部产物：count>1 时折叠成同一批次，封面在前。 */
+export interface WorkflowRunOutputs {
+  batchId?: string;
+  headNodeId: string;
+  nodeIds: string[];
+  artifacts: Array<WorkflowArtifactOutput & { nodeId: string }>;
+}
+
 export interface WorkflowRunResult {
   runId: string;
   projectId: string;
@@ -49,6 +57,7 @@ export interface WorkflowRunResult {
   status: 'completed' | 'failed' | 'cancelled';
   error?: WorkflowRunFailure;
   artifact?: WorkflowArtifactOutput;
+  outputs?: WorkflowRunOutputs;
   /** 只供执行追踪和测试使用，不由 Dispatcher 回传给外部 Agent。 */
   canonicalInput?: CanonicalGenerationInput;
 }
@@ -67,6 +76,7 @@ export interface WorkflowRunAdapterResult {
   status?: 'completed' | 'failed' | 'cancelled';
   error?: WorkflowRunFailure;
   artifact?: WorkflowArtifactOutput;
+  outputs?: WorkflowRunOutputs;
   canonicalInput?: CanonicalGenerationInput;
 }
 
@@ -144,6 +154,7 @@ export function createWorkflowExecutor(adapters: WorkflowExecutorAdapters, optio
           status: outcome?.status || 'completed',
           ...(outcome?.error ? { error: outcome.error } : {}),
           ...(outcome?.artifact ? { artifact: outcome.artifact } : {}),
+          ...(outcome?.outputs ? { outputs: outcome.outputs } : {}),
           ...(outcome?.canonicalInput ? { canonicalInput: outcome.canonicalInput } : {}),
         };
       } catch (cause) {

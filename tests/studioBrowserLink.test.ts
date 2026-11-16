@@ -105,7 +105,7 @@ describe('Studio Browser-Link bridge', () => {
 
     // Same apply payload + same mutationId → draftAuthority replays the receipt
     // (replayed:true), applies once. This is the path studio generate() uses.
-    const node = createWorkflowNode('fixed-node', 'text', { x: 0, y: 0 });
+    const node = createWorkflowNode('fixed-node', 'image', { x: 0, y: 0 });
     const ops = [{ type: 'add_node', node }];
     const applyArgs = { projectId: project.id, expectedRevision: project.draftVersion || 1, mutationId: 'm-1', idempotencyKey: 'm-1', operations: ops };
     const first = await dispatchWorkflowCommand({ id: 'p1', command: 'workflow.apply', source: 'operator', idempotencyKey: 'm-1', args: applyArgs });
@@ -119,7 +119,7 @@ describe('Studio Browser-Link bridge', () => {
     // any bridge-side cache — proof the authority, not the link, owns it.
     const divergent = await dispatchWorkflowCommand({
       id: 'p3', command: 'workflow.apply', source: 'operator', idempotencyKey: 'm-1',
-      args: { ...applyArgs, operations: [{ type: 'add_node', node: createWorkflowNode('other-node', 'text', { x: 0, y: 0 }) }] },
+      args: { ...applyArgs, operations: [{ type: 'add_node', node: createWorkflowNode('other-node', 'image', { x: 0, y: 0 }) }] },
     });
     expect(divergent.ok).toBe(false);
     expect(divergent.error?.code).toBe('IDEMPOTENCY_KEY_REUSE');

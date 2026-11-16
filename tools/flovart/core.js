@@ -6,6 +6,9 @@ export const COMMANDS = Object.keys(COMMAND_REGISTRY);
 
 export const COMMAND_ALIASES = {
   flovart_agent_turn: 'agent.turn',
+  flovart_task_start: 'agent.task.start',
+  flovart_task_get: 'agent.task.get',
+  flovart_task_cancel: 'agent.task.cancel',
   flovart_workflow_project_list: 'workflow.project.list',
   flovart_workflow_project_create: 'workflow.project.create',
   flovart_workflow_project_use: 'workflow.project.use',
@@ -27,6 +30,19 @@ export const COMMAND_ALIASES = {
   flovart_workflow_focus_nodes: 'workflow.focus.nodes',
   flovart_workflow_node_run: 'workflow.node.run',
   flovart_workflow_node_stop: 'workflow.node.stop',
+  flovart_generate: 'workflow.generate',
+  flovart_workflow_generate: 'workflow.generate',
+  flovart_models_list: 'workflow.models.list',
+  flovart_shortcut_list: 'workflow.shortcut.list',
+  flovart_shortcut_apply: 'workflow.shortcut.apply',
+  flovart_group_create: 'workflow.group.create',
+  flovart_group_run: 'workflow.group.run',
+  flovart_workflow_search_nodes: 'workflow.nodes.search',
+  flovart_note_write: 'workflow.note.write',
+  flovart_media_import: 'workflow.media.import',
+  flovart_script_materialize: 'workflow.script.materialize',
+  flovart_export: 'workflow.export',
+  flovart_workflow_export: 'workflow.export',
   gen: 'generate.image',
   flovart_generate_image: 'generate.image',
   flovart_generate_video: 'generate.video',
@@ -234,6 +250,27 @@ function normalizeWorkflowNodeToolArgs(args = {}) {
   }
   if (args.tool === 'rotate' && normalized.action === undefined && args.rotation !== undefined) normalized.action = args.rotation;
   return normalized;
+}
+
+// Agent 工具 v2 的命令按注册表类型标记解析 CLI 参数（--kebab-case → camelCase，数字/布尔/JSON）。
+const REGISTRY_TYPED_WORKFLOW_COMMANDS = new Set(['workflow.generate', 'workflow.models.list', 'workflow.nodes.search', 'workflow.shortcut.list', 'workflow.shortcut.apply', 'workflow.group.create', 'workflow.group.run', 'workflow.note.write', 'workflow.media.import', 'workflow.script.materialize', 'workflow.export',
+  'agent.task.start', 'agent.task.get', 'agent.task.cancel']);
+
+function registryTypedArgs(command, args = {}) {
+  const definition = COMMAND_REGISTRY[command];
+  const output = {};
+  for (const [name, descriptor] of Object.entries(definition?.args || {})) {
+    const kebab = name.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`);
+    const raw = args[name] ?? args[kebab];
+    if (raw === undefined) continue;
+    const base = String(descriptor).replace(/\?$/, '');
+    if (base === 'number') output[name] = typeof raw === 'number' ? raw : Number(raw);
+    else if (base === 'boolean') output[name] = parseOptionalBoolean(raw) ?? raw;
+    else if (base === 'array' || base === 'object') output[name] = parseJsonOption(raw, raw);
+    else if (base === 'string[]') output[name] = parseListOption(raw);
+    else output[name] = typeof raw === 'string' ? raw : raw;
+  }
+  return output;
 }
 
 function parseOptionalNumber(value) {
@@ -480,6 +517,7 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
       operations: parseJsonOption(commandOptions.operations ?? commandOptions.operationsJson ?? commandOptions['operations-json'] ?? commandOptions.ops ?? commandOptions['ops-json'], undefined),
       ids: commandOptions.ids === undefined ? undefined : parseListOption(commandOptions.ids),
       ...(command === 'workflow.node.tool' ? normalizeWorkflowNodeToolArgs(commandOptions) : {}),
+      ...(REGISTRY_TYPED_WORKFLOW_COMMANDS.has(command) ? registryTypedArgs(command, commandOptions) : {}),
     }).filter(([, value]) => value !== undefined));
     const source = runtime.source || 'cli';
     const caller = runtime.caller || (callerIdentity ? {
@@ -540,8 +578,11 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
         projectDir: args['project-dir'] || args.projectDir,
       });
     }
-    case 'command.list':
-      return { ok: true, commands: COMMAND_REGISTRY, aliases: COMMAND_ALIASES };
+    case 'command.list': {
+      // agentTools：DSH 等只拿 CLI 输出的宿主据此注册与其他宿主同名同 Schema 的工具。
+      const { getAgentToolSpecs } = await import('./agent-tools.js');
+      return { ok: true, commands: COMMAND_REGISTRY, aliases: COMMAND_ALIASES, agentTools: getAgentToolSpecs('dsh') };
+    }
     case 'command.schema': {
       const requested = args.command || args.name;
       if (!requested) return { ok: true, commands: COMMAND_REGISTRY, aliases: COMMAND_ALIASES };

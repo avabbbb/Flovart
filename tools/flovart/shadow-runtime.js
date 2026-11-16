@@ -236,14 +236,18 @@ function dispatchShadowWorkflow(envelope, state) {
   }
   if (!project) return fail('NOT_FOUND', 'No active Workflow project.');
   if (command === 'workflow.inspect') return done(redact(project));
-  if (command === 'workflow.node.run' || command === 'workflow.node.stop') {
+  if (command === 'workflow.node.run' || command === 'workflow.node.stop' || command === 'workflow.generate'
+    || command === 'workflow.models.list' || command === 'workflow.nodes.search' || command === 'workflow.shortcut.list' || command === 'workflow.shortcut.apply' || command === 'workflow.group.create' || command === 'workflow.group.run' || command === 'workflow.note.write' || command === 'workflow.media.import'
+    || command === 'workflow.script.materialize'
+    || command === 'workflow.export') {
     return fail('WORKSPACE_REQUIRED', 'Workflow 节点执行必须通过 Workspace Adapter 进入浏览器 WorkflowExecutor。');
   }
 
   let nodeId = args.nodeId || args.id;
   let connectionId = null;
   if (command === 'workflow.node.create' || command === 'workflow.node.create-connected') {
-    const node = createWorkflowNode(args.type || 'text', args);
+    if (!args.type) return fail('BAD_REQUEST', 'type 不能为空：image / video / audio（文本备注请用 workflow.note.write）');
+    const node = createWorkflowNode(args.type, args);
     if (!node) return fail('BAD_REQUEST', `Unsupported Workflow node type (${args.type})`);
     if (project.nodes.some(item => item.id === node.id)) return fail('BAD_REQUEST', `Workflow node ID already exists (${node.id})`);
     if (command === 'workflow.node.create-connected') {

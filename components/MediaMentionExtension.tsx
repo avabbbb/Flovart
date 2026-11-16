@@ -10,6 +10,8 @@
 
 import { Node, mergeAttributes } from '@tiptap/core';
 import { isFetchableMediaHref } from './workflow/media';
+import type { WorkflowReferenceRegion } from './workflow/types';
+import { normalizeReferenceRegion, regionChipBackground } from './workflow/referenceRegion';
 
 // ---- 可视化节点渲染 ----------------------------------------
 
@@ -26,7 +28,17 @@ function createMentionNodeView({ node, getPos, editor }: { node: any; getPos: an
     chip.title = label;
     chip.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:rgba(99,102,241,.10);border:1px solid rgba(99,102,241,.24);border-radius:6px;padding:1px 6px 1px 3px;font-size:12px;line-height:1.5;color:#4F46E5;font-weight:500;cursor:default;max-width:140px;vertical-align:middle;';
 
-    if (thumbnail && isFetchableMediaHref(thumbnail)) {
+    const region = normalizeReferenceRegion(node.attrs.region);
+    if (thumbnail && isFetchableMediaHref(thumbnail) && region) {
+        // 带区域的引用：缩略图只露出被框选的部分
+        const crop = document.createElement('span');
+        const background = regionChipBackground(region);
+        crop.dataset.region = '';
+        crop.title = label + ' · 局部区域';
+        crop.style.cssText = `width:16px;height:16px;border-radius:3px;flex-shrink:0;background-repeat:no-repeat;outline:1px dashed currentColor;outline-offset:-1px;background-size:${background.backgroundSize};background-position:${background.backgroundPosition};`;
+        crop.style.backgroundImage = `url("${thumbnail}")`;
+        chip.appendChild(crop);
+    } else if (thumbnail && isFetchableMediaHref(thumbnail)) {
         const image = document.createElement('img');
         image.src = thumbnail;
         image.alt = label;
@@ -90,6 +102,8 @@ export const MediaMentionNode = Node.create({
             description: { default: '' },
             sourceType: { default: null },
             assetId: { default: null },
+            /** 带区域的引用：{x,y,w,h}（0-1）与可选 mask；null 表示整张图。 */
+            region: { default: null },
         };
     },
 
@@ -120,6 +134,7 @@ export interface MentionData {
     description?: string;
     sourceType?: 'connected' | 'assetLibrary';
     assetId?: string;
+    region?: WorkflowReferenceRegion | null;
 }
 
 export function extractMentions(editorJSON: Record<string, unknown>): MentionData[] {

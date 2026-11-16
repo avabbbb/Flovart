@@ -21,6 +21,7 @@ import {
   WorkspaceClientError,
 } from './workspace-client.js';
 import { AGENT_SESSION_CONTROL_COMMANDS } from './agent-surface.js';
+import { applyStdinNodeIds, cliProgress, formatCliResponse, waitForAgentTask } from './cli-output.js';
 
 const argv = process.argv.slice(2);
 
@@ -48,7 +49,8 @@ function isResultOk(result) {
 }
 
 function printCliResponse(ok, commandName, data = null, error = null, extra = {}) {
-  console.log(JSON.stringify({ ok, command: commandName, data, error, ...extra }, null, 2));
+  // NDJSON：一条结果一行；--pretty 时缩进给人读。进度只走 stderr（cliProgress）。
+  console.log(formatCliResponse({ ok, command: commandName, data, error, ...extra }, { pretty: argv.includes('--pretty') }));
   if (!ok) process.exitCode = 1;
 }
 
@@ -150,6 +152,13 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
 
   async function main() {
   if (fileReadError) return;
+  // 管道：`--references -` / `--node-ids -` 从 stdin 读上游 NDJSON 里的 nodeId。
+  try {
+    args = await applyStdinNodeIds(command, args);
+  } catch (error) {
+    printCliResponse(false, command || 'unknown', null, { code: error?.code || 'INVALID_ARGUMENT', message: error instanceof Error ? error.message : String(error), retryable: false });
+    return;
+  }
   if (!command) {
     printCliResponse(true, 'help', { usage: 'flovart  # opens TUI; or flovart <command> --json', setup: SETUP_TEXT, commands: { tui: 'Open slash-command TUI', install: 'Download and verify the versioned Agent Toolkit', start: 'Launch local Runtime/WebUI services', update: 'Install and switch to the latest compatible Toolkit', source: 'Add --source for Vite/Go/Docker contributor services' } });
     return;
@@ -344,14 +353,20 @@ if (['install', 'start', 'update', 'uninstall'].includes(rawCommand)) {
     }
     try {
       const workspace = new FlovartWorkspaceClient();
-      const result = routingCommand === 'workspace.status'
+      const operation = createOperationGateway({ workspace });
+      let result = routingCommand === 'workspace.status'
         ? await workspace.status()
         : AGENT_PUBLIC_COMMAND_SET.has(routingCommand)
-          ? await executeFlovartCommand(command, args, {
-            operation: createOperationGateway({ workspace }),
-            source: 'cli',
-          })
+          ? await executeFlovartCommand(command, args, { operation, source: 'cli' })
           : await executeFlovartCommand(command, args, createWorkspaceFacade(workspace));
+      // agent.task.start --wait：stderr 输出任务事件，stdout 只输出最终一行结果。
+      const taskId = result?.result?.taskId ?? result?.taskId;
+      if (routingCommand === 'agent.task.start' && (args.wait === true || args.wait === 'true') && isResultOk(result) && taskId) {
+        cliProgress('task ' + taskId + ' started (' + (args.command || '') + ')');
+        result = await waitForAgentTask(taskId, (id, afterSeq) => executeFlovartCommand('agent.task.get', { taskId: id, afterSeq }, { operation, source: 'cli' }));
+        const view = result?.result ?? result;
+        if (view && view.status && view.status !== 'succeeded') result = { ok: false, error: view.error || { code: 'TASK_' + String(view.status).toUpperCase(), message: '任务未成功：' + view.status }, data: view };
+      }
       const ok = isResultOk(result);
       printCliResponse(ok, command, result, ok ? null : result.error || null, { runtime: 'workspace-adapter' });
     } catch (error) {

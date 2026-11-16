@@ -5,6 +5,7 @@ import { buildPlanCard, PAID_COMMANDS, SESSION_CONTROL_COMMANDS, SessionBudget }
 import { planBatchPick } from './batch-pick.js';
 import { importFlovartPipelineModule } from './flovart-modules.js';
 import { appendRunArtifactReceipts } from './receipts.js';
+import { AGENT_TASK_COMMAND_SET, createAgentTaskLayer } from './task-layer.js';
 
 const { PIPELINE_COMMANDS } = await importFlovartPipelineModule('commands');
 
@@ -15,7 +16,8 @@ const LEASED_WORKFLOW_COMMANDS = new Set([
   'workflow.inspect', 'workflow.selection.get', 'workflow.apply', 'workflow.node.run', 'workflow.node.stop',
   'workflow.node.create', 'workflow.node.create-connected', 'workflow.node.update', 'workflow.node.delete',
   'workflow.node.move', 'workflow.node.resize', 'workflow.node.tool', 'workflow.connect', 'workflow.disconnect',
-  'workflow.select', 'workflow.viewport.set',
+  'workflow.select', 'workflow.viewport.set', 'workflow.generate', 'workflow.models.list', 'workflow.nodes.search', 'workflow.shortcut.list', 'workflow.shortcut.apply', 'workflow.group.create', 'workflow.group.run', 'workflow.note.write',
+  'workflow.media.import', 'workflow.script.materialize', 'workflow.export',
 ]);
 // 与 components/workflow/revisionRebase.ts 的 NODE_REBASE_COMMANDS 一致：这些命令的版本冲突交给浏览器按节点判断。
 const NODE_REBASE_COMMANDS = new Set(['workflow.node.update', 'workflow.node.run', 'workflow.apply']);
@@ -62,13 +64,13 @@ function sessionError(code, message, details) {
 // 这些命令要等真实生成或人工确认结束才回包（视频生成上限约 600s），不能套用普通 60s 超时，
 // 否则外部 Agent 会在任务仍在运行时收到「操作超时」并重复提交。
 export const LONG_RUNNING_COMMANDS = new Set([
-  'workflow.node.run', 'workflow.node.tool', 'production.run', 'production.approve',
+  'workflow.node.run', 'workflow.node.tool', 'workflow.generate', 'workflow.shortcut.apply', 'workflow.group.run', 'workflow.media.import', 'workflow.export', 'production.run', 'production.approve',
   // 高风险删除在浏览器里等「允许/拒绝」弹窗，人的反应时间不受 60s 约束。
   'workflow.node.delete', 'workflow.project.delete',
 ]);
 
 export class WorkflowAgentSession {
-  constructor({ timeoutMs = 60000, longRunningTimeoutMs = 900_000, isKnownAgentIdentity, workspaceLease, webUrl = null, budget } = {}) {
+  constructor({ timeoutMs = 60000, longRunningTimeoutMs = 900_000, taskTimeoutMs = 30 * 60_000, isKnownAgentIdentity, workspaceLease, webUrl = null, budget } = {}) {
     this.timeoutMs = timeoutMs;
     this.longRunningTimeoutMs = longRunningTimeoutMs;
     this.clients = new Map();
@@ -84,6 +86,13 @@ export class WorkflowAgentSession {
     this.webUrl = webUrl;
     // 会话预算 / 暂停 / dry-run（P1）：只做硬上限，不绕过浏览器里的人工确认。
     this.budget = budget || new SessionBudget();
+    // 异步任务层（agent.task.*）：后台执行长命令，外部 Agent 轮询 get(afterSeq)。
+    this.tasks = createAgentTaskLayer({
+      run: (command, args, source, idempotencyKey, signal, caller, runOptions) => this.callCommand(command, args, source, idempotencyKey, signal, caller, runOptions),
+      stop: (command, args, source, caller) => this.callCommand(command, args, source, undefined, undefined, caller),
+      taskTimeoutMs,
+      onEvent: (taskId, event) => this.emit('agent_task', { taskId, ...event }),
+    });
   }
 
   health() {
@@ -420,8 +429,10 @@ export class WorkflowAgentSession {
     });
   }
 
-  async callCommand(command, args = {}, source = 'mcp', idempotencyKey, signal, caller) {
+  async callCommand(command, args = {}, source = 'mcp', idempotencyKey, signal, caller, runOptions = {}) {
     if (command === 'status') return this.dispatchCommand(command, args, source, idempotencyKey, signal, caller);
+    // 异步任务层：start 立即返回 taskId，子命令在后台以任务超时执行（不受 60s 限制）。
+    if (AGENT_TASK_COMMAND_SET.has(command)) return this.tasks.handle(command, args, { source, idempotencyKey, caller });
     if (PIPELINE_COMMANDS.has(command)) return this.callPipeline(command, args, source, idempotencyKey, signal, caller);
     if (command === 'workflow.batch.pick') return this.batchPick(args, source, idempotencyKey, signal, caller);
     if (SESSION_CONTROL_COMMANDS.has(command)) {
@@ -432,14 +443,15 @@ export class WorkflowAgentSession {
       return control;
     }
     // dry-run：不进浏览器、不花钱，先给计划卡（会动哪些节点、几次付费生成、预算会不会拦）。
-    if (args?.dryRun === true || args?.['dry-run'] === true) {
+    // workflow.generate 的 dryRun 由浏览器按真实模型能力预演（模型解析、引用、诊断），不在这里截走。
+    if ((args?.dryRun === true || args?.['dry-run'] === true) && command !== 'workflow.generate') {
       return { ok: true, result: buildPlanCard(command, args, { snapshot: this.snapshot, budget: this.budget }) };
     }
     const blocked = this.budget.check(command, args);
     if (blocked) return blocked;
     const entry = this.recordActivity({ command, source, caller, args });
     try {
-      const result = await this.dispatchCommand(command, args, source, idempotencyKey, signal, caller);
+      const result = await this.dispatchCommand(command, args, source, idempotencyKey, signal, caller, runOptions);
       const failed = Boolean(result) && typeof result === 'object' && result.ok === false;
       if (!failed && !result?.confirmation?.required && PAID_COMMANDS.has(command)) this.budget.consume(command, args);
       if (!failed && command === 'workflow.node.run') await this.recordRunReceipts(result, args, caller);
@@ -523,7 +535,7 @@ export class WorkflowAgentSession {
     });
   }
 
-  async dispatchCommand(command, args = {}, source = 'mcp', idempotencyKey, signal, caller) {
+  async dispatchCommand(command, args = {}, source = 'mcp', idempotencyKey, signal, caller, runOptions = {}) {
     if (command === 'status') {
       return {
         ok: true,
@@ -586,7 +598,9 @@ export class WorkflowAgentSession {
         cleanup();
         reject(sessionError('CANCELLED', 'Workflow 操作已取消', { command, requestId }));
       };
-      const timeoutMs = LONG_RUNNING_COMMANDS.has(command) ? this.longRunningTimeoutMs : this.timeoutMs;
+      const timeoutMs = runOptions.timeoutMs > 0
+        ? runOptions.timeoutMs
+        : LONG_RUNNING_COMMANDS.has(command) ? this.longRunningTimeoutMs : this.timeoutMs;
       const timer = setTimeout(() => {
         this.pending.delete(requestId);
         cleanup();

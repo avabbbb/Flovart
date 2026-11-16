@@ -1,18 +1,18 @@
 import { AGENT_OPERATION_DEFINITIONS, AGENT_PUBLIC_COMMANDS, AGENT_PUBLIC_COMMAND_SET } from './agent-surface.js';
+import { getAgentToolSpecs } from './agent-tools.js';
 import { getLocalStatus } from './local-status.js';
 import { FlovartWorkspaceClient, WorkspaceClientError } from './workspace-client.js';
 
 export const CANONICAL_AGENT_OPERATIONS = Object.freeze([...AGENT_PUBLIC_COMMANDS]);
 
-export const MCP_TOOL_NAMES = Object.freeze({
-  status: 'flovart_status',
-  'agent.turn': 'flovart_agent_turn',
-  'workflow.inspect': 'flovart_workflow_inspect',
-  'workflow.selection.get': 'flovart_workflow_selection',
-  'workflow.focus.nodes': 'flovart_workflow_focus',
-  'workflow.apply': 'flovart_workflow_apply',
-  'workflow.node.run': 'flovart_workflow_run',
-  'workflow.node.tool': 'flovart_workflow_node_tool',
+// MCP 工具名来自统一的 Agent 工具定义（与内置 / 本机 / DSH 同名）；旧名作为弃用别名另行注册一个版本。
+export const MCP_TOOL_NAMES = Object.freeze(Object.fromEntries(getAgentToolSpecs('mcp').map(spec => [spec.command, spec.name])));
+
+/** 上一版 MCP 专用工具名 → 命令；只为兼容已配置的外部 Agent 保留一个版本。 */
+export const MCP_DEPRECATED_TOOL_NAMES = Object.freeze({
+  flovart_workflow_selection: 'workflow.selection.get',
+  flovart_workflow_focus: 'workflow.focus.nodes',
+  flovart_workflow_run: 'workflow.node.run',
 });
 
 const WRITE_OPERATIONS = new Set(CANONICAL_AGENT_OPERATIONS.filter(command => AGENT_OPERATION_DEFINITIONS[command]?.mutation));

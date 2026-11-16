@@ -33,6 +33,7 @@ const TOOL_LABELS: Record<string, { zho: string; en: string }> = {
   flovart_workflow_node_run: { zho: '运行生成', en: 'Run generation' },
   flovart_workflow_node_tool: { zho: '画布工具', en: 'Canvas tool' },
   flovart_workflow_media_view: { zho: '查看画面', en: 'View media' },
+  flovart_workflow_search_nodes: { zho: '查找节点', en: 'Find nodes' },
   flovart_web_search: { zho: '联网搜索', en: 'Web search' },
   flovart_grep: { zho: '搜索本地文件', en: 'Search local files' },
   flovart_todo: { zho: '任务清单', en: 'To-do list' },

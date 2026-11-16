@@ -62,6 +62,27 @@ flovart agent.turn --prompt "给镜头 1 写一版提示词" --policy read-only 
   unless you pass `--policy workspace-write`, which asks the user first. Pass a
   stable `mutationId`: the same id replays the same result instead of running
   twice, and a busy Agent returns `AGENT_BUSY`.
+- Anything that may take longer than a minute (`agent.turn`, a paid
+  `workflow.node.run` / `workflow.generate`, `workflow.node.tool`,
+  `workflow.media.import`, `workflow.export`) can run as a background task:
+  `agent.task.start --command <command> --args '<json>' --idempotency-key <key>`
+  returns a `taskId` at once; poll `agent.task.get --task-id <id> --after-seq
+  <last seq>` every 5–10 s until `done` is true, then read `result` or
+  `error`. `agent.task.cancel --task-id <id>` stops it and asks the canvas to
+  stop nodes it started (already-submitted provider jobs may still be billed).
+  Confirmations, budget and pre-checks of the wrapped command still apply.
+  Tasks live in the local Agent process; after a restart `get` returns
+  `NOT_FOUND`.
+- CLI output is pipe-friendly: each `--json` result is one line on stdout
+  (NDJSON; add `--pretty` to indent it), progress goes to stderr prefixed
+  `[flovart]`. A downstream command reads node ids from stdin with
+  `--references -` (`workflow.generate`) or `--node-ids -`
+  (`workflow.node.run`, `workflow.focus.nodes`, `workflow.export`).
+  `agent.task.start ... --wait` streams task events to stderr and prints only
+  the final result. `status` also reports `diagnostics`: the bound project and
+  writer, where the Agent credential came from (token masked), state-file
+  modification times, and `workspaceUnavailableReason` — read it first when a
+  command fails with `WORKSPACE_UNAVAILABLE`.
 
 - `--agent-identity` names your host (`codex`, `claude-code`, `opencode`,
   `workbuddy`). Pass the same value on `workflow.inspect` and on every write
@@ -147,18 +168,84 @@ the browser itself is offline.
 
 - “打开 Flovart” → `ensure`, then `workflow.inspect`.
 - “看看当前 Workflow” → `workflow.inspect`. “当前选择” → `workflow.selection.get`.
-- Add, delete, move, resize, connect, disconnect or edit → one `workflow.apply`.
-- A sequence of new nodes → `workflow.node.create-connected`, which fills the
-  node defaults a bare `add_node` in `workflow.apply` needs:
+- Generate an image or video → one `workflow.generate` (MCP / Agent tool
+  `flovart_generate`). It creates or reuses **one** generation node, writes the
+  prompt into that node's Prompt Bar, turns `references` into Prompt Bar @chips
+  plus connections (order = chip order), picks the mode from the references
+  and, with `run: true`, runs it in place:
 
   ```bash
-  npm run flovart:cli -- workflow.node.create-connected --from-node-id <id> --type text --title "Shot 2" --x 420 --y 120 --agent-identity codex --idempotency-key <key> --json
+  npm run flovart:cli -- workflow.generate --type video --title "Shot 2" --prompt "@ref:<shot-1-image> 里的人物转身走进雨里" --references '[{"nodeId":"<shot-1-image>","role":"first_frame"}]' --shot '{"index":2,"durationSec":5}' --agent-identity codex --idempotency-key <key> --json
   ```
 
+  `nodeId`, each `references[].nodeId` and `@…` in the prompt also accept an
+  approved anchor's code (characters `A01`, scenes `S01`, products/props `P01`,
+  styles `T01` — shown before the node title, listed by `workflow.inspect`),
+  `shot:N`, or a node title. A title shared by several nodes returns
+  `AMBIGUOUS_NODE_NAME` with candidates; retry with the id or code. Example:
+  `--node-id shot:3 --prompt "@A02 站在 @S02 的雨里" --references '["A02","S02"]'`.
+  To use only part of an image (focus edit / a face / a product detail), give
+  that reference a `region` `{x,y,w,h}` in 0-1 of the original image, e.g.
+  `--references '[{"nodeId":"A01","region":{"x":0.3,"y":0.05,"w":0.4,"h":0.4}}]'`.
+  The chip shows the cropped area and the provider receives the crop; no crop
+  node is created. Images only.
+
+  Never build a text node (or a "prompt/config node") and connect it to a
+  generation node: text nodes are notes for people and are never generation
+  input. Shot order is `shot.index`, not a chain of connections.
+- In `workflow.generate` prompts, refer to inputs as `@ref:<nodeId>` or
+  `@"Node name"`; anything mentioned gets connected (`autoLinked`), and
+  disconnecting a source removes its chip (`prunedMentions`).
+- Several shots: build them all with `workflow.generate` (no `run`), then
+  run the list once with `workflow.node.run --node-ids` (one approval card,
+  each node runs once).
+- Runs block until a terminal status (`succeeded` / `failed` / `timeout` /
+  `unknown_after_submit`); never poll `workflow.inspect` while a run is in
+  progress, and never retry `unknown_after_submit`.
+- Pick or change a model → `workflow.models.list` first (live catalog with
+  per-mode configuration and reference min/max). On `MODE_UNSUPPORTED`,
+  `REFERENCE_COUNT_OUT_OF_RANGE` or `REFERENCE_LIMIT`, switch to one of the
+  returned `details.candidates` (`{modelId, mode}`) or fix the reference count
+  as the message says; do not try models one by one.
+- Multi-angle 3×3 grid, character turnaround, 2×2 / 5×5 storyboard grid,
+  relight or portrait enhance → `workflow.shortcut.apply --scene <id>`
+  (Agent tool `flovart_shortcut_apply`; ids from `workflow.shortcut.list`).
+  Always one node and `count=1`: grid tools render one grid image in place
+  (or in one new node to the right of a bare image), non-grid tools create one
+  node to the right. Split a grid later with `image.split-grid@1`; never build
+  N nodes for a grid.
+- Group nodes → `workflow.group.create --node-ids a,b,c` (a group frame:
+  `subgraph` with `metadata.groupKind: "group"`, members carry `parentId`;
+  unrelated to generation batches and alternates). Run the whole group in
+  dependency order with one confirmation → `workflow.group.run --group-id <id>`
+  (`--dry-run` returns the order only).
+- Bring an image from a URL or the asset library onto the canvas →
+  `workflow.media.import` (optionally `attachToNodeId` to use it as a reference).
+- Storyboard rows of a script node → `workflow.script.materialize --script-node-id
+  <id> --kind image|video --rows 1-5`. One generation node per row: the row's
+  `imagePrompt` / `videoPrompt` goes into that node's Prompt Bar, the row's
+  `characterRefs` (and any `@ref:<id>` in the prompt) become @chips +
+  connections, the node carries `shot` metadata, and the script row keeps only
+  `imageNodeId` / `videoNodeId`. It creates and never runs; rows already
+  materialized are skipped. Run the returned `nodeIds` with one
+  `workflow.node.run` (batch by rows, e.g. 1-5 then 6-9).
+- Export or download results → `workflow.export` with `nodeIds` or `groupId`
+  (a group is the nodes' `batchId`). One media node exports its original file;
+  several nodes or a group export a ZIP named by node title; script nodes
+  export a shot-list CSV. It never changes the canvas. Pass `inline: true`
+  only when you need the bytes back (≤20MB, base64).
+- Write a note only when the user asks for one → `workflow.note.write`. Notes
+  never connect to anything.
+- Move, connect, disconnect, group, retitle or reorder references → one
+  `workflow.apply` (`reorder_connections` with `targetNodeId` +
+  `orderedSourceIds`).
 - Run a node → `workflow.node.run` after confirming the node from inspection.
   Several independent nodes → one `workflow.node.run` with `nodeIds`; the user
   agrees to the cost once and the result lists each node. Rerun only failed
-  nodes.
+  nodes. Seedance runs are pre-checked locally (image references: jpeg/png/
+  webp/bmp/tiff/gif, each side 300–6000px, aspect 0.4–2.5, <30MB); one failure
+  rejects the whole batch with `SEEDANCE_PREFLIGHT_FAILED` and lists the nodes.
+  Fix those references, then rerun the batch.
 
 ### Generation runs on the canvas
 
@@ -193,6 +280,29 @@ Talk about the canvas, not the machinery behind it.
   idempotency key. Never resubmit under a new key.
 - Report what was added or changed, what is running, and what finished.
   Mention a structured error code only when the user must act on it.
+
+### Ask everything up front (before spending credits)
+
+Before a video, storyboard or multi-shot job, collect in **one** ask (built-in
+Agent: `flovart_ask` with `questions`; other hosts: your host's ask tool)
+every item below that the request or canvas does not already answer. Skip what
+is already known; never ask the same thing twice in a task.
+
+| id | Ask about | Typical options |
+| --- | --- | --- |
+| `duration` | Total length | 5s / 10s / 15s / 30s |
+| `aspect_ratio` | Frame | 9:16 vertical / 16:9 horizontal / 1:1 |
+| `resolution` | Resolution / tier | 480p draft first, then upgrade / 720p / 1080p |
+| `subtitles` | Subtitle language | none / Chinese / English / bilingual |
+| `characters` | Character references | use @-referenced images / generate anchors first / none |
+| `segments` | How many segments | 1 / 3 × 5s / per-shot |
+| `outline` | Where the outline comes from | user's script / Agent drafts it for approval / from reference video |
+
+- Write options as **complete plans** the user can accept in one click
+  (for example “15s vertical 9:16, 3 segments × 5s, 480p draft first”), mark
+  the recommended one, and let the “Other” box take anything else.
+- One ask, up to 12 questions; then work without further check-ins until a
+  cost confirmation or a real blocker.
 
 ## Ending a task: the outcome claim
 

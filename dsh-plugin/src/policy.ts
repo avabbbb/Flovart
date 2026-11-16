@@ -23,11 +23,32 @@ export interface FlovartToolPolicy {
   approval: FlovartApproval
 }
 
-const WRITE_TOOLS = new Set(['flovart_apply'])
-const RUN_TOOLS = new Set(['flovart_run'])
+const WRITE_TOOLS = new Set(['flovart_apply', 'flovart_workflow_apply'])
+const RUN_TOOLS = new Set(['flovart_run', 'flovart_workflow_node_run', 'flovart_group_run'])
+const READ_TOOLS = new Set([
+  'flovart_inspect', 'flovart_selection', 'flovart_status',
+  'flovart_workflow_inspect', 'flovart_workflow_selection_get', 'flovart_workflow_focus_nodes',
+  'flovart_models_list', 'flovart_workflow_search_nodes', 'flovart_shortcut_list', 'flovart_workflow_node_stop',
+  'flovart_export', 'flovart_task_get', 'flovart_task_cancel',
+])
+
+/** flovart_task_start 包装的命令 → 对应工具名，风险按被包装的命令判定。 */
+const TASK_COMMAND_TOOLS: Record<string, string> = {
+  'agent.turn': 'flovart_agent_turn',
+  'workflow.node.run': 'flovart_workflow_node_run',
+  'workflow.generate': 'flovart_generate',
+  'workflow.node.tool': 'flovart_workflow_node_tool',
+  'workflow.media.import': 'flovart_media_import',
+  'workflow.export': 'flovart_export',
+}
 
 /** Classify a Flovart tool call; unknown Flovart tools are treated as writes. */
 export function flovartToolRisk(name: string, args: Record<string, unknown>): FlovartToolRisk | null {
+  if (name === 'flovart_task_start') {
+    const inner = TASK_COMMAND_TOOLS[String(args.command ?? '')]
+    const innerArgs = args.args && typeof args.args === 'object' ? args.args as Record<string, unknown> : {}
+    return inner ? flovartToolRisk(inner, innerArgs) : 'write'
+  }
   if (RUN_TOOLS.has(name)) return 'run'
   if (WRITE_TOOLS.has(name)) {
     const raw = args.operations ?? args.ops
@@ -41,7 +62,9 @@ export function flovartToolRisk(name: string, args: Record<string, unknown>): Fl
     // 委派回合默认只读；显式 workspace-write 才是可写委派，按 write 走审批。
     return args.policy === 'workspace-write' ? 'write' : 'read'
   }
-  if (name === 'flovart_inspect' || name === 'flovart_selection' || name === 'flovart_status') return 'read'
+  // generate 只写 Prompt Bar 时是普通写入；run=true 才是付费运行。
+  if (name === 'flovart_generate' || name === 'flovart_shortcut_apply') return args.run === true || args.run === 'true' ? 'run' : 'write'
+  if (READ_TOOLS.has(name)) return 'read'
   return name.startsWith('flovart_') ? 'write' : null
 }
 
