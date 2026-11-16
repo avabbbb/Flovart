@@ -48,6 +48,16 @@ function collectNodeKeys(nodes: WorkflowNode[], keys = new Set<string>()) {
     if (metadata.storageKey) keys.add(metadata.storageKey);
     if (metadata.posterStorageKey) keys.add(metadata.posterStorageKey);
     if (metadata.previewStorageKey) keys.add(metadata.previewStorageKey);
+    // 多结果的备选（metadata.alternates）不是画布节点，但媒体同样存在 IDB 里，必须保持可达，
+    // 否则 prune 会删掉除首图外的结果，打开叠放里的第 2–4 张时报「媒体文件不存在」。
+    if (Array.isArray(metadata.alternates)) {
+      metadata.alternates.forEach(alternate => {
+        const media = alternate?.metadata || {};
+        if (media.storageKey) keys.add(media.storageKey);
+        if (media.posterStorageKey) keys.add(media.posterStorageKey);
+        if (media.previewStorageKey) keys.add(media.previewStorageKey);
+      });
+    }
     // 原位生成的旧版本媒体挂在 Take 上，仍可被切回，必须保持可达。
     metadata.operation?.takes?.forEach(take => {
       if (take.outputMedia?.storageKey) keys.add(take.outputMedia.storageKey);
