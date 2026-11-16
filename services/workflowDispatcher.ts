@@ -16,6 +16,8 @@ import { buildProductionBible } from '../components/workflow/productionBible';
 import { buildWorkflowPromptDocument, promptDocumentMentions } from '../components/workflow/promptDocument';
 import { generateModeOf, listWorkflowModels, planWorkflowGenerate, WorkflowGenerateError } from './workflowGenerateCommand';
 import type { UserApiKey } from '../types';
+import { seedancePreflightForNodes } from './generationPlan';
+import { describeSeedanceFailures } from './seedancePreflight';
 
 export interface WorkflowCommandEnvelope {
   id: string;
@@ -708,6 +710,17 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         const expectedRevision = args.expectedRevision === undefined ? undefined : finiteNumber(args.expectedRevision, 'expectedRevision');
         if (expectedRevision !== undefined && expectedRevision !== (project.draftVersion || 1)) {
           return error(envelope.id, 'REVISION_CONFLICT', 'Workflow 草稿版本已变化：期望 ' + expectedRevision + '，当前 ' + (project.draftVersion || 1) + '。');
+        }
+        if (command === 'workflow.node.run') {
+          // Seedance 合规预检：一项不合格整批不提交，并列出节点（D.4-5）。
+          const preflight = seedancePreflightForNodes(nodeIds.map(nodeId => project.nodes.find(node => node.id === nodeId)!), project);
+          if (!preflight.ok) {
+            return { ok: false, commandId: envelope.id, error: {
+              code: 'SEEDANCE_PREFLIGHT_FAILED',
+              message: describeSeedanceFailures(preflight),
+              details: { failures: preflight.failures },
+            } };
+          }
         }
         const surface = envelope.source === 'agent' ? 'browser-agent' : envelope.source === 'operator' ? 'runtime' : envelope.source;
         const runCommandFor = (nodeId: string): WorkflowRunCommand => ({ projectId: project.id, nodeId, ...(expectedRevision === undefined ? {} : { expectedRevision }) });
