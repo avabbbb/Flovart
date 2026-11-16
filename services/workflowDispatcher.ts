@@ -28,6 +28,7 @@ import type { UserApiKey } from '../types';
 import { seedancePreflightForNodes } from './generationPlan';
 import { describeSeedanceFailures } from './seedancePreflight';
 import { executeWorkflowExport, planWorkflowExport, WorkflowExportError, type WorkflowExportRuntime } from '../components/workflow/nodeExport';
+import { agentModelCatalogSummary, normalizeOperationModelIds } from './agentModelCatalog';
 import { checkRevision, revisionConflictMessage } from '../components/workflow/revisionRebase';
 
 export interface WorkflowCommandEnvelope {
@@ -181,6 +182,8 @@ export function redactWorkflowAgentValue<T>(value: T, key = ''): T {
 
 const redactNode = (node: WorkflowNode) => ({
   ...redactWorkflowAgentValue(node),
+  // 备选 id 可直接用于 media_view / set_batch_primary / ungroup_nodes。
+  ...(node.metadata.alternates?.length ? { alternateIds: node.metadata.alternates.map(item => item.id) } : {}),
   metadata: {
     ...redactWorkflowAgentValue(node.metadata),
     hasMedia: Boolean(node.metadata.href || node.metadata.poster || node.metadata.storageKey),
@@ -242,7 +245,7 @@ const inspectSummary = (project: WorkflowProject) => ({
     locked: node.isLocked === true,
     status: node.metadata.status || 'idle',
     // 多结果的备选挂在节点上（不是画布节点）；详情用 inspect nodeId 读 metadata.alternates。
-    ...(node.metadata.alternates?.length ? { alternateCount: node.metadata.alternates.length } : {}),
+    ...(node.metadata.alternates?.length ? { alternateCount: node.metadata.alternates.length, alternateIds: node.metadata.alternates.map(item => item.id) } : {}),
   })),
   connectionCount: project.connections.length,
   connections: project.connections.map(connection => ({
@@ -412,7 +415,7 @@ export function documentOperationsArg(value: unknown): WorkflowDocumentOperation
       if (!isRecord(node) || typeof node.type !== 'string' || !node.type.trim()) {
         throw new Error('operations[' + index + '] ' + operation.type + '.node 必须是带 type 的对象');
       }
-      // 新节点没给 id 时由系统生成（结果的 nodeIds 会带回）；绝不落一个 id 为空的节点。
+      // 新节点没给 id 时由系统生成（结果的 affectedNodeIds 会带回）；绝不落一个 id 为空的节点。
       if (typeof node.id === 'string' && node.id.trim()) return operation as unknown as WorkflowDocumentOperation;
       return { ...operation, node: { ...node, id: nanoid() } } as unknown as WorkflowDocumentOperation;
     }
@@ -746,10 +749,10 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
               },
             };
         } else if (summary) {
-          result = { ok: true, commandId: envelope.id, result: inspectSummary(project) };
+          result = { ok: true, commandId: envelope.id, result: { ...inspectSummary(project), availableModels: agentModelCatalogSummary() } };
         } else {
           // 制作圣经：结构化的锚点 / 镜头表 / 一致性问题，让 Agent 不必自己从节点里拼项目状态。
-          result = { ok: true, commandId: envelope.id, result: { ...inspectProject(project), productionBible: buildProductionBible(project) } };
+          result = { ok: true, commandId: envelope.id, result: { ...inspectProject(project), productionBible: buildProductionBible(project), availableModels: agentModelCatalogSummary() } };
         }
       } else if (command === 'workflow.selection.get') {
         if (!project) return error(envelope.id, 'NOT_FOUND', '当前没有可用的 Workflow 项目。');
@@ -1276,6 +1279,8 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         }
         if (agentTextNodeViolation(envelope.source, operations || [operation!])) return error(envelope.id, 'NOTE_IS_ANNOTATION', NOTE_IS_ANNOTATION_MESSAGE);
         operations = tagWorkflowNodeOrigin(operations || [operation!], envelope.source);
+        // modelId 只能是真实产品模型：别名归一成规范 id，编造的 id 直接报错并列出可用 id（整批不落写）。
+        operations = normalizeOperationModelIds(operations, project.nodes);
         // P0-2：断开/删除上游时，同步清掉下游 Prompt Bar 里对应的 @chip，并在结果里告诉调用方。
         let mentionPrunes: MentionPrune[] = [];
         if (operations.some(op => op.type === 'delete_connections' || op.type === 'delete_nodes')) {

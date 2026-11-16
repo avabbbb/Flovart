@@ -187,6 +187,48 @@ describe('workflow dispatcher', () => {
     expect(JSON.stringify(node.result)).not.toContain('private-key');
   });
 
+  // 2026-11-16 内置 Agent 实测：P0-1 无 id 新节点、P1-1 编造的模型 id、备选 id 不可见。
+  it('apply gives an id-less create_connected_node a real id and returns it', async () => {
+    const { dispatch, dependencies } = setup();
+    const project = dependencies.getState().projects[0];
+    const result = await dispatch({
+      id: 'agent-create', command: 'workflow.apply', source: 'cli',
+      args: {
+        projectId: project.id, expectedRevision: project.draftVersion, mutationId: 'agent-create',
+        operations: [{ type: 'create_connected_node', fromNodeId: 'image-1', node: { type: 'config', title: '空会议室', metadata: { config: { mode: 'image', submode: 'image-to-image', modelId: 'flovart:seedream-5-flash' } } } }],
+      },
+    });
+    expect(result.ok).toBe(true);
+    const committed = dependencies.getState().projects[0];
+    expect(committed.nodes).toHaveLength(2);
+    const created = committed.nodes[1];
+    expect(typeof created.id).toBe('string');
+    expect(created.id.length).toBeGreaterThan(0);
+    expect(committed.connections).toEqual([expect.objectContaining({ fromNodeId: 'image-1', toNodeId: created.id })]);
+    expect((result.result as { affectedNodeIds?: string[] }).affectedNodeIds).toContain(created.id);
+  });
+
+  it('apply rejects an invented modelId and lists real ids; inspect exposes the catalog and alternate ids', async () => {
+    const { dispatch, dependencies } = setup();
+    const project = dependencies.getState().projects[0];
+    const rejected = await dispatch({
+      id: 'bad-model', command: 'workflow.apply', source: 'cli',
+      args: {
+        projectId: project.id, expectedRevision: project.draftVersion, mutationId: 'bad-model',
+        operations: [{ type: 'update_node', id: 'image-1', metadata: { config: { mode: 'image', modelId: 'doubao-seedream-5-flash-x' } } }],
+      },
+    });
+    expect(rejected.ok).toBe(false);
+    expect(rejected.error?.message).toContain('flovart:seedream-5-flash');
+    expect(dependencies.getState().projects[0].draftVersion).toBe(project.draftVersion);
+
+    project.nodes[0].metadata.alternates = [{ id: 'alt-2', type: 'image', metadata: { storageKey: 'k2' } }] as never;
+    const summary = await dispatch({ id: 'summary-models', command: 'workflow.inspect', args: { summary: true }, source: 'agent' });
+    const body = summary.result as { availableModels: { image: Array<{ id: string }> }; nodes: Array<{ alternateIds?: string[] }> };
+    expect(body.availableModels.image.map(item => item.id)).toContain('flovart:seedream-5-flash');
+    expect(body.nodes[0].alternateIds).toEqual(['alt-2']);
+  });
+
   it('dry-runs workflow.apply without mutating the project', async () => {
     const { dispatch, dependencies } = setup();
     const project = dependencies.getState().projects[0];

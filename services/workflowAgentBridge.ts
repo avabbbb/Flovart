@@ -14,12 +14,15 @@ import { displayError } from './displayError';
 import { buildGenerationGateSummary, getGenerationGateDetails, type GenerationGateDetails } from './generationGate';
 import { planBlocked, type AgentConfirmRequest } from './agentSpendMandate';
 import { applyPlanChecks, buildGenerationPlanChecks } from './generationPlan';
+import { setAgentModelKeysProvider } from './agentModelCatalog';
 import type { UserApiKey as GateApiKey } from '../types';
 
 let agentGateKeysProvider: () => GateApiKey[] = () => [];
 /** 面板注入当前 API Key，让 Agent 确认摘要能估算费用；未注入时费用显示为未知。 */
 export function setAgentGateKeysProvider(provider: (() => GateApiKey[]) | null) {
   agentGateKeysProvider = provider || (() => []);
+  // 同一份 Key 让 inspect 的模型目录标出已配好线路的模型。
+  setAgentModelKeysProvider(provider);
 }
 function agentGateKeys(): GateApiKey[] {
   try { return agentGateKeysProvider(); } catch { return []; }
