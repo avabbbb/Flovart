@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createAgentTaskLayer, TASKABLE_COMMANDS } from '../agent/task-layer.js';
+import { createAgentTaskLayer as createLayer, TASKABLE_COMMANDS } from '../agent/task-layer.js';
+
+// task-layer.js 是 JS，参数类型由默认值推断得过窄；测试里按 any 调用。
+const createAgentTaskLayer = createLayer as unknown as (options: Record<string, unknown>) => any;
 import { WorkflowAgentSession } from '../agent/session.js';
 
 const deferred = <T,>() => {

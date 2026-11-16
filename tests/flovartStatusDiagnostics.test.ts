@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { buildStatusDiagnostics, maskSecret } from '../tools/flovart/local-status.js';
+import { buildStatusDiagnostics as buildDiagnostics, maskSecret } from '../tools/flovart/local-status.js';
 import { applyStdinNodeIds, formatCliResponse, nodeIdsFromNdjson, waitForAgentTask } from '../tools/flovart/cli-output.js';
 
+const buildStatusDiagnostics = buildDiagnostics as unknown as (input: Record<string, unknown>) => any;
 const files = (present: Record<string, string>) => (path: string) => (present[path] ? { exists: true, modifiedAt: present[path], bytes: 10 } : { exists: false });
 
 describe('status diagnostics', () => {
