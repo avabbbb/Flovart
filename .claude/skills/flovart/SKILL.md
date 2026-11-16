@@ -145,7 +145,7 @@ the browser itself is offline.
 
 ## Building and running
 
-- “打开 Flovart” / “打开 Iris” → `ensure`, then `workflow.inspect`.
+- “打开 Flovart” → `ensure`, then `workflow.inspect`.
 - “看看当前 Workflow” → `workflow.inspect`. “当前选择” → `workflow.selection.get`.
 - Add, delete, move, resize, connect, disconnect or edit → one `workflow.apply`.
 - A sequence of new nodes → `workflow.node.create-connected`, which fills the
