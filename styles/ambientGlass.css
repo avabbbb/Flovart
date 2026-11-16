@@ -58,7 +58,6 @@
       }
 
       /* 2. 卡：输入框、提示卡、生成计划卡 */
-      :root .compact-right-panel .agent-conversation .workflow-agent__composer,
       :root .compact-right-panel .agent-card-on-shell,
       :root .compact-right-panel .agent-plan {
         background: var(--amb-card) !important;
@@ -66,6 +65,24 @@
         backdrop-filter: var(--amb-card-filter);
         border-color: transparent !important;
         box-shadow: var(--amb-card-shadow) !important;
+      }
+      /* 输入框里挂着 Skill / @ 浮层：磨砂同样画在 ::before 上，输入框本身不做 backdrop root，浮层才糊得到聊天文字。 */
+      :root .compact-right-panel .agent-conversation .workflow-agent__composer {
+        isolation: isolate;
+        background: transparent !important;
+        border-color: transparent !important;
+        box-shadow: var(--amb-card-shadow) !important;
+      }
+      :root .compact-right-panel .agent-conversation .workflow-agent__composer::before {
+        content: '';
+        position: absolute;
+        z-index: -1;
+        inset: 0;
+        border-radius: inherit;
+        background: var(--amb-card);
+        -webkit-backdrop-filter: var(--amb-card-filter);
+        backdrop-filter: var(--amb-card-filter);
+        pointer-events: none;
       }
       :root .compact-right-panel .agent-conversation .workflow-agent__composer:focus-within {
         box-shadow: 0 0 0 3px color-mix(in srgb, var(--isl-mint) 18%, transparent), var(--amb-card-shadow) !important;
