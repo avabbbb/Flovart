@@ -24,6 +24,7 @@
     "host-registry.js",
     "local-agent.js",
     "local-status.js",
+    "cli-output.js",
     "operation-gateway.js",
     "workflow-operation-schema.js",
     "mcp-server.js",

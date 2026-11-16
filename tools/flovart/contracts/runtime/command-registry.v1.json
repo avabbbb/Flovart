@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "6f15cd2096c1afe2fab256fdde98f3335e00b7060b068927772ea27f7e00d1c1",
+  "registryHash": "c2d5bef3733811e36139628fe1c71951dc03fdd9b15256925c69b78694611f5e",
   "commands": [
     {
       "name": "runtime.status",
@@ -364,6 +364,33 @@
       "availability": "available"
     },
     {
+      "name": "agent.task.start",
+      "summary": "Start a long command (agent.turn, workflow.node.run, workflow.generate, workflow.node.tool, workflow.media.import, workflow.export) as a background task in the local Agent session and return its taskId at once, so it is not bound by the per-request timeout. Same idempotencyKey replays the same task.",
+      "args": {
+        "command": "string",
+        "args": "object?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "agent.task.get",
+      "summary": "Read a background task: status (queued|running|succeeded|failed|cancelled), events after afterSeq, and the command's result or error once done.",
+      "args": {
+        "taskId": "string",
+        "afterSeq": "number?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "agent.task.cancel",
+      "summary": "Cooperatively cancel a background task; canvas generation nodes it started are asked to stop. Already-submitted provider jobs may still be billed.",
+      "args": {
+        "taskId": "string",
+        "reason": "string?"
+      },
+      "availability": "available"
+    },
+    {
       "name": "workflow.inspect",
       "summary": "Inspect the visible Workflow graph with media and secrets redacted. Use summary=true for a light graph or nodeId for one node.",
       "args": {
@@ -634,6 +661,19 @@
         "mention": "boolean?",
         "expectedRevision": "number?",
         "mutationId": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.export",
+      "summary": "Export canvas content without changing the document: one media node as its original file, several nodes or a group (batchId) as a ZIP named by node title, script nodes as a shot-list CSV. Saves to the user's machine; inline=true also returns the bytes as base64 (<=20MB).",
+      "args": {
+        "projectId": "string?",
+        "nodeIds": "string[]?",
+        "groupId": "string?",
+        "fileName": "string?",
+        "save": "boolean?",
+        "inline": "boolean?"
       },
       "availability": "available"
     },

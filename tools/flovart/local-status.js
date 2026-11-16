@@ -1,5 +1,6 @@
-import { inspectLocalAgent, probeWebUi, readLocalAgentConnection } from './local-agent.js';
-import { readWebDiscovery } from './web-discovery.js';
+import { statSync } from 'node:fs';
+import { agentConfigPath, inspectLocalAgent, probeWebUi, readLocalAgentConnection } from './local-agent.js';
+import { readWebDiscovery, webDiscoveryPath } from './web-discovery.js';
 import { FlovartRuntimeClient } from './runtime-client.js';
 
 const DEFAULT_FRONTEND_URLS = Object.freeze([
@@ -27,8 +28,9 @@ export async function getLocalStatus(options = {}) {
   const runtimeStatus = await readRuntimeStatus(options);
 
   let agent;
+  let connection = null;
   try {
-    const connection = readLocalAgentConnection({ env: options.env || process.env, configPath: options.configPath });
+    connection = readLocalAgentConnection({ env: options.env || process.env, configPath: options.configPath });
     agent = await inspectLocalAgent(connection, { fetchImpl, timeoutMs: options.timeoutMs || 800 });
   } catch (cause) {
     agent = { state: 'auth_failed', connection: null, health: null, protocol: null, error: cause instanceof Error ? cause.message : String(cause) };
@@ -60,7 +62,77 @@ export async function getLocalStatus(options = {}) {
     activeHostWriter: health.activeHostWriter || null,
   };
   if (agent.error) status.agent.error = agent.error;
+  status.diagnostics = buildStatusDiagnostics({
+    env: options.env || process.env,
+    configPath: options.configPath,
+    connection,
+    agentState: agent.state,
+    agentError: agent.error,
+    health,
+    frontendUrl,
+    statFile: options.statFile,
+  });
   return status;
+}
+
+/** 脱敏：只留末 4 位。 */
+export function maskSecret(value) {
+  const text = String(value || '');
+  if (!text) return null;
+  return text.length <= 8 ? '****' : '****' + text.slice(-4);
+}
+
+function defaultStatFile(path) {
+  try {
+    const stat = statSync(path);
+    return { exists: true, modifiedAt: stat.mtime.toISOString(), bytes: stat.size };
+  } catch {
+    return { exists: false };
+  }
+}
+
+/**
+ * status 增强（libtv-docs-study D.4-3）：回答"为什么突然报 WORKSPACE_UNAVAILABLE"。
+ * 给出绑定的项目 / writer、凭据来源（脱敏）、本机状态文件的修改时间，以及按顺序排查出的第一个原因。
+ */
+export function buildStatusDiagnostics({ env = process.env, configPath, connection, agentState, agentError, health = {}, frontendUrl, statFile = defaultStatFile } = {}) {
+  const agentConfig = configPath || agentConfigPath(env);
+  const credentialSource = configPath
+    ? 'option:configPath'
+    : env.FLOVART_AGENT_CONFIG ? 'env:FLOVART_AGENT_CONFIG'
+      : env.FLOVART_AGENT_HOME ? 'env:FLOVART_AGENT_HOME'
+        : 'default:~/.flovart/agent.json';
+  const agentFile = { name: 'agent.json', path: agentConfig, ...statFile(agentConfig) };
+  const webFilePath = webDiscoveryPath(env);
+  const webFile = { name: 'web.json', path: webFilePath, ...statFile(webFilePath) };
+  const writer = health.activeHostWriter || null;
+  const binding = {
+    projectId: health.activeProjectId || null,
+    clientId: health.clientId || null,
+    revision: numericOrNull(health.revision),
+    writer: writer ? {
+      agentIdentity: writer.agentIdentity || null,
+      ...(writer.hostSessionId ? { hostSessionId: writer.hostSessionId } : {}),
+      ...(writer.projectId ? { projectId: writer.projectId } : {}),
+    } : null,
+  };
+  let reason = null;
+  if (!agentFile.exists) reason = { code: 'AGENT_CONFIG_MISSING', message: '找不到本机 Agent 配置 ' + agentConfig + '：先运行 flovart ensure 启动本地 Agent，或用 FLOVART_AGENT_CONFIG 指向正确的文件。' };
+  else if (agentState === 'auth_failed') reason = { code: 'AGENT_AUTH_FAILED', message: 'Agent 配置存在但无法认证（' + (agentError || 'token 无效') + '）：配置可能在 ' + (agentFile.modifiedAt || '最近') + ' 被重写，重启 CLI 宿主或重新 ensure。' };
+  else if (agentState !== 'ready') reason = { code: 'AGENT_OFFLINE', message: '本机 Agent 未就绪（' + (agentState || 'unknown') + '）：运行 flovart ensure。' };
+  else if (!Number(health.clients || 0)) reason = { code: 'BROWSER_NOT_CONNECTED', message: '没有打开的 Flovart 页面连到 Agent：在浏览器或桌面端打开 Flovart' + (frontendUrl ? '（' + frontendUrl + '）' : '') + '。' };
+  else if (!health.hasWorkflow) reason = { code: 'NO_ACTIVE_WORKFLOW', message: 'Flovart 页面已连接，但没有激活的 Workflow 项目：在画布里打开一个项目。' };
+  return {
+    credential: {
+      source: credentialSource,
+      configPath: agentConfig,
+      token: maskSecret(connection?.token),
+      agentUrl: connection?.url || null,
+    },
+    binding,
+    stateFiles: [agentFile, webFile],
+    workspaceUnavailableReason: reason,
+  };
 }
 
 async function readRuntimeStatus(options) {

@@ -62,6 +62,27 @@ flovart agent.turn --prompt "给镜头 1 写一版提示词" --policy read-only 
   unless you pass `--policy workspace-write`, which asks the user first. Pass a
   stable `mutationId`: the same id replays the same result instead of running
   twice, and a busy Agent returns `AGENT_BUSY`.
+- Anything that may take longer than a minute (`agent.turn`, a paid
+  `workflow.node.run` / `workflow.generate`, `workflow.node.tool`,
+  `workflow.media.import`, `workflow.export`) can run as a background task:
+  `agent.task.start --command <command> --args '<json>' --idempotency-key <key>`
+  returns a `taskId` at once; poll `agent.task.get --task-id <id> --after-seq
+  <last seq>` every 5–10 s until `done` is true, then read `result` or
+  `error`. `agent.task.cancel --task-id <id>` stops it and asks the canvas to
+  stop nodes it started (already-submitted provider jobs may still be billed).
+  Confirmations, budget and pre-checks of the wrapped command still apply.
+  Tasks live in the local Agent process; after a restart `get` returns
+  `NOT_FOUND`.
+- CLI output is pipe-friendly: each `--json` result is one line on stdout
+  (NDJSON; add `--pretty` to indent it), progress goes to stderr prefixed
+  `[flovart]`. A downstream command reads node ids from stdin with
+  `--references -` (`workflow.generate`) or `--node-ids -`
+  (`workflow.node.run`, `workflow.focus.nodes`, `workflow.export`).
+  `agent.task.start ... --wait` streams task events to stderr and prints only
+  the final result. `status` also reports `diagnostics`: the bound project and
+  writer, where the Agent credential came from (token masked), state-file
+  modification times, and `workspaceUnavailableReason` — read it first when a
+  command fails with `WORKSPACE_UNAVAILABLE`.
 
 - `--agent-identity` names your host (`codex`, `claude-code`, `opencode`,
   `workbuddy`). Pass the same value on `workflow.inspect` and on every write
@@ -184,6 +205,11 @@ the browser itself is offline.
   `imageNodeId` / `videoNodeId`. It creates and never runs; rows already
   materialized are skipped. Run the returned `nodeIds` with one
   `workflow.node.run` (batch by rows, e.g. 1-5 then 6-9).
+- Export or download results → `workflow.export` with `nodeIds` or `groupId`
+  (a group is the nodes' `batchId`). One media node exports its original file;
+  several nodes or a group export a ZIP named by node title; script nodes
+  export a shot-list CSV. It never changes the canvas. Pass `inline: true`
+  only when you need the bytes back (≤20MB, base64).
 - Write a note only when the user asks for one → `workflow.note.write`. Notes
   never connect to anything.
 - Move, connect, disconnect, group, retitle or reorder references → one
@@ -192,7 +218,10 @@ the browser itself is offline.
 - Run a node → `workflow.node.run` after confirming the node from inspection.
   Several independent nodes → one `workflow.node.run` with `nodeIds`; the user
   agrees to the cost once and the result lists each node. Rerun only failed
-  nodes.
+  nodes. Seedance runs are pre-checked locally (image references: jpeg/png/
+  webp/bmp/tiff/gif, each side 300–6000px, aspect 0.4–2.5, <30MB); one failure
+  rejects the whole batch with `SEEDANCE_PREFLIGHT_FAILED` and lists the nodes.
+  Fix those references, then rerun the batch.
 
 ### Generation runs on the canvas
 

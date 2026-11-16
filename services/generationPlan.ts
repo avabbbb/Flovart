@@ -6,6 +6,8 @@ import { getProductModel, resolveProductModelRoute, type ProductModelDefinition 
 import { resolveProviderGenerationExtension } from './userScriptProviderAdapter';
 import { planReferenceTranscodes } from './referenceTranscode';
 import type { GenerationGateDetails, PlanNotice, PlanReference } from './generationGate';
+import { checkSeedanceReference, isSeedanceModel, seedanceBatchPreflight, type SeedanceBatchResult, type SeedanceReferenceInput } from './seedancePreflight';
+import type { CanonicalGenerationInput } from '../components/workflow/inputResolver';
 
 // 未显式选择 submode 时，只从同一份参考推导输入模式；runWorkflowGeneration 与计划卡共用。
 export function deriveProductMode(
@@ -86,6 +88,11 @@ export function buildGenerationPlanChecks(input: {
         ...(issue ? { message: issue.message } : {}),
       };
     });
+    if (isSeedanceModel(productModel.id)) {
+      for (const issue of seedanceReferences(canonical).flatMap(checkSeedanceReference)) {
+        blockers.push({ code: 'seedance-compliance', message: 'Seedance 合规预检：' + issue.message });
+      }
+    }
     if (transcode) {
       warnings.push({
         code: 'reference-transcode',
@@ -108,4 +115,41 @@ export function applyPlanChecks(details: GenerationGateDetails, checks: Generati
     ...(checks.warnings.length ? { warnings: [...(details.warnings ?? []), ...checks.warnings] } : {}),
     ...(checks.blockers.length ? { blockers: [...(details.blockers ?? []), ...checks.blockers] } : {}),
   };
+}
+
+function seedanceReferences(canonical: Pick<CanonicalGenerationInput, 'references'>): SeedanceReferenceInput[] {
+  return canonical.references.map(({ resource }) => ({
+    title: resource.title,
+    kind: resource.kind,
+    mimeType: resource.mimeType,
+    name: resource.href || resource.storageKey,
+    width: resource.naturalWidth,
+    height: resource.naturalHeight,
+    bytes: resource.bytes,
+  }));
+}
+
+/**
+ * 运行前整批 Seedance 合规预检（D.4-5）：只看选了 Seedance 模型的生成节点的图片参考；
+ * 任一不合格整批不提交。解析失败的节点跳过（运行时 Provider 校验兜底）。
+ */
+export function seedancePreflightForNodes(
+  nodes: readonly WorkflowNode[],
+  project: Pick<WorkflowProject, 'nodes' | 'connections'>,
+): SeedanceBatchResult {
+  const inputs = nodes.flatMap(node => {
+    const config = node.metadata.config;
+    const productModel = config?.modelId ? getProductModel(config.modelId) : undefined;
+    if (!productModel || !isSeedanceModel(productModel.id) || node.metadata.operation) return [];
+    const mode = productModel.capability === 'image' ? 'image' : 'video';
+    try {
+      const resolvedInputs = resolveWorkflowInputs(node, project.nodes, project.connections, { promptIntent: promptIntentFromNode(node, 'generate') });
+      const productMode = deriveProductMode(mode, config?.submode as ProductModelMode | undefined, productModel, resolvedInputs.references.map(reference => reference.resource));
+      const canonical = buildCanonicalGenerationInput({ targetNode: node, inputs: resolvedInputs, prompt: '', mode, submode: productMode, parameters: { modelId: productModel.id } });
+      return [{ nodeId: node.id, title: node.title, references: seedanceReferences(canonical) }];
+    } catch {
+      return [];
+    }
+  });
+  return seedanceBatchPreflight(inputs);
 }

@@ -6,6 +6,9 @@ export const COMMANDS = Object.keys(COMMAND_REGISTRY);
 
 export const COMMAND_ALIASES = {
   flovart_agent_turn: 'agent.turn',
+  flovart_task_start: 'agent.task.start',
+  flovart_task_get: 'agent.task.get',
+  flovart_task_cancel: 'agent.task.cancel',
   flovart_workflow_project_list: 'workflow.project.list',
   flovart_workflow_project_create: 'workflow.project.create',
   flovart_workflow_project_use: 'workflow.project.use',
@@ -33,6 +36,8 @@ export const COMMAND_ALIASES = {
   flovart_note_write: 'workflow.note.write',
   flovart_media_import: 'workflow.media.import',
   flovart_script_materialize: 'workflow.script.materialize',
+  flovart_export: 'workflow.export',
+  flovart_workflow_export: 'workflow.export',
   gen: 'generate.image',
   flovart_generate_image: 'generate.image',
   flovart_generate_video: 'generate.video',
@@ -243,7 +248,8 @@ function normalizeWorkflowNodeToolArgs(args = {}) {
 }
 
 // Agent 工具 v2 的命令按注册表类型标记解析 CLI 参数（--kebab-case → camelCase，数字/布尔/JSON）。
-const REGISTRY_TYPED_WORKFLOW_COMMANDS = new Set(['workflow.generate', 'workflow.models.list', 'workflow.note.write', 'workflow.media.import', 'workflow.script.materialize']);
+const REGISTRY_TYPED_WORKFLOW_COMMANDS = new Set(['workflow.generate', 'workflow.models.list', 'workflow.note.write', 'workflow.media.import', 'workflow.script.materialize', 'workflow.export',
+  'agent.task.start', 'agent.task.get', 'agent.task.cancel']);
 
 function registryTypedArgs(command, args = {}) {
   const definition = COMMAND_REGISTRY[command];

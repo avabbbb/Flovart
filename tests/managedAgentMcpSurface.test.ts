@@ -10,6 +10,9 @@ describe('Flovart Agent tool surface', () => {
     expect(commands).toEqual([
       'status',
       'agent.turn',
+      'agent.task.start',
+      'agent.task.get',
+      'agent.task.cancel',
       'workflow.inspect',
       'workflow.selection.get',
       'workflow.focus.nodes',
@@ -19,6 +22,7 @@ describe('Flovart Agent tool surface', () => {
       'workflow.note.write',
       'workflow.media.import',
       'workflow.script.materialize',
+      'workflow.export',
       'workflow.node.run',
       'workflow.node.stop',
       'workflow.node.tool',
