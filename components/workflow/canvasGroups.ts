@@ -32,6 +32,68 @@ export function groupFrameBounds(members: readonly WorkflowNode[]): GroupBounds 
   };
 }
 
+/**
+ * 分组框跟随成员自动伸缩：成员被移动、改尺寸、加入 / 移出、删除后，把受影响的分组框贴合到成员包围盒
+ * （与 createGroupFrame 同一套边距和标题栏高度）。纯函数，没有变化时原样返回同一个数组。
+ *
+ * - touchedIds：本次被改动的节点；它们的祖先分组框都会重算（嵌套分组由内向外）。
+ *   只改了分组框自己（例如用户手动拉大框）不会被拉回，等成员下次变动时再贴合。
+ * - extraFrameIds：需要额外重算的框（成员移出 / 被删前所在的旧分组）。
+ * - 折叠的分组不动（成员隐藏，框显示折叠条）；没有可见成员的框也不动。
+ */
+export function fitGroupFrames(nodes: readonly WorkflowNode[], touchedIds: Iterable<string>, extraFrameIds: Iterable<string> = []): WorkflowNode[] {
+  const byId = new Map(nodes.map(node => [node.id, node]));
+  const affected = new Set<string>();
+  const addAncestors = (startId: string | undefined) => {
+    let current = startId ? byId.get(startId) : undefined;
+    const seen = new Set<string>();
+    while (current && !seen.has(current.id)) {
+      seen.add(current.id);
+      if (isGroupFrame(current)) affected.add(current.id);
+      current = current.parentId ? byId.get(current.parentId) : undefined;
+    }
+  };
+  for (const id of touchedIds) addAncestors(byId.get(id)?.parentId);
+  for (const id of extraFrameIds) addAncestors(id);
+  if (!affected.size) return nodes as WorkflowNode[];
+  const depth = (id: string) => {
+    let level = 0;
+    let current = byId.get(id);
+    while (current?.parentId && level < 64) { level += 1; current = byId.get(current.parentId); }
+    return level;
+  };
+  const order = [...affected].sort((left, right) => depth(right) - depth(left));
+  const next = new Map(byId);
+  let changed = false;
+  for (const frameId of order) {
+    const frame = next.get(frameId);
+    if (!frame || frame.metadata.collapsed === true) continue;
+    const members = [...next.values()].filter(node => node.parentId === frameId && node.isVisible !== false);
+    if (!members.length) continue;
+    const bounds = groupFrameBounds(members);
+    if (frame.position.x === bounds.x && frame.position.y === bounds.y && frame.width === bounds.width && frame.height === bounds.height) continue;
+    next.set(frameId, { ...frame, position: { x: bounds.x, y: bounds.y }, width: bounds.width, height: bounds.height });
+    changed = true;
+  }
+  return changed ? nodes.map(node => next.get(node.id) || node) : nodes as WorkflowNode[];
+}
+
+/** 对比前后两份节点，得出 fitGroupFrames 需要的改动节点与旧父分组。 */
+export function groupFitSeeds(before: readonly WorkflowNode[], after: readonly WorkflowNode[]) {
+  const previous = new Map(before.map(node => [node.id, node]));
+  const remaining = new Set(after.map(node => node.id));
+  const touched: string[] = [];
+  const oldParents: string[] = [];
+  for (const node of after) {
+    const old = previous.get(node.id);
+    if (old === node) continue;
+    touched.push(node.id);
+    if (old?.parentId && old.parentId !== node.parentId) oldParents.push(old.parentId);
+  }
+  for (const node of before) if (!remaining.has(node.id) && node.parentId) oldParents.push(node.parentId);
+  return { touched, oldParents };
+}
+
 export function createGroupFrame(id: string, members: readonly WorkflowNode[], title?: string): WorkflowNode {
   const bounds = groupFrameBounds(members);
   const frame = createWorkflowNode(id, 'subgraph', { x: bounds.x, y: bounds.y }, { groupKind: 'group', collapsed: false, childKeys: [] });

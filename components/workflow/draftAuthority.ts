@@ -4,6 +4,7 @@ import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
 import { canonicalize } from 'json-canonicalize';
 
 import { applyWorkflowOps } from './ops';
+import { fitGroupFrames, groupFitSeeds } from './canvasGroups';
 import type {
   WorkflowConnection,
   WorkflowDraftActor,
@@ -198,8 +199,11 @@ export function applyWorkflowDraftChangeSet(
       error: { code: 'BAD_REQUEST', message: applied.rejections.map(item => item.reason).join('；') },
     };
   }
+  // 分组框跟随成员伸缩：同一个 ChangeSet 里一起记录，撤销一步还原。
+  const seeds = groupFitSeeds(project.nodes, applied.snapshot.nodes);
+  const fittedNodes = fitGroupFrames(applied.snapshot.nodes, seeds.touched, seeds.oldParents);
   const recorded = appendChangeSet(project, { nodes: project.nodes, connections: project.connections }, {
-    nodes: applied.snapshot.nodes,
+    nodes: fittedNodes,
     connections: applied.snapshot.connections,
   }, request);
   if (!recorded) return { ok: false, error: { code: 'BAD_REQUEST', message: '该操作没有修改 Workflow Draft：写入内容与当前节点完全一致' } };

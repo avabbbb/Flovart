@@ -8,12 +8,15 @@ import {
   buildGroupCreateOps,
   buildUngroupOps,
   enclosingGroupId,
+  fitGroupFrames,
+  groupFitSeeds,
   groupMemberIds,
   groupRunOrder,
   isGroupFrame,
   migrateManualBatchGroups,
 } from '../components/workflow/canvasGroups';
 import { migrateWorkflowProject } from '../components/workflow/migrations';
+import { applyWorkflowMutation } from '../components/workflow/draftAuthority';
 import type { WorkflowConnection, WorkflowNode } from '../components/workflow/types';
 
 const snapshot = (nodes: WorkflowNode[], connections: WorkflowConnection[] = []) => ({ projectId: 'p', title: 'p', nodes, connections, selectedNodeIds: [], viewport: { x: 0, y: 0, k: 1 } });
@@ -104,5 +107,66 @@ describe('canvas groups', () => {
       nodes: [{ ...gen('m1', 0), batchId: 'M', batchGroupSource: 'manual' }, { ...gen('m2', 400), batchId: 'M', batchGroupSource: 'manual' }],
     });
     expect(project.nodes.find(node => isGroupFrame(node))?.id).toBe('group-M');
+  });
+});
+
+describe('group frames follow their members', () => {
+  const grouped = () => {
+    const nodes = [gen('a', 100), gen('b', 600)];
+    const plan = buildGroupCreateOps(nodes, ['a', 'b'], { groupId: 'g1' });
+    return applyWorkflowOps(snapshot(nodes), plan.ops).snapshot.nodes;
+  };
+  const frameOf = (nodes: WorkflowNode[], id = 'g1') => nodes.find(node => node.id === id)!;
+
+  it('grows when a member moves outward and shrinks back when it returns', () => {
+    const nodes = grouped();
+    const original = frameOf(nodes);
+    const moved = nodes.map(node => node.id === 'b' ? { ...node, position: { x: 1200, y: 500 } } : node);
+    const grown = frameOf(fitGroupFrames(moved, ['b']));
+    expect(grown.width).toBe(1200 + (moved.find(n => n.id === 'b')!.width) - 100 + GROUP_PADDING * 2);
+    expect(grown.height).toBeGreaterThan(original.height);
+    expect(grown.position).toEqual(original.position);
+    const back = frameOf(fitGroupFrames(nodes.map(node => ({ ...node })), ['b']));
+    expect({ ...back.position, w: back.width, h: back.height }).toEqual({ ...original.position, w: original.width, h: original.height });
+  });
+
+  it('returns the same array when nothing needs to change and ignores collapsed or member-less frames', () => {
+    const nodes = grouped();
+    expect(fitGroupFrames(nodes, ['a'])).toBe(nodes);
+    expect(fitGroupFrames(nodes, [])).toBe(nodes);
+    const collapsed = nodes.map(node => node.id === 'g1' ? { ...node, metadata: { ...node.metadata, collapsed: true } } : node.id === 'b' ? { ...node, position: { x: 3000, y: 100 } } : node);
+    expect(fitGroupFrames(collapsed, ['b'])).toBe(collapsed);
+  });
+
+  it('does not snap back a frame the user resized by itself', () => {
+    const nodes = grouped().map(node => node.id === 'g1' ? { ...node, width: 2000 } : node);
+    expect(frameOf(fitGroupFrames(nodes, ['g1'])).width).toBe(2000);
+  });
+
+  it('fits nested groups from the inside out', () => {
+    const base = grouped();
+    const c = gen('c', 100);
+    c.position = { x: 100, y: 900 };
+    const inner = buildGroupCreateOps([...base], ['a', 'b'], { groupId: 'inner' });
+    let nodes = applyWorkflowOps(snapshot(base), inner.ops).snapshot.nodes;
+    nodes = nodes.map(node => node.id === 'inner' ? { ...node, parentId: 'g1' } : node);
+    nodes = [...nodes, { ...c, parentId: 'g1' }];
+    nodes = fitGroupFrames(nodes, ['c', 'inner']);
+    const moved = nodes.map(node => node.id === 'a' ? { ...node, position: { x: -800, y: 100 } } : node);
+    const fitted = fitGroupFrames(moved, ['a']);
+    expect(frameOf(fitted, 'inner').position.x).toBe(-800 - GROUP_PADDING);
+    expect(frameOf(fitted, 'g1').position.x).toBe(-800 - GROUP_PADDING * 2);
+  });
+
+  it('shrinks the old group when a member is deleted, inside the same undoable change set', () => {
+    const nodes = grouped();
+    const extra = { ...gen('c', 1600), parentId: 'g1' };
+    const start = fitGroupFrames([...nodes, extra], ['c']);
+    const project = { id: 'p', title: 'p', nodes: start, connections: [], selectedNodeIds: [], viewport: { x: 0, y: 0, k: 1 }, createdAt: '', updatedAt: '', draftVersion: 1 } as unknown as Parameters<typeof applyWorkflowMutation>[0];
+    const result = applyWorkflowMutation(project, { projectId: 'p', expectedRevision: 1, mutationId: 'm1', source: 'ui', ops: [{ type: 'delete_nodes', ids: ['c'] }] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(frameOf(result.project.nodes).width).toBe(frameOf(nodes).width);
+    expect(groupFitSeeds(start, result.project.nodes).oldParents).toContain('g1');
   });
 });

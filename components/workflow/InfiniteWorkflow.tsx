@@ -68,7 +68,7 @@ import { ScriptNodeEditor } from './ScriptNodeEditor';
 import { SlashMenu } from './SlashMenu';
 import { buildShortcutApplyOps, type SlashShortcut } from './slashShortcuts';
 import { copyWorkflowSelection, pasteWorkflowClip } from './canvasClipboard';
-import { buildGroupCreateOps, buildUngroupOps, enclosingGroupId, groupMemberIds, groupRunOrder, isGroupFrame } from './canvasGroups';
+import { buildGroupCreateOps, buildUngroupOps, enclosingGroupId, fitGroupFrames, groupMemberIds, groupRunOrder, isGroupFrame } from './canvasGroups';
 import { WorkflowToolbar, type WorkflowTool } from './WorkflowToolbar';
 import { deriveWorkflowRunStates, planWorkflowStaleRerun } from './runState';
 import { deriveWorkflowPresence } from './presence';
@@ -538,15 +538,17 @@ export function InfiniteWorkflow({
   // 拖拽/缩放只产生本地预览副本，存储与历史在松手时一次性提交（见 finishInteraction）。
   const displayNodes = useMemo(() => {
     if (!interactionPreview) return project.nodes;
+    // 拖动 / 缩放成员时分组框实时跟着伸缩（松手提交时 draftAuthority 用同一个函数落盘）。
     if (interactionPreview.kind === 'node') {
       const { positions } = interactionPreview;
-      return project.nodes.map(node => {
+      const moved = project.nodes.map(node => {
         const position = positions.get(node.id);
         return position ? { ...node, position } : node;
       });
+      return fitGroupFrames(moved, positions.keys());
     }
     const { id, width, height } = interactionPreview;
-    return project.nodes.map(node => node.id === id ? { ...node, width, height } : node);
+    return fitGroupFrames(project.nodes.map(node => node.id === id ? { ...node, width, height } : node), [id]);
   }, [interactionPreview, project.nodes]);
 
   projectRef.current = project;
