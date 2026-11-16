@@ -40,7 +40,7 @@ const setup = (options: { runNode?: ReturnType<typeof vi.fn>; keys?: UserApiKey[
     setActiveProject: id => { activeProjectId = id; },
     deleteProjects: () => {},
     updateProject: (id, patch) => { projects = projects.map(project => project.id === id ? { ...project, ...patch } : project); },
-    executor: createWorkflowExecutor({ runNode, stopNode: vi.fn() }, { createRunId: () => 'run-1' }),
+    executor: createWorkflowExecutor({ runNode: runNode as Parameters<typeof createWorkflowExecutor>[0]['runNode'], stopNode: vi.fn() }, { createRunId: () => 'run-1' }),
     getUserApiKeys: () => options.keys || [],
   };
   const project = () => dependencies.getState().projects[0];
