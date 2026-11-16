@@ -168,6 +168,8 @@ export interface BrowserAgentTextRoute {
   model: string;
   /** 来自 Key 的流式 usage opt-in；缺省 passive，不改请求。 */
   streamUsage?: StreamUsageMode;
+  /** 覆盖流式卡住检测 / 重试参数（基准与测试用），缺省见 BROWSER_AGENT_STREAM_DEFAULTS。 */
+  timeouts?: Partial<{ firstChunkMs: number; idleMs: number; retries: number; retryBaseMs: number }>;
   baseUrl: string;
   apiKey: string;
 }
@@ -341,17 +343,18 @@ export function toOpenAIMessages(messages: AgentMessage[], options: OpenAIMessag
  */
 export function buildBrowserAgentRequestBody(
   route: Pick<BrowserAgentTextRoute, 'provider' | 'model' | 'baseUrl'>,
-  context: { messages: AgentMessage[]; tools?: Array<{ name: string; description: string; parameters: unknown }> },
+  context: { systemPrompt?: string; messages: AgentMessage[]; tools?: Array<{ name: string; description: string; parameters: unknown }> },
   thinkingLevel: AgentThinkingLevel = 'off',
 ): Record<string, unknown> {
   const reasoning = buildReasoningParams(thinkingLevel, route);
   return {
     model: route.model,
     // DeepSeek / Kimi 的工具循环要求原样回传 reasoning_content，其它服务不回传。
-    messages: toOpenAIMessages(context.messages, {
+    // 系统提示词固定在最前（稳定前缀，见 withSystemPrompt）。
+    messages: withSystemPrompt(toOpenAIMessages(context.messages, {
       reasoningEcho: reasoningEchoFor(route),
       emptyReasoningContent: requiresEmptyReasoningContent(route),
-    }),
+    }), context.systemPrompt),
     ...(context.tools?.length ? {
       tools: context.tools.map(tool => ({
         type: 'function',
@@ -366,7 +369,69 @@ export function buildBrowserAgentRequestBody(
   };
 }
 
+/** 流式卡住检测与瞬时失败重试的默认值；route.timeouts 可覆盖（基准与测试用）。 */
+export const BROWSER_AGENT_STREAM_DEFAULTS = {
+  /** 发出请求到第一个 SSE 事件（含思考增量）的最长等待。 */
+  firstChunkMs: 90_000,
+  /** 两个 SSE 事件之间的最长静默。 */
+  idleMs: 60_000,
+  /** 首个增量出现前，对网络错误 / 408 / 429 / 5xx / 卡住的额外重试次数。 */
+  retries: 2,
+  retryBaseMs: 600,
+};
+
+/** 用户主动停止时写进助手消息的文案；面板据此显示「已中止」而不是红色错误卡。 */
+export const AGENT_ABORTED_MESSAGE = '已中止';
+
+class StreamStallError extends Error {
+  constructor(readonly phase: 'first' | 'idle', readonly ms: number) {
+    super(phase === 'first'
+      ? `模型 ${Math.round(ms / 1000)} 秒内没有开始输出，已停止等待，可重试。`
+      : `模型输出中断超过 ${Math.round(ms / 1000)} 秒，已停止等待，可重试。`);
+    this.name = 'StreamStallError';
+  }
+}
+
+class RetryableHttpError extends Error {
+  constructor(readonly status: number, readonly body: string, readonly retryAfterMs?: number) {
+    super(`模型请求失败（HTTP ${status}）：${body.slice(0, 200)}`);
+    this.name = 'RetryableHttpError';
+  }
+}
+
+function isTransient(error: unknown): boolean {
+  if (error instanceof StreamStallError || error instanceof RetryableHttpError) return true;
+  // fetch 的网络层失败（断连、DNS、TLS）在浏览器与 Node 中都是 TypeError。
+  return error instanceof TypeError;
+}
+
+function retryAfterMs(header: string | null): number | undefined {
+  if (!header) return undefined;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return Math.min(5_000, Math.max(0, seconds * 1000));
+  return undefined;
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) { reject(signal.reason ?? new DOMException('Aborted', 'AbortError')); return; }
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(); }, ms);
+    const onAbort = () => { clearTimeout(timer); reject(signal?.reason ?? new DOMException('Aborted', 'AbortError')); };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/**
+ * 系统提示词作为第一条 system 消息：固定在请求最前面，之后是按时间追加的历史，
+ * 使同一会话的每次请求共享同一前缀（DeepSeek / OpenAI 兼容服务的前缀缓存可以命中）。
+ */
+function withSystemPrompt(messages: Array<Record<string, unknown>>, systemPrompt: string | undefined) {
+  const prompt = String(systemPrompt || '').trim();
+  return prompt ? [{ role: 'system', content: prompt }, ...messages] : messages;
+}
+
 export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn {
+  const limits = { ...BROWSER_AGENT_STREAM_DEFAULTS, ...(route.timeouts || {}) };
   return async (model, context, options) => {
     const stream = createAssistantMessageEventStream();
     const startMessage: AssistantMessage = {
@@ -381,133 +446,196 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
     };
     // pi-agent-core 把 state.thinkingLevel 作为 options.reasoning 传进来（off 时为 undefined）。
     const requested = normalizeThinkingLevel((options as { reasoning?: unknown } | undefined)?.reasoning);
-    const thinkingLevel: AgentThinkingLevel = requested !== 'off' && isReasoningUnsupported(route.model) ? 'off' : requested;
+    let thinkingLevel: AgentThinkingLevel = requested !== 'off' && isReasoningUnsupported(route.model) ? 'off' : requested;
+    const userSignal = options?.signal;
     void (async () => {
+      // 每次尝试一个新的 AbortController（不复用已 abort 的控制器）；用户停止通过 userSignal 级联。
+      let attemptController: AbortController | undefined;
+      const onUserAbort = () => attemptController?.abort(userSignal?.reason);
+      userSignal?.addEventListener('abort', onUserAbort);
+      // 一旦向面板推过任何增量就不再重试，避免同一条回复出现两遍。
+      let emitted = false;
+      let started = false;
+      const usage = createStreamUsageAccumulator('openai');
+      const usageMeta = { provider: String(route.provider), model: route.model, source: 'browser-agent' };
       try {
-        const request = (level: AgentThinkingLevel) => fetchStreamWithUsageOptIn(`${route.baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${route.apiKey}`,
-          },
-          signal: options?.signal,
-        }, buildBrowserAgentRequestBody(route, context as never, level), route.streamUsage);
-        let response = await request(thinkingLevel);
-        if (!response.ok && thinkingLevel !== 'off') {
-          const body = await response.clone().text().catch(() => '');
-          if (isReasoningRejection(response.status, body)) {
-            // 该模型不接受思考参数：记住并去掉参数重试一次；选择器随后显示「不支持」。
-            markReasoningUnsupported(route.model);
-            response = await request('off');
-          }
-        }
-        if (!response.ok) {
-          const body = await response.text().catch(() => '');
-          throw new Error(`模型请求失败（HTTP ${response.status}）：${body.slice(0, 200)}`);
-        }
-        if (!response.body) throw new Error('模型没有返回流');
-        let text = '';
-        let thinking = '';
-        let thinkingOpen = false;
-        const toolCalls: Array<{ index: number; id?: string; name?: string; arguments?: string }> = [];
-        let finishReason = '';
+        for (let attempt = 0; ; attempt += 1) {
+          if (userSignal?.aborted) throw userSignal.reason ?? new DOMException('Aborted', 'AbortError');
+          attemptController = new AbortController();
+          const controller = attemptController;
+          let stallTimer: ReturnType<typeof setTimeout> | undefined;
+          let stall: StreamStallError | undefined;
+          const arm = (phase: 'first' | 'idle') => {
+            clearTimeout(stallTimer);
+            const ms = phase === 'first' ? limits.firstChunkMs : limits.idleMs;
+            stallTimer = setTimeout(() => { stall = new StreamStallError(phase, ms); controller.abort(stall); }, ms);
+          };
+          try {
+            arm('first');
+            const request = (level: AgentThinkingLevel) => {
+              const body = buildBrowserAgentRequestBody(route, context as never, level);
+              return fetchStreamWithUsageOptIn(`${route.baseUrl}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${route.apiKey}`,
+                },
+                signal: controller.signal,
+              }, body, route.streamUsage);
+            };
+            let response = await request(thinkingLevel);
+            if (!response.ok && thinkingLevel !== 'off') {
+              const body = await response.clone().text().catch(() => '');
+              if (isReasoningRejection(response.status, body)) {
+                // 该模型不接受思考参数：记住并去掉参数重试一次；选择器随后显示「不支持」。
+                markReasoningUnsupported(route.model);
+                thinkingLevel = 'off';
+                response = await request('off');
+              }
+            }
+            if (!response.ok) {
+              const body = await response.text().catch(() => '');
+              if (response.status === 408 || response.status === 429 || response.status >= 500) {
+                throw new RetryableHttpError(response.status, body, retryAfterMs(response.headers.get('retry-after')));
+              }
+              throw new Error(`模型请求失败（HTTP ${response.status}）：${body.slice(0, 200)}`);
+            }
+            if (!response.body) throw new Error('模型没有返回流');
+            let text = '';
+            let thinking = '';
+            let thinkingOpen = false;
+            const toolCalls: Array<{ index: number; id?: string; name?: string; arguments?: string }> = [];
+            let finishReason = '';
 
-        const invalidToolCalls: string[] = [];
-        const partial = (strict = false) => {
-          const content: AssistantMessage['content'] = [];
-          if (thinking) content.push({ type: 'thinking', thinking });
-          if (text) content.push({ type: 'text', text });
-          for (const toolCall of toolCalls) {
-            if (!toolCall.id || !toolCall.name) continue;
-            let argumentsValue: Record<string, unknown> = {};
-            try {
-              argumentsValue = toolCall.arguments ? JSON.parse(toolCall.arguments) : {};
-            } catch {
-              // 流式中途参数未完整属正常；最终消息仍无法解析时拒绝执行，绝不以 {} 调用工具。
-              if (strict) {
-                invalidToolCalls.push(toolCall.name);
-                continue;
+            const invalidToolCalls: string[] = [];
+            const partial = (strict = false) => {
+              const content: AssistantMessage['content'] = [];
+              if (thinking) content.push({ type: 'thinking', thinking });
+              if (text) content.push({ type: 'text', text });
+              for (const toolCall of toolCalls) {
+                if (!toolCall.id || !toolCall.name) continue;
+                let argumentsValue: Record<string, unknown> = {};
+                try {
+                  argumentsValue = toolCall.arguments ? JSON.parse(toolCall.arguments) : {};
+                } catch {
+                  // 流式中途参数未完整属正常；最终消息仍无法解析时拒绝执行，绝不以 {} 调用工具。
+                  if (strict) {
+                    invalidToolCalls.push(toolCall.name);
+                    continue;
+                  }
+                }
+                content.push({ type: 'toolCall', id: toolCall.id, name: toolCall.name, arguments: argumentsValue });
               }
-            }
-            content.push({ type: 'toolCall', id: toolCall.id, name: toolCall.name, arguments: argumentsValue });
-          }
-          return { ...startMessage, content };
-        };
+              return { ...startMessage, content };
+            };
+            // pi-agent-core 只在收到 start 之后才转发 text_delta / thinking_delta（message_update）；
+            // 不发 start，面板就收不到任何增量，只能等整段回复结束才一次性出现。
+            const ensureStarted = () => {
+              if (started) return;
+              started = true;
+              stream.push({ type: 'start', partial: partial() });
+            };
 
-        const usage = createStreamUsageAccumulator('openai');
-        const usageMeta = { provider: String(route.provider), model: route.model, source: 'browser-agent' };
-        try {
-          for await (const event of readSseEvents(response)) {
-            const data = event.data.trim();
-            if (!data || data === '[DONE]') continue;
-            let json: { choices?: Array<{ delta?: Record<string, unknown>; finish_reason?: string | null }>; usage?: unknown };
-            try { json = JSON.parse(data); } catch { continue; }
-            usage.feed(json);
-            const delta = json.choices?.[0]?.delta || {};
-            // DeepSeek / Qwen / vLLM 用 reasoning_content，OpenRouter 等用 reasoning（字符串）。
-            const reasoningDelta = typeof delta.reasoning_content === 'string' ? delta.reasoning_content
-              : typeof delta.reasoning === 'string' ? delta.reasoning : '';
-            if (reasoningDelta) {
-              if (!thinkingOpen && !thinking) {
-                thinkingOpen = true;
-                stream.push({ type: 'thinking_start', contentIndex: 0, partial: partial() });
+            for await (const event of readSseEvents(response)) {
+              arm('idle');
+              const data = event.data.trim();
+              if (!data || data === '[DONE]') continue;
+              let json: { choices?: Array<{ delta?: Record<string, unknown>; finish_reason?: string | null }>; usage?: unknown };
+              try { json = JSON.parse(data); } catch { continue; }
+              usage.feed(json);
+              const delta = json.choices?.[0]?.delta || {};
+              // DeepSeek / Qwen / vLLM 用 reasoning_content，OpenRouter 等用 reasoning（字符串）。
+              const reasoningDelta = typeof delta.reasoning_content === 'string' ? delta.reasoning_content
+                : typeof delta.reasoning === 'string' ? delta.reasoning : '';
+              if (reasoningDelta) {
+                ensureStarted();
+                emitted = true;
+                if (!thinkingOpen && !thinking) {
+                  thinkingOpen = true;
+                  stream.push({ type: 'thinking_start', contentIndex: 0, partial: partial() });
+                }
+                thinking += reasoningDelta;
+                stream.push({ type: 'thinking_delta', contentIndex: 0, delta: reasoningDelta, partial: partial() });
               }
-              thinking += reasoningDelta;
-              stream.push({ type: 'thinking_delta', contentIndex: 0, delta: reasoningDelta, partial: partial() });
-            }
-            if (typeof delta.content === 'string' && delta.content) {
-              if (thinkingOpen) {
-                thinkingOpen = false;
-                stream.push({ type: 'thinking_end', contentIndex: 0, content: thinking, partial: partial() });
+              if (typeof delta.content === 'string' && delta.content) {
+                ensureStarted();
+                emitted = true;
+                if (thinkingOpen) {
+                  thinkingOpen = false;
+                  stream.push({ type: 'thinking_end', contentIndex: 0, content: thinking, partial: partial() });
+                }
+                text += delta.content;
+                stream.push({ type: 'text_delta', contentIndex: thinking ? 1 : 0, delta: delta.content, partial: partial() });
               }
-              text += delta.content;
-              stream.push({ type: 'text_delta', contentIndex: thinking ? 1 : 0, delta: delta.content, partial: partial() });
-            }
-            const toolCallsDelta = delta.tool_calls;
-            if (Array.isArray(toolCallsDelta)) {
-              for (const piece of toolCallsDelta as Array<Record<string, unknown>>) {
-                const index = Number(piece?.index ?? 0);
-                const current = toolCalls[index] || { index };
-                const fn = piece?.function as Record<string, unknown> | undefined;
-                if (typeof piece?.id === 'string') current.id = piece.id;
-                if (typeof fn?.name === 'string') current.name = fn.name;
-                if (typeof fn?.arguments === 'string') current.arguments = (current.arguments || '') + fn.arguments;
-                toolCalls[index] = current;
+              const toolCallsDelta = delta.tool_calls;
+              if (Array.isArray(toolCallsDelta)) {
+                emitted = true;
+                for (const piece of toolCallsDelta as Array<Record<string, unknown>>) {
+                  const index = Number(piece?.index ?? 0);
+                  const current = toolCalls[index] || { index };
+                  const fn = piece?.function as Record<string, unknown> | undefined;
+                  if (typeof piece?.id === 'string') current.id = piece.id;
+                  if (typeof fn?.name === 'string') current.name = fn.name;
+                  if (typeof fn?.arguments === 'string') current.arguments = (current.arguments || '') + fn.arguments;
+                  toolCalls[index] = current;
+                }
               }
+              if (json.choices?.[0]?.finish_reason) finishReason = json.choices[0].finish_reason;
             }
-            if (json.choices?.[0]?.finish_reason) finishReason = json.choices[0].finish_reason;
+            clearTimeout(stallTimer);
+            commitStreamUsage(usageMeta, usage, 'ok');
+            if (thinkingOpen) {
+              thinkingOpen = false;
+              stream.push({ type: 'thinking_end', contentIndex: 0, content: thinking, partial: partial() });
+            }
+            const finalMessage = partial(true);
+            if (invalidToolCalls.length) {
+              const truncated = finishReason === 'length' ? '，输出被 max_tokens 截断' : '';
+              throw new Error('模型返回的工具参数不完整或不是合法 JSON（' + invalidToolCalls.join('、') + truncated + '），未执行任何工具，画布未改动。');
+            }
+            const tokens = usage.result();
+            const message: AssistantMessage = {
+              ...finalMessage,
+              ...(tokens ? { usage: {
+                ...EMPTY_USAGE,
+                input: Math.max(0, tokens.inputTokens - (tokens.cachedInputTokens ?? 0)),
+                output: tokens.outputTokens,
+                cacheRead: tokens.cachedInputTokens ?? 0,
+                totalTokens: tokens.totalTokens,
+              } as AssistantMessage['usage'] } : {}),
+              stopReason: finishReason === 'tool_calls' ? 'toolUse' : finishReason === 'length' ? 'length' : 'stop',
+              timestamp: Date.now(),
+            };
+            stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'length' | 'toolUse', message });
+            stream.end(message);
+            return;
+          } catch (error) {
+            clearTimeout(stallTimer);
+            // 卡住检测触发的 abort 会让 fetch / reader 抛 AbortError，这里换回真正的原因。
+            const cause = stall && !userSignal?.aborted ? stall : error;
+            if (userSignal?.aborted || emitted || attempt >= limits.retries || !isTransient(cause)) {
+              commitStreamUsage(usageMeta, usage, streamOutcome(cause, userSignal));
+              throw cause;
+            }
+            const wait = cause instanceof RetryableHttpError && cause.retryAfterMs !== undefined
+              ? cause.retryAfterMs
+              : limits.retryBaseMs * 2 ** attempt;
+            await sleep(wait, userSignal);
           }
-        } catch (error) {
-          commitStreamUsage(usageMeta, usage, streamOutcome(error, options?.signal));
-          throw error;
         }
-        commitStreamUsage(usageMeta, usage, 'ok');
-        if (thinkingOpen) {
-          thinkingOpen = false;
-          stream.push({ type: 'thinking_end', contentIndex: 0, content: thinking, partial: partial() });
-        }
-        const finalMessage = partial(true);
-        if (invalidToolCalls.length) {
-          const truncated = finishReason === 'length' ? '，输出被 max_tokens 截断' : '';
-          throw new Error('模型返回的工具参数不完整或不是合法 JSON（' + invalidToolCalls.join('、') + truncated + '），未执行任何工具，画布未改动。');
-        }
-        const message: AssistantMessage = {
-          ...finalMessage,
-          stopReason: finishReason === 'tool_calls' ? 'toolUse' : finishReason === 'length' ? 'length' : 'stop',
-          timestamp: Date.now(),
-        };
-        stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'length' | 'toolUse', message });
-        stream.end(message);
       } catch (error) {
-        const aborted = Boolean(options?.signal?.aborted);
+        const aborted = Boolean(userSignal?.aborted);
         const message: AssistantMessage = {
           ...startMessage,
           stopReason: aborted ? 'aborted' : 'error',
-          errorMessage: displayError(error),
+          // 用户停止不是错误：不把 "signal is aborted without reason" 这类底层文案写进会话。
+          errorMessage: aborted ? AGENT_ABORTED_MESSAGE : displayError(error),
           timestamp: Date.now(),
         };
         stream.push({ type: 'error', reason: aborted ? 'aborted' : 'error', error: message });
         stream.end(message);
+      } finally {
+        userSignal?.removeEventListener('abort', onUserAbort);
       }
     })();
     return stream;
