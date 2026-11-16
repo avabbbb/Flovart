@@ -55,6 +55,8 @@ export interface CanvasRecipeStep {
 export interface CanvasRecipe {
   steps: CanvasRecipeStep[];
   layout: { columns: number };
+  /** 选区里的备注（文本节点）：只作作者说明附在 Skill 里，不是步骤、不当 prompt。 */
+  notes?: string[];
 }
 
 export interface UserSkillRecord {
@@ -129,12 +131,20 @@ function layoutRows(nodes: WorkflowNode[]): WorkflowNode[][] {
 
 export function recipeFromNodes(project: Pick<WorkflowProject, 'nodes' | 'connections'>, nodeIds: readonly string[]): CanvasRecipe {
   const wanted = new Set(nodeIds);
+  // 文本节点是备注：不进入 recipe 步骤、不当输入，内容只作为作者说明保留。
+  const isNote = (node: WorkflowNode) => node.type === 'text';
+  const noteIds = new Set(project.nodes.filter(isNote).map(node => node.id));
   const titleById = new Map(project.nodes.map(node => [node.id, node.title || node.id]));
-  const rows = layoutRows(project.nodes.filter(node => wanted.has(node.id)));
+  const picked = project.nodes.filter(node => wanted.has(node.id));
+  const notes = layoutRows(picked.filter(isNote)).flat()
+    .map(node => stringField(metadataOf(node), 'content', 'text') || '')
+    .map(text => text.trim())
+    .filter(Boolean);
+  const rows = layoutRows(picked.filter(node => !isNote(node)));
   const steps = rows.flat().map<CanvasRecipeStep>(node => {
     const meta = metadataOf(node);
     const inputs = project.connections
-      .filter(connection => connection.toNodeId === node.id)
+      .filter(connection => connection.toNodeId === node.id && !noteIds.has(connection.fromNodeId))
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       .map(connection => titleById.get(connection.fromNodeId))
       .filter((title): title is string => Boolean(title));
@@ -144,12 +154,12 @@ export function recipeFromNodes(project: Pick<WorkflowProject, 'nodes' | 'connec
       title: node.title || node.id,
       model: stringField(meta, 'productModelId', 'model'),
       mode: stringField(meta, 'mode', 'generationMode'),
-      prompt: stringField(meta, 'prompt', 'text', 'content'),
+      prompt: stringField(meta, 'prompt'),
       params: pickParams(meta),
       inputs,
     };
   });
-  return { steps, layout: { columns: rows.reduce((max, row) => Math.max(max, row.length), 0) } };
+  return { steps, layout: { columns: rows.reduce((max, row) => Math.max(max, row.length), 0) }, ...(notes.length ? { notes } : {}) };
 }
 
 export function normalizeSkillSlug(value: string): string {
@@ -164,7 +174,6 @@ export function normalizeSkillSlug(value: string): string {
 }
 
 const NODE_TYPE_LABEL: Record<string, string> = {
-  text: '文本',
   image: '图片',
   video: '视频',
   audio: '音频',
@@ -176,13 +185,14 @@ function excerpt(value: string): string {
 }
 
 function describeStep(step: CanvasRecipeStep, index: number): string {
-  const parts = [String(index + 1) + '. 创建' + (NODE_TYPE_LABEL[step.type] ?? step.type) + '节点「' + step.title + '」'];
+  const generation = step.type === 'image' || step.type === 'video';
+  const parts = [String(index + 1) + '. ' + (generation ? '用 flovart_generate 建' : '创建') + (NODE_TYPE_LABEL[step.type] ?? step.type) + (generation ? '生成' : '') + '节点「' + step.title + '」'];
   if (step.model) parts.push('模型 ' + step.model);
   if (step.mode) parts.push('方式 ' + step.mode);
   if (step.inputs.length) parts.push('输入：' + step.inputs.join('、'));
   const params = Object.entries(step.params).map(([key, value]) => key + '=' + String(value)).join('，');
   if (params) parts.push('参数：' + params);
-  if (step.prompt) parts.push('提示词参考：' + excerpt(step.prompt));
+  if (step.prompt) parts.push('Prompt Bar 提示词参考：' + excerpt(step.prompt));
   return parts.join('；');
 }
 
@@ -190,7 +200,8 @@ function recipeReplayPrompt(recipe: CanvasRecipe, name: string): string {
   return [
     '按 Skill「' + name + '」复刻以下画布制作流程：用用户提供的新输入替换原内容，保持节点类型、模型、参数与连线关系不变。',
     ...recipe.steps.map(describeStep),
-    '节点按 ' + Math.max(1, recipe.layout.columns) + ' 列网格排列，连线与上述输入一致；缺少必要输入时先向用户询问，付费生成前遵循当前生成模式的确认规则。',
+    '节点按 ' + Math.max(1, recipe.layout.columns) + ' 列网格排列，连线与上述输入一致（输入同时作为 @引用）；不要建文本节点承载提示词；缺少必要输入时先向用户询问，付费生成前遵循当前生成模式的确认规则。',
+    ...(recipe.notes?.length ? ['作者说明（备注，仅供理解意图，不是步骤）：' + recipe.notes.map(excerpt).join(' / ')] : []),
   ].join('\n');
 }
 

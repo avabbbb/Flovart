@@ -19,6 +19,7 @@ import { mediaKindOf } from '../studio/assetLibraryShared';
 import type { AssetSuggestion } from '../MentionList';
 import type { MentionData } from '../MediaMentionExtension';
 import { createWorkflowNode, scriptNodeHeight, WORKFLOW_NODE_SPECS } from './constants';
+import { buildScriptMaterializeOps } from './scriptMaterialize';
 import { inheritGenerationConfig } from '../../services/generationInheritance';
 import { extractVideoFrame } from '../../services/videoFrameExtractor';
 import { applyWorkflowMutation, redoWorkflowDraftChangeSet, undoWorkflowDraftChangeSet, workflowDocumentOperationsFromFrames } from './draftAuthority';
@@ -77,7 +78,7 @@ import { useProductionProjectionAdapter } from './useProductionProjectionAdapter
 import { composeImageGrid } from './gridComposer';
 import { LIGHTING_PRESETS, buildRelightPrompt } from './LightingPresets';
 import { isWorkflowGenerationActive } from '../../services/workflowGeneration';
-import type { WorkflowConnection, WorkflowDocumentOperation, WorkflowNode as WorkflowNodeData, WorkflowNodeType, WorkflowPoint, WorkflowProject, WorkflowSnapshot, WorkflowViewport, ScriptShot, SlashCommand } from './types';
+import type { WorkflowConnection, WorkflowDocumentOperation, WorkflowNode as WorkflowNodeData, WorkflowNodeType, WorkflowPoint, WorkflowProject, WorkflowSnapshot, WorkflowViewport, SlashCommand } from './types';
 import {
   runWorkflowCropOperation,
   runWorkflowImageEditOperation,
@@ -1430,71 +1431,20 @@ export function InfiniteWorkflow({
     const snapshot = currentSnapshot();
     const scriptNode = snapshot.nodes.find(n => n.id === scriptNodeId);
     if (!scriptNode || scriptNode.type !== 'script') return;
-    const breakdown = scriptNode.metadata.scriptBreakdown;
-    if (!breakdown || breakdown.shots.length === 0) return;
-
-    const shotsToGenerate = breakdown.shots.filter(shot => {
-      const existingId = mode === 'image' ? shot.imageNodeId : shot.videoNodeId;
-      if (existingId && snapshot.nodes.some(n => n.id === existingId)) return false;
-      const promptOverride = mode === 'image' ? shot.imagePromptOverride : shot.videoPromptOverride;
-      return Boolean(promptOverride || shot.action || shot.scene);
-    });
-    if (shotsToGenerate.length === 0) return;
-
-    const nodeWidth = mode === 'image' ? 340 : 420;
-    const nodeHeight = mode === 'image' ? 240 : 236;
-    const gapX = 20;
-    const gapY = 20;
-    const perRow = 5;
-    const startX = scriptNode.position.x + scriptNode.width + 80;
-    const startY = scriptNode.position.y;
-
-    // 新节点占据的网格区域（x 条带 × y 波段）都参与避让：只判 x 会把远处
-    // 不同高度的节点也当成障碍，导致新分镜被推出很远。
-    const rows = Math.ceil(shotsToGenerate.length / perRow);
-    const rightEdge = Math.max(startX, ...snapshot.nodes
-      .filter(n => n.position.x < startX + perRow * (nodeWidth + gapX) && n.position.x + n.width > startX
-        && n.position.y < startY + rows * (nodeHeight + gapY) && n.position.y + n.height > startY)
-      .map(n => n.position.x + n.width + gapX));
-    const originX = rightEdge > startX ? rightEdge : startX;
-
-    const ops: WorkflowDocumentOperation[] = [];
-    const newNodeIds: string[] = [];
-    const batchId = nanoid();
-    const updatedShots: ScriptShot[] = [...breakdown.shots];
-
-    // 参数继承：新分镜沿用本脚本已有同模式分镜的模型/比例/风格，避免回退到默认模型。
-    const inheritedConfig = inheritGenerationConfig(mode, breakdown.shots.map(shot => {
-      const existingId = mode === 'image' ? shot.imageNodeId : shot.videoNodeId;
-      return existingId ? snapshot.nodes.find(n => n.id === existingId) : undefined;
-    }));
-    shotsToGenerate.forEach((shot, index) => {
-      const col = index % perRow;
-      const row = Math.floor(index / perRow);
-      const nodeId = nanoid();
-      newNodeIds.push(nodeId);
-      const promptOverride = mode === 'image' ? shot.imagePromptOverride : shot.videoPromptOverride;
-      const prompt = promptOverride || [shot.scene, shot.action, shot.emotion].filter(Boolean).join(', ');
-      const newNode = createWorkflowNode(nodeId, mode, {
-        x: originX + col * (nodeWidth + gapX),
-        y: startY + row * (nodeHeight + gapY),
-      }, { prompt, status: 'idle', ...(inheritedConfig ? { config: inheritedConfig } : {}) });
-      newNode.title = `分镜 ${shot.index + 1}`;
-      ops.push({ type: 'add_node', node: newNode });
-      ops.push({ type: 'connect_nodes', fromNodeId: scriptNodeId, toNodeId: nodeId });
-      const shotIndex = updatedShots.findIndex(s => s.id === shot.id);
-      if (shotIndex >= 0) {
-        updatedShots[shotIndex] = mode === 'image'
-          ? { ...updatedShots[shotIndex], imageNodeId: nodeId }
-          : { ...updatedShots[shotIndex], videoNodeId: nodeId };
-      }
-    });
-
-    ops.push({ type: 'update_node', id: scriptNodeId, metadata: { ...scriptNode.metadata, scriptBreakdown: { ...breakdown, shots: updatedShots } } });
-    ops.push({ type: 'group_nodes', ids: newNodeIds, batchId, source: 'auto' });
-
-    const success = applyOps(ops);
-    if (success) {
+    if (!scriptNode.metadata.scriptBreakdown?.shots.length) return;
+    // 与 Agent 的 workflow.script.materialize 同一个纯函数：每行一个生成节点，提示词写进 Prompt Bar，
+    // 锚点成 @chip + 连线，节点挂 shot 元数据，脚本行回链。用户在编辑器里点了批量生成，所以建好后直接入队运行。
+    let plan: ReturnType<typeof buildScriptMaterializeOps>;
+    try {
+      plan = buildScriptMaterializeOps(scriptNode, { kind: mode, nodes: snapshot.nodes, connections: snapshot.connections, createId: nanoid });
+    } catch (error) {
+      setNotice(displayError(error, '分镜生成失败'));
+      return;
+    }
+    if (!plan.created.length) return;
+    if (plan.diagnostics.length) setNotice(plan.diagnostics.map(item => item.message).join('；'));
+    const newNodeIds = plan.created.map(item => item.nodeId);
+    if (applyOps(plan.operations)) {
       newNodeIds.forEach(id => enqueueRunNode(id));
       selectNodes(newNodeIds);
     }

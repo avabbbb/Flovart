@@ -174,6 +174,20 @@ const DEFINITIONS = [
     },
   },
   {
+    command: 'workflow.script.materialize',
+    name: 'flovart_script_materialize',
+    surfaces: ALL,
+    description: '把脚本节点的分镜行物化为生成节点：每行一个 image（或 video）生成节点，行里的 imagePrompt/videoPrompt 写进该节点 Prompt Bar，锚点（characterRefs 与 prompt 里的 @ref:<id>）以 @chip + 连线接上，节点挂 shot 元数据，脚本行回存 imageNodeId/videoNodeId。只建不跑：已物化的行跳过；要运行请把返回的 nodeIds 交给 flovart_workflow_node_run（一次确认，可按批分开，如先 1-5 再 6-9）。',
+    fields: {
+      scriptNodeId: { type: 'string', minLength: 1, description: '脚本节点 id' },
+      kind: { type: 'string', enum: ['image', 'video'], description: '建图片还是视频生成节点，默认 image' },
+      rows: { type: 'string', description: '1 起的分镜行号：1-5、1,3,6-9 或 all（默认全部）' },
+      dryRun: { type: 'boolean', description: 'true 时只返回计划，不写画布' },
+      expectedRevision: { type: 'number' },
+      mutationId: { type: 'string' },
+    },
+  },
+  {
     command: 'workflow.node.run',
     name: 'flovart_workflow_node_run',
     aliases: ['flovart_workflow_run', 'flovart_run', 'flovart_approve_run'],

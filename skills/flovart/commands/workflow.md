@@ -27,9 +27,10 @@ npm run flovart:cli -- workflow.node.run --node-id <image-id> --idempotency-key 
 npm run flovart:cli -- workflow.node.run --node-ids <shot-1>,<shot-2>,<shot-3> --idempotency-key batch-1-v1 --json
 npm run flovart:cli -- workflow.focus.nodes --node-ids <shot-1>,<shot-2> --json
 npm run flovart:cli -- workflow.node.stop --node-id <image-id> --json
+npm run flovart:cli -- workflow.script.materialize --script-node-id <script-id> --kind image --rows 1-5 --idempotency-key shots-1 --json
 ```
 
-The stable Agent surface is `workflow.inspect`, `workflow.selection.get`, `workflow.focus.nodes`, `workflow.apply`, `workflow.generate`, `workflow.models.list`, `workflow.media.import`, `workflow.note.write`, `workflow.node.run`, `workflow.node.stop` and `workflow.node.tool`. Tool names, descriptions and full parameter schemas are the same in the built-in Agent, the local Agent, MCP and DSH (`tools/flovart/agent-tools.js`). Granular `workflow.node.*`, connection, selection, and viewport commands remain compatibility adapters and route through the same visible Workflow contract.
+The stable Agent surface is `workflow.inspect`, `workflow.selection.get`, `workflow.focus.nodes`, `workflow.apply`, `workflow.generate`, `workflow.models.list`, `workflow.media.import`, `workflow.script.materialize`, `workflow.note.write`, `workflow.node.run`, `workflow.node.stop` and `workflow.node.tool`. Tool names, descriptions and full parameter schemas are the same in the built-in Agent, the local Agent, MCP and DSH (`tools/flovart/agent-tools.js`). Granular `workflow.node.*`, connection, selection, and viewport commands remain compatibility adapters and route through the same visible Workflow contract.
 
 ## Generating: one node, prompt in its Prompt Bar
 

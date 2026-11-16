@@ -27,7 +27,21 @@ export interface ScriptShot {
   dialogue?: string;
   sfx?: string;
   scene?: string;
+  /** 景别：特写 / 近景 / 中景 / 全景 / 远景 …（LibTV rows.shotSize）。 */
+  shotSize?: string;
+  /** 光影与氛围（LibTV rows.lightingAndAtmosphere）。 */
+  lighting?: string;
+  /** 本镜头引用的锚点节点 id（角色/场景/道具/风格）；物化时以 @chip + 连线接到生成节点。 */
+  characterRefs?: string[];
+  /** 声音设计：音效、配乐提示（LibTV rows.audioEffects）。 */
+  audio?: string;
+  /** 物化为图片生成节点时写进其 Prompt Bar 的提示词（替代 imagePromptOverride）。 */
+  imagePrompt?: string;
+  /** 物化为视频生成节点时写进其 Prompt Bar 的提示词（替代 videoPromptOverride）。 */
+  videoPrompt?: string;
+  /** @deprecated 旧字段，只读迁移：用 scriptShotPrompt() 读取，写入用 imagePrompt。 */
   imagePromptOverride?: string;
+  /** @deprecated 旧字段，只读迁移：用 scriptShotPrompt() 读取，写入用 videoPrompt。 */
   videoPromptOverride?: string;
   /** 分镜表：镜头时长（秒），由 Agent 或编辑器填写。 */
   durationSec?: number;
@@ -426,8 +440,14 @@ export interface WorkflowShotMeta {
   scene?: string;
   camera?: string;
   dialogue?: string;
+  shotSize?: string;
+  lighting?: string;
+  audio?: string;
   /** 显式指定的锚点节点；未指定时使用上游连线中的已批准锚点。 */
   anchorNodeIds?: string[];
+  /** 由脚本节点物化而来时：来源脚本节点与分镜行 id（脚本行反向保存 imageNodeId/videoNodeId）。 */
+  scriptNodeId?: string;
+  scriptShotId?: string;
 }
 
 export type WorkflowAnchorKind = 'character' | 'scene' | 'product' | 'style';

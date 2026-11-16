@@ -25,6 +25,7 @@ export const WORKSPACE_WRITE_COMMAND_NAMES = Object.freeze([
   'workflow.focus.nodes',
   'workflow.note.write',
   'workflow.media.import',
+  'workflow.script.materialize',
 ]);
 
 export const WORKSPACE_EXECUTION_COMMAND_NAMES = Object.freeze([

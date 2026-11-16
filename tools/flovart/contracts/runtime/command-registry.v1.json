@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "4c92aab1bba179b79c678a7d6a8d4c9ebac3457bdb31fa5521dd94f661c69837",
+  "registryHash": "6f15cd2096c1afe2fab256fdde98f3335e00b7060b068927772ea27f7e00d1c1",
   "commands": [
     {
       "name": "runtime.status",
@@ -603,6 +603,20 @@
         "title": "string?",
         "attachToNodeId": "string?",
         "placement": "right|below|above|left?",
+        "expectedRevision": "number?",
+        "mutationId": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.script.materialize",
+      "summary": "Materialize script storyboard rows into generation nodes: one image or video node per row, row prompt written into that node's Prompt Bar, anchors linked as @chips + connections, shot metadata attached, script rows back-linked. Creates only; never runs.",
+      "args": {
+        "projectId": "string?",
+        "scriptNodeId": "string",
+        "kind": "image|video?",
+        "rows": "string?",
+        "dryRun": "boolean?",
         "expectedRevision": "number?",
         "mutationId": "string?"
       },

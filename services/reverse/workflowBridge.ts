@@ -91,7 +91,7 @@ export async function sendReverseAsSubgraph(projectId: string, reverseProject: R
     ...plan.update.map((node) => ({
       type: 'update_node' as const,
       id: node.id,
-      patch: { title: node.title, position: node.position, width: node.width, height: node.height, parentId: node.parentId },
+      patch: { title: node.title, position: node.position, width: node.width, height: node.height, parentId: node.parentId, ...(node.shot ? { shot: node.shot } : {}) },
       metadata: node.metadata,
     })),
     ...plan.add.map((node) => ({ type: 'add_node' as const, node })),

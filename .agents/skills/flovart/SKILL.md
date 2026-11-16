@@ -176,6 +176,14 @@ the browser itself is offline.
   as the message says; do not try models one by one.
 - Bring an image from a URL or the asset library onto the canvas →
   `workflow.media.import` (optionally `attachToNodeId` to use it as a reference).
+- Storyboard rows of a script node → `workflow.script.materialize --script-node-id
+  <id> --kind image|video --rows 1-5`. One generation node per row: the row's
+  `imagePrompt` / `videoPrompt` goes into that node's Prompt Bar, the row's
+  `characterRefs` (and any `@ref:<id>` in the prompt) become @chips +
+  connections, the node carries `shot` metadata, and the script row keeps only
+  `imageNodeId` / `videoNodeId`. It creates and never runs; rows already
+  materialized are skipped. Run the returned `nodeIds` with one
+  `workflow.node.run` (batch by rows, e.g. 1-5 then 6-9).
 - Write a note only when the user asks for one → `workflow.note.write`. Notes
   never connect to anything.
 - Move, connect, disconnect, group, retitle or reorder references → one
