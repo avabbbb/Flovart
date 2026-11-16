@@ -13,36 +13,138 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Lint, typecheck, tests and build run as independent parallel jobs.
+# Pull requests run only the Vitest tests their diff can reach
+# (`vitest run --changed <merge-base>`); pushes to main, manual runs and PRs
+# that touch dependency/config/generated/non-module inputs run the full suite,
+# split across shards. See .github/scripts/test-plan.sh for the rules.
+
 jobs:
-  web-and-runtime:
-    name: Web, extension, DSH, Rust
+  plan:
+    name: Plan test run
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+      base: ${{ steps.plan.outputs.base }}
+      shards: ${{ steps.plan.outputs.shards }}
+      shard_total: ${{ steps.plan.outputs.shard_total }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Choose full or changed-only tests
+        id: plan
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          mode=full
+          base=""
+          reason="${EVENT_NAME} always runs the full suite"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+            base="$(git merge-base "origin/${BASE_REF}" HEAD)"
+            plan="$(.github/scripts/test-plan.sh "$base" HEAD)"
+            mode="$(sed -n 's/^mode=//p' <<< "$plan")"
+            reason="$(sed -n 's/^reason=//p' <<< "$plan")"
+          fi
+          if [ "$mode" = "full" ]; then
+            shards='[1,2,3]'; total=3
+          else
+            shards='[1]'; total=1
+          fi
+          echo "Test plan: mode=$mode base=${base:-n/a} ($reason)"
+          {
+            echo "mode=$mode"
+            echo "base=$base"
+            echo "shards=$shards"
+            echo "shard_total=$total"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### Test plan"
+            echo "- mode: \`$mode\`"
+            echo "- merge base: \`${base:-n/a}\`"
+            echo "- reason: $reason"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  lint:
+    name: Lint and repo contracts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node and dependencies
+        uses: ./.github/actions/setup-deps
+
+      - name: Docs contract
+        run: npm run docs:check
+
+      - name: Tracked secret audit
+        run: npm run release:secret-audit
+
+  typecheck:
+    name: Typecheck (tsgo)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node and dependencies
+        uses: ./.github/actions/setup-deps
+
+      - name: Typecheck
+        run: npm run typecheck
+
+  test:
+    name: Tests (${{ needs.plan.outputs.mode }}${{ needs.plan.outputs.mode == 'full' && format(' {0}/{1}', matrix.shard, needs.plan.outputs.shard_total) || '' }})
+    needs: plan
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Changed-only runs diff against the merge base, which needs history.
+          fetch-depth: ${{ needs.plan.outputs.mode == 'changed' && '0' || '1' }}
+
+      - name: Setup Node and dependencies
+        uses: ./.github/actions/setup-deps
+
+      - name: Unit and integration tests (full, sharded)
+        if: needs.plan.outputs.mode == 'full'
+        shell: bash
+        run: npx vitest run --reporter=dot --shard=${{ matrix.shard }}/${{ needs.plan.outputs.shard_total }}
+
+      - name: Unit and integration tests (changed since merge base)
+        if: needs.plan.outputs.mode == 'changed'
+        shell: bash
+        run: npx vitest run --reporter=dot --changed ${{ needs.plan.outputs.base }} --passWithNoTests
+
+  build:
+    name: Build (web, extension, DSH, Rust)
     runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
       - name: Setup Rust
         if: github.event_name != 'pull_request'
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install DSH plugin dependencies
-        run: npm --prefix dsh-plugin ci
+      - name: Setup Node and dependencies
+        uses: ./.github/actions/setup-deps
 
       - name: Audit DSH plugin dependencies
         if: github.event_name != 'pull_request'
         run: npm audit --prefix dsh-plugin --audit-level=moderate
-
-      - name: Docs contract
-        run: npm run docs:check
 
       - name: Verify release versions
         if: github.event_name != 'pull_request'
@@ -51,15 +153,6 @@ jobs:
       - name: Release red-team invariants
         if: github.event_name != 'pull_request'
         run: npm run release:red-team
-
-      - name: Tracked secret audit
-        run: npm run release:secret-audit
-
-      - name: Typecheck
-        run: npx tsc --noEmit
-
-      - name: Unit and integration tests
-        run: npm test -- --reporter=dot
 
       - name: Web build
         run: npm run build
@@ -99,17 +192,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install DSH plugin dependencies
-        run: npm --prefix dsh-plugin ci
+      - name: Setup Node and dependencies
+        uses: ./.github/actions/setup-deps
 
       - name: Audit DSH plugin dependencies
         run: npm audit --prefix dsh-plugin --audit-level=moderate

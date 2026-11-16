@@ -1,0 +1,35 @@
+name: Setup Node and dependencies
+description: >
+  Node 22 with the npm download cache, plus root and DSH plugin node_modules.
+  On Linux runners the installed node_modules trees are cached by lockfile hash,
+  so a warm run skips `npm ci` entirely. Windows keeps plain `npm ci` (restoring
+  a large node_modules tarball there is not faster than installing).
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: npm
+        cache-dependency-path: |
+          package-lock.json
+          dsh-plugin/package-lock.json
+
+    - name: Restore node_modules
+      id: modules
+      if: runner.os == 'Linux'
+      uses: actions/cache@v4
+      with:
+        path: |
+          node_modules
+          dsh-plugin/node_modules
+        key: node-modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json', 'dsh-plugin/package-lock.json') }}
+
+    - name: Install dependencies
+      if: steps.modules.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        npm ci
+        npm --prefix dsh-plugin ci
