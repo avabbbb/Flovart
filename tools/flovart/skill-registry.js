@@ -238,6 +238,35 @@ export class SkillRegistry {
     await fs.rm(packageDir, { recursive: true, force: true });
   }
 
+  /**
+   * Read one text file of a scanned package for an Agent: SKILL.md, or a file
+   * under references/ or commands/. Rejects traversal (`..`, absolute paths,
+   * backslashes, drive letters, NUL) and anything resolving outside the package.
+   */
+  async readFile(id, relativePath = 'SKILL.md') {
+    if (!safeSkillPackageName(id)) throw new Error(`无效的 Skill id：${id}`);
+    const raw = String(relativePath ?? '').trim() || 'SKILL.md';
+    const parts = raw.replace(/^\.\//, '').split('/');
+    const safe = !raw.includes('\0') && !raw.includes('\\') && !/^[A-Za-z]:/.test(raw) && !raw.startsWith('/')
+      && parts.every(part => part && part !== '.' && part !== '..');
+    const allowed = safe && (parts.join('/') === 'SKILL.md' || (parts.length >= 2 && (parts[0] === 'references' || parts[0] === 'commands')));
+    if (!allowed || !isSkillPackagePath(parts.join('/'))) throw new Error(`不允许读取的 Skill 路径：${raw}`);
+    const skills = await this.scan();
+    const skill = skills.find(item => item.id === id);
+    if (!skill) throw new Error(`Skill 不在本机注册表：${id}`);
+    const root = path.resolve(skill.packageDir);
+    const target = path.resolve(root, ...parts);
+    if (!target.startsWith(root + path.sep)) throw new Error(`不允许读取的 Skill 路径：${raw}`);
+    // 符号链接也不能把读取带出包目录。
+    const real = await fs.realpath(target).catch(() => null);
+    const realRoot = await fs.realpath(root).catch(() => root);
+    if (!real || !real.startsWith(realRoot + path.sep)) throw new Error(`Skill ${id} 里没有文件：${parts.join('/')}`);
+    const stat = await fs.stat(real);
+    if (!stat.isFile()) throw new Error(`Skill ${id} 里没有文件：${parts.join('/')}`);
+    if (stat.size > SKILL_PACKAGE_MAX_FILE_BYTES) throw new Error(`Skill 文件超过大小上限：${parts.join('/')}`);
+    return { path: parts.join('/'), size: stat.size, content: await fs.readFile(real, 'utf8') };
+  }
+
   /** Resolve one production package by id+version across all roots (for Agent binding). */
   async resolvePackage(id, version) {
     if (!safeSkillPackageName(id)) return null;

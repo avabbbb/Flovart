@@ -181,6 +181,9 @@ const READ_COMMANDS = new Set([
   'flovart_grep',
   'flovart_todo',
   'flovart_ask',
+  // 内核自带：读技能只读包内文本；项目记忆只写本机记忆，不触达画布、不计费。
+  'flovart_skill_read',
+  'flovart_memory',
   // 停止 / 选中 / 视口 / 聚焦不改文档；停止只会减少花费，不在手动模式里拦。
   'workflow.node.stop',
   'workflow.select',

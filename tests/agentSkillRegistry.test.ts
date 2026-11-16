@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync, existsSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -218,5 +218,60 @@ describe('agent SkillRegistry', () => {
     writeFileSync(join(skillsRoot, 'community.demo'), 'file-not-dir', 'utf8');
     const skills = await registry.scan();
     expect(skills.every(skill => skill.kind === 'production' || skill.kind === 'coding-agent')).toBe(true);
+  });
+});
+
+describe('agent SkillRegistry.readFile (/api/skills/:id/file)', () => {
+  let repoRoot: string;
+  let skillsRoot: string;
+  let registry: SkillRegistry;
+
+  beforeEach(() => {
+    repoRoot = mkdtempSync(join(tmpdir(), 'flovart-skill-file-'));
+    skillsRoot = join(repoRoot, '.agents', 'skills');
+    mkdirSync(skillsRoot, { recursive: true });
+    registry = new SkillRegistry({ repoRoot, roots: [skillsRoot] });
+    const dir = writePackage(skillsRoot, 'community.demo');
+    mkdirSync(join(dir, 'commands'), { recursive: true });
+    writeFileSync(join(dir, 'commands', 'run.md'), '# Run\n', 'utf8');
+    mkdirSync(join(dir, 'scripts'), { recursive: true });
+    writeFileSync(join(dir, 'scripts', 'install.md'), 'not for agents', 'utf8');
+    writeFileSync(join(repoRoot, 'secret.md'), 'TOP SECRET', 'utf8');
+    try { symlinkSync(join(repoRoot, 'secret.md'), join(dir, 'references', 'link.md')); } catch { /* 无符号链接权限时跳过该断言 */ }
+  });
+
+  afterEach(() => rmSync(repoRoot, { recursive: true, force: true }));
+
+  it('reads SKILL.md and files under references/ or commands/', async () => {
+    expect((await registry.readFile('community.demo')).content).toContain('# Demo');
+    expect(await registry.readFile('community.demo', 'references/creative-direction.md')).toMatchObject({ path: 'references/creative-direction.md', content: '# Direction\n' });
+    expect((await registry.readFile('community.demo', './commands/run.md')).content).toBe('# Run\n');
+  });
+
+  it.each([
+    '../../secret.md', 'references/../../../secret.md', '/etc/passwd', 'C:/x.md', 'references\\..\\..\\secret.md',
+    'scripts/install.md', 'flovart.skill.yaml', 'references/', 'assets/cover.png',
+  ])('blocks %s', async path => {
+    await expect(registry.readFile('community.demo', path)).rejects.toThrow(/不允许读取/);
+  });
+
+  it('blocks symlinks that leave the package and unknown ids', async () => {
+    if (existsSync(join(skillsRoot, 'community.demo', 'references', 'link.md'))) {
+      await expect(registry.readFile('community.demo', 'references/link.md')).rejects.toThrow(/没有文件/);
+    }
+    await expect(registry.readFile('community.demo', 'references/missing.md')).rejects.toThrow(/没有文件/);
+    await expect(registry.readFile('../x', 'SKILL.md')).rejects.toThrow(/无效的 Skill id/);
+    await expect(registry.readFile('community.missing', 'SKILL.md')).rejects.toThrow(/不在本机注册表/);
+  });
+
+  it('browser client calls /api/skills/:id/file with an encoded path', async () => {
+    const { ManagedSkillRegistryClient } = await import('../services/localSkillRegistry');
+    const calls: string[] = [];
+    const client = new ManagedSkillRegistryClient({ url: 'http://127.0.0.1:1', token: 't' } as never, (async (url: string) => {
+      calls.push(url);
+      return new Response(JSON.stringify({ ok: true, file: { path: 'references/a b.md', content: '# A' } }), { status: 200 });
+    }) as never);
+    expect(await client.readSkillFile('community.demo', 'references/a b.md')).toBe('# A');
+    expect(calls).toEqual(['http://127.0.0.1:1/api/skills/community.demo/file?path=references%2Fa%20b.md']);
   });
 });

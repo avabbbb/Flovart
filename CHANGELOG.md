@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Agent 渐进式技能加载：系统提示词只带技能索引，新增只读工具 `flovart_skill_read`（分页、越界拦截、会话内去重，已读列表跨压缩保留）；手动绑定的技能改为「强制使用」，首轮完整注入 SKILL.md（移除 2000 字截断）。本机 Agent 服务新增 `GET /api/skills/:id/file`（只读 SKILL.md、references/、commands/，拦截越界与符号链接逃逸）。
+- Agent 自动压缩上下文：发送前超阈值先压缩，上下文溢出时压缩后重试一次（拒答、限流不重试，溢出不再被翻译成「参数不被接受」）；会话菜单新增「压缩上下文」。
+- Agent 项目记忆工具 `flovart_memory`：按项目本机保存，最多 100 条、淘汰最旧，写入前脱敏；摘要注入系统提示词，会话菜单可查看与删除。
 - 区域引用「点选主体」M1：新增主体蒙版纯函数（点位归一化、SAM 提示坐标换算、候选选择、外接框外扩、框内 alpha 蒙版与 PNG 编码）与懒加载的 SlimSAM 分割 Worker 原型（`@huggingface/transformers` + `Xenova/slimsam-77-uniform`，WebGPU 优先、WASM 兜底，模型来源可用 `VITE_SEGMENTATION_MODEL_BASE_URL` 指向镜像）；`region.pick` 可选字段进入校验但不参与身份键。暂无 UI，未经真实浏览器验证。
 - Agent `media_view` 附带实测尺寸：图片写「原始 W×H，比例≈16:9」，视频帧网格说明里加原始分辨率，Agent 反推 / 复刻时不用看图猜比例。
 - 分组框跟随成员自动伸缩：成员移动、改尺寸、加入 / 移出、删除后，所在分组框（含嵌套分组，由内向外）贴合成员包围盒；拖动时实时跟随，松手与成员改动记在同一个 ChangeSet 里，一步撤销。折叠的分组不动；只手动拉大框本身不会被拉回。

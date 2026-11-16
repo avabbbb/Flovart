@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { AtSign, Box, Check, ChevronDown, Copy, GitBranch, Hand, Image as ImageIcon, KeyRound, LayoutGrid, Plus, RotateCw, Send, Square, Trash2, Video, X, Zap } from 'lucide-react';
+import { AtSign, BookMarked, Box, Check, ChevronDown, ChevronLeft, Copy, GitBranch, Hand, Image as ImageIcon, KeyRound, LayoutGrid, Minimize2, Plus, RotateCw, Send, Square, Trash2, Video, X, Zap } from 'lucide-react';
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { AGENT_ATTACHMENT_MAX, composerAttachmentsToImages, createComposerAttachment, mergeComposerAttachments, releaseComposerAttachment, type AgentComposerAttachment } from '../../services/agentComposerAttachments';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
@@ -30,6 +30,7 @@ import { BrowserAgentRuntime } from '../../services/browserAgentRuntime';
 import { loadAgentNodeMedia } from '../../services/agentMediaView';
 import { formatReceiptContext } from '../../services/agentReceipts';
 import { useAgentReceiptStore } from '../../stores/useAgentReceiptStore';
+import { useAgentMemoryStore } from '../../stores/useAgentMemoryStore';
 import { displayError as toDisplayError } from '../../services/displayError';
 import { agentSetupMessage, classifyAgentSetupError, type AgentSetupBlocker } from '../../services/runtimeHealth';
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
@@ -349,6 +350,10 @@ const userApiKeysRef = useRef(userApiKeys);
   }, []);
   const [replaceTarget, setReplaceTarget] = useState<AgentReference | null>(null);
   const [sessionList, setSessionList] = useState<Array<{ id: string; title: string; updatedAt: string }>>([]);
+  // 会话菜单里切换「历史对话 / 项目记忆」两种列表；项目记忆与内置 Agent 共用同一个 store。
+  const [sessionMenuView, setSessionMenuView] = useState<'sessions' | 'memory'>('sessions');
+  const memoryEntries = useAgentMemoryStore(state => state.byProject[project.id]);
+  useEffect(() => { void useAgentMemoryStore.getState().load(project.id).catch(() => undefined); }, [project.id]);
   const [activeSessionId, setActiveSessionId] = useState('');
   useEffect(() => { sessionGrantsRef.current.clear(); }, [activeSessionId]);
   // Lane15 first-run UX: setupBlocker classifies a cold-open/send failure via
@@ -703,6 +708,26 @@ const userApiKeysRef = useRef(userApiKeys);
     } catch (error) {
       setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: errorMessage(error) }]);
     }
+  };
+
+  /** 会话菜单「压缩上下文」：只对浏览器内置内核可用，运行中不压缩。 */
+  const handleCompactContext = async () => {
+    const kernel = kernelRef.current;
+    if (!kernel || sending) return;
+    dispatchLayer({ type: 'close', layer: 'sessions' });
+    try {
+      const result = await kernel.compactContext();
+      const snapshot = await kernel.snapshot();
+      setMessages(displayMessages(snapshot as FlovartAgentSnapshot, languageRef.current));
+      flashCopied(result.compacted ? t('agentPanel.compactDone') : t('agentPanel.compactNotNeeded'));
+    } catch (error) {
+      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: errorMessage(error) }]);
+    }
+  };
+
+  const openMemoryView = () => {
+    setSessionMenuView('memory');
+    void useAgentMemoryStore.getState().load(project.id);
   };
 
   const handleDeleteSession = async (sessionId: string) => {
@@ -1124,11 +1149,30 @@ const userApiKeysRef = useRef(userApiKeys);
           aria-label={t('agentPanel.history')}
           aria-expanded={sessionsOpen}
           title={t('agentPanel.history')}
-          onClick={() => { dispatchLayer({ type: 'toggle', layer: 'sessions' }); if (!sessionsOpen) void refreshSessions(); }}
+          onClick={() => { dispatchLayer({ type: 'toggle', layer: 'sessions' }); setSessionMenuView('sessions'); if (!sessionsOpen) void refreshSessions(); }}
         ><span>{activeSessionTitle}</span><ChevronDown size={13} /></button>
         {sessionsOpen && (
           <div className="agent-session-menu agent-header-menu is-left" role="menu" aria-label={t('agentPanel.history')}>
+            {sessionMenuView === 'memory' ? (
+              <>
+                <button type="button" role="menuitem" onClick={() => setSessionMenuView('sessions')}><ChevronLeft size={14} /><span><strong>{t('agentPanel.backToHistory')}</strong><small>{t('agentPanel.projectMemoryHint', memoryEntries?.length || 0)}</small></span></button>
+                <div className="agent-session-menu__list" aria-label={t('agentPanel.projectMemory')}>
+                  {!memoryEntries?.length && <p className="agent-session-menu__empty">{t('agentPanel.memoryEmpty')}</p>}
+                  {(memoryEntries || []).map(entry => (
+                    <div key={entry.id} className="agent-session-menu__item">
+                      <button type="button" title={entry.text} onClick={() => undefined}>
+                        <strong>{entry.text}</strong>
+                        <small>{formatSessionTime(new Date(entry.updatedAt).toISOString(), language)}{entry.tags?.length ? ' · ' + entry.tags.join('、') : ''}</small>
+                      </button>
+                      <button type="button" aria-label={`${t('agentPanel.deleteMemory')} ${entry.text}`} title={t('agentPanel.deleteMemory')} onClick={() => void useAgentMemoryStore.getState().remove(project.id, entry.id)}><Trash2 size={12} /></button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (<>
             <button type="button" role="menuitem" onClick={() => void handleNewConversation()}><Plus size={14} /><span><strong>{t('agentPanel.newChat')}</strong><small>{t('agentPanel.newChatHint')}</small></span></button>
+            {kernelRef.current && <button type="button" role="menuitem" disabled={sending} onClick={() => void handleCompactContext()}><Minimize2 size={14} /><span><strong>{t('agentPanel.compactContext')}</strong><small>{t('agentPanel.compactContextHint')}</small></span></button>}
+            {kernelRef.current && <button type="button" role="menuitem" onClick={openMemoryView}><BookMarked size={14} /><span><strong>{t('agentPanel.projectMemory')}</strong><small>{t('agentPanel.projectMemoryHint', memoryEntries?.length || 0)}</small></span></button>}
             <div className="agent-session-menu__list">
               {sessionList.length === 0 && <p className="agent-session-menu__empty">{t('agentPanel.noHistory')}</p>}
               {sessionList.map(session => (
@@ -1141,6 +1185,7 @@ const userApiKeysRef = useRef(userApiKeys);
                 </div>
               ))}
             </div>
+            </>)}
           </div>
         )}
         <DrawerChromeTabs />

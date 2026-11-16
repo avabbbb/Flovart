@@ -66,6 +66,8 @@ const TOOL_PHASES: Record<string, { state: AgentOrbState; copy: Copy }> = {
   flovart_web_search: { state: 'searching', copy: { zho: '正在联网搜索', en: 'Searching the web' } },
   flovart_grep: { state: 'searching', copy: { zho: '正在搜索本地文件', en: 'Searching local files' } },
   flovart_todo: { state: 'solving', copy: { zho: '正在规划任务', en: 'Planning the steps' } },
+  flovart_skill_read: { state: 'searching', copy: { zho: '正在读取技能', en: 'Reading the skill' } },
+  flovart_memory: { state: 'solving', copy: { zho: '正在整理项目记忆', en: 'Updating project memory' } },
   flovart_workflow_apply: { state: 'shaping', copy: { zho: '正在修改画布', en: 'Editing the canvas' } },
   flovart_workflow_node_run: { state: 'working', copy: { zho: '正在提交生成', en: 'Starting generation' } },
   flovart_ask: { state: 'listening', copy: { zho: '等你回答', en: 'Waiting for your answer' } },

@@ -427,6 +427,18 @@ export function startHttpServer() {
       if (request.method === 'GET' && url.pathname === '/api/skills') {
         return json(response, 200, { ok: true, skills: await skillRegistry.scan() });
       }
+      if (request.method === 'GET' && /^\/api\/skills\/[^/]+\/file$/.test(url.pathname)) {
+        // 内置 Agent 的 flovart_skill_read：只读 SKILL.md 与 references/、commands/ 下的文件，越界路径 400。
+        const id = decodeURIComponent(url.pathname.split('/').at(-2));
+        try {
+          const file = await skillRegistry.readFile(id, url.searchParams.get('path') || 'SKILL.md');
+          return json(response, 200, { ok: true, file });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          const notFound = /不在本机注册表|里没有文件/.test(message);
+          return json(response, notFound ? 404 : 400, { ok: false, error: { message } });
+        }
+      }
       if (request.method === 'GET' && /^\/api\/skills\/[^/]+$/.test(url.pathname)) {
         const id = decodeURIComponent(url.pathname.split('/').at(-1));
         let manifest;

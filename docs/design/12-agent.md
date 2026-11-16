@@ -36,6 +36,12 @@ Transport 只做参数解码、权限上下文与结果编码；不做 MCP → C
 
 内置 Assistant 的内核由 `BrowserAgentRuntime` 按项目持有（`services/browserAgentRuntime.ts`）；面板只是生命周期所有者与订阅者，不再直接构造内核。后续若让外部 Agent 通过命令面委派一轮内置对话，入口必须是这个运行时，而不是 React state。
 
+内置 Assistant（浏览器内核）的 harness：
+- **技能按需读取**：系统提示词只带技能索引（`.agents/skills/*` 的 name + description，排除给外部 CLI 用的 `flovart`、`open-flovart`，它们仍可按 id 读取）；任务命中技能时模型调用内核自带的只读工具 `flovart_skill_read` 读 SKILL.md 或 `references/`、`commands/` 下的文件（分页、拒绝越界、会话内去重）。Production Skill 面板里的手动绑定表示「强制使用」：首轮完整读取一次 SKILL.md，不截断。本机 Agent 服务对应接口 `GET /api/skills/:id/file?path=`。
+- **上下文压缩**：用 pi-agent-core 内置压缩；发送前估算超过阈值（窗口减 max(15%, 16384) 预留）先压缩，请求因上下文溢出失败时压缩后重试一次（拒答、限流不重试）；会话菜单可手动「压缩上下文」。压缩只影响发给模型的上下文，面板历史、技能已读列表、项目记忆保留。
+- **项目记忆**：内核自带工具 `flovart_memory`（add / list / search / delete），按 Flovart 项目隔离、存本机 localforage、每项目最多 100 条（满了淘汰最旧），写入前脱敏密钥 / Token / 密码；摘要注入系统提示词，会话菜单可查看与删除。
+- 这三个工具与 `flovart_todo` 一样只属于内置内核，不进 `tools/flovart/agent-tools.js` 的外部工具面。
+
 ## 4. 权威与安全
 
 - 修改绑定明确 project / revision；重试使用稳定幂等 ID；未知提交先查询。

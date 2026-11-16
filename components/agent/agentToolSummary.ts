@@ -113,6 +113,20 @@ function answerSummary(result: unknown, language: Lang): string {
   return pick(language, '你的回答：', 'Answered: ') + values.map(value => value.length > 40 ? value.slice(0, 39) + '…' : value).join(pick(language, '；', '; '));
 }
 
+/** flovart_skill_read 结果首行「【技能 <id> · <file>…】」（与 services/agentSkills.skillReadHeader 同构）。 */
+function skillReadHeaderOf(text: string): { id: string; file: string } | null {
+  const match = /^【技能 (\S+) · ([^，】]+)/.exec(String(text || '').trim());
+  return match ? { id: match[1], file: match[2] } : null;
+}
+
+/** 技能读取卡片「查看技能内容」里展示的原文（去掉首行标题）；不是成功读取原文时返回空串。 */
+export function skillReadContent(toolName: string | undefined, result: unknown): string {
+  if (toolName !== 'flovart_skill_read') return '';
+  const text = toolResultText(result);
+  if (!skillReadHeaderOf(text) || /^[^\n]*\n已读过/.test(text)) return '';
+  return text.slice(text.indexOf('\n') + 1);
+}
+
 /** 工具卡的一句话摘要 + 缩略图。 */
 export function summarizeToolCall(input: AgentToolSummaryInput): AgentToolSummary {
   const language: Lang = input.language === 'en' ? 'en' : 'zho';
@@ -145,7 +159,27 @@ export function summarizeToolCall(input: AgentToolSummaryInput): AgentToolSummar
     };
   }
 
+  if (name === 'flovart_skill_read') {
+    const header = skillReadHeaderOf(text);
+    const id = header?.id || String(args?.id || '').trim();
+    if (!id) return none;
+    const file = header?.file || String(args?.file || 'SKILL.md');
+    const target = file === 'SKILL.md' ? '' : ` · ${file}`;
+    if (status === 'pending') return { text: pick(language, `正在读取 ${id} 技能${target}`, `Reading skill ${id}${target}`), thumbnails: [] };
+    const already = /\n已读过/.test(text);
+    const forced = args?.forced === true || asRecord(asRecord(input.result)?.details)?.forced === true;
+    if (already) return { text: pick(language, `${id} 技能已读过${target}`, `Skill ${id} already read${target}`), thumbnails: [] };
+    return { text: pick(language, `已读取 ${id} 技能${target}${forced ? '（强制使用）' : ''}`, `Read skill ${id}${target}${forced ? ' (pinned)' : ''}`), thumbnails: [] };
+  }
+
   if (status === 'pending') return none;
+
+  if (name === 'flovart_memory') {
+    const action = String(args?.action || '');
+    if (action === 'add' || action === 'delete') return { text: firstLine(text), thumbnails: [] };
+    const count = (text.match(/^- \[/gm) || []).length;
+    if (action === 'list' || action === 'search') return { text: count ? pick(language, `找到 ${count} 条记忆`, `${count} memor${count === 1 ? 'y' : 'ies'}`) : firstLine(text), thumbnails: [] };
+  }
 
   if (name === 'flovart_workflow_inspect' || name === 'flovart_workflow_selection_get') {
     const json = parseJson(text);

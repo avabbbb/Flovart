@@ -38,6 +38,8 @@ const TOOL_LABELS: Record<string, { zho: string; en: string }> = {
   flovart_grep: { zho: '搜索本地文件', en: 'Search local files' },
   flovart_todo: { zho: '任务清单', en: 'To-do list' },
   flovart_ask: { zho: '向你提问', en: 'Question for you' },
+  flovart_skill_read: { zho: '读取技能', en: 'Read skill' },
+  flovart_memory: { zho: '项目记忆', en: 'Project memory' },
   flovart_pipeline_run_start: { zho: '创建制作 run', en: 'Start run' },
   flovart_pipeline_run_get: { zho: '读取制作 run', en: 'Read run' },
 };

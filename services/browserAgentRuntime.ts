@@ -15,6 +15,8 @@ import {
   type AgentAskResult,
   type BrowserAgentTextRoute,
 } from './browserAgentKernel';
+import { MergedSkillCatalog } from './agentSkillCatalog';
+import { createLocalSkillRegistry } from './localSkillRegistry';
 
 export interface BrowserAgentRuntimeDeps {
   projectId: string;
@@ -46,6 +48,8 @@ export interface RuntimeKernel {
   openSessionById(sessionId: string): Promise<unknown>;
   deleteSession(sessionId: string): Promise<void>;
   branchSession(fromSessionId: string, upto: string | readonly string[]): Promise<unknown>;
+  /** 手动压缩上下文；旧替身可不实现。 */
+  compactContext?(): Promise<{ compacted: boolean; tokensBefore?: number }>;
 }
 
 export type DelegatedTurnPolicy = 'read-only' | 'workspace-write';
@@ -135,6 +139,16 @@ export class BrowserAgentRuntime {
     options: { kernel?: RuntimeKernel } = {},
   ): Promise<BrowserAgentRuntime> {
     const policyState = { override: null as DelegatedTurnPolicy | 'default' | null };
+    // 技能：打包的 .agents/skills 立即可用；有本机 Agent 服务时再补上它注册表里安装的技能（失败忽略）。
+    const skillCatalog = new MergedSkillCatalog();
+    if (!options.kernel) {
+      void createLocalSkillRegistry()
+        .then(registry => (registry?.readSkillFile ? skillCatalog.attachRemote({
+          listLocalSkills: () => registry.listLocalSkills(),
+          readSkillFile: (id, path) => registry.readSkillFile!(id, path),
+        }) : undefined))
+        .catch(() => undefined);
+    }
     const kernel = options.kernel ?? new BrowserAgentKernel({
       projectId: deps.projectId,
       route: deps.route,
@@ -152,6 +166,7 @@ export class BrowserAgentRuntime {
       }),
       confirm: deps.confirm,
       systemPrompt: deps.systemPrompt,
+      skillCatalog,
       ...(deps.getThinkingLevel ? { getThinkingLevel: deps.getThinkingLevel } : {}),
     });
     await kernel.openSession();
@@ -209,6 +224,12 @@ export class BrowserAgentRuntime {
 
   branchSession(fromSessionId: string, upto: string | readonly string[]): Promise<unknown> {
     return this.kernel.branchSession(fromSessionId, upto);
+  }
+
+  /** 手动压缩当前会话的上下文（会话菜单「压缩上下文」）。 */
+  async compactContext(): Promise<{ compacted: boolean; tokensBefore?: number }> {
+    if (!this.kernel.compactContext) throw new AgentRuntimeError('BAD_REQUEST', '当前 Agent 不支持手动压缩上下文。');
+    return this.kernel.compactContext();
   }
 
   /**

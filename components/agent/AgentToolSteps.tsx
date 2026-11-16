@@ -7,7 +7,7 @@ import { Check, ChevronRight, X } from 'lucide-react';
 import type { WorkflowAgentDisplayMessage } from '../workflow/WorkflowAgentMessages';
 import { AgentOrbIcon } from './AgentWorkingOrb';
 import { agentWorkingPhase } from './agentWorkingPhase';
-import { formatToolDuration, summarizeToolCall, toolRawText, toolStepsHeadline } from './agentToolSummary';
+import { formatToolDuration, skillReadContent, summarizeToolCall, toolRawText, toolStepsHeadline } from './agentToolSummary';
 import '../../styles/agentWorking.css';
 
 type Lang = 'en' | 'zho';
@@ -68,6 +68,8 @@ const ToolStep = memo(function ToolStep({ tool, running, now, language, single }
     () => (tool.args !== undefined || tool.detail !== undefined ? toolRawText(tool.args, tool.detail === tool.args ? undefined : tool.detail, language) : ''),
     [tool.args, tool.detail, language],
   );
+  // 技能读取：原文很长，「查看原始数据」会截断，单独给一个可展开的原文。
+  const skillText = useMemo(() => (state === 'success' ? skillReadContent(tool.toolName, result) : ''), [tool.toolName, result, state]);
   const summaryText = summary.text || (state === 'pending' ? tool.text : '');
   const orb = live ? agentWorkingPhase({ turnPhase: 'sending', messages: [tool], language }).state : 'working';
   const elapsed = tool.startedAt === undefined ? undefined : (tool.endedAt ?? (live ? now : undefined)) ?? undefined;
@@ -96,6 +98,12 @@ const ToolStep = memo(function ToolStep({ tool, running, now, language, single }
         <div className="agent-step__thumbs">
           {summary.thumbnails.map((thumb, index) => <img key={index} src={thumb.src} alt={thumb.alt} title={thumb.alt} loading="lazy" />)}
         </div>
+      )}
+      {skillText && (
+        <details className="agent-step__raw" data-testid="agent-skill-content">
+          <summary><ChevronRight size={12} aria-hidden="true" />{en ? 'View skill content' : '查看技能内容'}</summary>
+          <pre>{skillText}</pre>
+        </details>
       )}
       {raw && (
         <details className="agent-step__raw">

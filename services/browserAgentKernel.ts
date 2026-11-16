@@ -5,7 +5,7 @@ import { fetchStreamWithUsageOptIn, type StreamUsageMode } from './streamUsageOp
 // 不依赖外部 Managed Agent 服务。会话持久化到 localforage，模型走 OpenAI 兼容
 // agent-text 线路（与桌面 Runtime 的 agent-text.route.sync 同源配置），
 // 工具走浏览器侧 workflowDispatcher 命令面。
-import { Agent, InMemorySessionStorage, toSession } from '@earendil-works/pi-agent-core';
+import { Agent, convertToLlm, InMemorySessionStorage, toSession } from '@earendil-works/pi-agent-core';
 import type { AgentMessage, AgentTool, Session, StreamFn } from '@earendil-works/pi-agent-core';
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
@@ -14,7 +14,7 @@ import { Type } from 'typebox';
 import { resolveAgentTextRoutes } from './agentTextRoutes';
 import { createBrowserWorkflowContract } from './browserWorkflowContract';
 import { withWorkflowHumanApproval, workflowCommandNeedsConfirmation } from './workflowDispatcher';
-import { getBundledProductionSkill, type ProductionSkillAttachment } from './productionSkillCatalog';
+import type { ProductionSkillAttachment } from './productionSkillCatalog';
 import { workflowConfirmRequest } from './workflowAgentBridge';
 import type { AgentConfirmRequest } from './agentSpendMandate';
 import { AGENT_BROWSER_COMMANDS } from '../tools/flovart/agent-surface.js';
@@ -32,6 +32,32 @@ import { resolveToolApproval, toolApprovalFor, type ApprovalContext } from './ag
 import type { UserApiKey } from '../types';
 import { displayError } from './displayError';
 import { reasoningEchoFor, requiresEmptyReasoningContent, type ReasoningEcho } from './agentReasoning';
+import {
+  buildSkillIndex,
+  createSkillReadTool,
+  formatSkillIndexPrompt,
+  readSkillForAgent,
+  resolveSkillEntry,
+  SKILL_READ_ENTRY,
+  SKILL_READ_TOOL_NAME,
+  SkillReadLedger,
+  type AgentSkillCatalog,
+  type SkillReadRecord,
+} from './agentSkills';
+import { MergedSkillCatalog } from './agentSkillCatalog';
+import { createMemoryTool, formatMemorySummary, MEMORY_TOOL_NAME, type AgentMemoryBackend } from './agentProjectMemory';
+import {
+  BROWSER_AGENT_CONTEXT_WINDOW,
+  classifyAgentRequestFailure,
+  compactSession,
+  DEFAULT_AGENT_COMPACTION_SETTINGS,
+  estimateRequestTokens,
+  isContextOverflowMessage,
+  OVERFLOW_KEEP_RECENT_TOKENS,
+  shouldCompactContext,
+  type AgentCompactionSettings,
+} from './agentCompaction';
+import { agentMemoryStoreBackend } from '../stores/useAgentMemoryStore';
 import { buildReasoningParams, effectiveAgentThinkingLevel, isReasoningRejection, isReasoningUnsupported, markReasoningUnsupported, normalizeThinkingLevel, type AgentThinkingLevel } from './agentThinking';
 
 // ---------------------------------------------------------------------------
@@ -424,6 +450,8 @@ export const BROWSER_AGENT_STREAM_DEFAULTS = {
 
 /** 用户主动停止时写进助手消息的文案；面板据此显示「已中止」而不是红色错误卡。 */
 export const AGENT_ABORTED_MESSAGE = '已中止';
+/** 服务商报上下文超限时写进助手消息的文案（classifyAgentRequestFailure 认得它，内核据此压缩后重试一次）。 */
+export const AGENT_CONTEXT_OVERFLOW_MESSAGE = '对话上下文超出模型上限（context length exceeded）：可在会话菜单里「压缩上下文」后重试。';
 
 class StreamStallError extends Error {
   constructor(readonly phase: 'first' | 'idle', readonly ms: number) {
@@ -678,11 +706,13 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
         }
       } catch (error) {
         const aborted = Boolean(userSignal?.aborted);
+        // 上下文溢出要在 displayError 之前识别：它会把 HTTP 400 统一翻成「参数不被接受」，丢掉溢出证据。
+        const overflow = !aborted && classifyAgentRequestFailure(error instanceof Error ? error.message : String(error)) === 'context_overflow';
         const message: AssistantMessage = {
           ...startMessage,
           stopReason: aborted ? 'aborted' : 'error',
           // 用户停止不是错误：不把 "signal is aborted without reason" 这类底层文案写进会话。
-          errorMessage: aborted ? AGENT_ABORTED_MESSAGE : displayError(error),
+          errorMessage: aborted ? AGENT_ABORTED_MESSAGE : overflow ? AGENT_CONTEXT_OVERFLOW_MESSAGE : displayError(error),
           timestamp: Date.now(),
         };
         stream.push({ type: 'error', reason: aborted ? 'aborted' : 'error', error: message });
@@ -1021,6 +1051,8 @@ const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，Flovart 生成式 
 - flovart_web_search：联网搜索（Parallel 公共 MCP，免 Key，失败回退 DeepSeek）。需要外部资料、竞品信息、风格参考或事实核对时调用；结果给出来源 URL，引用时要带上。
 - flovart_grep：在用户连接过的本地文件夹里搜文本文件（正则）。用户说“我本地的素材/文档里有…”时先用它；只能搜已授权文件夹，读不到任意路径。
 - flovart_todo：多步制作的任务清单。
+- flovart_skill_read：读取技能（Skill）的完整说明（id，可选 file 读 references/、commands/ 下的文件，长文件用 offset 翻页）。任务与下方技能索引里的某个技能匹配时先读再做。
+- flovart_memory：项目记忆（add/list/search/delete，只属于当前项目）。用户说“记住…”、或确认了以后还要沿用的偏好 / 设定时写入一句事实；不要写入密钥、Token、密码或一次性过程。
 command.list/schema 属于 CLI discovery/debug，不是你的工具；不得访问 Shell、任意文件或 Provider Secret。
 
 ## 画布能力地图
@@ -1126,6 +1158,14 @@ function snapshotMessage(entry: { type: string; id: string; message?: AgentMessa
   };
 }
 
+/**
+ * 会话的全部 entry（按写入顺序）。浏览器内核不用 moveTo 分叉，entry 天然是一条线；
+ * 压缩后 getBranch() 只从保留点开始，面板历史、技能已读列表与分支都要用完整列表。
+ */
+async function allEntries(session: Session) {
+  return (await session.getStorage().getEntries()) as Awaited<ReturnType<Session['getBranch']>>;
+}
+
 export interface BrowserAgentKernelOptions {
   projectId: string;
   route: BrowserAgentTextRoute;
@@ -1135,12 +1175,37 @@ export interface BrowserAgentKernelOptions {
   skillAttachment?: ProductionSkillAttachment | null;
   /** 当前思考强度；每轮发送前读取，缺省读本机为该模型保存的设置。 */
   getThinkingLevel?: () => AgentThinkingLevel;
+  /** 技能来源；缺省为打包的 .agents/skills（运行时可再接本机注册表）。 */
+  skillCatalog?: AgentSkillCatalog;
+  /** 项目记忆；缺省用 useAgentMemoryStore（localforage），null 表示关闭。 */
+  memory?: AgentMemoryBackend | null;
+  /** 模型上下文窗口（token），缺省 128K。 */
+  contextWindow?: number;
+  /** 覆盖自动压缩设置（测试用）。 */
+  compaction?: Partial<AgentCompactionSettings>;
+}
+
+/** 压缩前后在面板上显示的一条系统提示。 */
+function compactionNotice(entry: { id: string; tokensBefore?: number; timestamp?: string }): ReturnType<typeof snapshotMessage> {
+  const tokens = Number(entry.tokensBefore || 0);
+  return {
+    id: entry.id,
+    role: 'system',
+    text: tokens > 0 ? `已压缩上下文：约 ${Math.round(tokens / 1000)}K tokens 的早期对话整理成了摘要，技能已读记录与项目记忆保留。` : '已压缩上下文：早期对话整理成了摘要。',
+    timestamp: entry.timestamp ? Date.parse(entry.timestamp) : undefined,
+  };
+}
+
+interface OverflowGuard {
+  armed: boolean;
+  hit: boolean;
 }
 
 export class BrowserAgentKernel {
   private repo: BrowserSessionRepo | null = null;
   private session: Session | null = null;
   private agent: Agent | null = null;
+  private streamFn: StreamFn | null = null;
   private unsubscribe: (() => void) | null = null;
   private listeners = new Set<(event: { type: string; [key: string]: unknown }) => void>();
   private activeChangeSetId = '';
@@ -1153,15 +1218,42 @@ export class BrowserAgentKernel {
   private readonly confirm: (summary: string) => Promise<boolean>;
   private readonly initialSkillAttachment: ProductionSkillAttachment | null;
   private readonly getThinkingLevel: () => AgentThinkingLevel;
+  private readonly skillCatalog: AgentSkillCatalog;
+  private readonly skillLedger = new SkillReadLedger();
+  /** 当前分支里的压缩次数；技能已读记录按它判断原文是否还在上下文里。 */
+  private compactionEpoch = 0;
+  private readonly memory: AgentMemoryBackend | null;
+  private readonly contextWindow: number;
+  private readonly compactionSettings: AgentCompactionSettings;
+  private overflowGuard: OverflowGuard | null = null;
+  private compactionController: AbortController | null = null;
+  private compacting = false;
+  /** 每次停止 +1：压缩（模型调用）期间用户点了停止，就不再接着发这一轮。 */
+  private cancelEpoch = 0;
 
   constructor(options: BrowserAgentKernelOptions) {
     this.projectId = options.projectId;
     this.getThinkingLevel = options.getThinkingLevel ?? (() => effectiveAgentThinkingLevel(options.route.model));
     this.route = options.route;
-    // 与 Node 内核一致：任务清单是内核自带的只读工具，调用方已提供同名工具时不重复注册。
-    this.tools = options.tools.some(tool => tool.name === TODO_TOOL_NAME)
-      ? options.tools
-      : [...options.tools, createTodoTool() as unknown as AgentTool];
+    this.skillCatalog = options.skillCatalog ?? new MergedSkillCatalog();
+    this.memory = options.memory === undefined ? agentMemoryStoreBackend : options.memory;
+    this.contextWindow = options.contextWindow ?? BROWSER_AGENT_CONTEXT_WINDOW;
+    this.compactionSettings = { ...DEFAULT_AGENT_COMPACTION_SETTINGS, ...(options.compaction || {}) };
+    // 与 Node 内核一致：任务清单、技能读取、项目记忆是内核自带工具，调用方已提供同名工具时不重复注册。
+    const builtins: AgentTool[] = [];
+    if (!options.tools.some(tool => tool.name === TODO_TOOL_NAME)) builtins.push(createTodoTool() as unknown as AgentTool);
+    if (!options.tools.some(tool => tool.name === SKILL_READ_TOOL_NAME)) {
+      builtins.push(createSkillReadTool({
+        catalog: this.skillCatalog,
+        ledger: this.skillLedger,
+        getEpoch: () => this.compactionEpoch,
+        onRead: record => this.recordSkillRead(record),
+      }));
+    }
+    if (this.memory && !options.tools.some(tool => tool.name === MEMORY_TOOL_NAME)) {
+      builtins.push(createMemoryTool({ projectId: this.projectId, backend: this.memory }));
+    }
+    this.tools = [...options.tools, ...builtins];
     this.confirm = options.confirm;
     this.initialSkillAttachment = options.skillAttachment ?? null;
     this.systemPrompt = options.systemPrompt ?? BROWSER_DEFAULT_SYSTEM_PROMPT;
@@ -1176,6 +1268,32 @@ export class BrowserAgentKernel {
     for (const listener of this.listeners) void listener(event);
   }
 
+  /** 技能读取写进会话（自定义 entry，不进模型上下文），所以压缩、刷新、切回会话后已读列表都在。 */
+  private async recordSkillRead(record: SkillReadRecord): Promise<void> {
+    if (!this.session) return;
+    await this.session.appendCustomEntry(SKILL_READ_ENTRY, record);
+    await this.repo?.persist(this.session);
+  }
+
+  /** 从会话分支恢复：绑定的强制技能、技能已读列表、压缩次数。 */
+  private restoreSessionState(entries: ReadonlyArray<{ type: string; customType?: string; data?: unknown }>): void {
+    this.boundProductionSkill = null;
+    this.productionSkillBindingError = null;
+    const persistedBinding = [...entries].reverse().find(entry => entry.type === 'custom' && entry.customType === PRODUCTION_SKILL_BINDING_ENTRY);
+    if (persistedBinding?.data) {
+      try {
+        const data = persistedBinding.data as ProductionSkillAttachment;
+        if (data?.id && data?.version && data?.contentHash) this.boundProductionSkill = data;
+      } catch (error) {
+        this.productionSkillBindingError = displayError(error, '技能绑定恢复失败。');
+      }
+    }
+    this.skillLedger.restore(entries
+      .filter(entry => entry.type === 'custom' && entry.customType === SKILL_READ_ENTRY && entry.data)
+      .map(entry => entry.data as SkillReadRecord));
+    this.compactionEpoch = entries.filter(entry => entry.type === 'compaction').length;
+  }
+
   async openSession(): Promise<unknown> {
     if (this.session) return this.snapshot();
     this.repo = new BrowserSessionRepo(this.projectId);
@@ -1186,21 +1304,27 @@ export class BrowserAgentKernel {
       ? await this.repo.open({ id: latest.id })
       : await this.repo.create({ metadata: { projectId: this.projectId, role: 'main' } });
 
-    const entries = await this.session.getBranch();
-    const persistedBinding = [...entries].reverse().find((entry): entry is Extract<typeof entry, { type: 'custom'; customType: string; data?: unknown }> => (
-      entry.type === 'custom' && entry.customType === PRODUCTION_SKILL_BINDING_ENTRY
-    ));
-    if (persistedBinding?.data) {
-      try {
-        const data = persistedBinding.data as ProductionSkillAttachment;
-        if (data?.id && data?.version && data?.contentHash) this.boundProductionSkill = data;
-      } catch (error) {
-        this.productionSkillBindingError = displayError(error, '技能绑定恢复失败。');
-      }
-    }
-
+    this.restoreSessionState(await allEntries(this.session));
     await this.buildAgent();
     return this.snapshot();
+  }
+
+  /** 系统提示词 = 基础提示词 + 技能索引（含强制技能与已读列表）+ 项目记忆摘要。每轮发送前重算。 */
+  private async composeSystemPrompt(): Promise<string> {
+    const entries = this.skillCatalog.list();
+    const forced = this.boundProductionSkill
+      ? (resolveSkillEntry(entries, this.boundProductionSkill.id)?.id || this.boundProductionSkill.displayName)
+      : null;
+    const skills = formatSkillIndexPrompt(buildSkillIndex(entries), { read: this.skillLedger.skillIds(), forced });
+    let memory = '';
+    if (this.memory) {
+      try {
+        memory = formatMemorySummary(await this.memory.list(this.projectId));
+      } catch {
+        memory = '';
+      }
+    }
+    return [this.systemPrompt, skills, memory].filter(Boolean).join('\n\n');
   }
 
   /** 用当前 session + route 构建 PI Agent 实例；会话切换后复用。 */
@@ -1215,21 +1339,16 @@ export class BrowserAgentKernel {
       }, signal, onUpdate as never),
     } : tool);
 
-    const skillContext = this.boundProductionSkill
-      ? (() => {
-          const bundled = getBundledProductionSkill(this.boundProductionSkill!.id);
-          return bundled ? `\n\n${bundled.skillSource.slice(0, 2000)}` : `\n\n${this.boundProductionSkill!.displayName}`;
-        })()
-      : '';
-
     this.agent?.abort();
     this.unsubscribe?.();
     this.unsubscribe = null;
     const thinkingLevel = this.currentThinkingLevel();
+    this.streamFn = createBrowserAgentStream(this.route);
     this.agent = new Agent({
       initialState: {
         thinkingLevel,
-        systemPrompt: this.boundProductionSkill ? `${this.systemPrompt}${skillContext}` : this.systemPrompt,
+        // 绑定的强制技能不再塞进系统提示词（以前只截前 2000 字）：首轮以一次完整的 flovart_skill_read 注入原文。
+        systemPrompt: await this.composeSystemPrompt(),
         model: {
           id: this.route.model,
           name: this.route.model,
@@ -1239,13 +1358,15 @@ export class BrowserAgentKernel {
           reasoning: thinkingLevel !== 'off',
           input: ['text', 'image'],
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: 128_000,
+          contextWindow: this.contextWindow,
           maxTokens: 16_384,
         } as never,
         tools: wrappedTools as never,
         messages: context.messages,
       },
-      streamFn: createBrowserAgentStream(this.route),
+      // 压缩摘要（compactionSummary）等扩展消息由 pi 的 convertToLlm 转成 user 消息。
+      convertToLlm,
+      streamFn: this.streamFn,
       beforeToolCall: async ({ toolCall }) => (
         this.tools.some(tool => tool.name === toolCall.name)
           ? undefined
@@ -1257,7 +1378,14 @@ export class BrowserAgentKernel {
 
     this.unsubscribe = this.agent.subscribe(async event => {
       if (event.type === 'message_end') {
-        await this.session?.appendMessage((event as { message: AgentMessage }).message);
+        const message = (event as { message: AgentMessage }).message;
+        // 上下文溢出：本轮第一次遇到时不落盘、不转发，send() 压缩后自动重试一次。
+        const guard = this.overflowGuard;
+        if (guard?.armed && !guard.hit && isContextOverflowMessage(message)) {
+          guard.hit = true;
+          return;
+        }
+        await this.session?.appendMessage(message);
         if (this.session) await this.repo?.persist(this.session);
       }
       this.emit(event as { type: string; [key: string]: unknown });
@@ -1300,9 +1428,8 @@ export class BrowserAgentKernel {
     this.agent?.abort();
     this.unsubscribe?.();
     this.unsubscribe = null;
-    this.boundProductionSkill = null;
-    this.productionSkillBindingError = null;
     this.session = await this.repo!.create({ metadata: { projectId: this.projectId, role: 'main' } });
+    this.restoreSessionState([]);
     await this.buildAgent();
     this.emit({ type: 'session_switched' });
     return this.snapshot();
@@ -1327,7 +1454,7 @@ export class BrowserAgentKernel {
     if (!sessions.length) throw new Error('会话不存在：' + fromSessionId);
     let kept: Awaited<ReturnType<typeof this.session.getBranch>> | null = null;
     for (const source of sessions) {
-      const entries = await source.getBranch();
+      const entries = await allEntries(source);
       const index = branchEntryIndex(entries, candidates);
       if (index >= 0) {
         kept = entries.slice(0, index + 1);
@@ -1339,8 +1466,6 @@ export class BrowserAgentKernel {
     this.agent?.abort();
     this.unsubscribe?.();
     this.unsubscribe = null;
-    this.boundProductionSkill = null;
-    this.productionSkillBindingError = null;
     const branch = await this.repo.create({
       metadata: { projectId: this.projectId, role: 'branch', branchedFrom: fromSessionId, branchPointId },
     });
@@ -1348,15 +1473,13 @@ export class BrowserAgentKernel {
       if (entry.type === 'message' && 'message' in entry && entry.message) await branch.appendMessage(entry.message);
       else if (entry.type === 'custom' && entry.customType === PRODUCTION_SKILL_BINDING_ENTRY && entry.data) {
         await branch.appendCustomEntry(entry.customType, entry.data);
+      } else if (entry.type === 'custom' && entry.customType === SKILL_READ_ENTRY && entry.data) {
+        // 分支复制的是完整原始消息（不含压缩），技能原文都在：压缩轮次归零。
+        await branch.appendCustomEntry(entry.customType, { ...(entry.data as SkillReadRecord), epoch: 0 });
       }
     }
-    const persistedBinding = [...kept].reverse().find(entry => (
-      entry.type === 'custom' && entry.customType === PRODUCTION_SKILL_BINDING_ENTRY
-    )) as { data?: ProductionSkillAttachment } | undefined;
-    if (persistedBinding?.data?.id && persistedBinding.data.version && persistedBinding.data.contentHash) {
-      this.boundProductionSkill = persistedBinding.data;
-    }
     this.session = branch;
+    this.restoreSessionState(await allEntries(branch));
     await this.buildAgent();
     this.emit({ type: 'session_switched' });
     return this.snapshot();
@@ -1374,20 +1497,7 @@ export class BrowserAgentKernel {
     this.unsubscribe?.();
     this.unsubscribe = null;
     this.session = await this.repo.open({ id: sessionId });
-    const entries = await this.session.getBranch();
-    const persistedBinding = [...entries].reverse().find((entry): entry is Extract<typeof entry, { type: 'custom'; customType: string; data?: unknown }> => (
-      entry.type === 'custom' && entry.customType === PRODUCTION_SKILL_BINDING_ENTRY
-    ));
-    this.boundProductionSkill = null;
-    this.productionSkillBindingError = null;
-    if (persistedBinding?.data) {
-      try {
-        const data = persistedBinding.data as ProductionSkillAttachment;
-        if (data?.id && data?.version && data?.contentHash) this.boundProductionSkill = data;
-      } catch (error) {
-        this.productionSkillBindingError = displayError(error, '技能绑定恢复失败。');
-      }
-    }
+    this.restoreSessionState(await allEntries(this.session));
     await this.buildAgent();
     this.emit({ type: 'session_switched' });
     return this.snapshot();
@@ -1411,6 +1521,8 @@ export class BrowserAgentKernel {
     // 停止也丢掉排队中的插话：用户点停止就是要这一轮完全结束。
     this.agent?.clearAllQueues();
     this.agent?.abort();
+    this.compactionController?.abort();
+    this.cancelEpoch += 1;
   }
 
   /** 当前是否有一轮在跑（面板据此决定新消息走插话还是新一轮）。 */
@@ -1434,6 +1546,155 @@ export class BrowserAgentKernel {
     return true;
   }
 
+  // -------------------------------------------------------------------------
+  // 上下文压缩
+  // -------------------------------------------------------------------------
+
+  /** 下一次请求的 token 估算（消息 + 系统提示词 + 工具定义 + 待发送内容）。 */
+  estimateContextTokens(pending: { text?: string; images?: number } = {}): number {
+    if (!this.agent) return 0;
+    return estimateRequestTokens({
+      messages: this.agent.state.messages,
+      systemPrompt: this.agent.state.systemPrompt,
+      toolsJson: JSON.stringify(this.tools.map(tool => ({ name: tool.name, description: tool.description, parameters: tool.parameters }))),
+      pendingText: pending.text,
+      pendingImages: pending.images,
+    });
+  }
+
+  /** 压缩一次并把 Agent 的消息换成压缩后的上下文；没有可压缩的历史返回 null。 */
+  private async runCompaction(reason: 'threshold' | 'overflow' | 'manual'): Promise<{ tokensBefore: number } | null> {
+    if (!this.session || !this.agent || !this.streamFn) return null;
+    this.compacting = true;
+    this.compactionController = new AbortController();
+    let started = false;
+    try {
+      const outcome = await compactSession({
+        onStart: () => { started = true; this.emit({ type: 'compaction_start', reason }); },
+        session: this.session,
+        streamFn: this.streamFn,
+        model: this.agent.state.model,
+        keepRecentTokens: reason === 'overflow' ? OVERFLOW_KEEP_RECENT_TOKENS : this.compactionSettings.keepRecentTokens,
+        signal: this.compactionController.signal,
+      });
+      if (outcome) {
+        this.compactionEpoch += 1;
+        await this.repo?.persist(this.session);
+        this.agent.state.messages = (await this.session.buildContext()).messages;
+        this.agent.state.systemPrompt = await this.composeSystemPrompt();
+      }
+      if (started) this.emit({ type: 'compaction_end', reason, compacted: Boolean(outcome), tokensBefore: outcome?.tokensBefore ?? 0 });
+      return outcome ? { tokensBefore: outcome.tokensBefore } : null;
+    } catch (error) {
+      if (started) this.emit({ type: 'compaction_end', reason, compacted: false, error: displayError(error, '上下文压缩失败。') });
+      throw error;
+    } finally {
+      this.compacting = false;
+      this.compactionController = null;
+    }
+  }
+
+  /** 手动「压缩上下文」：运行中不压缩；历史太短时返回 compacted=false。 */
+  async compactContext(): Promise<{ compacted: boolean; tokensBefore?: number }> {
+    if (!this.agent || !this.session) throw new Error('Flovart Agent session is not open');
+    if (this.agent.state.isStreaming || this.compacting) throw new Error('Agent 正在运行，请等这一轮结束后再压缩上下文。');
+    const outcome = await this.runCompaction('manual');
+    return outcome ? { compacted: true, tokensBefore: outcome.tokensBefore } : { compacted: false };
+  }
+
+  /** 发送前检查：估算超过阈值就先压缩；压缩失败不拦截发送（溢出时还有一次压缩重试）。 */
+  private async compactIfNeeded(pending: { text: string; images: number }): Promise<void> {
+    const tokens = this.estimateContextTokens(pending);
+    if (!shouldCompactContext(tokens, this.contextWindow, this.compactionSettings)) return;
+    try {
+      await this.runCompaction('threshold');
+    } catch {
+      // 已通过 compaction_end 事件报告；继续发送。
+    }
+  }
+
+  /** 绑定的强制技能：当前压缩轮次里还没完整读过 SKILL.md 时，生成一次完整读取（工具调用 + 结果）。 */
+  private async forcedSkillMessages(): Promise<AgentMessage[]> {
+    const bound = this.boundProductionSkill;
+    if (!bound) return [];
+    const entry = resolveSkillEntry(this.skillCatalog.list(), bound.id);
+    if (!entry || this.skillLedger.hasFullRead(entry.id, this.compactionEpoch)) return [];
+    const result = await readSkillForAgent({
+      catalog: this.skillCatalog,
+      ledger: this.skillLedger,
+      epoch: this.compactionEpoch,
+      id: entry.id,
+      force: true,
+      full: true,
+    });
+    if (!result.record) return [];
+    await this.recordSkillRead(result.record);
+    const toolCallId = 'skill-forced-' + crypto.randomUUID();
+    const args = { id: entry.id, forced: true };
+    const now = Date.now();
+    const call = {
+      role: 'assistant',
+      content: [{ type: 'toolCall', id: toolCallId, name: SKILL_READ_TOOL_NAME, arguments: args }],
+      api: 'openai-compatible',
+      provider: this.route.provider,
+      model: this.route.model,
+      usage: EMPTY_USAGE,
+      stopReason: 'toolUse',
+      timestamp: now,
+    } as unknown as AgentMessage;
+    const toolResult = {
+      role: 'toolResult',
+      toolCallId,
+      toolName: SKILL_READ_TOOL_NAME,
+      content: [{ type: 'text', text: result.text }],
+      details: result.details,
+      isError: false,
+      timestamp: now,
+    } as unknown as AgentMessage;
+    this.emit({ type: 'tool_execution_start', toolCallId, toolName: SKILL_READ_TOOL_NAME, args });
+    this.emit({ type: 'tool_execution_end', toolCallId, toolName: SKILL_READ_TOOL_NAME, result: { content: [{ type: 'text', text: result.text }], details: result.details }, isError: false });
+    return [call, toolResult];
+  }
+
+  /** 上下文溢出后的唯一一次自动恢复：压缩（保留更少的最近上下文）后从同一位置继续。 */
+  private async recoverFromOverflow(agent: Agent): Promise<boolean> {
+    const guard = this.overflowGuard;
+    if (!guard?.hit || !this.session) return false;
+    guard.armed = false;
+    guard.hit = false;
+    const cancelEpoch = this.cancelEpoch;
+    let compacted = false;
+    try {
+      compacted = Boolean(await this.runCompaction('overflow'));
+    } catch {
+      compacted = false;
+    }
+    if (this.cancelEpoch !== cancelEpoch) return false; // 用户在压缩时停止了：不重试，也不补错误卡
+    const messages = (await this.session.buildContext()).messages;
+    const last = messages[messages.length - 1] as { role?: string } | undefined;
+    if (!compacted || !last || last.role === 'assistant') {
+      // 压缩不了：把这次溢出错误照常写进会话，让面板显示并提示手动压缩。
+      const failed: AgentMessage = {
+        role: 'assistant',
+        content: [],
+        api: 'openai-compatible',
+        provider: this.route.provider,
+        model: this.route.model,
+        usage: EMPTY_USAGE,
+        stopReason: 'error',
+        errorMessage: AGENT_CONTEXT_OVERFLOW_MESSAGE,
+        timestamp: Date.now(),
+      } as unknown as AgentMessage;
+      await this.session.appendMessage(failed);
+      await this.repo?.persist(this.session);
+      agent.state.messages = [...messages, failed];
+      return false;
+    }
+    agent.state.messages = messages;
+    await agent.continue();
+    return true;
+  }
+
   async send(text: string, images: ImageContent[] = [], skillAttachment?: ProductionSkillAttachment | null): Promise<unknown> {
     if (!this.agent || !this.session) throw new Error('Flovart Agent session is not open');
     const prompt = String(text || '').trim();
@@ -1444,7 +1705,6 @@ export class BrowserAgentKernel {
       if (this.boundProductionSkill) {
         this.boundProductionSkill = null;
         this.productionSkillBindingError = null;
-        this.agent.state.systemPrompt = this.systemPrompt;
         await this.session.appendCustomEntry(PRODUCTION_SKILL_BINDING_ENTRY, null);
       }
     } else if (skillAttachment) {
@@ -1454,8 +1714,6 @@ export class BrowserAgentKernel {
         || this.boundProductionSkill.contentHash !== skillAttachment.contentHash;
       this.boundProductionSkill = skillAttachment;
       this.productionSkillBindingError = null;
-      const bundled = getBundledProductionSkill(skillAttachment.id);
-      this.agent.state.systemPrompt = `${this.systemPrompt}\n\n${bundled ? bundled.skillSource.slice(0, 2000) : skillAttachment.displayName}`;
       if (changed) await this.session.appendCustomEntry(PRODUCTION_SKILL_BINDING_ENTRY, {
         id: skillAttachment.id,
         version: skillAttachment.version,
@@ -1467,12 +1725,32 @@ export class BrowserAgentKernel {
 
     this.syncThinkingLevel();
     const agent = this.agent;
-    await agent.prompt(prompt, images.length > 0 ? images : undefined);
-    // 最后一次轮询之后才到的插话还留在队列里：接着处理，不能丢。停止（abort）会清空队列。
-    while (this.agent === agent && agent.hasQueuedMessages() && !agent.state.isStreaming) {
-      const last = agent.state.messages[agent.state.messages.length - 1] as { stopReason?: string } | undefined;
-      if (last?.stopReason === 'aborted') { agent.clearAllQueues(); break; }
-      await agent.continue();
+    agent.state.systemPrompt = await this.composeSystemPrompt();
+    const cancelEpoch = this.cancelEpoch;
+    await this.compactIfNeeded({ text: prompt, images: images.length });
+    // 压缩期间用户点了停止：这一轮不再发送（用户消息也不写入会话）。
+    if (this.cancelEpoch !== cancelEpoch) throw new Error(AGENT_ABORTED_MESSAGE);
+    const forced = await this.forcedSkillMessages();
+    if (forced.length) agent.state.systemPrompt = await this.composeSystemPrompt();
+    const userMessage = {
+      role: 'user',
+      content: [{ type: 'text', text: prompt }, ...images],
+      timestamp: Date.now(),
+    } as AgentMessage;
+    this.overflowGuard = { armed: true, hit: false };
+    try {
+      // 强制技能的完整读取紧跟在用户消息之后：模型这一轮就能看到原文，面板显示一条「已读取 xxx 技能」。
+      await agent.prompt(forced.length ? [userMessage, ...forced] : userMessage);
+      await this.recoverFromOverflow(agent);
+      // 最后一次轮询之后才到的插话还留在队列里：接着处理，不能丢。停止（abort）会清空队列。
+      while (this.agent === agent && agent.hasQueuedMessages() && !agent.state.isStreaming) {
+        const last = agent.state.messages[agent.state.messages.length - 1] as { stopReason?: string } | undefined;
+        if (last?.stopReason === 'aborted') { agent.clearAllQueues(); break; }
+        await agent.continue();
+        await this.recoverFromOverflow(agent);
+      }
+    } finally {
+      this.overflowGuard = null;
     }
     return this.snapshot();
   }
@@ -1487,15 +1765,15 @@ export class BrowserAgentKernel {
   }> {
     if (!this.session) throw new Error('Flovart Agent session is not open');
     const metadata = await this.session.getMetadata();
-    const entries = await this.session.getBranch();
+    const entries = await allEntries(this.session);
     return {
       sessionId: metadata.id,
       projectId: this.projectId,
       boundProductionSkill: this.boundProductionSkill,
       productionSkillBindingError: this.productionSkillBindingError,
       messages: entries
-        .filter(entry => entry.type === 'message')
-        .map(snapshotMessage)
+        .filter(entry => entry.type === 'message' || entry.type === 'compaction')
+        .map(entry => (entry.type === 'compaction' ? compactionNotice(entry as { id: string; tokensBefore?: number; timestamp?: string }) : snapshotMessage(entry)))
         .filter(message => message.role !== 'assistant' || message.text || message.thinking || message.error),
       running: Boolean(this.agent?.state.isStreaming),
     };
@@ -1503,6 +1781,7 @@ export class BrowserAgentKernel {
 
   async close(): Promise<void> {
     this.agent?.abort();
+    this.compactionController?.abort();
     this.unsubscribe?.();
     this.agent = null;
     this.session = null;

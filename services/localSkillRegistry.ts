@@ -56,6 +56,8 @@ export interface SkillRegistryClient {
   getSkillManifest(id: string): Promise<LocalSkillManifest>;
   installFromHub(id: string, hubUrl: string): Promise<LocalSkillEntry>;
   uninstallSkill(id: string): Promise<void>;
+  /** 读取技能包内的 SKILL.md 或 references/、commands/ 下的文件（服务端拦截越界路径）。 */
+  readSkillFile?(id: string, path: string): Promise<string>;
   /** 画布（当前或历史工程）→ 标准 Skill 包；验收通过且 install=true 才入库。 */
   draftFromCanvas?(input: CanvasSkillDraftInput): Promise<CanvasSkillDraftResult>;
 }
@@ -184,6 +186,13 @@ export class ManagedSkillRegistryClient implements SkillRegistryClient {
       method: 'POST',
       body: JSON.stringify({ id }),
     });
+  }
+
+  async readSkillFile(id: string, path: string): Promise<string> {
+    const body = await this.request(`/api/skills/${encodeURIComponent(id)}/file?path=${encodeURIComponent(path)}`);
+    const content = (body as { file?: { content?: unknown } }).file?.content;
+    if (typeof content !== 'string') throw new SkillRegistryError('NOT_FOUND', `Skill ${id} 里没有文件 ${path}。`);
+    return content;
   }
 
   async draftFromCanvas(input: CanvasSkillDraftInput): Promise<CanvasSkillDraftResult> {
