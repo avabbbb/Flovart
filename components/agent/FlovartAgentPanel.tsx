@@ -58,6 +58,7 @@ import { agentWorkingMeta, agentWorkingPhase } from './agentWorkingPhase';
 import { AgentOrbIcon } from './AgentWorkingOrb';
 import { AgentMediaTiles } from './AgentMediaTiles';
 import { referenceLineLabels, userTurnReferences } from './agentMessageRefs';
+import { abortedNoticeText, isAbortMessage, queuedNoticeText } from './agentAbort';
 import { activityAfterConfirmation, agentLayerReducer, blockerAfterCredentialSignal, closedLayers, needsCredential, replacePendingConfirmation, useAgentTurn } from './agentPanelState';
 
 interface FlovartAgentPanelProps {
@@ -117,14 +118,21 @@ function snapshotNeedsConfiguration(snapshot: FlovartAgentSnapshot) {
   return isAgentTextConfigurationError(latestAssistant?.error);
 }
 
+/** 这一轮是否失败：只看最新一条助手消息，且用户停止不算失败（历史里的旧错误不能让之后每轮都标红）。 */
+function latestTurnFailed(snapshot: { messages: Array<{ role: string; error?: string }> }) {
+  const latest = [...snapshot.messages].reverse().find(message => message.role === 'assistant');
+  return Boolean(latest?.error && !isAbortMessage(latest.error));
+}
+
 function displayMessages(snapshot: {
   messages: Array<{ id: string; role: string; text: string; thinking?: string; toolName?: string; toolCallId?: string; isError?: boolean; timestamp?: number; error?: string }>;
   boundProductionSkill?: ProductionSkillAttachment | null;
 }, language: 'en' | 'zho'): WorkflowAgentDisplayMessage[] {
   return snapshot.messages.map(message => ({
     id: message.id,
-    role: (message.error ? 'error' : message.role) as WorkflowAgentDisplayMessage['role'],
-    text: message.error ? agentMessageText(message.error, language) : message.role === 'user' ? displayUserTurnText(message.text) : message.text,
+    // 用户停止显示为中性的「已中止」，不进红色错误卡。
+    role: (message.error ? (isAbortMessage(message.error) ? 'system' : 'error') : message.role) as WorkflowAgentDisplayMessage['role'],
+    text: message.error ? (isAbortMessage(message.error) ? abortedNoticeText(language) : agentMessageText(message.error, language)) : message.role === 'user' ? displayUserTurnText(message.text) : message.text,
     // 快照里的思考都已结束：收起显示（thinkingDone）。
     ...(message.role === 'assistant' && !message.error && message.thinking ? { thinking: message.thinking, thinkingDone: true } : {}),
     title: message.role === 'tool' ? agentToolLabel(message.toolName, language) : undefined,
@@ -208,6 +216,12 @@ const userApiKeysRef = useRef(userApiKeys);
   // 一轮对话的显式状态：idle | sending | awaitingConfirmation | stopping；sending 只是派生值。
   const { turn, turnRef, dispatchTurn } = useAgentTurn();
   const sending = turn.phase !== 'idle';
+  // 内核只在空闲时换线路：运行中改 Key / 切模型不能销毁内核（那会 abort 正在跑的一轮，
+  // 会话里留下 "signal is aborted without reason"），等这一轮结束再重建。
+  const [kernelRouteSignature, setKernelRouteSignature] = useState(browserRouteSignature);
+  useEffect(() => {
+    if (!sending) setKernelRouteSignature(browserRouteSignature);
+  }, [browserRouteSignature, sending]);
   const [turnStartedAt, setTurnStartedAt] = useState<number>();
   const [confirmation, setConfirmation] = useState<PendingConfirmation>();
   const [pendingAsk, setPendingAsk] = useState<PendingAsk>();
@@ -576,7 +590,7 @@ const userApiKeysRef = useRef(userApiKeys);
       void kernelRef.current?.close();
       kernelRef.current = undefined;
     };
-  }, [project.id, browserRouteSignature]);
+  }, [project.id, kernelRouteSignature]);
 
   useEffect(() => {
     if (workspaceBridge.current) void workspaceBridge.current.pushSnapshot(project).catch(() => setWorkspaceStatus('error'));
@@ -776,6 +790,8 @@ const userApiKeysRef = useRef(userApiKeys);
       }
     } else if (event.type === 'tool-update') {
       setMessages(items => items.map(item => item.id === 'tool-' + event.id ? { ...item, detail: event.partial } : item));
+    } else if (event.type === 'error' && isAbortMessage(event.message)) {
+      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'system', text: abortedNoticeText(language) }]);
     } else if (event.type === 'error') {
       // Mid-turn errors are usually transient; only a credential wall earns the
       // guided-action card — everything else stays a plain message.
@@ -809,11 +825,24 @@ const userApiKeysRef = useRef(userApiKeys);
     attachmentsRef.current = [];
   }, []);
 
+  // 运行中发出的消息：内置内核走插话（steer，下一步骤边界注入）；托管 Agent 或带媒体的消息排队，这一轮结束后自动发送。
+  type OutgoingTurn = {
+    id: string;
+    requestText: string;
+    displayText: string;
+    references: AgentReference[];
+    attachments: AgentComposerAttachment[];
+    messageReferences: Array<{ id: string; kind: AgentReference['type']; label: string }>;
+  };
+  const queuedTurns = useRef<OutgoingTurn[]>([]);
+
   const send = async () => {
     const text = prompt.trim();
-    if ((!text && references.length === 0 && attachments.length === 0) || turnRef.current.phase !== 'idle') return;
+    if (!text && references.length === 0 && attachments.length === 0) return;
     // 连接中不发送（按钮本就禁用）；不再在发送时强行把连接状态改成 ready。
     if (status === 'connecting') return;
+    const phase = turnRef.current.phase;
+    if (phase === 'stopping') return;
     if (!client.current && !kernelRef.current) {
       // Agents-offline / credential wall: never dump '仅桌面端可用'. When the
       // missing piece is an agent-text route the blocker is credential (a key
@@ -837,22 +866,44 @@ const userApiKeysRef = useRef(userApiKeys);
       references.length ? `引用：${references.map(reference => `@${reference.label}`).join('、')}` : '',
       turnAttachments.length ? `附件：${turnAttachments.map(item => item.name).join('、')}` : '',
     ].filter(Boolean).join('\n\n');
-    const assistantId = `stream-${crypto.randomUUID()}`;
+    const outgoing: OutgoingTurn = {
+      id: crypto.randomUUID(),
+      requestText,
+      displayText,
+      references: [...references],
+      attachments: turnAttachments,
+      messageReferences: references.map(reference => ({ id: reference.id, kind: reference.type, label: reference.label })),
+    };
     stickToBottom.current = true;
-    const messageReferences = references.map(reference => ({ id: reference.id, kind: reference.type, label: reference.label }));
-    setMessages(items => [...items, { id: crypto.randomUUID(), role: 'user', text: displayText, ...(messageReferences.length ? { references: messageReferences } : {}) }]);
+    setMessages(items => [...items, { id: outgoing.id, role: 'user', text: displayText, ...(outgoing.messageReferences.length ? { references: outgoing.messageReferences } : {}) }]);
     // 单个节点的「已加入上下文」提示随这一轮发出而结束；分组提示保留（还能保存为 Skill）。
     setGroupBanner(current => (current && current.nodeIds.length <= 1 ? null : current));
     setPrompt('');
     setReferences([]);
-    turnAttachments.forEach(releaseComposerAttachment);
     attachmentsRef.current = [];
     setAttachments([]);
     dispatchLayer({ type: 'close', layer: 'mention' });
+    if (phase !== 'idle') {
+      // 不打断当前这一轮。纯文本直接插话；带媒体（附件、@图片节点）需要异步取画面，排到这一轮之后。
+      const hasMedia = outgoing.attachments.length > 0 || outgoing.references.some(reference => reference.type === 'node');
+      const steered = !hasMedia && Boolean(kernelRef.current?.steer(outgoing.requestText));
+      if (!steered) queuedTurns.current.push(outgoing);
+      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'system', text: queuedNoticeText(steered ? 'steer' : 'queue', language) }]);
+      return;
+    }
+    await runTurn(outgoing);
+  };
+
+  const runTurn = async (outgoing: OutgoingTurn) => {
+    const { requestText, attachments: turnAttachments, references: turnReferences } = outgoing;
+    const assistantId = `stream-${crypto.randomUUID()}`;
+    // 排队的消息可能被上一轮结束时的快照刷掉：重新补上这条用户消息。
+    setMessages(items => items.some(item => item.id === outgoing.id) ? items : [...items, { id: outgoing.id, role: 'user', text: outgoing.displayText, ...(outgoing.messageReferences.length ? { references: outgoing.messageReferences } : {}) }]);
     const { turnId } = dispatchTurn({ type: 'send' });
     setTurnStartedAt(Date.now());
     setSetupBlocker(null);
     activity.current('running');
+    // 每轮一个新的 AbortController：停止只作用于这一轮，不复用已 abort 的控制器。
     const controller = new AbortController();
     abort.current = controller;
     let failed = false;
@@ -860,13 +911,14 @@ const userApiKeysRef = useRef(userApiKeys);
       if (kernelRef.current) {
         // 浏览器内置 PI 内核：事件已通过 subscribe 实时推送，这里只需等待完成并同步 snapshot
         // @引用的图片/视频节点自动附带画面（图片 ≤1024px，视频首/中/尾帧，最多 6 张）。
-        const referencedNodes = references.flatMap(reference => {
+        const referencedNodes = turnReferences.flatMap(reference => {
           if (reference.type !== 'node') return [];
           const node = project.nodes.find(item => item.id === reference.id);
           return node ? [node] : [];
         });
         const nodeMedia = referencedNodes.length > 0 ? await loadAgentNodeMedia(referencedNodes) : { images: [], notes: [] };
         const attachmentMedia = turnAttachments.length ? await composerAttachmentsToImages(turnAttachments) : { images: [], notes: [] };
+        turnAttachments.forEach(releaseComposerAttachment);
         // 本地附件优先占位，避免被 6 张上限挤掉；节点画面随后补位。
         const media = {
           images: [...attachmentMedia.images, ...nodeMedia.images].slice(0, 6),
@@ -875,21 +927,24 @@ const userApiKeysRef = useRef(userApiKeys);
         const kernelText = media.notes.length > 0 ? requestText + '\n\n已附带画面：\n' + media.notes.join('\n') : requestText;
         await kernelRef.current.send(kernelText, media.images, skillAttachment);
         const snapshot = await kernelRef.current.snapshot() as FlovartAgentSnapshot;
-        if (snapshot.messages.some(message => message.error)) failed = true;
+        if (latestTurnFailed(snapshot)) failed = true;
         handleEvent({ type: 'snapshot', snapshot: snapshot as FlovartAgentSnapshot }, assistantId);
       } else {
+        turnAttachments.forEach(releaseComposerAttachment);
         // 托管 Agent 的 /turn 只收文本，无法随消息带图片；明确告知而不是假装看过画面。
         const managedText = turnAttachments.length
           ? requestText + '\n\n注意：本轮附带的本地媒体（' + turnAttachments.map(item => item.name).join('、') + '）无法通过当前托管通道传给 Agent，请先让用户上传到画布或改用内置 Agent。'
           : requestText;
         await client.current!.turn(project.id, managedText, event => {
-          if (event.type === 'error' || (event.type === 'snapshot' && event.snapshot.messages.some(message => message.error))) failed = true;
+          if ((event.type === 'error' && !isAbortMessage(event.message)) || (event.type === 'snapshot' && latestTurnFailed(event.snapshot))) failed = true;
           handleEvent(event, assistantId);
         }, controller.signal, skillAttachment);
       }
       activity.current(failed ? 'error' : 'done');
     } catch (error) {
-      if (!controller.signal.aborted) {
+      if (controller.signal.aborted || isAbortMessage(errorMessage(error))) {
+        setMessages(items => [...items, { id: crypto.randomUUID(), role: 'system', text: abortedNoticeText(language) }]);
+      } else {
         const message = errorMessage(error);
         const blocker = classifyAgentSetupError(error);
         if (blocker === 'credential' || isAgentTextConfigurationError(message)) setSetupBlocker('credential');
@@ -897,10 +952,14 @@ const userApiKeysRef = useRef(userApiKeys);
         activity.current('error');
       }
     } finally {
+      if (abort.current === controller) abort.current = undefined;
       dispatchTurn({ type: 'settled', turnId });
       // 会话标题由内核在 persist 时从首条用户消息派生；回合结束后主动刷新，
       // 否则标题要等用户点开会话菜单才更新。
       void refreshSessions();
+      // 运行中排队的消息：这一轮结束（正常、失败都算；停止会清空队列）后接着发送。
+      const next = queuedTurns.current.shift();
+      if (next) void runTurn(next);
     }
   };
 
@@ -909,6 +968,9 @@ const userApiKeysRef = useRef(userApiKeys);
     const { phase, turnId } = turnRef.current;
     if (phase !== 'sending' && phase !== 'awaitingConfirmation') return;
     dispatchTurn({ type: 'stop' });
+    // 停止就是结束这一轮：排队中的消息一起丢弃（内核的插话队列在 cancel 里清空）。
+    queuedTurns.current.forEach(item => item.attachments.forEach(releaseComposerAttachment));
+    queuedTurns.current = [];
     replacePendingConfirmation(confirmationRef, undefined);
     setConfirmation(undefined);
     askRef.current?.resolve({ ok: false, cancelled: true });
@@ -1303,6 +1365,10 @@ const userApiKeysRef = useRef(userApiKeys);
             {sending
               ? <span className="agent-composer__running">
                   <span className="agent-composer__running-label" role="status" title={language === 'zho' ? '运行中' : 'Working'}><AgentOrbIcon state="working" size={20} /><span>{language === 'zho' ? '运行中' : 'Working'}</span></span>
+                  {/* 运行中也能发：插话进当前这一轮或排在它之后；停止是独立按钮。 */}
+                  {(prompt.trim() || references.length > 0 || attachments.length > 0) && turn.phase !== 'stopping'
+                    ? <button type="button" className="agent-composer__send agent-composer__send--queue" aria-label={language === 'zho' ? '发送（不打断当前任务）' : 'Send without interrupting'} title={language === 'zho' ? '发送：插入当前任务，下一步生效' : 'Send: joins the running turn at the next step'} onClick={() => void send()}><Send size={15} /></button>
+                    : null}
                   <span className="agent-composer__stop">
                     <span className="agent-composer__send-ring" aria-hidden="true" />
                     <button type="button" className="agent-composer__send" aria-label="停止" onClick={stop}><Square size={13} /></button>

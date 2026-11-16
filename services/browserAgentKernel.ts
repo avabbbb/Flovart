@@ -1044,6 +1044,7 @@ function snapshotMessage(entry: { type: string; id: string; message?: AgentMessa
   isError?: boolean;
   timestamp?: number;
   error?: string;
+  aborted?: boolean;
 } {
   const message = entry.message;
   if (message && message.role === 'toolResult') {
@@ -1064,7 +1065,10 @@ function snapshotMessage(entry: { type: string; id: string; message?: AgentMessa
     text: message ? textBlocks(message) : '',
     ...(thinking ? { thinking } : {}),
     timestamp: message ? (message as { timestamp?: number }).timestamp : undefined,
-    error: (message as { errorMessage?: string } | undefined)?.errorMessage,
+    ...((message as { stopReason?: string } | undefined)?.stopReason === 'aborted'
+      // 用户停止：统一显示「已中止」（旧会话里存的可能是 "signal is aborted without reason"）。
+      ? { aborted: true, error: AGENT_ABORTED_MESSAGE }
+      : { error: (message as { errorMessage?: string } | undefined)?.errorMessage }),
   };
 }
 
@@ -1350,7 +1354,30 @@ export class BrowserAgentKernel {
   }
 
   cancel(): void {
+    // 停止也丢掉排队中的插话：用户点停止就是要这一轮完全结束。
+    this.agent?.clearAllQueues();
     this.agent?.abort();
+  }
+
+  /** 当前是否有一轮在跑（面板据此决定新消息走插话还是新一轮）。 */
+  get running(): boolean {
+    return Boolean(this.agent?.state.isStreaming);
+  }
+
+  /**
+   * 运行中插话（steering）：不打断当前这一轮，消息在下一个步骤边界（工具执行完、下一次调用模型前）
+   * 注入对话；如果模型正在写最后一段回复，写完后立即接着处理。没有在跑时返回 false，调用方改走 send。
+   */
+  steer(text: string, images: ImageContent[] = []): boolean {
+    if (!this.agent || !this.session || !this.agent.state.isStreaming) return false;
+    const prompt = String(text || '').trim();
+    if (!prompt && images.length === 0) return false;
+    this.agent.steer({
+      role: 'user',
+      content: [{ type: 'text', text: prompt }, ...images],
+      timestamp: Date.now(),
+    } as AgentMessage);
+    return true;
   }
 
   async send(text: string, images: ImageContent[] = [], skillAttachment?: ProductionSkillAttachment | null): Promise<unknown> {
@@ -1385,7 +1412,14 @@ export class BrowserAgentKernel {
     }
 
     this.syncThinkingLevel();
-    await this.agent.prompt(prompt, images.length > 0 ? images : undefined);
+    const agent = this.agent;
+    await agent.prompt(prompt, images.length > 0 ? images : undefined);
+    // 最后一次轮询之后才到的插话还留在队列里：接着处理，不能丢。停止（abort）会清空队列。
+    while (this.agent === agent && agent.hasQueuedMessages() && !agent.state.isStreaming) {
+      const last = agent.state.messages[agent.state.messages.length - 1] as { stopReason?: string } | undefined;
+      if (last?.stopReason === 'aborted') { agent.clearAllQueues(); break; }
+      await agent.continue();
+    }
     return this.snapshot();
   }
 
