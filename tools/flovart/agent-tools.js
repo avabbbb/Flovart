@@ -30,7 +30,7 @@ const GENERATE_DESCRIPTION = [
   '不传 nodeId 时按 type=image|video 新建；传 nodeId 时复用该生成节点（不能是文本备注、脚本或音频）。',
   'prompt 里可用 @ref:<节点id> 精确指代参考，也可写 @图片1 / @视频1；没写到的 references 会自动追加 chip。',
   '生成方式按引用自动推导（无参考=文生，有图=图生图/图生视频，首尾帧=first-last-frame，多参考/视频/音频=reference-to-video），',
-  '模型不传时用与 Prompt Bar 相同的默认策略；不兼容时返回 MODE_UNSUPPORTED / REFERENCE_LIMIT 和可用模型列表，不要盲试，先 flovart_models_list。',
+  '模型不传时用与 Prompt Bar 相同的默认策略；不兼容时返回 MODE_UNSUPPORTED / REFERENCE_COUNT_OUT_OF_RANGE（含 min/max/got 与 candidates:[{modelId,mode}]）/ REFERENCE_LIMIT，直接换 candidates 里的模型或模式，不要盲试，先 flovart_models_list。',
   'run 默认 false（只写节点，不花钱）；run=true 会扣费并请用户确认，结果原位替换，count>1 折叠成同一批次，返回 run.batch 与每张 takes。',
   '剧本/分镜：每个镜头一个生成节点，镜头内容写进 prompt，镜号等写进 shot；不要建文本节点承载提示词。',
 ].join('');

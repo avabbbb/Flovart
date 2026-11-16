@@ -1,3 +1,4 @@
+import { checkReferenceCount, describeReferenceFix, getReferenceConstraints, suggestReferenceCandidates, type ReferenceKind } from './referenceConstraints';
 import { nanoid } from 'nanoid';
 import { createWorkflowNode } from '../components/workflow/constants';
 import { applyWorkflowOps } from '../components/workflow/ops';
@@ -119,7 +120,16 @@ export function describeProductModel(model: ProductModelDefinition, keys: UserAp
     const route = resolveProductModelRoute(model.id, mode, keys);
     const context = route ? { provider: route.key.provider, routeId: route.routeId } : undefined;
     const limits = getEffectiveReferenceLimits(model.id, mode, context);
-    return { mode, configured: configuredModes.includes(mode), maxReferences: limits };
+    const constraints = getReferenceConstraints(model.id, mode, context);
+    return {
+      mode,
+      configured: configuredModes.includes(mode),
+      maxReferences: limits,
+      minReferences: constraints ? { image: constraints.perKind.image.min, video: constraints.perKind.video.min, audio: constraints.perKind.audio.min } : { image: 0, video: 0, audio: 0 },
+      minTotalReferences: constraints?.minTotal ?? 0,
+      maxTotalReferences: constraints?.maxTotal ?? 0,
+      requires: constraints?.requires ?? [],
+    };
   });
   return {
     id: model.id,
@@ -198,6 +208,18 @@ function stableNodeId(mutationId: string) {
   let hash = 2166136261;
   for (const char of mutationId) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;
   return 'gen-' + hash.toString(36);
+}
+
+/** 当前这组参考能直接用的 (modelId, mode)：已配置线路的在前，按线路 schema 校验。 */
+function referenceCandidatesFor(mode: GenerateMode, kinds: ReferenceKind[], keys: UserApiKey[]) {
+  return suggestReferenceCandidates(mode, kinds, {
+    routeContextOf: (modelId, candidateMode) => {
+      const route = resolveProductModelRoute(modelId, candidateMode, keys);
+      return route ? { provider: route.key.provider, routeId: route.routeId } : undefined;
+    },
+    isConfigured: (modelId, candidateMode) => Boolean(resolveProductModelRoute(modelId, candidateMode, keys)),
+    limit: 8,
+  });
 }
 
 function compatibleModels(mode: GenerateMode, submode: ProductModelMode, kinds: Array<'image' | 'video' | 'audio'>, keys: UserApiKey[]) {
@@ -290,6 +312,7 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
     throw new WorkflowGenerateError('MODE_UNSUPPORTED', `${model.name} 不支持 ${submode}（支持：${model.capabilities.modes.join('、')}）。不要盲试，换下面列出的模型或去掉不兼容的参考。`, {
       modelId: model.id,
       submode,
+      candidates: referenceCandidatesFor(mode, kinds as ReferenceKind[], keys).map(({ modelId, mode: candidateMode }) => ({ modelId, mode: candidateMode })),
       compatibleModels: compatibleModels(mode, submode, kinds, keys),
     });
   }
@@ -308,6 +331,20 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
     }
   } else if (!diagnostics.some(item => item.code === 'MODEL_NOT_CONFIGURED')) {
     diagnostics.push({ code: 'MODEL_NOT_CONFIGURED', message: `${model.name} 的 ${submode} 还没有配置线路，运行前需要用户在设置里添加对应 API Key。` });
+  }
+  const countViolation = checkReferenceCount(model.id, submode, kinds as ReferenceKind[], routeContext);
+  if (countViolation) {
+    const candidates = referenceCandidatesFor(mode, kinds as ReferenceKind[], keys);
+    throw new WorkflowGenerateError('REFERENCE_COUNT_OUT_OF_RANGE', `${model.name}（${submode}）：${countViolation.message}。${describeReferenceFix(countViolation, candidates)}`, {
+      modelId: model.id,
+      mode: submode,
+      kind: countViolation.kind,
+      min: countViolation.min,
+      max: countViolation.max,
+      got: countViolation.got,
+      candidates: candidates.map(({ modelId, mode: candidateMode }) => ({ modelId, mode: candidateMode })),
+      compatibleModels: compatibleModels(mode, submode, kinds, keys),
+    });
   }
   const referenceProblem = explainReferenceCompatibility(model.id, submode, kinds, routeContext);
   if (referenceProblem) {
