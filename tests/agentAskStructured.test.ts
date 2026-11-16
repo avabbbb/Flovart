@@ -22,7 +22,7 @@ const spec = {
 describe('structured flovart_ask', () => {
   it('builds radio / checkbox / textarea fields with full-plan labels and recommended defaults', () => {
     const result = buildAgentAskForm(spec);
-    if (!result.ok) throw new Error(result.error);
+    if (!result.ok) throw new Error('error' in result ? result.error : 'failed');
     const { form } = result;
     expect(form.context).toEqual(['开工前确认几个关键点', '这些决定会影响费用和分镜']);
     expect(form.fields.map(field => field.kind)).toEqual(['radio', 'checkbox', 'textarea']);

@@ -8,7 +8,7 @@ const node = (id: string, patch: Partial<WorkflowNode> & { metadata?: Record<str
 
 const project = {
   nodes: [
-    node('hero', { title: '林夏', anchor: { kind: 'character', approved: true, approvedAt: '2026-11-01T00:00:00Z' }, metadata: { href: 'x', prompt: '短发少女，雨衣', generationRequestId: 'g1', alternates: [{}, {}] } }),
+    node('hero', { title: '林夏', anchor: { kind: 'character', approved: true, approvedAt: '2026-11-01T00:00:00Z' }, metadata: { href: 'x', prompt: '短发少女，雨衣', generationRequestId: 'g1', alternates: [{}, {}] as never } }),
     node('street', { title: '雨夜街道', anchor: { kind: 'scene', approved: true, approvedAt: '2026-11-02T00:00:00Z' }, metadata: { href: 'x' } }),
     node('prop', { title: '旧相机', anchor: { kind: 'product', approved: false } }),
     node('s1', { type: 'video', title: '镜头 1', shot: { index: 1, durationSec: 5, anchorNodeIds: ['hero', 'street'] }, metadata: { storageKey: 'k', prompt: '林夏走进雨里', generationRequestId: 'g2' } }),
