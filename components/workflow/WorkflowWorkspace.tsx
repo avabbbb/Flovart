@@ -210,6 +210,42 @@ export async function insertPipelineVersionsIntoProject(
   }
 }
 
+/**
+ * 本地图片放上画布（与拖到画布空白处同一份落盘与提交路径）。Agent 输入框拖入图片时用它：
+ * 图片先成为画布上的图片节点，Agent 再按节点 id 引用，不依赖文本模型能否直接看图。
+ */
+export async function insertLocalImagesIntoProject(projectId: string, files: File[]): Promise<WorkflowPatchResult & { nodes?: Array<{ id: string; title: string }> }> {
+  const records: Array<{ file: File; record: WorkflowMediaRecord }> = [];
+  const discardAll = async () => { await Promise.all(records.map(item => discardWorkflowMediaRecord(item.record.storageKey))); };
+  try {
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) continue;
+      records.push({ file, record: await ingestWorkflowMedia(file) });
+    }
+    if (!records.length) return { ok: false, error: '没有可放到画布的图片。' };
+    const current = useWorkflowStore.getState().projects.find(project => project.id === projectId);
+    if (!current) {
+      await discardAll();
+      return { ok: false, error: '项目不存在或已删除。' };
+    }
+    const imageCount = current.nodes.filter(node => node.type === 'image').length;
+    const nodes = layoutMediaNodes(records.map(({ record }, index) => {
+      const { type, warning: _warning, pendingPreview: _pending, ...metadata } = record;
+      return { type, naturalWidth: record.naturalWidth, naturalHeight: record.naturalHeight, title: `图片 ${imageCount + index + 1}`, metadata: metadata as WorkflowNodeMetadata };
+    }), current);
+    const committed = commitWorkflowProjectPatch(current.id, { nodes: [...current.nodes, ...nodes], selectedNodeIds: nodes.map(node => node.id) }, '从 Agent 输入框放入图片');
+    if (!committed.ok) {
+      await discardAll();
+      return committed;
+    }
+    records.forEach(item => releaseWorkflowMediaRecord(item.record.storageKey));
+    return { ok: true, nodes: nodes.map(node => ({ id: node.id, title: node.title })) };
+  } catch (error) {
+    await discardAll();
+    return { ok: false, error: displayError(error, '图片放到画布失败') };
+  }
+}
+
 /** Apply a node/connection patch through the draft-authority mutation path so undo + receipts stay intact. */
 export function commitWorkflowProjectPatch(projectId: string, patch: Partial<WorkflowProject>, intent: string): WorkflowPatchResult {
   const current = useWorkflowStore.getState().projects.find(project => project.id === projectId);

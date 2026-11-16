@@ -338,6 +338,44 @@ export function toOpenAIMessages(messages: AgentMessage[], options: OpenAIMessag
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// 纯文本模型：服务商明确拒收图片后记住该线路，之后的请求不再带图片内容（会话内有效）。
+// ---------------------------------------------------------------------------
+
+const TEXT_ONLY_ROUTES = new Set<string>();
+const textOnlyKey = (route: Pick<BrowserAgentTextRoute, 'baseUrl' | 'model'>) => route.baseUrl + '\u0000' + route.model;
+export const TEXT_ONLY_IMAGE_NOTE = '[图片未发送：当前文本模型不支持图片输入。需要看画面时请让用户换支持看图的模型；画布上的图片节点仍可按节点 id 引用、连线作为生成参考。]';
+
+export function isRouteTextOnly(route: Pick<BrowserAgentTextRoute, 'baseUrl' | 'model'>): boolean {
+  return TEXT_ONLY_ROUTES.has(textOnlyKey(route));
+}
+
+export function markRouteTextOnly(route: Pick<BrowserAgentTextRoute, 'baseUrl' | 'model'>, textOnly = true): void {
+  if (textOnly) TEXT_ONLY_ROUTES.add(textOnlyKey(route));
+  else TEXT_ONLY_ROUTES.delete(textOnlyKey(route));
+}
+
+/** HTTP 400/415/422 且正文说模型不收图片 / 文件 / 多模态输入。 */
+export function isImageInputRejection(status: number, body: string): boolean {
+  if (status !== 400 && status !== 415 && status !== 422) return false;
+  return /image|vision|multimodal|multi-modal|file input|image_url/i.test(body)
+    && /not support|unsupported|does not|doesn't|not allowed|invalid|cannot|can't|only (?:supports? )?text/i.test(body);
+}
+
+function hasImageParts(messages: Array<Record<string, unknown>>): boolean {
+  return messages.some(message => Array.isArray(message.content) && (message.content as Array<{ type?: string }>).some(part => part?.type === 'image_url'));
+}
+
+/** 去掉 OpenAI 消息里的 image_url 片段，每条消息留一句说明。 */
+export function stripImageParts(messages: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+  return messages.map(message => {
+    if (!Array.isArray(message.content)) return message;
+    const parts = message.content as Array<{ type?: string }>;
+    if (!parts.some(part => part?.type === 'image_url')) return message;
+    return { ...message, content: [...parts.filter(part => part?.type !== 'image_url'), { type: 'text', text: TEXT_ONLY_IMAGE_NOTE }] };
+  });
+}
+
 /**
  * /chat/completions 请求体。思考强度为 off 时不带任何思考参数；
  * 其余按服务映射（见 agentThinking.buildReasoningParams）。
@@ -346,16 +384,19 @@ export function buildBrowserAgentRequestBody(
   route: Pick<BrowserAgentTextRoute, 'provider' | 'model' | 'baseUrl'>,
   context: { systemPrompt?: string; messages: AgentMessage[]; tools?: Array<{ name: string; description: string; parameters: unknown }> },
   thinkingLevel: AgentThinkingLevel = 'off',
+  options: { textOnly?: boolean } = {},
 ): Record<string, unknown> {
   const reasoning = buildReasoningParams(thinkingLevel, route);
+  const messages = toOpenAIMessages(context.messages, {
+    reasoningEcho: reasoningEchoFor(route),
+    emptyReasoningContent: requiresEmptyReasoningContent(route),
+  });
   return {
     model: route.model,
     // DeepSeek / Kimi 的工具循环要求原样回传 reasoning_content，其它服务不回传。
     // 系统提示词固定在最前（稳定前缀，见 withSystemPrompt）。
-    messages: withSystemPrompt(toOpenAIMessages(context.messages, {
-      reasoningEcho: reasoningEchoFor(route),
-      emptyReasoningContent: requiresEmptyReasoningContent(route),
-    }), context.systemPrompt),
+    // 纯文本模型：图片内容换成一句说明，不再整轮 400。
+    messages: withSystemPrompt(options.textOnly ? stripImageParts(messages) : messages, context.systemPrompt),
     ...(context.tools?.length ? {
       tools: context.tools.map(tool => ({
         type: 'function',
@@ -473,8 +514,11 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
           };
           try {
             arm('first');
+            let sentImages = false;
             const request = (level: AgentThinkingLevel) => {
-              const body = buildBrowserAgentRequestBody(route, context as never, level);
+              const textOnly = isRouteTextOnly(route);
+              const body = buildBrowserAgentRequestBody(route, context as never, level, { textOnly });
+              sentImages = !textOnly && hasImageParts(body.messages as Array<Record<string, unknown>>);
               return fetchStreamWithUsageOptIn(`${route.baseUrl}/chat/completions`, {
                 method: 'POST',
                 headers: {
@@ -492,6 +536,14 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
                 markReasoningUnsupported(route.model);
                 thinkingLevel = 'off';
                 response = await request('off');
+              }
+            }
+            if (!response.ok && sentImages) {
+              const body = await response.clone().text().catch(() => '');
+              if (isImageInputRejection(response.status, body)) {
+                // 纯文本模型收到图片：记住这条线路，去掉图片内容重试一次（Agent 改按画布节点 id 引用）。
+                markRouteTextOnly(route);
+                response = await request(thinkingLevel);
               }
             }
             if (!response.ok) {

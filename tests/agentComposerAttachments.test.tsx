@@ -10,6 +10,9 @@ vi.mock('../services/managedAgentConnection', () => ({
   getManagedAgentConnection: vi.fn(),
 }));
 
+const insertLocalImagesIntoProject = vi.hoisted(() => vi.fn());
+vi.mock('../components/workflow/WorkflowWorkspace', () => ({ insertLocalImagesIntoProject }));
+
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
 const attachment = (id: string): AgentComposerAttachment => ({
@@ -66,6 +69,27 @@ describe('agent composer attachments', () => {
       fireEvent.click(remove);
       await waitFor(() => expect(screen.queryByLabelText('本轮附件')).not.toBeInTheDocument());
       expect(screen.getByRole('button', { name: '发送' })).toBeDisabled();
+    });
+
+    // 2026-11-16 内置 Agent 实测 P1-2：拖进输入框的图只成了附件，直接发给纯文本模型报错，也没上画布。
+    it('drops an image onto the composer: it lands on the canvas and is referenced as a node, not attached', async () => {
+      insertLocalImagesIntoProject.mockResolvedValueOnce({ ok: true, nodes: [{ id: 'node-dropped', title: '图片 3' }] });
+      renderPanel();
+      await screen.findByPlaceholderText('告诉 Flovart Agent 你想制作什么');
+      const file = new File(['abc'], 'meeting.webp', { type: 'image/webp' });
+      fireEvent.drop(screen.getByTestId('agent-composer'), { dataTransfer: { files: [file], items: [] } });
+
+      await waitFor(() => expect(insertLocalImagesIntoProject).toHaveBeenCalledWith('project-attach', [file]));
+      expect(await screen.findByLabelText('已引用内容')).toHaveTextContent('图片 3');
+      expect(screen.queryByLabelText('本轮附件')).not.toBeInTheDocument();
+    });
+
+    it('falls back to an attachment when the image cannot be placed on the canvas', async () => {
+      insertLocalImagesIntoProject.mockResolvedValueOnce({ ok: false, error: 'x' });
+      renderPanel();
+      await screen.findByPlaceholderText('告诉 Flovart Agent 你想制作什么');
+      fireEvent.drop(screen.getByTestId('agent-composer'), { dataTransfer: { files: [new File(['abc'], 'a.png', { type: 'image/png' })], items: [] } });
+      expect(await screen.findByLabelText('移除附件 a.png')).toBeInTheDocument();
     });
   });
 });

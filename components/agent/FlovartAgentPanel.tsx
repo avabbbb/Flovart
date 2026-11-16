@@ -13,6 +13,7 @@ import { setAgentGateKeysProvider, WorkflowAgentBridge } from '../../services/wo
 import { WorkflowAgentMessages, type WorkflowAgentDisplayMessage } from '../workflow/WorkflowAgentMessages';
 import type { WorkflowProject } from '../workflow/types';
 import { useWorkflowStore } from '../workflow/store';
+import { insertLocalImagesIntoProject } from '../workflow/WorkflowWorkspace';
 import type { AgentPanelStatus } from './agentWorkspaceStore';
 import { consumeSpendMandate, createSpendMandate, defaultMandateTasks, describeMandateDenial, evaluateSpendMandate, planBlocked, spendDemand, type AgentConfirmRequest, type AgentSpendMandate } from '../../services/agentSpendMandate';
 import { ProductionSkillDeck } from './ProductionSkillDeck';
@@ -823,6 +824,21 @@ const userApiKeysRef = useRef(userApiKeys);
     focusComposer();
   };
 
+  // 拖进输入框的图片：先像拖到画布一样建成图片节点，再作为 @节点 引用加入本轮；
+  // Agent 按节点 id 使用它（看图走 media_view，纯文本模型也能把它连成参考）。视频与放画布失败的图片仍作为本轮附件。
+  const dropComposerFiles = async (files: File[]) => {
+    const images = files.filter(file => file.type.startsWith('image/'));
+    const others = files.filter(file => !file.type.startsWith('image/'));
+    if (others.length) addAttachmentFiles(others);
+    if (!images.length) return;
+    const placed = await insertLocalImagesIntoProject(project.id, images);
+    if (!placed.ok || !placed.nodes?.length) {
+      addAttachmentFiles(images);
+      return;
+    }
+    placed.nodes.forEach(node => addReference({ id: node.id, type: 'node', label: node.title, mediaType: 'image' }));
+  };
+
   const removeAttachment = (attachment: AgentComposerAttachment) => {
     releaseComposerAttachment(attachment);
     const next = attachmentsRef.current.filter(item => item !== attachment);
@@ -1252,7 +1268,7 @@ const userApiKeysRef = useRef(userApiKeys);
             event.preventDefault();
             attachDragDepth.current = 0;
             setAttachDragActive(false);
-            addAttachmentFiles(event.dataTransfer.files);
+            void dropComposerFiles(Array.from(event.dataTransfer.files));
           }}
         >
           {attachDragActive && <div className="agent-composer__drop" aria-hidden="true"><span>{language === 'zho' ? '松手加入本轮对话' : 'Release to attach'}</span></div>}
