@@ -1,12 +1,15 @@
 /* ───────────────────────────────────────────────────────────────
    Ambient glass（原型）· 参考 Hark 的毛玻璃观感
    只改 Agent 对话面板，应用其余部分保持原样：
-   1. 右侧 Agent 对话面板：半透明底 + 强模糊 + 白色内高光；
+   1. 右侧 Agent 对话面板：半透明底 + 面板内自带的柔和环境光（顶部薄荷、右侧淡紫、底部蜜桃）+ 强模糊 + 白色内高光；
    2. 面板里的卡片（输入框、提示卡、生成计划卡、选中图层）改为磨砂卡，不再是实底。
    减弱透明度 / 高对比 / 不支持 backdrop-filter 时整体回退到实底。
    ─────────────────────────────────────────────────────────────── */
 :root {
   --amb-shell: rgba(255, 255, 255, .46);
+  --amb-p1: rgba(25, 200, 185, .22);   /* mint · 顶部 */
+  --amb-p2: rgba(150, 140, 235, .16);  /* lilac · 右中 */
+  --amb-p3: rgba(245, 160, 110, .18);  /* peach · 底部 */
   --amb-shell-filter: blur(32px) saturate(115%);
   --amb-stroke: rgba(255, 255, 255, .7);
   --amb-edge: rgba(31, 29, 26, .07);
@@ -18,6 +21,9 @@
 }
 :root[data-theme='dark'] {
   --amb-shell: rgba(36, 36, 42, .5);
+  --amb-p1: rgba(58, 217, 201, .10);
+  --amb-p2: rgba(130, 120, 255, .12);
+  --amb-p3: rgba(240, 122, 114, .12);
   --amb-shell-filter: blur(32px) saturate(115%);
   --amb-stroke: rgba(255, 255, 255, .1);
   --amb-edge: rgba(0, 0, 0, .5);
@@ -33,7 +39,11 @@
       /* 1. 右侧 Agent 对话面板（壳） */
       /* 选择器加权：要压过 adaptive.css / glass.css 里停靠态的 !important 底色 */
       :root aside.compact-right-panel.compact-right-panel.compact-right-panel[data-open='true'] {
-        background: var(--amb-shell) !important;
+        background:
+          radial-gradient(120% 45% at 15% 0%, var(--amb-p1), transparent 70%),
+          radial-gradient(70% 45% at 100% 45%, var(--amb-p2), transparent 70%),
+          radial-gradient(120% 40% at 50% 100%, var(--amb-p3), transparent 70%),
+          var(--amb-shell) !important;
         -webkit-backdrop-filter: var(--amb-shell-filter);
         backdrop-filter: var(--amb-shell-filter);
         border: 1px solid var(--amb-stroke) !important;
