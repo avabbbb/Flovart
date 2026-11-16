@@ -579,6 +579,10 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       });
     };
 
+    // 一次运行多张时节点上的费用是整批合计（之前每张覆盖一次，2 张、4 张都只显示单张价）。
+    let runEstimatedTotal = 0;
+    let runActualTotal = 0;
+    let runActualKnown = false;
     for (let index = 0; index < count; index += 1) {
       if (!stillActive()) throw abortError();
       // 单节点没有真实百分比，不写 0%；批量时按已完成张数给出进度。
@@ -626,7 +630,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       if (usage) {
         current = patchInitiator(canonical(runtime, current), nodeId, {
           generationUsageRecordId: usage.id,
-          generationEstimatedCost: usage.estimatedCost,
+          generationEstimatedCost: typeof usage.estimatedCost === 'number' ? (runEstimatedTotal += usage.estimatedCost) : usage.estimatedCost,
           generationCurrency: usage.currency,
           generationBillableState: usage.billableState,
         });
@@ -701,8 +705,12 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
                 currency,
                 finishTime: Date.now(),
               });
+              if (event.amount !== undefined) {
+                runActualTotal += event.amount;
+                runActualKnown = true;
+              }
               current = patchInitiator(canonical(runtime, current), nodeId, {
-                generationActualCost: event.amount,
+                generationActualCost: runActualKnown ? runActualTotal : event.amount,
                 generationActualTokens: event.totalTokens,
                 generationCurrency: currency || usage.currency,
                 generationBillableState: event.amount !== undefined ? 'actual' : 'unknown',

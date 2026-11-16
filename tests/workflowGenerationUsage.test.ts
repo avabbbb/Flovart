@@ -125,3 +125,37 @@ describe('停止生成时的 usage 状态', () => {
     expect(latest.nodes.find(item => item.id === 'config-1')?.metadata.status).toBe('idle');
   });
 });
+
+// 2026-11-16 内置 Agent 实测 P2-1：一次 2 张 / 4 张时节点费用只显示单张价（每张覆盖一次），Agent 照着少报。
+describe('一次运行多张时的费用合计', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.reserveApiUsage.mockResolvedValue({ id: 'usage-n', estimatedCost: 0.11, currency: 'CNY', billableState: 'estimated' });
+    mocks.updateApiUsage.mockResolvedValue(undefined);
+  });
+
+  it('sums estimated and actual cost across every task of the run', async () => {
+    let task = 0;
+    mocks.executeUnifiedIgnition.mockImplementation(async (input: UnifiedIgnitionInput) => {
+      task += 1;
+      await input.onProviderTaskLifecycle?.({ phase: 'submitted', providerTaskId: 'rh-' + task, submittedAt: 1 });
+      await input.onProviderTaskLifecycle?.({ phase: 'usage', providerTaskId: 'rh-' + task, status: 'succeeded', amount: 0.11, currency: 'CNY' });
+      return { ok: true, elementId: 'config-1', mediaUrl: 'data:image/png;base64,iVBORw0KGgo=', mimeType: 'image/png', capability: 'image' };
+    });
+    const initial = project();
+    initial.nodes[0].metadata.config = { mode: 'image', modelId: 'flovart:gpt-image-2', count: 4 } as never;
+    let latest = initial;
+    await runWorkflowGeneration(latest, 'config-1', {
+      userApiKeys: [imageKey],
+      getProject: () => latest,
+      onProjectChange: next => { latest = next; },
+      // jsdom 里图片解码永远不回调：注入入库，避免真实媒体持久化卡住。
+      ingestMedia: async (file: File) => ({ type: 'image' as const, storageKey: 'media-' + task, name: file.name, mimeType: 'image/png', bytes: 8, naturalWidth: 64, naturalHeight: 64 }),
+    }).catch(() => undefined);
+    expect(task).toBe(4);
+    const node = latest.nodes.find(item => item.id === 'config-1')!;
+    expect(node.metadata.generationActualCost).toBeCloseTo(0.44, 5);
+    expect(node.metadata.generationEstimatedCost).toBeCloseTo(0.44, 5);
+  });
+});
+
