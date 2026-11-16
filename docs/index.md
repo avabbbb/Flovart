@@ -46,6 +46,8 @@
 质量与开发日志：
 - [评测体系总说明 eval.md](../eval/eval.md)：五层评测对象、规则 / LLM-as-a-Judge / 实验三层方法、六层漏斗 Rubric、Auto Rubrics、四步归因、三阶段上线治理；规则层跑法见 [eval/README](../eval/README.md)
 - [真实 API 验收步骤](quality/real-api-acceptance.md)：导入 → 计划卡 → 提交 → 查询 → 保存 → 播放 → 导出 → 刷新重读
+- [2026-11-16 Agent 可靠性](quality/2026-11-16-agent-reliability.md)：中止文案、流式 start、卡住检测与重试、系统提示词、DeepSeek 缓存计数、运行中插话、按节点 rebase、`--title` 简写、无文本线路凭据卡；mock / real 前后基准
+- [2026-11-16 会议室现场评测](quality/2026-11-16-meeting-room-field-test.md)：网页端从配 Key 到出图的完整现场记录与问题清单
 - [2026-11-16 评测体系与 LLM-as-a-Judge](quality/2026-11-16-eval-judge.md)：eval.md 落地、执行成功率四段、Judge 层、`node.run --wait-seconds`、DSH / Skill 清理
 - [2026-11-16 多结果改为首图节点 + 备选](quality/2026-11-16-batch-alternates.md)：拖走批次后原位残留（退出动画继承无限循环）的根因与修复、旧叠放批次迁移、斜叠卡片 / 网格 / 画廊
 - [2026-11-15 DSH 链接错误与连接面板 UI](quality/2026-11-15-dsh-connection-ui.md)：链接错误分类、状态卡死、连接指引 / 状态 / 运行日志弹性布局
