@@ -163,6 +163,11 @@ the browser itself is offline.
   `shot:N`, or a node title. A title shared by several nodes returns
   `AMBIGUOUS_NODE_NAME` with candidates; retry with the id or code. Example:
   `--node-id shot:3 --prompt "@A02 站在 @S02 的雨里" --references '["A02","S02"]'`.
+  To use only part of an image (focus edit / a face / a product detail), give
+  that reference a `region` `{x,y,w,h}` in 0-1 of the original image, e.g.
+  `--references '[{"nodeId":"A01","region":{"x":0.3,"y":0.05,"w":0.4,"h":0.4}}]'`.
+  The chip shows the cropped area and the provider receives the crop; no crop
+  node is created. Images only.
 
   Never build a text node (or a "prompt/config node") and connect it to a
   generation node: text nodes are notes for people and are never generation

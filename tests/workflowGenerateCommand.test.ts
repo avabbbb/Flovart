@@ -305,3 +305,24 @@ describe('workflow.apply reorder_connections', () => {
     expect(stray.ok).toBe(false);
   });
 });
+
+describe('workflow.generate region references', () => {
+  it('writes the region into the chip attrs and promptIntent, and validates it', async () => {
+    const { dispatch, project } = setup();
+    const result = await dispatch({
+      id: 'g-region', command: 'workflow.generate', source: 'agent',
+      args: { type: 'image', prompt: '只保留 @ref:img-a 的脸', references: [{ nodeId: 'img-a', region: { x: 0.3, y: 0.1, w: 0.4, h: 0.4 } }] },
+    });
+    expect(result.ok).toBe(true);
+    const body = result.result as { nodeId: string; references: Array<{ region?: unknown }> };
+    expect(body.references[0].region).toEqual({ x: 0.3, y: 0.1, w: 0.4, h: 0.4 });
+    const created = project().nodes.find(node => node.id === body.nodeId)!;
+    expect(extractMentions(created.metadata.richTextDocument!)[0].region).toEqual({ x: 0.3, y: 0.1, w: 0.4, h: 0.4 });
+    const inputs = resolveWorkflowInputs(created, project().nodes, project().connections);
+    expect(inputs.references[0].resource.region).toEqual({ x: 0.3, y: 0.1, w: 0.4, h: 0.4 });
+
+    const bad = await dispatch({ id: 'g-bad', command: 'workflow.generate', source: 'agent', args: { type: 'image', prompt: 'x', references: [{ nodeId: 'img-a', region: { x: 1.5, y: 0, w: 0.2, h: 0.2 } }] } });
+    expect(bad.error?.code).toBe('BAD_REQUEST');
+    expect(bad.error?.message).toMatch(/region/);
+  });
+});

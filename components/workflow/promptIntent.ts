@@ -1,4 +1,5 @@
-import type { WorkflowGenerationReferenceRole, WorkflowNode } from './types';
+import type { WorkflowGenerationReferenceRole, WorkflowNode, WorkflowReferenceRegion } from './types';
+import { normalizeReferenceRegion, referenceRegionKey } from './referenceRegion';
 
 export type PromptIntentAction = 'edit' | 'generate' | 'stop' | 'add_reference' | 'remove_reference' | 'reorder_reference';
 
@@ -10,6 +11,8 @@ export interface PromptReferenceIdentity {
   elementType?: string;
   sourceType?: string;
   role?: WorkflowGenerationReferenceRole;
+  /** 带区域的引用（只用于图片）。 */
+  region?: WorkflowReferenceRegion;
 }
 
 export interface PromptIntent {
@@ -20,7 +23,8 @@ export interface PromptIntent {
 }
 
 function mentionIdentity(mention: PromptReferenceIdentity) {
-  return mention.id ? `id:${mention.id}` : mention.assetId ? `asset:${mention.assetId}` : `label:${mention.label || ''}`;
+  const base = mention.id ? `id:${mention.id}` : mention.assetId ? `asset:${mention.assetId}` : `label:${mention.label || ''}`;
+  return mention.region ? base + '#r:' + referenceRegionKey(mention.region) : base;
 }
 
 export function createPromptIntent(input: {
@@ -60,6 +64,7 @@ function documentMentions(document: unknown): PromptReferenceIdentity[] {
           label: typeof attrs.label === 'string' ? attrs.label : undefined,
           elementType: typeof attrs.elementType === 'string' ? attrs.elementType : undefined,
           sourceType: typeof attrs.sourceType === 'string' ? attrs.sourceType : undefined,
+          ...(normalizeReferenceRegion(attrs.region) ? { region: normalizeReferenceRegion(attrs.region) } : {}),
         });
       }
     }

@@ -1,6 +1,7 @@
 import type { ProductModelMode } from '../../types';
 import { findWorkflowNodeDefinition } from './resourceContract';
 import type { PromptIntent } from './promptIntent';
+import { normalizeReferenceRegion, referenceRegionKey, regionPixelSize, regionResourceId } from './referenceRegion';
 import type {
   SeedanceReferences,
   WorkflowArtifactRef,
@@ -11,6 +12,7 @@ import type {
   WorkflowResource,
   WorkflowResourceKind,
   WorkflowResourceLocator,
+  WorkflowReferenceRegion,
   WorkflowResourceReference,
 } from './types';
 
@@ -34,6 +36,8 @@ export interface WorkflowMentionReferenceInput {
   sourceType?: string;
   assetId?: string;
   role?: WorkflowGenerationReferenceRole;
+  /** 带区域的引用（仅图片）：执行前按区域裁剪 / 叠蒙版。 */
+  region?: WorkflowReferenceRegion;
 }
 
 export interface WorkflowAssetReferenceInput {
@@ -82,6 +86,8 @@ export interface ResolvedWorkflowResource {
   /** 源节点记录的媒体像素尺寸；供 Provider 前置分辨率校验使用。 */
   naturalWidth?: number;
   naturalHeight?: number;
+  /** 带区域的引用：resourceId 带 `#r:` 后缀，naturalWidth/Height 已换算成区域尺寸。 */
+  region?: WorkflowReferenceRegion;
   // 源节点记录的时长与文件大小；供 Provider 前置时长/体积校验使用。
   durationMs?: number;
   bytes?: number;
@@ -222,6 +228,28 @@ function resolveNodeResources(node: WorkflowNode, connection: WorkflowConnection
 }
 
 function resourceIdentity(resource: ResolvedWorkflowResource): string {
+  const base = baseResourceIdentity(resource);
+  return resource.region ? base + '#r:' + referenceRegionKey(resource.region) : base;
+}
+
+/** 把整图资源换成它的区域版本：身份、resourceId 与像素尺寸都按区域；视频/音频不支持区域，原样返回。 */
+function withRegion(resource: WorkflowMediaResource, region: WorkflowReferenceRegion | undefined): WorkflowMediaResource {
+  if (!region || resource.kind !== 'image') return resource;
+  const resourceId = regionResourceId(resource.resourceId, region);
+  const size = regionPixelSize(resource.naturalWidth, resource.naturalHeight, region);
+  return {
+    ...resource,
+    resourceId,
+    resource: { ...resource.resource, resourceId },
+    reference: { ...resource.reference, resourceId },
+    region,
+    // 运行时产物引用会让 Provider 绕过 href 直接取整图；区域版本只走裁剪后的 href。
+    artifactRef: undefined,
+    ...(size ? { naturalWidth: size.width, naturalHeight: size.height } : {}),
+  };
+}
+
+function baseResourceIdentity(resource: ResolvedWorkflowResource): string {
   switch (resource.locator.kind) {
     case 'asset': return `asset:${resource.locator.assetId}`;
     case 'workflow-storage': return `storage:${resource.locator.storageKey}`;
@@ -258,6 +286,7 @@ function extractDocumentMentions(document?: Record<string, unknown>): WorkflowMe
           sourceType: typeof attrs.sourceType === 'string' ? attrs.sourceType : undefined,
           assetId: typeof attrs.assetId === 'string' ? attrs.assetId : undefined,
           role,
+          ...(normalizeReferenceRegion(attrs.region) ? { region: normalizeReferenceRegion(attrs.region) } : {}),
         });
       }
     }
@@ -507,6 +536,11 @@ export function resolveWorkflowInputs(
       });
       return;
     }
+    if (mention.region && source.kind === 'image') {
+      // 区域版本只进入 references（执行时裁剪）；resources 仍保留整图，供图上下文/旧路径使用。
+      regionBaseIdentities.add(resourceIdentity(source));
+      source = withRegion(source, mention.region);
+    }
     const identity = resourceIdentity(source);
     if (!mentionIdentities.has(identity)) {
       mentionIdentities.add(identity);
@@ -518,8 +552,10 @@ export function resolveWorkflowInputs(
     });
   };
 
+  const regionBaseIdentities = new Set<string>();
   mentionInputs.forEach(addMention);
-  plainTextMentionInputs(prompt, media).forEach(addMention);
+  // 富文本 chip 已带区域的源，不再被纯文本「@图片1」按整图重复选中。
+  plainTextMentionInputs(prompt, media).filter(mention => !mention.id || !regionBaseIdentities.has(mention.id)).forEach(addMention);
 
   const orderedResources = resources;
   const hasMentionSelection = mentionIdentities.size > 0;

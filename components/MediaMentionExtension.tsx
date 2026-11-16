@@ -10,6 +10,7 @@
 
 import { Node, mergeAttributes } from '@tiptap/core';
 import { isFetchableMediaHref } from './workflow/media';
+import type { WorkflowReferenceRegion } from './workflow/types';
 
 // ---- 可视化节点渲染 ----------------------------------------
 
@@ -90,6 +91,8 @@ export const MediaMentionNode = Node.create({
             description: { default: '' },
             sourceType: { default: null },
             assetId: { default: null },
+            /** 带区域的引用：{x,y,w,h}（0-1）与可选 mask；null 表示整张图。 */
+            region: { default: null },
         };
     },
 
@@ -120,6 +123,7 @@ export interface MentionData {
     description?: string;
     sourceType?: 'connected' | 'assetLibrary';
     assetId?: string;
+    region?: WorkflowReferenceRegion | null;
 }
 
 export function extractMentions(editorJSON: Record<string, unknown>): MentionData[] {

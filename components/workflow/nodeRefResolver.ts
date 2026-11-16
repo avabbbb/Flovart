@@ -11,6 +11,10 @@ export type NodeRefResult =
   | { ok: true; nodeId: string; via: NodeRefMatch }
   | { ok: false; code: 'NOT_FOUND' | 'AMBIGUOUS_NODE_NAME'; ref: string; candidates: NodeRefCandidate[] };
 
+export type NodeRefMiss = Extract<NodeRefResult, { ok: false }>;
+/** 类型守卫（项目未开 strictNullChecks，布尔判别联合不能自动收窄）。 */
+export const isNodeRefMiss = (result: NodeRefResult): result is NodeRefMiss => result.ok === false;
+
 export interface NodeRefIndex {
   nodes: readonly RefNode[];
   codes: Map<string, string>;
@@ -84,7 +88,7 @@ export function extractNodeRefs(text: string, nodesOrIndex: readonly RefNode[] |
   const rewritten = String(text ?? '').replace(MENTION_PATTERN, (whole, _quote, quotedName, shot, code) => {
     const ref = quotedName ?? shot ?? code;
     const result = resolveNodeRef(ref, index);
-    if (result.ok) {
+    if (!isNodeRefMiss(result)) {
       if (!nodeIds.includes(result.nodeId)) nodeIds.push(result.nodeId);
       return '@ref:' + result.nodeId;
     }

@@ -21,6 +21,24 @@ const REFERENCE_ITEM = Object.freeze({
       enum: ['first_frame', 'last_frame', 'reference', 'character', 'style', 'mask', 'source_video', 'source_audio'],
       description: '参考角色（可选）。首尾帧视频给 first_frame + last_frame；其余默认按顺序作参考。',
     },
+    region: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['x', 'y', 'w', 'h'],
+      description: '只引用图片的一块区域（焦点编辑/镜头聚焦）：0-1 归一化 {x,y,w,h}，左上为原点；运行前自动裁剪，不建裁剪节点。仅图片。',
+      properties: {
+        x: { type: 'number', minimum: 0, maximum: 1 },
+        y: { type: 'number', minimum: 0, maximum: 1 },
+        w: { type: 'number', exclusiveMinimum: 0, maximum: 1 },
+        h: { type: 'number', exclusiveMinimum: 0, maximum: 1 },
+        mask: {
+          type: 'object',
+          additionalProperties: false,
+          description: '可选蒙版（点选主体时）：storageKey 或 href，与区域同尺寸',
+          properties: { storageKey: { type: 'string' }, href: { type: 'string' } },
+        },
+      },
+    },
   },
 });
 
@@ -29,6 +47,7 @@ const GENERATE_DESCRIPTION = [
   'references 里的素材同时成为 @chip 和连线（顺序 = chip 顺序：图片1、图片2…），然后可选原位运行。',
   '不传 nodeId 时按 type=image|video 新建；传 nodeId 时复用该生成节点（不能是文本备注、脚本或音频）。',
   'prompt 里可用 @ref:<节点id> 精确指代参考，也可写 @图片1 / @视频1，或已批准锚点的编号 @A01 / @S01、@shot:3、@"节点名"；没写到的 references 会自动追加 chip。',
+  'references[].region={x,y,w,h}（0-1）只引用图片的一块区域，例如只取人脸或产品局部；运行前自动裁剪，画布上不建裁剪节点。',
   'nodeId 与 references 同样接受节点 id、锚点编号（角色 A、场景 S、产品道具 P、风格 T）、shot:N 或节点名；名字重名时返回 AMBIGUOUS_NODE_NAME 和候选，改用 id 或编号。',
   '生成方式按引用自动推导（无参考=文生，有图=图生图/图生视频，首尾帧=first-last-frame，多参考/视频/音频=reference-to-video），',
   '模型不传时用与 Prompt Bar 相同的默认策略；不兼容时返回 MODE_UNSUPPORTED / REFERENCE_LIMIT 和可用模型列表，不要盲试，先 flovart_models_list。',

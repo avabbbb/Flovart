@@ -197,6 +197,18 @@ export type WorkflowResourceLocator =
   | { kind: 'missing'; reason: string };
 
 /** 节点声明给下游的资源；执行层只通过 locator 解析，不猜节点 metadata。 */
+/**
+ * 带区域的引用（焦点编辑 / 镜头聚焦）：x/y/w/h 为 0-1 归一化框；点选主体时另带 mask（与框同尺寸的蒙版图），
+ * 框选只有框。提交给 Provider 前按区域裁剪（有 mask 时再叠蒙版），画布上不留中间节点。
+ */
+export interface WorkflowReferenceRegion {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  mask?: { storageKey?: string; href?: string };
+}
+
 export interface WorkflowResource {
   resourceId: string;
   title: string;

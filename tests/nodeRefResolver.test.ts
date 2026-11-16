@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractNodeRefs, resolveNodeRef } from '../components/workflow/nodeRefResolver';
+import { extractNodeRefs, isNodeRefMiss, resolveNodeRef } from '../components/workflow/nodeRefResolver';
 
 const nodes = [
   { id: 'img-hero', type: 'image', title: '主角定妆', anchor: { kind: 'character' as const, approved: true, code: 'A01' } },
@@ -31,12 +31,12 @@ describe('resolveNodeRef', () => {
     expect(resolveNodeRef('街景', nodes)).toMatchObject({ ok: true, nodeId: 'img-street', via: 'name' });
     const dup = resolveNodeRef('镜头', nodes);
     expect(dup).toMatchObject({ ok: false, code: 'AMBIGUOUS_NODE_NAME' });
-    expect(dup.ok ? [] : dup.candidates.map(item => item.nodeId)).toEqual(['v-1', 'v-3']);
+    expect(isNodeRefMiss(dup) ? dup.candidates.map(item => item.nodeId) : []).toEqual(['v-1', 'v-3']);
   });
   it('lists anchor codes on ambiguous candidates', () => {
     const twins = [...nodes, { id: 'img-hero-2', type: 'image', title: '主角定妆' }];
     const result = resolveNodeRef('主角定妆', twins);
-    expect(result.ok ? null : result.candidates[0]).toEqual({ nodeId: 'img-hero', title: '主角定妆', type: 'image', code: 'A01' });
+    expect(isNodeRefMiss(result) ? result.candidates[0] : null).toEqual({ nodeId: 'img-hero', title: '主角定妆', type: 'image', code: 'A01' });
   });
 });
 
@@ -51,6 +51,6 @@ describe('extractNodeRefs', () => {
     const result = extractNodeRefs('@P09 和 @"镜头"', nodes);
     expect(result.text).toBe('@P09 和 @"镜头"');
     expect(result.unresolved).toEqual(['@P09']);
-    expect(result.ambiguous[0].candidates.map(item => item.nodeId)).toEqual(['v-1', 'v-3']);
+    expect(result.ambiguous[0].candidates.map(item => item.nodeId) : []).toEqual(['v-1', 'v-3']);
   });
 });
