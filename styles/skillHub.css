@@ -887,3 +887,14 @@
   .agent-skill-picker.skill-hub::before,
   .agent-reference-picker.flv-frost::before { background: var(--isl-surface); }
 }
+
+/* @ 引用预览卡同时带旧的 .agent-reference-preview（workflow.css：fixed + #161618 实底）。
+   样式表加载顺序会变（资源窗口在 App 顶层引入 skillHub.css），所以用复合选择器把磨砂卡钉死，不依赖顺序。 */
+.agent-reference-preview.skill-hub__preview {
+  position: absolute;
+  z-index: 4;
+  padding: 0;
+  border: 1px solid var(--flv-frost-edge);
+  background: var(--flv-frost-fill-strong);
+  box-shadow: var(--flv-frost-highlight), var(--flv-frost-shadow);
+}
