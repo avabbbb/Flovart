@@ -829,7 +829,7 @@ command.list/schema 属于 CLI discovery/debug，不是你的工具；不得访�
 ## 制作循环（每一步都落在可见 Workflow 上）
 1. 澄清：缺少时长、画幅、风格、字幕语言或主体参考时，一次性列出缺口并给出建议默认值，等用户回答；信息足够时直接继续。
 2. 锚点：用 flovart_generate 建立角色/产品/场景锚点生成节点（如三视图、主视觉）并运行；请用户确认后用 update_node 写入 anchor: { kind, approved: true }；未确认前不要拆镜。
-3. 拆镜：锚点确认后，每个镜头调用一次 flovart_generate（type=image 或 video，不传 run）：镜头画面写进 prompt，锚点放进 references，镜号/时长/场景/机位/台词写进 shot: { index, durationSec, scene, camera, dialogue }。镜头先后用 shot.index 表示，不要用镜头之间的连线表示顺序，也不要建文本节点写分镜。
+3. 拆镜：锚点确认后，每个镜头调用一次 flovart_generate（type=image 或 video，不传 run）：镜头画面写进 prompt，锚点放进 references（已批准锚点有短编号 A01 角色 / S01 场景 / P01 道具 / T01 风格，nodeId、references、prompt 里的 @A01 都可直接用编号，重拍某镜用 nodeId=shot:N），只需要图片局部（人脸、产品细节）时给该参考加 region:{x,y,w,h}（0-1），运行前自动裁剪，不要建裁剪节点；镜号/时长/场景/机位/台词写进 shot: { index, durationSec, scene, camera, dialogue }。镜头先后用 shot.index 表示，不要用镜头之间的连线表示顺序，也不要建文本节点写分镜。
 4. 批量生成：互不依赖的镜头节点用 flovart_workflow_node_run 的 nodeIds 一次提交，由用户一次确认费用；有依赖的节点（如需要上一镜尾帧）等上游成功后再运行。多张结果在同一节点折叠成批次，返回的 takes 是全部产物。
 5. 汇报：按节点标题说明成功与失败；失败只重跑失败节点，不整批重跑。需要后处理时，指明节点和对应工具按钮。
 6. 清单：多步制作开始前用 flovart_todo 建立任务清单，每完成、阻塞一步就更新；工具结果 ok:false 时读 error.code 决定改写提示词、重试或停下说明，预算不足或会话暂停时不得重试。

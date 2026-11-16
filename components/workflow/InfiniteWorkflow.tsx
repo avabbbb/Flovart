@@ -2,7 +2,7 @@ import { FAN_SPRING, fanPose } from '../ui/ImageFan';
 import { BATCH_GRID_GAP, BATCH_STACK_SPRING, batchCellCloseTransition, batchCellOpenTransition, batchCellStackedPose } from './batchStackMotion';
 import { workflowFitOnOpen } from './templates';
 import { pickVideoFile, promptUndecodableVideo } from '../../services/undecodableVideoPrompt';
-import { anchorApprovalPatch } from '../../services/anchorApproval';
+import { anchorApprovalPatch, deriveAnchorCodes } from '../../services/anchorApproval';
 import { deriveWorkflowLayerPreview } from './layerPreview';
 import { nanoid } from 'nanoid';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -48,8 +48,8 @@ import { pushAgentGroup } from '../../stores/useAgentGroupInboxStore';
 import { buildTextAssetPrompt, canGenerateTextAssets, textAssetSpec } from './textAssets';
 import { WorkflowCreateMenu, type WorkflowCreateMenuState } from './WorkflowCreateMenu';
 import type { WorkflowSharedMedia } from './WorkflowConfigPanel';
-import { WorkflowStoryboard } from './WorkflowStoryboard';
-import { buildProductionBible } from './productionBible';
+import { WorkflowStoryboardView, WorkflowViewSwitch } from './WorkflowStoryboardView';
+import { buildProductionBible, buildStoryboardView } from './productionBible';
 import { WorkflowMiniMap } from './WorkflowMiniMap';
 import { WorkflowQuickToggles } from './WorkflowQuickToggles';
 import { WorkflowNode } from './WorkflowNode';
@@ -959,14 +959,50 @@ export function InfiniteWorkflow({
     }
   }, [currentFrame, imageToolRuntime, pushHistory, videoControls]);
 
+  // 节点内剪辑（P1-5）：剪辑条直接嵌在视频节点里，不再弹 TrimDialog；产物仍是 video.trim@1 的新版本。
+  const [inlineTrim, setInlineTrim] = useState<{ projectId: string; nodeId: string } | null>(null);
+  const [inlineTrimBusy, setInlineTrimBusy] = useState(false);
+  const openInlineTrim = useCallback((nodeId: string) => {
+    if (videoControls.isLocked()) { setNotice('请先完成或关闭当前视频工具'); return; }
+    const target = projectRef.current.nodes.find(node => node.id === nodeId);
+    if (!target || target.type !== 'video' || !(target.metadata.storageKey || target.metadata.href || target.metadata.artifactRef?.taskId)) {
+      setNotice('目标视频节点缺少媒体，无法使用视频工具');
+      return;
+    }
+    if (target.metadata.status === 'loading' || target.isLocked) return;
+    setInlineTrim({ projectId: projectRef.current.id, nodeId });
+  }, [videoControls]);
+  const confirmInlineTrim = useCallback(async (nodeId: string, startSec: number, endSec: number) => {
+    const transaction = { id: nanoid(), projectId: projectRef.current.id, nodeId, frame: currentFrame() };
+    if (!videoControls.begin(transaction)) return;
+    setInlineTrimBusy(true);
+    setNotice('正在剪辑…');
+    try {
+      const result = await runWorkflowVideoTrimOperation(transaction.projectId, nodeId, { startSec, endSec }, imageToolRuntime);
+      if (!videoControls.owns(transaction)) return;
+      if (result.status === 'committed' && projectRef.current.id === transaction.projectId) {
+        pushHistory(transaction.frame);
+        setNotice('视频剪辑完成，已生成新版本');
+        setInlineTrim(null);
+      } else if (result.status === 'stale') {
+        setInlineTrim(null);
+      }
+    } catch (error) {
+      if (videoControls.owns(transaction)) setNotice(displayError(error, '视频剪辑失败'));
+    } finally {
+      setInlineTrimBusy(false);
+      videoControls.settle(transaction);
+    }
+  }, [currentFrame, imageToolRuntime, pushHistory, videoControls]);
+
   const builtInVideoTools = useMemo<WorkflowVideoToolHandlers>(() => ({
-    trim: id => openVideoTool('trim', id),
+    trim: id => openInlineTrim(id),
     avSplit: (id, audio) => { void handleAvSplit(id, audio); },
     // merge 需要携带完整选中 id 列表，确认时回传真实选中集而非全库视频。
     merge: ids => { if (ids.length > 0) openVideoTool('merge', ids[0], ids); },
     extractFrame: handleExtractFrame,
     extractFrameAt: id => openVideoTool('extract-frame', id),
-  }), [openVideoTool, handleExtractFrame, handleAvSplit]);
+  }), [openVideoTool, openInlineTrim, handleExtractFrame, handleAvSplit]);
 
   // 自动派生（默认关闭）：视频节点新进入成功状态时，按设置串行执行截帧 / 音视频分离 Operation。
   const [autoMediaDerive, setAutoMediaDerive] = useState<AutoMediaDeriveSettings>(() => loadAutoMediaDeriveSettings());
@@ -1531,7 +1567,30 @@ export function InfiniteWorkflow({
   }, [focusBounds]);
 
   // 故事板（P2）：镜头表来自制作圣经，只在项目里有 shot 元数据时露出入口。
-  const [storyboardOpen, setStoryboardOpen] = useState(false);
+  // 故事板第二视图（P1-4）：同一份 workflow 推导，不另建 store。
+  const [workflowView, setWorkflowView] = useState<'workflow' | 'storyboard'>('workflow');
+  const storyboardView = useMemo(() => buildStoryboardView(project), [project]);
+  const [storyboardMergeBusy, setStoryboardMergeBusy] = useState(false);
+  const mergeStoryboard = useCallback(async (sourceNodeIds: string[]) => {
+    if (sourceNodeIds.length < 2) return;
+    const transaction = { id: nanoid(), projectId: projectRef.current.id, nodeId: sourceNodeIds[0], frame: currentFrame() };
+    if (!videoControls.begin(transaction)) { setNotice('请先完成或关闭当前视频工具'); return; }
+    setStoryboardMergeBusy(true);
+    setNotice('正在按镜号拼接成片…');
+    try {
+      const result = await runWorkflowVideoMergeOperation(transaction.projectId, sourceNodeIds, imageToolRuntime);
+      if (!videoControls.owns(transaction)) return;
+      if (result.status === 'committed' && projectRef.current.id === transaction.projectId) {
+        pushHistory(transaction.frame);
+        setNotice('成片拼接完成');
+      }
+    } catch (error) {
+      if (videoControls.owns(transaction)) setNotice(displayError(error, '成片拼接失败'));
+    } finally {
+      setStoryboardMergeBusy(false);
+      videoControls.settle(transaction);
+    }
+  }, [currentFrame, imageToolRuntime, pushHistory, videoControls]);
   const productionBible = useMemo(() => buildProductionBible(project), [project]);
 
   // focusNodeRequest 是一次性事件：按 nonce 只处理一次。否则 focusNode/selectNodes
@@ -2745,6 +2804,7 @@ export function InfiniteWorkflow({
   } : undefined;
   const selectedNodes = useMemo(() => new Set(selectedNodeIds), [selectedNodeIds]);
   // 派生运行状态（stale 等）：纯计算，不写回项目。
+  const anchorCodes = useMemo(() => deriveAnchorCodes(project.nodes), [project.nodes]);
   const runStates = useMemo(() => deriveWorkflowRunStates({ nodes: project.nodes, connections: project.connections }), [project.nodes, project.connections]);
   const stalePlan = useMemo(() => planWorkflowStaleRerun({ nodes: project.nodes, connections: project.connections }, runStates), [project.nodes, project.connections, runStates]);
   const presenceByNode = useMemo(() => deriveWorkflowPresence({ nodes: project.nodes, draftChangeSets: project.draftChangeSets }), [project.nodes, project.draftChangeSets]);
@@ -3113,21 +3173,15 @@ export function InfiniteWorkflow({
         setContextMenu({ type: 'pane', x: event.clientX, y: event.clientY });
       }}
     >
-      {productionBible.shots.length > 0 && !storyboardOpen && (
-        <button
-          type="button"
-          data-workflow-overlay
-          style={{ position: 'absolute', right: 16, top: 72, zIndex: 80, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(127,127,127,0.3)', background: 'var(--workflow-panel-bg, rgba(255,255,255,0.97))', color: 'inherit', cursor: 'pointer' }}
-          onPointerDown={event => event.stopPropagation()}
-          onClick={() => setStoryboardOpen(true)}
-        >{(language === 'en' ? 'Storyboard · ' : '故事板 · ') + productionBible.shots.length}</button>
+      {(productionBible.shots.length > 0 || productionBible.anchors.length > 0 || workflowView === 'storyboard') && (
+        <WorkflowViewSwitch value={workflowView} onChange={setWorkflowView} language={language} shotCount={productionBible.shots.length} />
       )}
-      {storyboardOpen && (
-        <WorkflowStoryboard
-          bible={productionBible}
+      {workflowView === 'storyboard' && (
+        <WorkflowStoryboardView
+          view={storyboardView}
           language={language}
-          onClose={() => setStoryboardOpen(false)}
-          onFocus={id => { selectNodes([id]); focusNode(id); }}
+          mergeBusy={storyboardMergeBusy}
+          onOpenNode={id => { setWorkflowView('workflow'); selectNodes([id]); focusNode(id); setPromptFocusSignal(value => value + 1); }}
           onReference={ids => {
             const members = projectRef.current.nodes.filter(item => ids.includes(item.id));
             if (!members.length) return;
@@ -3136,6 +3190,7 @@ export function InfiniteWorkflow({
               label: members.length === 1 ? members[0].title : (language === 'en' ? 'Storyboard · ' + members.length + ' shots' : '故事板 · ' + members.length + ' 个镜头'),
             });
           }}
+          onMerge={ids => { void mergeStoryboard(ids); }}
         />
       )}
       <WorkflowToolbar
@@ -3426,9 +3481,14 @@ export function InfiniteWorkflow({
             )) : undefined}
             onNeedPoster={() => requestVideoPoster(node.id)}
             onChangeTitle={title => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, patch: { title } }]); }}
+            anchorCode={anchorCodes.get(node.id)}
+            trimEditing={inlineTrim?.projectId === project.id && inlineTrim.nodeId === node.id}
+            trimBusy={inlineTrimBusy}
+            onTrimConfirm={(startSec, endSec) => { void confirmInlineTrim(node.id, startSec, endSec); }}
+            onTrimCancel={() => { if (!inlineTrimBusy) setInlineTrim(null); }}
             onToggleAnchorApproval={node.anchor ? () => {
               if (node.isLocked) return;
-              const patch = anchorApprovalPatch(node);
+              const patch = anchorApprovalPatch(node, new Date(), projectRef.current.nodes);
               if (patch) applyOps([{ type: 'update_node', id: node.id, patch }]);
             } : undefined}
             renameSignal={renameSignal?.nodeId === node.id ? renameSignal.nonce : undefined}

@@ -127,6 +127,32 @@ describe('workflow.generate', () => {
     expect(project().nodes).toHaveLength(3);
   });
 
+  it('resolves anchor codes, shot:N and names in nodeId / references / prompt; reports duplicate names', async () => {
+    const { dispatch, project } = setup();
+    const base = project();
+    const nodes = base.nodes.map(node => node.id === 'img-a' ? { ...node, anchor: { kind: 'character' as const, approved: true } }
+      : node.id === 'img-b' ? { ...node, title: '街景', anchor: { kind: 'scene' as const, approved: true, code: 'S01' } } : node);
+    nodes.push({ ...createWorkflowNode('img-shot', 'image', { x: 600, y: 0 }), title: '镜头', shot: { index: 3 } });
+    nodes.push({ ...createWorkflowNode('img-dup', 'image', { x: 600, y: 400 }), title: '镜头' });
+    (project() as WorkflowProject).nodes = nodes;
+    const result = await dispatch({
+      id: 'g-ref', command: 'workflow.generate', source: 'agent',
+      args: { nodeId: 'shot:3', prompt: '@A01 站在 @S01 里重拍', references: ['A01', '街景', 'img-a'] },
+    });
+    expect(result.ok).toBe(true);
+    const body = result.result as { nodeId: string; references: Array<{ nodeId: string; mentioned: boolean }> };
+    expect(body.nodeId).toBe('img-shot');
+    expect(body.references.map(item => [item.nodeId, item.mentioned])).toEqual([['img-a', true], ['img-b', true]]);
+    const target = project().nodes.find(node => node.id === 'img-shot')!;
+    expect(target.metadata.prompt).toBe('@图片1 站在 @图片2 里重拍');
+
+    const ambiguous = await dispatch({ id: 'g-dup', command: 'workflow.generate', source: 'agent', args: { nodeId: '镜头', prompt: 'x' } });
+    expect(ambiguous.error?.code).toBe('AMBIGUOUS_NODE_NAME');
+    expect((ambiguous.error?.details?.candidates as Array<{ nodeId: string }>).map(item => item.nodeId)).toEqual(['img-shot', 'img-dup']);
+    const missing = await dispatch({ id: 'g-miss', command: 'workflow.generate', source: 'agent', args: { type: 'image', prompt: 'x', references: ['P07'] } });
+    expect(missing.error?.code).toBe('NOT_FOUND');
+  });
+
   it('reports an incompatible model with the models that would work instead of downgrading', async () => {
     const { dispatch, project } = setup();
     const result = await dispatch({ id: 'bad', command: 'workflow.generate', source: 'agent', args: { type: 'image', prompt: '改成水彩', references: ['img-a'], modelId: 'flovart:imagen-4' } });
@@ -379,5 +405,26 @@ describe('workflow.script.materialize', () => {
     expect(notScript.error?.code).toBe('UNSUPPORTED_TARGET');
     const note = await dispatch({ id: 'n2', command: 'workflow.script.materialize', source: 'agent', args: { scriptNodeId: 'note-1' } });
     expect(note.error?.code).toBe('NOTE_IS_ANNOTATION');
+  });
+});
+
+describe('workflow.generate region references', () => {
+  it('writes the region into the chip attrs and promptIntent, and validates it', async () => {
+    const { dispatch, project } = setup();
+    const result = await dispatch({
+      id: 'g-region', command: 'workflow.generate', source: 'agent',
+      args: { type: 'image', prompt: '只保留 @ref:img-a 的脸', references: [{ nodeId: 'img-a', region: { x: 0.3, y: 0.1, w: 0.4, h: 0.4 } }] },
+    });
+    expect(result.ok).toBe(true);
+    const body = result.result as { nodeId: string; references: Array<{ region?: unknown }> };
+    expect(body.references[0].region).toEqual({ x: 0.3, y: 0.1, w: 0.4, h: 0.4 });
+    const created = project().nodes.find(node => node.id === body.nodeId)!;
+    expect(extractMentions(created.metadata.richTextDocument!)[0].region).toEqual({ x: 0.3, y: 0.1, w: 0.4, h: 0.4 });
+    const inputs = resolveWorkflowInputs(created, project().nodes, project().connections);
+    expect(inputs.references[0].resource.region).toEqual({ x: 0.3, y: 0.1, w: 0.4, h: 0.4 });
+
+    const bad = await dispatch({ id: 'g-bad', command: 'workflow.generate', source: 'agent', args: { type: 'image', prompt: 'x', references: [{ nodeId: 'img-a', region: { x: 1.5, y: 0, w: 0.2, h: 0.2 } }] } });
+    expect(bad.error?.code).toBe('BAD_REQUEST');
+    expect(bad.error?.message).toMatch(/region/);
   });
 });

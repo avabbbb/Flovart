@@ -71,6 +71,7 @@
 .workflow-node:hover .workflow-node__title-edit-icon { opacity: .4; }
 /* 共享 chip 基类：锚点批准 / 配置项 / 本地文件夹筛选。只在各自规则里写尺寸与圆角差异。 */
 .workflow-node__anchor-chip,.workflow-config__chip,.local-folder-chip { display:inline-flex;align-items:center;gap:4px;border:1px solid var(--wf-border);background:transparent;color:var(--wf-muted);font:inherit;font-size:10px;line-height:1; }
+.workflow-node__anchor-code { flex:none;font-size:10px;font-weight:600;letter-spacing:.02em;color:var(--wf-accent);font-variant-numeric:tabular-nums; }
 .workflow-node__anchor-chip,.local-folder-chip { cursor:pointer;transition:border-color .14s ease,color .14s ease,background .14s ease; }
 .workflow-node__anchor-chip:hover:not(:disabled),.local-folder-chip:hover { border-color:var(--wf-accent);color:var(--wf-accent); }
 .workflow-node__anchor-chip.is-approved,.local-folder-chip.is-active { border-color:var(--wf-accent);color:var(--wf-text);background:color-mix(in srgb,var(--wf-accent) 12%,transparent); }
@@ -1026,3 +1027,62 @@
 @media (hover: none) { .workflow-alt-stack__actions { opacity:1; } }
 @media (prefers-reduced-motion: reduce) { .workflow-alt-stack *,.workflow-alt-stack { transition:none !important; } }
 .workflow-node-prompt__slash { position: absolute; z-index: 6; left: 0; bottom: calc(100% + 8px); }
+/* 区域引用弹层（P1-2） */
+.workflow-region-popover { position:fixed;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;background:rgba(15,15,20,.45); }
+.workflow-region-popover__panel { width:min(560px,92vw);max-height:90vh;display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:12px;background:var(--wf-surface,#fff);color:var(--wf-text,#111);box-shadow:0 18px 48px rgba(0,0,0,.28); }
+.workflow-region-popover__head { display:flex;flex-direction:column;gap:2px;font-size:13px; }
+.workflow-region-popover__head span { font-size:11px;color:var(--wf-muted,#666); }
+.workflow-region-popover__frame { position:relative;align-self:center;max-width:100%;cursor:crosshair;user-select:none;touch-action:none;line-height:0; }
+.workflow-region-popover__frame img { max-width:100%;max-height:62vh;display:block;border-radius:6px; }
+.workflow-region-popover__empty { width:320px;height:200px;display:flex;align-items:center;justify-content:center;line-height:1;font-size:12px;color:var(--wf-muted,#666); }
+.workflow-region-popover__box { position:absolute;border:2px solid var(--wf-accent,#6366f1);box-shadow:0 0 0 9999px rgba(0,0,0,.42);border-radius:3px;pointer-events:none; }
+.workflow-region-popover__actions { display:flex;gap:8px;align-items:center; }
+.workflow-region-popover__actions button { padding:6px 12px;border-radius:8px;border:1px solid var(--wf-border,#ddd);background:transparent;color:inherit;font-size:12px;cursor:pointer; }
+.workflow-region-popover__actions button.is-primary { background:var(--wf-accent,#6366f1);border-color:var(--wf-accent,#6366f1);color:#fff; }
+.workflow-region-popover__actions button:disabled { opacity:.45;cursor:default; }
+/* 节点内剪辑条（P1-5） */
+.workflow-node__trim-bar { position:absolute;left:8px;right:8px;bottom:8px;z-index:3;display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:8px;background:rgba(12,12,16,.78);color:#fff;font-size:11px;outline:none;backdrop-filter:blur(6px); }
+.workflow-node__trim-bar:focus-visible { box-shadow:0 0 0 2px var(--wf-accent,#19c8b9); }
+.workflow-node__trim-track { position:relative;height:18px; }
+.workflow-node__trim-track::before { content:'';position:absolute;left:0;right:0;top:7px;height:4px;border-radius:2px;background:rgba(255,255,255,.22); }
+.workflow-node__trim-selection { position:absolute;top:5px;height:8px;border-radius:3px;background:var(--wf-accent,#19c8b9);pointer-events:none; }
+.workflow-node__trim-playhead { position:absolute;top:1px;width:2px;height:16px;margin-left:-1px;background:#fff;pointer-events:none; }
+.workflow-node__trim-track input[type=range] { position:absolute;inset:0;width:100%;margin:0;background:transparent;appearance:none;-webkit-appearance:none;pointer-events:none; }
+.workflow-node__trim-track input[type=range]::-webkit-slider-thumb { -webkit-appearance:none;pointer-events:auto;width:10px;height:18px;border-radius:3px;background:#fff;cursor:ew-resize; }
+.workflow-node__trim-track input[type=range]::-moz-range-thumb { pointer-events:auto;width:10px;height:18px;border-radius:3px;background:#fff;cursor:ew-resize;border:0; }
+.workflow-node__trim-meta { display:flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums; }
+.workflow-node__trim-length { opacity:.7; }
+.workflow-node__trim-meta button { padding:3px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.3);background:transparent;color:inherit;font-size:11px;cursor:pointer; }
+.workflow-node__trim-meta button.is-primary { background:var(--wf-accent,#19c8b9);border-color:var(--wf-accent,#19c8b9);color:#0b1b1a; }
+.workflow-node__trim-meta button:disabled { opacity:.5;cursor:default; }
+/* 故事板第二视图（P1-4） */
+.workflow-view-switch { position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:90;display:inline-flex;padding:3px;gap:2px;border-radius:10px;border:1px solid var(--wf-border,rgba(127,127,127,.3));background:var(--workflow-panel-bg,rgba(255,255,255,.97));box-shadow:0 4px 14px rgba(0,0,0,.08); }
+.workflow-view-switch button { padding:5px 12px;border:0;border-radius:7px;background:transparent;color:inherit;font-size:12px;cursor:pointer;opacity:.7; }
+.workflow-view-switch button[aria-selected=true] { background:var(--wf-accent,#19c8b9);color:#fff;opacity:1; }
+.workflow-storyboard { position:absolute;inset:0;z-index:85;overflow-y:auto;padding:64px max(24px,calc(50% - 560px)) 120px;background:var(--wf-canvas-bg,var(--workflow-panel-bg,#f7f7f8));color:inherit;display:flex;flex-direction:column;gap:20px; }
+.workflow-storyboard__summary { display:flex;align-items:center;gap:8px;font-size:12px;flex-wrap:wrap; }
+.workflow-storyboard__issues { color:#c2410c; }
+.workflow-storyboard__section > header { display:flex;align-items:center;gap:8px;margin-bottom:8px; }
+.workflow-storyboard__section h3 { margin:0;font-size:13px;font-weight:600;flex:1; }
+.workflow-storyboard__empty { margin:0;font-size:12px;opacity:.65; }
+.workflow-storyboard__anchors { display:flex;flex-wrap:wrap;gap:10px; }
+.workflow-storyboard__card { width:112px;display:flex;flex-direction:column;gap:4px;padding:6px;border-radius:10px;border:1px solid var(--wf-border,rgba(127,127,127,.25));background:var(--workflow-panel-bg,#fff);cursor:pointer;font-size:11px; }
+.workflow-storyboard__card.is-pending { opacity:.6;border-style:dashed; }
+.workflow-storyboard__card:hover,.workflow-storyboard__row:hover,.workflow-storyboard__clip:hover { border-color:var(--wf-accent,#19c8b9); }
+.workflow-storyboard__thumb { width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:6px;background:rgba(127,127,127,.12);display:block; }
+.workflow-storyboard__thumb.is-empty { display:flex;align-items:center;justify-content:center;opacity:.6; }
+.workflow-storyboard__row .workflow-storyboard__thumb { width:96px;flex:none; }
+.workflow-storyboard__code { font-weight:700;color:var(--wf-accent,#19c8b9);font-variant-numeric:tabular-nums; }
+.workflow-storyboard__card-title { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.workflow-storyboard__rows { display:flex;flex-direction:column;gap:6px; }
+.workflow-storyboard__row { display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;border:1px solid var(--wf-border,rgba(127,127,127,.25));background:var(--workflow-panel-bg,#fff);cursor:pointer; }
+.workflow-storyboard__index { min-width:30px;font-variant-numeric:tabular-nums;opacity:.7;font-size:12px; }
+.workflow-storyboard__row-main { flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:12px; }
+.workflow-storyboard__prompt { overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.8; }
+.workflow-storyboard__meta { font-size:11px;opacity:.6; }
+.workflow-storyboard__timeline { display:flex;gap:3px;min-height:44px; }
+.workflow-storyboard__clip { min-width:44px;display:flex;flex-direction:column;justify-content:center;gap:2px;padding:4px 8px;border-radius:6px;border:1px solid var(--wf-border,rgba(127,127,127,.25));background:rgba(25,200,185,.14);font-size:11px;cursor:pointer;font-variant-numeric:tabular-nums; }
+.workflow-storyboard__clip.is-missing { background:transparent;border-style:dashed;opacity:.65; }
+.workflow-storyboard__btn { display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:7px;border:1px solid var(--wf-border,rgba(127,127,127,.3));background:transparent;color:inherit;font-size:12px;cursor:pointer;flex:none; }
+.workflow-storyboard__btn.is-primary { background:var(--wf-accent,#19c8b9);border-color:var(--wf-accent,#19c8b9);color:#fff; }
+.workflow-storyboard__btn:disabled { opacity:.45;cursor:default; }

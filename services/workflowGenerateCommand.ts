@@ -6,12 +6,15 @@ import { applyWorkflowOps } from '../components/workflow/ops';
 import { buildWorkflowPromptDocument, workflowPromptMentionAttrs } from '../components/workflow/promptDocument';
 import { createPromptIntent, type PromptIntent } from '../components/workflow/promptIntent';
 import { reorderReferenceOperations } from '../components/workflow/references';
+import { validateReferenceRegion } from '../components/workflow/referenceRegion';
+import { buildNodeRefIndex, extractNodeRefs, isNodeRefMiss, resolveNodeRef, type NodeRefIndex } from '../components/workflow/nodeRefResolver';
 import type {
   WorkflowConnection,
   WorkflowDocumentOperation,
   WorkflowGenerationConfig,
   WorkflowGenerationReferenceRole,
   WorkflowNode,
+  WorkflowReferenceRegion,
   WorkflowShotMeta,
 } from '../components/workflow/types';
 import type { ProductModelMode, UserApiKey } from '../types';
@@ -60,6 +63,8 @@ const ADVANCED_PARAM_KEYS = new Set(['seed', 'cameraMovement', 'customMovement',
 export interface GenerateReference {
   nodeId: string;
   role?: WorkflowGenerationReferenceRole;
+  /** 带区域的引用（仅图片）：{x,y,w,h} 0-1 归一化，可选 mask；执行前裁剪，不建中间节点。 */
+  region?: WorkflowReferenceRegion;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -82,9 +87,11 @@ export function parseGenerateReferences(value: unknown): GenerateReference[] {
     if (role && !REFERENCE_ROLES.has(role as WorkflowGenerationReferenceRole)) {
       throw new WorkflowGenerateError('BAD_REQUEST', `references[${index}].role 不支持：${role}；可用 ${[...REFERENCE_ROLES].join('/')}`);
     }
+    const regionCheck = isRecord(item) ? validateReferenceRegion(item.region) : {};
+    if (regionCheck.error) throw new WorkflowGenerateError('BAD_REQUEST', `references[${index}].${regionCheck.error}`);
     if (seen.has(nodeId)) return [];
     seen.add(nodeId);
-    return [{ nodeId, ...(role ? { role: role as WorkflowGenerationReferenceRole } : {}) }];
+    return [{ nodeId, ...(role ? { role: role as WorkflowGenerationReferenceRole } : {}), ...(regionCheck.region ? { region: regionCheck.region } : {}) }];
   });
 }
 
@@ -200,7 +207,7 @@ export interface GeneratePlan {
   operations: WorkflowDocumentOperation[];
   prompt: string;
   model: { modelId?: string; submode: ProductModelMode; routeId?: string; provider?: string; source?: string };
-  references: Array<{ nodeId: string; label: string; kind: string; role?: WorkflowGenerationReferenceRole; mentioned: boolean }>;
+  references: Array<{ nodeId: string; label: string; kind: string; role?: WorkflowGenerationReferenceRole; region?: WorkflowReferenceRegion; mentioned: boolean }>;
   promptIntent: PromptIntent;
   diagnostics: GenerateDiagnostic[];
   /** prompt 引用了但原本没连线、本次自动连上的节点（P0-2）。 */
@@ -238,12 +245,46 @@ function compatibleModels(mode: GenerateMode, submode: ProductModelMode, kinds: 
  * prompt 编成带 @chip 的 Prompt Bar 文档，按引用推导生成方式并校验模型能力。
  * 不兼容时抛结构化错误（带可用模型列表），绝不静默降级或换模型。
  */
+/** 把区域写进对应节点的 mediaMention attrs（Prompt Bar chip 与运行时都读这里）。原地修改新建的文档。 */
+function attachMentionRegions(document: unknown, regionById: Map<string, WorkflowReferenceRegion>) {
+  const walk = (value: unknown) => {
+    if (!isRecord(value)) return;
+    if (value.type === 'mediaMention' && isRecord(value.attrs) && typeof value.attrs.id === 'string' && regionById.has(value.attrs.id)) {
+      value.attrs = { ...value.attrs, region: regionById.get(value.attrs.id) };
+    }
+    if (Array.isArray(value.content)) value.content.forEach(walk);
+  };
+  walk(document);
+}
+
+/** nodeId / references 支持节点 id、锚点编号 A01/S01/P01/T01、shot:N、节点名；重名报 AMBIGUOUS_NODE_NAME。 */
+function resolveRefOrThrow(ref: string, index: NodeRefIndex, label: string): string {
+  const result = resolveNodeRef(ref, index);
+  if (!isNodeRefMiss(result)) return result.nodeId;
+  if (result.code === 'AMBIGUOUS_NODE_NAME') {
+    throw new WorkflowGenerateError('AMBIGUOUS_NODE_NAME', `${label}「${ref}」匹配到多个节点，请改用节点 id 或锚点编号：${result.candidates.map(item => item.nodeId + (item.code ? '(' + item.code + ')' : '')).join('、')}`, { candidates: result.candidates });
+  }
+  throw new WorkflowGenerateError('NOT_FOUND', `${label}不存在：${ref}`);
+}
+
 export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
   const { args, keys } = input;
   const diagnostics: GenerateDiagnostic[] = [];
-  let prompt = typeof args.prompt === 'string' ? args.prompt : '';
-  if (!prompt.trim()) throw new WorkflowGenerateError('BAD_REQUEST', 'prompt 不能为空：提示词直接写进生成节点的 Prompt Bar');
-  const requestedId = text(args.nodeId);
+  const refIndex = buildNodeRefIndex(input.nodes);
+  const rawPrompt = typeof args.prompt === 'string' ? args.prompt : '';
+  if (!rawPrompt.trim()) throw new WorkflowGenerateError('BAD_REQUEST', 'prompt 不能为空：提示词直接写进生成节点的 Prompt Bar');
+  // 提示词里的 @A01 / @shot:3 / @"节点名" 先改写成 @ref:<id>，后续按 @ref 统一处理。
+  const extracted = extractNodeRefs(rawPrompt, refIndex);
+  if (extracted.ambiguous.length) {
+    const first = extracted.ambiguous[0];
+    throw new WorkflowGenerateError('AMBIGUOUS_NODE_NAME', `prompt 里的 ${first.ref} 匹配到多个节点，请改用 @ref:<id> 或锚点编号：${first.candidates.map(item => item.nodeId).join('、')}`, { candidates: first.candidates });
+  }
+  if (extracted.unresolved.length) {
+    diagnostics.push({ code: 'UNKNOWN_NODE_REF', message: `${extracted.unresolved.join('、')} 没有对应的节点，已保留为文字。` });
+  }
+  let prompt = extracted.text;
+  const requestedRef = text(args.nodeId);
+  const requestedId = requestedRef ? resolveRefOrThrow(requestedRef, refIndex, '节点') : '';
   let target: WorkflowNode | undefined;
   let created = false;
   let mode: GenerateMode;
@@ -266,8 +307,14 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
   }
   const nodeId = target?.id || stableNodeId(input.mutationId);
 
-  const explicitReferences = parseGenerateReferences(args.references);
-  // P0-2：prompt 里的 @ref / @"名字" 与连线必须一致——没连线的按策略自动补进 references 或拒绝。
+  const seenReferences = new Set<string>();
+  const explicitReferences: GenerateReference[] = parseGenerateReferences(args.references).flatMap(reference => {
+    const resolved = resolveRefOrThrow(reference.nodeId, refIndex, '参考节点');
+    if (seenReferences.has(resolved)) return [];
+    seenReferences.add(resolved);
+    return [{ ...reference, nodeId: resolved }];
+  });
+  // P0-2：prompt 里的 @ref（@A01 / @shot:N / @"名字" 已先改写为 @ref）与连线必须一致——没连线的按策略自动补进 references 或拒绝。
   const linkPolicy = args.linkPolicy === 'reject' ? 'reject' : 'auto';
   const alignment = alignPromptReferences({
     text: prompt,
@@ -281,7 +328,7 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
   prompt = alignment.text;
   const references: GenerateReference[] = [
     ...explicitReferences,
-    ...alignment.autoLinked.map(nodeId => ({ nodeId })),
+    ...alignment.autoLinked.filter(id => !seenReferences.has(id)).map(nodeId => ({ nodeId })),
   ];
   const referenceNodes = references.map(reference => {
     const node = input.nodes.find(item => item.id === reference.nodeId);
@@ -289,6 +336,7 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
     if (node.id === nodeId) throw new WorkflowGenerateError('BAD_REQUEST', '不能把生成节点自己当参考');
     if (node.type === 'text') throw new WorkflowGenerateError('NOTE_IS_ANNOTATION', `节点 ${node.id} 是备注，不能当参考；把需要的文字直接写进 prompt。`);
     if (!MEDIA_TYPES.has(node.type)) throw new WorkflowGenerateError('BAD_REQUEST', `参考节点 ${node.id}（${node.type}）不是图片/视频/音频`);
+    if (reference.region && node.type !== 'image') throw new WorkflowGenerateError('BAD_REQUEST', `region 只能用于图片参考；${node.id} 是 ${node.type}`);
     return { ...reference, node, kind: node.type as 'image' | 'video' | 'audio' };
   });
   if (mode === 'image' && referenceNodes.some(reference => reference.kind !== 'image')) {
@@ -449,6 +497,8 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
     connections,
     ensureMentionIds: referenceNodes.map(reference => reference.node.id),
   });
+  const regionById = new Map(referenceNodes.filter(reference => reference.region).map(reference => [reference.node.id, reference.region!]));
+  if (regionById.size) attachMentionRegions(document.richTextDocument, regionById);
   if (document.unresolved.length) {
     diagnostics.push({ code: 'UNRESOLVED_MENTION', message: `@ref:${document.unresolved.join('、@ref:')} 不在 references 里，已保留为文字；要引用请加进 references。` });
   }
@@ -485,6 +535,7 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
       elementType: labels.get(id)?.elementType,
       sourceType: 'connected',
       ...(roleById.get(id) ? { role: roleById.get(id) } : {}),
+      ...(regionById.get(id) ? { region: regionById.get(id) } : {}),
     })),
     requestedAction: 'generate',
   });
@@ -505,6 +556,7 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
       label: labels.get(reference.node.id)?.label || reference.node.title,
       kind: reference.kind,
       ...(reference.role ? { role: reference.role } : {}),
+      ...(reference.region ? { region: reference.region } : {}),
       mentioned: document.mentionIds.includes(reference.node.id),
     })),
     promptIntent,

@@ -1,5 +1,5 @@
 import type { MentionItem } from '../MentionList';
-import type { SeedanceReferences, WorkflowConnection, WorkflowNode } from './types';
+import type { SeedanceReferences, WorkflowConnection, WorkflowNode, WorkflowReferenceRegion } from './types';
 
 /** 上游媒体节点类型 */
 const MEDIA_TYPES = new Set(['image', 'video', 'audio']);
@@ -11,6 +11,8 @@ export interface ImageReferenceChip {
   storageKey?: string;
   elementType: 'image' | 'video' | 'audio';
   mentioned: boolean;
+  /** 带区域的引用：chip 缩略图只显示该区域。 */
+  region?: WorkflowReferenceRegion;
 }
 
 /**
