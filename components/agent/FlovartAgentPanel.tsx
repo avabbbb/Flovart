@@ -453,7 +453,7 @@ const userApiKeysRef = useRef(userApiKeys);
   const liveNodes = useWorkflowStore(s => s.projects.find(item => item.id === project.id)?.nodes) || project.nodes;
   const languageRef = useRef(language);
   languageRef.current = language;
-  const t = useCallback((key: string, ...args: number[]): string => {
+  const t = useCallback((key: string, ...args: Array<number | string>): string => {
     const dict = translations[language] || translations.en;
     const value = key.split('.').reduce<unknown>((current, part) => {
       if (!current || typeof current !== 'object' || !(part in current)) return undefined;
@@ -463,6 +463,7 @@ const userApiKeysRef = useRef(userApiKeys);
     return value === undefined ? key : String(value);
   }, [language]);
 
+  const untitledAsset = t('agentPanel.referenceUntitledAsset');
   const referenceGroups = useMemo(() => {
     // @ 后实时筛选：名称子串（忽略空格）或类型词（图片 / 视频 / image…），见 pickerNavigation。
     const matches = (item: { label: string; mediaType?: string }) => matchesReference(item, mentionQuery);
@@ -475,11 +476,11 @@ const userApiKeysRef = useRef(userApiKeys);
         .sort((a, b) => Number(a.mediaType !== 'image' && a.mediaType !== 'video') - Number(b.mediaType !== 'image' && b.mediaType !== 'video'))
         .slice(0, 60),
       assets: (assetLibrary?.items || [])
-        .map(item => ({ id: item.id, type: 'asset' as const, label: item.name || '未命名素材', mediaType: item.mimeType }))
+        .map(item => ({ id: item.id, type: 'asset' as const, label: item.name || untitledAsset, mediaType: item.mimeType }))
         .filter(matches)
         .slice(0, 60),
     };
-  }, [assetLibrary?.items, mentionQuery, project.nodes]);
+  }, [assetLibrary?.items, mentionQuery, project.nodes, untitledAsset]);
   const mentionItems = useMemo<AgentReference[]>(() => [...referenceGroups.nodes, ...referenceGroups.assets], [referenceGroups]);
   const [mentionHighlight, setMentionHighlight] = useState(-1);
   const mentionListId = useId();
@@ -1485,19 +1486,19 @@ const userApiKeysRef = useRef(userApiKeys);
             searchQuery={slashQuery ?? undefined}
             keyboardRef={skillNav}
           />
-          {mentionOpen && <div className="agent-reference-picker flv-frost" id={mentionListId} role="listbox" aria-label="@ 引用节点和资产">
-            <div className="agent-reference-picker__search"><AtSign size={14} /><span>{replaceTarget ? `替换“${replaceTarget.label}”为…` : mentionQuery ? `搜索“${mentionQuery}”` : '引用节点或我的素材'}</span></div>
+          {mentionOpen && <div className="agent-reference-picker flv-frost" id={mentionListId} role="listbox" aria-label={t('agentPanel.referencePicker')}>
+            <div className="agent-reference-picker__search"><AtSign size={14} /><span>{replaceTarget ? t('agentPanel.referenceReplace', replaceTarget.label) : mentionQuery ? t('agentPanel.referenceSearch', mentionQuery) : t('agentPanel.referencePrompt')}</span></div>
             <div className="agent-reference-picker__list">
               {mentionItems.length ? (
                 <>
-                  <ReferenceGroup label="节点" items={referenceGroups.nodes} onSelect={addReference} icon={referenceIcon} empty="没有匹配节点" highlighted={highlightedReference} optionId={mentionOptionId} onHover={reference => setMentionHighlight(mentionItems.indexOf(reference))} />
-                  <ReferenceGroup label="资产" items={referenceGroups.assets} onSelect={addReference} icon={referenceIcon} empty={assetLibrary?.items.length ? '没有匹配资产' : '我的素材为空'} highlighted={highlightedReference} optionId={mentionOptionId} onHover={reference => setMentionHighlight(mentionItems.indexOf(reference))} />
+                  <ReferenceGroup label={t('agentPanel.referenceGroupNodes')} items={referenceGroups.nodes} onSelect={addReference} icon={referenceIcon} empty={t('agentPanel.referenceNoNodes')} highlighted={highlightedReference} optionId={mentionOptionId} onHover={reference => setMentionHighlight(mentionItems.indexOf(reference))} />
+                  <ReferenceGroup label={t('agentPanel.referenceGroupAssets')} items={referenceGroups.assets} onSelect={addReference} icon={referenceIcon} empty={assetLibrary?.items.length ? t('agentPanel.referenceNoAssets') : t('agentPanel.referenceAssetsEmpty')} highlighted={highlightedReference} optionId={mentionOptionId} onHover={reference => setMentionHighlight(mentionItems.indexOf(reference))} />
                 </>
               ) : (
-                <p className="agent-reference-picker__empty" role="status">{mentionQuery ? `没有匹配“${mentionQuery}”的节点或素材` : '画布上还没有节点，素材库也是空的'}</p>
+                <p className="agent-reference-picker__empty" role="status">{mentionQuery ? t('agentPanel.referenceNoMatch', mentionQuery) : t('agentPanel.referenceNothing')}</p>
               )}
             </div>
-            {highlightedReference && <ReferencePreview reference={highlightedReference} nodes={project.nodes} assets={assetLibrary?.items || []} />}
+            {highlightedReference && <ReferencePreview language={language} reference={highlightedReference} nodes={project.nodes} assets={assetLibrary?.items || []} />}
           </div>}
           {(creationMode !== 'all' || preferredModel) && <div className="agent-reference-chips" aria-label={language === 'zho' ? '创作设置' : 'Creation settings'}>
             {creationMode !== 'all' && <span className="agent-setting-chip">{creationModeLabel(creationMode, language)}<button type="button" aria-label={language === 'zho' ? '恢复全能创作' : 'Reset mode'} onClick={() => setCreationMode('all')}><X size={11} /></button></span>}

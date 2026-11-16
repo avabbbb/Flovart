@@ -1,4 +1,5 @@
 import { FileText, Film, Image as ImageIcon } from 'lucide-react';
+import { translations } from '../../utils/translations';
 import { useLayoutEffect, useRef, useState } from 'react';
 
 import type { AssetItem } from '../../types';
@@ -23,9 +24,9 @@ function formatDuration(seconds?: number): string {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 }
 
-const KIND_LABEL: Record<string, string> = { image: '图片', video: '视频', audio: '音频', text: '文本' };
 
-export function ReferencePreview({ reference, nodes, assets }: { reference: ReferenceLike; nodes: readonly WorkflowNode[]; assets: readonly AssetItem[] }) {
+export function ReferencePreview({ reference, nodes, assets, language = 'zho' }: { reference: ReferenceLike; nodes: readonly WorkflowNode[]; assets: readonly AssetItem[]; language?: 'en' | 'zho' }) {
+  const copy = translations[language].agentPanel;
   const ref = useRef<HTMLElement>(null);
   const [side, setSide] = useState<'left' | 'above' | 'hidden'>('left');
   const node = reference.type === 'node' ? nodes.find(item => item.id === reference.id) : undefined;
@@ -41,7 +42,7 @@ export function ReferencePreview({ reference, nodes, assets }: { reference: Refe
   const duration = Number(metadata.durationSec || 0) || (Number(metadata.durationMs || 0) / 1000) || undefined;
   const bytes = Number(metadata.bytes || 0) || undefined;
   const text = kind === 'text' ? String(metadata.content || metadata.prompt || '') : String(asset?.prompt || metadata.prompt || '');
-  const specs = [KIND_LABEL[kind] || reference.mediaType || '', width && height ? `${width}×${height}` : '', formatDuration(duration), formatBytes(bytes)].filter(Boolean);
+  const specs = [copy.referenceKind[kind] || reference.mediaType || '', width && height ? `${width}×${height}` : '', formatDuration(duration), formatBytes(bytes)].filter(Boolean);
 
   // 预览卡位置：读所在浮层的视口位置，左侧放得下就放左边，否则上方，再不行隐藏。
   useLayoutEffect(() => {
@@ -60,7 +61,7 @@ export function ReferencePreview({ reference, nodes, assets }: { reference: Refe
             ? <video src={media.url} muted autoPlay loop playsInline preload="metadata" />
             : <img src={media.url} alt="" />
           : <span className="agent-reference-preview__glyph">{kind === 'video' ? <Film size={22} /> : kind === 'text' ? <FileText size={22} /> : <ImageIcon size={22} />}</span>}
-        <span className="skill-hub__badge">{reference.type === 'node' ? '节点' : '素材'}</span>
+        <span className="skill-hub__badge">{reference.type === 'node' ? copy.referenceBadgeNode : copy.referenceBadgeAsset}</span>
       </div>
       <div className="skill-hub__preview-body">
         <strong>{reference.label}</strong>
