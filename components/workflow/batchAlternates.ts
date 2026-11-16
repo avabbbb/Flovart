@@ -185,6 +185,28 @@ export function findAlternateOwner(nodes: readonly WorkflowNode[], alternateId: 
 }
 
 /**
+ * 按 ID 找画布节点；找不到时再看它是不是某个节点的备选（多结果的第 2–N 张不是画布节点，
+ * 但 Agent / 外部调用者会从旧 inspect、Take 记录里拿到这些 ID）。
+ */
+export function resolveNodeOrAlternate(nodes: readonly WorkflowNode[], id: string):
+  | { kind: 'node'; node: WorkflowNode }
+  | { kind: 'alternate'; owner: WorkflowNode; alternate: WorkflowMediaAlternate; node: WorkflowNode }
+  | null {
+  const node = nodes.find(item => item.id === id);
+  if (node) return { kind: 'node', node };
+  const found = findAlternateOwner(nodes, id);
+  return found ? { kind: 'alternate', owner: found.node, alternate: found.alternate, node: alternateAsNode(found.node, found.alternate) } : null;
+}
+
+/** 只接受画布节点的命令（运行、连线、改参数）遇到备选 ID 时的说明，避免只回一句「节点不存在」。 */
+export function missingNodeMessage(nodes: readonly WorkflowNode[], id: string) {
+  const owner = findAlternateOwner(nodes, id);
+  return owner
+    ? `${id} 是节点 ${owner.node.id} 的备选结果（多结果的其中一张），不是独立画布节点：查看用 media_view，要单独操作先「拆成独立节点」或「设为首图」`
+    : `节点不存在：${id}`;
+}
+
+/**
  * 旧数据迁移：生成产生的叠放批次（同 batchId、带 batchIndex 的媒体节点，首图 batchIndex 0 / batchGroupSource 'auto'）
  * 折叠成首图节点上的备选。
  *

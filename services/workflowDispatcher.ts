@@ -5,6 +5,7 @@ import { WORKFLOW_NODE_PATCH_FIELDS, WORKFLOW_OPERATION_FIELDS } from '../tools/
 import { nanoid } from 'nanoid';
 import { WORKFLOW_MUTATION_COMMANDS, workflowCommandSummary } from '../components/workflow/agentOps';
 import { createWorkflowNode } from '../components/workflow/constants';
+import { alternateAsNode, findAlternateOwner, missingNodeMessage } from '../components/workflow/batchAlternates';
 import { applyWorkflowMutation, applyWorkflowViewOperations } from '../components/workflow/draftAuthority';
 import { applyWorkflowOps } from '../components/workflow/ops';
 import { appendWorkflowDraftLog, createWorkflowDraftLogEntry } from '../components/workflow/draftLog';
@@ -718,8 +719,23 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
           result = { ok: true, commandId: envelope.id, result: { projectId: project.id, title: project.title, draftVersion: project.draftVersion || 1, ledger, text: renderProjectLedger(ledger) } };
         } else if (nodeId) {
           const scoped = inspectNode(project, nodeId);
-          if (!scoped) return error(envelope.id, 'NOT_FOUND', `节点不存在：${nodeId}`);
-          result = { ok: true, commandId: envelope.id, result: scoped };
+          const alternate = scoped ? null : findAlternateOwner(project.nodes, nodeId);
+          if (!scoped && !alternate) return error(envelope.id, 'NOT_FOUND', `节点不存在：${nodeId}`);
+          result = scoped
+            ? { ok: true, commandId: envelope.id, result: scoped }
+            : {
+              ok: true,
+              commandId: envelope.id,
+              result: {
+                projectId: project.id,
+                title: project.title,
+                draftVersion: project.draftVersion || 1,
+                // 备选不是画布节点：给出它自己的媒体 / 来源，以及所属节点，调用方据此决定查看、设为首图或拆分。
+                alternateOf: alternate!.node.id,
+                node: redactNode(alternateAsNode(alternate!.node, alternate!.alternate)),
+                note: missingNodeMessage(project.nodes, nodeId),
+              },
+            };
         } else if (summary) {
           result = { ok: true, commandId: envelope.id, result: inspectSummary(project) };
         } else {
@@ -773,7 +789,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
       } else if (command === 'workflow.node.run' || command === 'workflow.node.stop') {
         const nodeIds = command === 'workflow.node.run' ? workflowRunNodeIds(args) : [requiredString(args.nodeId || args.id, 'nodeId')];
         const missingNodeId = nodeIds.find(nodeId => !project.nodes.some(node => node.id === nodeId));
-        if (missingNodeId) return error(envelope.id, 'NOT_FOUND', '节点不存在：' + missingNodeId);
+        if (missingNodeId) return error(envelope.id, 'NOT_FOUND', missingNodeMessage(project.nodes, missingNodeId));
         const executor = dependencies.getExecutor?.() || dependencies.executor;
         if (!executor || (command === 'workflow.node.stop' && !executor.stopNode)) {
           return error(envelope.id, 'RUNNER_UNAVAILABLE', command === 'workflow.node.run' ? 'Workflow 生成适配器尚未连接。' : 'Workflow 停止适配器尚未连接。');

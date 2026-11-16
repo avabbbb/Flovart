@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createWorkflowNode } from '../components/workflow/constants';
-import { alternateFromNode, foldResultBatches, nodeAlternates, prependAlternates, primaryVariantId, promoteAlternate, removeAlternates, splitAlternates } from '../components/workflow/batchAlternates';
+import { alternateFromNode, foldResultBatches, missingNodeMessage, resolveNodeOrAlternate, nodeAlternates, prependAlternates, primaryVariantId, promoteAlternate, removeAlternates, splitAlternates } from '../components/workflow/batchAlternates';
 import { applyWorkflowOps } from '../components/workflow/ops';
 import { migrateWorkflowProject } from '../components/workflow/migrations';
 import type { WorkflowConnection, WorkflowNode, WorkflowSnapshot } from '../components/workflow/types';
@@ -148,5 +148,27 @@ describe('legacy stacked batches fold into the primary on load', () => {
     expect(project.nodes.map(node => node.id)).toEqual(['root']);
     expect(project.selectedNodeIds).toEqual(['root']);
     expect(nodeAlternates(project.nodes[0])).toHaveLength(3);
+  });
+});
+
+describe('alternate id resolution (Agent / dispatcher)', () => {
+  it('resolves a folded alternate id back to a viewable temporary node', () => {
+    const { nodes } = foldResultBatches(legacyStack('image'), []);
+    expect(nodes.map(node => node.id)).toEqual(['root']);
+    const resolved = resolveNodeOrAlternate(nodes, 's2');
+    expect(resolved?.kind).toBe('alternate');
+    if (resolved?.kind !== 'alternate') return;
+    expect(resolved.owner.id).toBe('root');
+    expect(resolved.node.id).toBe('s2');
+    expect(resolved.node.position).toEqual(resolved.owner.position);
+    expect(resolved.node.metadata.storageKey).toBe('key-s2');
+    expect(resolveNodeOrAlternate(nodes, 'root')?.kind).toBe('node');
+    expect(resolveNodeOrAlternate(nodes, 'nope')).toBeNull();
+  });
+
+  it('explains alternate ids instead of a bare "node not found"', () => {
+    const { nodes } = foldResultBatches(legacyStack('image'), []);
+    expect(missingNodeMessage(nodes, 's1')).toContain('是节点 root 的备选结果');
+    expect(missingNodeMessage(nodes, 'nope')).toBe('节点不存在：nope');
   });
 });

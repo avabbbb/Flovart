@@ -540,8 +540,17 @@ export async function loadFallbackMediaBlob(href: string): Promise<Blob> {
 export async function loadWorkflowMediaBlob(storageKey?: string, href?: string, artifactRef?: WorkflowArtifactRef): Promise<Blob> {
   if (storageKey) {
     const blob = await workflowMediaStorage.get(storageKey);
-    if (!blob) throw new Error('图片文件不存在，请重新选择文件');
-    return blob;
+    if (blob) return blob;
+    // 本地副本丢了（例如旧版 prune 删掉了叠放第 2–4 张），还有 Runtime 产物或原始链接时从那里取回，
+    // 不直接判死；都没有才报「不存在」。
+    const missing = new Error('图片文件不存在，请重新选择文件');
+    if (artifactRef?.taskId) {
+      try { return await loadRuntimeArtifactBlob(artifactRef.taskId, artifactRef.mimeType); } catch { /* 继续试 href */ }
+    }
+    if (href && !href.startsWith('blob:')) {
+      try { return await loadFallbackMediaBlob(href); } catch { /* 原样报缺失 */ }
+    }
+    throw missing;
   }
   if (artifactRef?.taskId) return loadRuntimeArtifactBlob(artifactRef.taskId, artifactRef.mimeType);
   if (!href) throw new Error('图片节点没有可用媒体');

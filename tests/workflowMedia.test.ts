@@ -195,6 +195,14 @@ describe('workflow media', () => {
     act(() => hook.unmount());
   });
 
+  it('falls back to the original href when the local copy of a stored media is gone', async () => {
+    await putImage('board:workflow-fallback-image', 'data:image/png;base64,iVBORw0KGgo=');
+    const blob = await loadWorkflowMediaBlob('pruned-key', toIdbRef('board:workflow-fallback-image'));
+    expect(blob.type).toBe('image/png');
+    await expect(loadWorkflowMediaBlob('pruned-key')).rejects.toThrow('不存在');
+    await expect(loadWorkflowMediaBlob('pruned-key', 'blob:stale')).rejects.toThrow('不存在');
+  });
+
   it('returns an empty loading URL immediately when the durable key changes', async () => {
     await workflowMediaStorage.set('media-one', new Blob(['one'], { type: 'image/png' }));
     await workflowMediaStorage.set('media-two', new Blob(['two'], { type: 'image/png' }));
