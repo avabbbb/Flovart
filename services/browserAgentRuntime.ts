@@ -4,6 +4,7 @@
 import type { ImageContent } from '@earendil-works/pi-ai';
 import type { WorkflowNode } from '../components/workflow/types';
 import type { AgentConfirmRequest } from './agentSpendMandate';
+import type { AgentConfirmVerdict } from './runApproval';
 import type { AgentSearchCredential } from './agentWebSearch';
 import type { ApprovalContext, ApprovalMode } from './agentToolPolicy';
 import type { ProductionSkillAttachment } from './productionSkillCatalog';
@@ -21,7 +22,7 @@ import { createLocalSkillRegistry } from './localSkillRegistry';
 export interface BrowserAgentRuntimeDeps {
   projectId: string;
   route: BrowserAgentTextRoute;
-  confirm: (summary: string, request?: AgentConfirmRequest) => Promise<boolean>;
+  confirm: (summary: string, request?: AgentConfirmRequest) => Promise<AgentConfirmVerdict>;
   ask?: (request: AgentAskRequest) => Promise<AgentAskResult>;
   systemPrompt: string;
   getNodes?: () => readonly WorkflowNode[];

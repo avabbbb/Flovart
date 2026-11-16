@@ -17,6 +17,7 @@ import { withWorkflowHumanApproval, workflowCommandNeedsConfirmation } from './w
 import type { ProductionSkillAttachment } from './productionSkillCatalog';
 import { workflowConfirmRequest } from './workflowAgentBridge';
 import type { AgentConfirmRequest } from './agentSpendMandate';
+import { readConfirmVerdict, type AgentConfirmVerdict } from './runApproval';
 import { AGENT_BROWSER_COMMANDS } from '../tools/flovart/agent-surface.js';
 import { agentToolInputSchema, getAgentToolSpecs } from '../tools/flovart/agent-tools.js';
 import { createTodoTool, TODO_TOOL_NAME } from '../agent/todo.js';
@@ -744,7 +745,7 @@ export type AgentAskResult =
 export interface BrowserAgentToolDependencies {
   projectId: string;
   /** 高风险操作（删除、付费、Production 运行等）的用户确认；返回 false 表示拒绝 */
-  confirm: (summary: string, request?: AgentConfirmRequest) => Promise<boolean>;
+  confirm: (summary: string, request?: AgentConfirmRequest) => Promise<AgentConfirmVerdict>;
   /** 结构化提问；提供时注册 flovart_ask（与 omp ask 的 HTML form 契约一致） */
   ask?: (request: AgentAskRequest) => Promise<AgentAskResult>;
   /** 当前 Agent 回合的幂等键（可逆写操作合并进同一 ChangeSet） */
@@ -782,7 +783,8 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
       grantable: resolution.grantable,
       ...(resolution.reason ? { reason: resolution.reason } : {}),
     });
-    if (!approved) throw new Error('用户拒绝了该操作');
+    const verdict = readConfirmVerdict(approved);
+    if (!verdict.approved) throw new Error(verdict.message);
   };
   // 命令面工具共用的一次调用：策略层 → 浏览器契约 → 需要时请用户确认后带批准重发。
   const runCommand = async (command: string, params: Record<string, unknown>) => {
@@ -809,7 +811,9 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
         grantable: false,
         ...(decision.reason ? { reason: decision.reason } : {}),
       });
-      if (!approved) throw new Error('用户拒绝了该操作');
+      // 生成计划卡的「创建后手动生成 / 调整后再创建」带一句说明：Agent 据此不重试、不重复建节点。
+      const verdict = readConfirmVerdict(approved);
+      if (!verdict.approved) throw new Error(verdict.message);
       result = await workflowContract.dispatch(withWorkflowHumanApproval(envelope));
     }
     if (!result.ok) {
@@ -1170,7 +1174,7 @@ export interface BrowserAgentKernelOptions {
   projectId: string;
   route: BrowserAgentTextRoute;
   tools: AgentTool[];
-  confirm: (summary: string) => Promise<boolean>;
+  confirm: (summary: string) => Promise<AgentConfirmVerdict>;
   systemPrompt?: string;
   skillAttachment?: ProductionSkillAttachment | null;
   /** 当前思考强度；每轮发送前读取，缺省读本机为该模型保存的设置。 */
@@ -1215,7 +1219,7 @@ export class BrowserAgentKernel {
   private readonly projectId: string;
   private readonly route: BrowserAgentTextRoute;
   private readonly tools: AgentTool[];
-  private readonly confirm: (summary: string) => Promise<boolean>;
+  private readonly confirm: (summary: string) => Promise<AgentConfirmVerdict>;
   private readonly initialSkillAttachment: ProductionSkillAttachment | null;
   private readonly getThinkingLevel: () => AgentThinkingLevel;
   private readonly skillCatalog: AgentSkillCatalog;

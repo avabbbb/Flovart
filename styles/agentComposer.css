@@ -260,3 +260,83 @@
 
 .agent-mode-menu .agent-mode-menu__policies select { max-width: 96px; font: inherit; font-size: 11px; }
 .agent-mode-menu .agent-mode-menu__policies > button { display: flex; width: 100%; align-items: center; gap: 10px; border: 0; border-radius: 5px; padding: 6px 8px; color: inherit; background: transparent; text-align: left; cursor: pointer; }
+
+/* ── 对话导航：轮次时间轴 / 回到最新消息（参考 RunningHub）── 只用现有 token，明暗两套自动跟随。 */
+.agent-conversation .agent-conversation__viewport { position: relative; display: flex; min-height: 0; flex: 1; flex-direction: column; }
+.agent-turn-rail { position: absolute; top: 50%; left: -11px; z-index: 6; display: flex; max-height: 70%; flex-direction: column; gap: 5px; padding: 4px 0; transform: translateY(-50%); }
+.agent-turn-rail__item { position: relative; display: flex; align-items: center; }
+.agent-turn-rail__tick { display: block; width: 8px; height: 2px; border: 0; border-radius: 2px; padding: 0; background: color-mix(in srgb, var(--isl-ink-ghost) 55%, transparent); cursor: pointer; transition: width .15s ease, background-color .15s ease; }
+.agent-turn-rail__tick::before { content: ''; display: block; height: 10px; margin-top: -4px; } /* 扩大点击区 */
+.agent-turn-rail__tick:hover, .agent-turn-rail__tick:focus-visible { width: 12px; background: var(--isl-ink-soft); outline: none; }
+.agent-turn-rail__tick.is-active { width: 12px; background: var(--isl-ink); }
+.agent-turn-rail__preview { position: absolute; top: 50%; left: 18px; z-index: 7; display: grid; width: 248px; gap: 4px; border: 1px solid var(--agent-line, var(--isl-border)); border-radius: 10px; padding: 9px 11px; color: var(--isl-ink); background: var(--isl-card); box-shadow: var(--card-on-shell-shadow, 0 8px 24px rgba(0, 0, 0, .18)); transform: translateY(-50%); pointer-events: none; }
+.agent-turn-rail__preview strong { display: -webkit-box; overflow: hidden; font-size: 12px; font-weight: 700; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.agent-turn-rail__preview p { display: -webkit-box; margin: 0; overflow: hidden; color: var(--isl-ink-soft); font-size: 11px; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.agent-turn-rail__preview small { color: var(--isl-ink-ghost); font-size: 10px; }
+.agent-scroll-latest { position: absolute; right: 0; bottom: 8px; left: 0; z-index: 6; display: flex; justify-content: center; pointer-events: none; }
+.agent-scroll-latest__btn { position: relative; display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid var(--agent-line, var(--isl-border)); border-radius: 999px; padding: 0; color: var(--isl-ink); background: var(--isl-card); box-shadow: var(--card-on-shell-shadow, 0 4px 14px rgba(0, 0, 0, .16)); cursor: pointer; pointer-events: auto; transition: background-color .12s ease; }
+.agent-scroll-latest__btn:hover { background: var(--agent-subtle, var(--isl-surface-2)); }
+.agent-scroll-latest__btn:focus-visible { outline: 2px solid color-mix(in srgb, var(--isl-mint) 60%, transparent); outline-offset: 2px; }
+.agent-scroll-latest__btn[data-tip]:hover::after, .agent-scroll-latest__btn[data-tip]:focus-visible::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%; border-radius: 6px; padding: 3px 8px; color: var(--isl-card); background: var(--isl-ink); font-size: 11px; line-height: 1.5; white-space: nowrap; transform: translateX(-50%); pointer-events: none; }
+@media (max-width: 560px) { .agent-turn-rail { left: -7px; } .agent-turn-rail__tick { width: 5px; } .agent-turn-rail__preview { width: 200px; } }
+
+/* ── 引用回复：输入框上方的引用条 + 用户气泡里的引用块 ── */
+.agent-quote-bar { position: relative; display: grid; gap: 2px; margin: 0 0 2px; border-radius: 12px; padding: 7px 30px 7px 10px; color: var(--isl-ink-soft); background: var(--agent-subtle, var(--isl-surface-2)); font-size: 11px; }
+.agent-quote-bar__head { display: flex; align-items: center; gap: 5px; color: var(--isl-ink); }
+.agent-quote-bar__head strong { font-size: 11px; font-weight: 600; }
+.agent-quote-bar__text { display: -webkit-box; margin: 0; overflow: hidden; line-height: 1.55; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.agent-quote-bar__close { position: absolute; top: 6px; right: 6px; display: grid; width: 20px; height: 20px; place-items: center; border: 0; border-radius: 6px; padding: 0; color: var(--isl-ink-ghost); background: transparent; cursor: pointer; }
+.agent-quote-bar__close:hover { color: var(--isl-ink); background: color-mix(in srgb, var(--isl-ink) 8%, transparent); }
+.workflow-agent__messages .workflow-agent__message--user > .workflow-agent__quote { max-width: 85%; margin: 0 0 4px; border-left: 2px solid color-mix(in srgb, var(--isl-ink-ghost) 70%, transparent); padding: 2px 0 2px 8px; color: var(--isl-ink-soft); font-size: 11px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
+
+/* ── 生成计划卡（参考 RunningHub）── */
+.agent-plan-wrap { display: grid; gap: 6px; margin: 2px 0 14px; }
+.agent-plan { --p-text: var(--isl-ink); --p-muted: var(--isl-ink-soft); --p-ghost: var(--isl-ink-ghost); --p-line: var(--agent-line, var(--isl-border)); display: grid; gap: 10px; border: 1px solid var(--p-line); border-radius: 14px; padding: 12px 14px; color: var(--p-text); background: var(--agent-subtle, var(--isl-surface-2)); font-size: 12px; line-height: 1.5; outline: none; }
+.agent-plan:focus-visible { border-color: color-mix(in srgb, var(--p-text) 35%, var(--p-line)); }
+.agent-plan__model { margin: 0; color: var(--p-muted); font-size: 11px; overflow-wrap: anywhere; }
+.agent-plan__model span { color: var(--p-text); }
+.agent-plan__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.agent-plan__title { min-width: 0; font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+.agent-plan__status { flex: none; color: var(--p-muted); font-size: 11px; white-space: nowrap; }
+.agent-plan__status--running { color: var(--isl-mint-deep, var(--p-text)); }
+.agent-plan__status--done { color: var(--p-text); }
+.agent-plan__status--failed { color: color-mix(in srgb, #e5484d 75%, var(--p-text)); }
+.agent-plan__row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; }
+.agent-plan__row--toggle { width: 100%; border: 0; padding: 0; color: var(--p-text); background: transparent; font: inherit; cursor: pointer; text-align: left; }
+.agent-plan__row--toggle > strong { font-size: 12px; font-weight: 700; }
+.agent-plan__row--toggle > span { display: inline-flex; align-items: center; gap: 2px; color: var(--p-muted); font-size: 11px; }
+.agent-plan__row--toggle:hover > span { color: var(--p-text); }
+.agent-plan__row--toggle svg { transition: transform .15s ease; }
+.agent-plan__row--toggle svg.is-open { transform: rotate(90deg); }
+.agent-plan__assets { display: grid; gap: 8px; }
+.agent-plan__assets .flovart-plan { max-height: 240px; overflow: auto; font-size: 11px; }
+.agent-plan__group { justify-content: flex-start; color: var(--p-muted); font-size: 11px; }
+.agent-plan__group-name { display: inline-flex; min-width: 0; align-items: center; gap: 4px; color: var(--p-text); overflow-wrap: anywhere; }
+.agent-plan__workflow { display: grid; gap: 6px; }
+.agent-plan__label { color: var(--p-muted); font-size: 11px; }
+.agent-plan__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.agent-plan__chip { display: inline-flex; max-width: 100%; align-items: center; gap: 4px; border: 1px solid var(--p-line); border-radius: 999px; padding: 2px 9px; color: var(--p-muted); background: transparent; font: inherit; font-size: 11px; cursor: pointer; }
+.agent-plan__chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-plan__chip:hover:not(:disabled) { color: var(--p-text); border-color: color-mix(in srgb, var(--p-text) 35%, var(--p-line)); }
+.agent-plan__chip:disabled { cursor: default; }
+.agent-plan__chip--running { color: var(--isl-mint-deep, var(--p-text)); border-color: color-mix(in srgb, var(--isl-mint) 45%, var(--p-line)); }
+.agent-plan__chip--done { color: var(--p-text); }
+.agent-plan__chip--error { color: color-mix(in srgb, #e5484d 75%, var(--p-text)); border-color: color-mix(in srgb, #e5484d 40%, var(--p-line)); }
+.agent-plan__blocked { margin: 0; color: color-mix(in srgb, #e5484d 75%, var(--p-text)); font-size: 11px; }
+.agent-plan__mandate { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--p-muted); font-size: 11px; }
+.agent-plan__mandate input[type='number'] { width: 48px; height: 22px; padding: 0 6px; border: 1px solid var(--p-line); border-radius: 6px; color: var(--p-text); background: var(--isl-card); font: inherit; }
+.agent-plan__actions { display: grid; gap: 4px; }
+.agent-plan__primary { height: 34px; border: 0; border-radius: 10px; color: var(--isl-card); background: var(--p-text); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.agent-plan__primary:hover:not(:disabled) { background: color-mix(in srgb, var(--p-text) 88%, var(--isl-card)); }
+.agent-plan__primary:disabled { opacity: .4; cursor: not-allowed; }
+.agent-plan__secondary { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.agent-plan__secondary button { height: 30px; border: 0; border-radius: 8px; color: var(--p-muted); background: transparent; font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; }
+.agent-plan__secondary button:hover { color: var(--p-text); background: color-mix(in srgb, var(--p-text) 7%, transparent); }
+.agent-plan__progress { display: flex; height: 34px; align-items: center; justify-content: center; gap: 6px; border-radius: 10px; color: var(--p-text); background: color-mix(in srgb, var(--p-text) 7%, transparent); font-size: 12px; font-weight: 600; }
+.agent-plan__progress i { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+.agent-plan__progress--running i { animation: agent-plan-pulse 1.2s ease-in-out infinite; }
+.agent-plan__progress--failed { color: color-mix(in srgb, #e5484d 75%, var(--p-text)); }
+.agent-plan__note { margin: 0; padding: 0 4px; color: var(--p-ghost, var(--isl-ink-ghost)); font-size: 11px; line-height: 1.55; overflow-wrap: anywhere; }
+.agent-conversation__body > .agent-plan-wrap, .workflow-agent__body > .agent-plan-wrap { margin: 0 0 8px; max-height: 60%; overflow: auto; }
+@keyframes agent-plan-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .agent-plan__progress--running i { animation: none; } .agent-turn-rail__tick { transition: none; } }

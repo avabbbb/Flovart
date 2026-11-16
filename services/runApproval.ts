@@ -65,3 +65,26 @@ export function describeRunApproval(nodeCount: number, gates: readonly Generatio
     detail: `共 ${tasks} 个任务 · ${cost ? '预估 ' + cost : '预估额度未知'} · 一次确认覆盖整张清单`,
   };
 }
+
+/**
+ * 确认结果：大多数确认只有批准 / 拒绝（boolean）；生成计划卡的「不运行」选项另带一句给 Agent 的说明，
+ * 让它知道节点已保留、不要重复创建，而不是笼统的「用户拒绝」。
+ */
+export type AgentConfirmVerdict = boolean | { approved: false; note: string };
+
+export const CONFIRM_DENIED_MESSAGE = '用户拒绝了该操作';
+
+/** 把确认结果拆成「是否批准 + 拒绝时抛给 Agent 的说明」。 */
+export function readConfirmVerdict(verdict: AgentConfirmVerdict): { approved: boolean; message: string } {
+  if (verdict === true) return { approved: true, message: '' };
+  if (verdict && typeof verdict === 'object' && verdict.note.trim()) return { approved: false, message: verdict.note.trim() };
+  return { approved: false, message: CONFIRM_DENIED_MESSAGE };
+}
+
+/** 生成计划卡上「不运行」两个选项回给 Agent 的说明（写给模型，不是界面文案）。 */
+export function runPlanDenialNote(decision: 'manual' | 'adjust', nodeCount: number): string {
+  if (decision === 'manual') {
+    return `用户选择「创建后手动生成」：这 ${nodeCount} 个节点已保留在画布上，由用户自己运行。本次不要运行，也不要重复创建这些节点；简短告诉用户节点已就绪即可。`;
+  }
+  return `用户选择「调整后再创建」：本次不运行。先不要重复创建或运行这些节点，等用户在下一条消息里说明要调整什么，再按要求修改。`;
+}

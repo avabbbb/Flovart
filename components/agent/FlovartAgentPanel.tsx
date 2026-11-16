@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { AtSign, BookMarked, Box, Check, ChevronDown, ChevronLeft, Copy, GitBranch, Hand, Image as ImageIcon, KeyRound, LayoutGrid, Minimize2, Plus, RotateCw, Send, Square, Trash2, Video, X, Zap } from 'lucide-react';
+import { AtSign, BookMarked, Box, Check, ChevronDown, ChevronLeft, Copy, GitBranch, Hand, Image as ImageIcon, KeyRound, LayoutGrid, Minimize2, Plus, Quote, RotateCw, Send, Square, Trash2, Video, X, Zap } from 'lucide-react';
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { AGENT_ATTACHMENT_MAX, composerAttachmentsToImages, createComposerAttachment, mergeComposerAttachments, releaseComposerAttachment, type AgentComposerAttachment } from '../../services/agentComposerAttachments';
 import { getManagedAgentConnection } from '../../services/managedAgentConnection';
@@ -61,6 +61,12 @@ import { AgentOrbIcon } from './AgentWorkingOrb';
 import { AgentMediaTiles } from './AgentMediaTiles';
 import { referenceLineLabels, userTurnReferences } from './agentMessageRefs';
 import { abortedNoticeText, isAbortMessage, queuedNoticeText } from './agentAbort';
+import { AgentRunPlanCard } from './AgentRunPlanCard';
+import { isRunPlanRequest, runPlanApproved, runPlanNodeIds, type RunPlanDecision } from './agentRunPlan';
+import { readConfirmVerdict, runPlanDenialNote, type AgentConfirmVerdict } from '../../services/runApproval';
+import { AgentScrollToLatest, AgentTurnTimeline, activeMessageScroller, messageScrollers, smoothScrollTo } from './AgentConversationNav';
+import { isAwayFromBottom, nextStickToBottom, splitConversationTurns } from './agentConversationNav';
+import { quotePreview, withQuote } from './agentQuote';
 import { activityAfterConfirmation, agentLayerReducer, blockerAfterCredentialSignal, closedLayers, needsCredential, replacePendingConfirmation, useAgentTurn } from './agentPanelState';
 
 interface FlovartAgentPanelProps {
@@ -179,7 +185,9 @@ const userApiKeysRef = useRef(userApiKeys);
   }, [userApiKeys]);
   const workspaceBridge = useRef<WorkflowAgentBridge | undefined>(undefined);
   const abort = useRef<AbortController | undefined>(undefined);
-  type PendingConfirmation = { id?: string; summary: string; resolve: (approved: boolean) => void; request?: AgentConfirmRequest; offerMandate?: boolean; blocked?: boolean };
+  type PendingConfirmation = { id?: string; summary: string; resolve: (verdict: AgentConfirmVerdict) => void; request?: AgentConfirmRequest; offerMandate?: boolean; blocked?: boolean; turnIndex?: number };
+  // 生成计划卡：用户做出选择后仍留在这一轮里，按画布节点实时显示「生成中 n/N → 已完成」。
+  type TrackedRunPlan = { id: string; request: AgentConfirmRequest; decision: RunPlanDecision; decidedAt: number; turnIndex: number };
   type PendingAsk = { id: string; form: AgentAskForm; resolve: (result: AgentAskResult) => void };
   const composer = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -211,6 +219,9 @@ const userApiKeysRef = useRef(userApiKeys);
   const projectRef = useRef(project);
   projectRef.current = project;
   const [messages, setMessages] = useState<WorkflowAgentDisplayMessage[]>([]);
+  // 计划卡挂在发起它的那一轮末尾：确认弹出时记下当前是第几轮。
+  const userTurnCountRef = useRef(0);
+  userTurnCountRef.current = messages.filter(message => message.role === 'user').length;
   const [prompt, setPrompt] = useState('');
   const [skillAttachment, setSkillAttachment] = useState<ProductionSkillAttachment>();
   const [status, setStatus] = useState<'connecting' | 'ready' | 'error'>('connecting');
@@ -231,19 +242,40 @@ const userApiKeysRef = useRef(userApiKeys);
   const [mandateTasks, setMandateTasks] = useState(10);
   const [mode, setMode] = useState<ApprovalMode>(initialMode);
   const hasMessages = messages.length > 0;
+  // 「回到最新消息」：离底超过 1/3 屏时显示。跟随底部只在用户没往上翻时生效，流式输出不会把人拉回底部。
+  const [awayFromBottom, setAwayFromBottom] = useState(false);
   useLayoutEffect(() => {
     const scrollers = messageScrollers(messagesRef.current);
+    const lastTop = new WeakMap<HTMLElement, number>();
     const onScroll = (event: Event) => {
       const el = event.currentTarget as HTMLElement;
-      stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      if (el !== activeMessageScroller(messagesRef.current)) return;
+      const metrics = { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight };
+      stickToBottom.current = nextStickToBottom(stickToBottom.current, metrics, lastTop.get(el) ?? el.scrollTop);
+      lastTop.set(el, el.scrollTop);
+      setAwayFromBottom(isAwayFromBottom(metrics));
     };
     scrollers.forEach(el => el.addEventListener('scroll', onScroll, { passive: true }));
     return () => scrollers.forEach(el => el.removeEventListener('scroll', onScroll));
   }, [hasMessages]);
+  const [trackedPlans, setTrackedPlans] = useState<TrackedRunPlan[]>([]);
   useLayoutEffect(() => {
-    if (!stickToBottom.current) return;
+    if (!stickToBottom.current) {
+      const el = activeMessageScroller(messagesRef.current);
+      if (el) setAwayFromBottom(isAwayFromBottom({ scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }));
+      return;
+    }
     for (const el of messageScrollers(messagesRef.current)) el.scrollTop = el.scrollHeight;
-  }, [messages, sending]);
+    setAwayFromBottom(false);
+  }, [messages, sending, confirmation, trackedPlans]);
+  const scrollToLatest = () => {
+    stickToBottom.current = true;
+    setAwayFromBottom(false);
+    const el = activeMessageScroller(messagesRef.current);
+    if (el) smoothScrollTo(el, el.scrollHeight);
+  };
+  // 引用回复：输入框上方的引用条；发送时以 Markdown 引用块拼进这条用户消息。
+  const [quote, setQuote] = useState<{ messageId: string; text: string } | null>(null);
   // 面板内所有浮层共用一个 openLayer：同一时刻只开一个，Escape/外部点击统一关闭。
   const [layers, dispatchLayer] = useReducer(agentLayerReducer, closedLayers);
   const { layer: openLayer, slashQuery } = layers;
@@ -277,7 +309,7 @@ const userApiKeysRef = useRef(userApiKeys);
     dispatchTurn({ type: 'confirmRequested' });
     activity.current('waiting');
   };
-  const settleConfirmation = (pending: PendingConfirmation, approved: boolean) => {
+  const settleConfirmation = (pending: PendingConfirmation, approved: AgentConfirmVerdict) => {
     const nextActivity = activityAfterConfirmation(turnRef.current.phase);
     confirmationRef.current = undefined;
     pending.resolve(approved);
@@ -322,7 +354,21 @@ const userApiKeysRef = useRef(userApiKeys);
     }
     settleConfirmation(pending, approved);
   };
-  const askConfirmation = useRef((summary: string, request?: AgentConfirmRequest): Promise<boolean> => {
+  /** 生成计划卡的三个选择：仍是同一个确认请求；只有「创建并自动生成」批准，另两个带说明拒绝。 */
+  const decideRunPlan = (pending: PendingConfirmation, decision: RunPlanDecision, options: { session: boolean }) => {
+    const request = pending.request;
+    if (request) {
+      const tracked: TrackedRunPlan = { id: pending.id || crypto.randomUUID(), request, decision, decidedAt: Date.now(), turnIndex: pending.turnIndex ?? 0 };
+      setTrackedPlans(current => [...current.filter(item => item.id !== tracked.id), tracked]);
+    }
+    if (runPlanApproved(decision)) {
+      decideConfirmation(pending, true, options.session ? 'session' : 'once');
+      return;
+    }
+    settleConfirmation(pending, { approved: false, note: runPlanDenialNote(decision === 'manual' ? 'manual' : 'adjust', runPlanNodeIds(request).length) });
+    if (decision === 'adjust') focusComposer();
+  };
+  const askConfirmation = useRef((summary: string, request?: AgentConfirmRequest): Promise<AgentConfirmVerdict> => {
     // 停止中的轮次不再弹确认卡：直接拒绝，让内核尽快收尾。
     if (turnRef.current.phase === 'stopping') return Promise.resolve(false);
     const current = mandateRef.current;
@@ -337,13 +383,16 @@ const userApiKeysRef = useRef(userApiKeys);
     if (grantKey && !planBlocked(request) && confirmScopesFor(request).includes('session') && sessionGrantsRef.current.has(grantKey)) {
       return Promise.resolve(true);
     }
-    return new Promise<boolean>(resolve => {
+    return new Promise<AgentConfirmVerdict>(resolve => {
       const offerMandate = modeRef.current !== 'always-ask' && request?.kind === 'generation' && (request.gates?.length ?? 0) > 0 && !planBlocked(request);
       if (offerMandate) setMandateTasks(defaultMandateTasks(request));
       // 有计划时由 GenerationPlanCard 展示，文本摘要只给 CLI/无宿主。
-      presentConfirmation({ summary: request?.gates?.length ? '' : summary, resolve, request, offerMandate, blocked: planBlocked(request) });
+      presentConfirmation({ summary: request?.gates?.length ? '' : summary, resolve, request, offerMandate, blocked: planBlocked(request), turnIndex: Math.max(0, userTurnCountRef.current - 1) });
     });
   }).current;
+  // 托管 Agent 的 bridge 只认 true / false：计划卡的「不运行」选项在那里就是拒绝。
+  const askConfirmationBoolean = useRef((summary: string, request?: AgentConfirmRequest): Promise<boolean> =>
+    askConfirmation(summary, request).then(verdict => readConfirmVerdict(verdict).approved)).current;
   useEffect(() => {
     setAgentGateKeysProvider(() => userApiKeysRef.current);
     return () => setAgentGateKeysProvider(null);
@@ -356,6 +405,16 @@ const userApiKeysRef = useRef(userApiKeys);
   useEffect(() => { void useAgentMemoryStore.getState().load(project.id).catch(() => undefined); }, [project.id]);
   const [activeSessionId, setActiveSessionId] = useState('');
   useEffect(() => { sessionGrantsRef.current.clear(); }, [activeSessionId]);
+  // 换会话 / 项目：上一段对话的计划卡与引用条不跟过来（会话 id 第一次落定时不算换）。
+  const previousSessionId = useRef('');
+  useEffect(() => {
+    if (previousSessionId.current && previousSessionId.current !== activeSessionId) {
+      setTrackedPlans([]);
+      setQuote(null);
+    }
+    previousSessionId.current = activeSessionId;
+  }, [activeSessionId]);
+  useEffect(() => { setTrackedPlans([]); setQuote(null); }, [project.id]);
   // Lane15 first-run UX: setupBlocker classifies a cold-open/send failure via
   // the executor taxonomy (runtimeHealth) instead of raw strings, so the panel
   // can render a real next step ('Add API key') instead of a jargon dead end.
@@ -544,15 +603,15 @@ const userApiKeysRef = useRef(userApiKeys);
           const bridge = new WorkflowAgentBridge({
             url: connection.url,
             token: connection.token,
-            confirm: askConfirmation,
+            confirm: askConfirmationBoolean,
             // 托管 Agent 的可逆写入走同一个审批解析器；删除 / 付费由 bridge 的高风险确认单独处理。
             confirmWrite: (summary, request) => {
-              if (!request) return askConfirmation(summary, request);
+              if (!request) return askConfirmationBoolean(summary, request);
               const tool = request.tool || request.command;
               const resolution = resolveToolApproval({ ...approvalContext(), tool, decision: toolApprovalFor(request.command, { ...(request.args || {}) }) });
               if (resolution.action === 'allow') return true;
               if (resolution.action === 'deny') return false;
-              return askConfirmation(summary, { ...request, tool, tier: resolution.tier, grantable: resolution.grantable, ...(resolution.reason ? { reason: resolution.reason } : {}) });
+              return askConfirmationBoolean(summary, { ...request, tool, tier: resolution.tier, grantable: resolution.grantable, ...(resolution.reason ? { reason: resolution.reason } : {}) });
             },
             onStatus: nextStatus => {
               if (!active) return;
@@ -889,8 +948,10 @@ const userApiKeysRef = useRef(userApiKeys);
   const queuedTurns = useRef<OutgoingTurn[]>([]);
 
   const send = async () => {
-    const text = prompt.trim();
-    if (!text && references.length === 0 && attachments.length === 0) return;
+    const typed = prompt.trim();
+    if (!typed && !quote && references.length === 0 && attachments.length === 0) return;
+    // 引用回复：引文以 Markdown 引用块放在正文前，进入模型上下文，气泡里显示为引用块。
+    const text = withQuote(typed, quote?.text);
     // 连接中不发送（按钮本就禁用）；不再在发送时强行把连接状态改成 ready。
     if (status === 'connecting') return;
     const phase = turnRef.current.phase;
@@ -932,6 +993,7 @@ const userApiKeysRef = useRef(userApiKeys);
     // 单个节点的「已加入上下文」提示随这一轮发出而结束；分组提示保留（还能保存为 Skill）。
     setGroupBanner(current => (current && current.nodeIds.length <= 1 ? null : current));
     setPrompt('');
+    setQuote(null);
     setReferences([]);
     attachmentsRef.current = [];
     setAttachments([]);
@@ -1139,6 +1201,42 @@ const userApiKeysRef = useRef(userApiKeys);
   const setupGate = Boolean(setupBlocker);
   // 复制与渲染用同一份可见消息：设置引导卡里的重复错误不导出。
   const transcriptMessages = setupGate ? messages.filter(message => message.id !== 'agent-text-config') : messages;
+  const uiLanguage: 'en' | 'zho' = language === 'zho' ? 'zho' : 'en';
+  const conversationTurns = useMemo(() => splitConversationTurns(transcriptMessages), [transcriptMessages]);
+  // 待选择的生成计划卡：有对应的轮次就挂在那一轮末尾；没有（例如外部 Agent 直接发起）就放回确认卡的位置，绝不让它不显示。
+  const pendingPlan = confirmation && isRunPlanRequest(confirmation.request) ? confirmation : undefined;
+  const pendingPlanInline = Boolean(pendingPlan && (pendingPlan.turnIndex ?? 0) < conversationTurns.length);
+  const pendingPlanCard = pendingPlan?.request ? <AgentRunPlanCard
+    key={pendingPlan.id}
+    request={pendingPlan.request}
+    nodes={liveNodes}
+    language={uiLanguage}
+    blocked={pendingPlan.blocked}
+    offerMandate={pendingPlan.offerMandate}
+    planMandateNote={describeMandateDenial(mandate, pendingPlan.request)}
+    mandateTasks={mandateTasks}
+    onMandateTasksChange={setMandateTasks}
+    onDecide={(decision, options) => decideRunPlan(pendingPlan, decision, options)}
+    onFocusNode={onFocusNode}
+  /> : null;
+  // 每轮末尾：这一轮已选择过的计划卡（按时间），再加正在等待选择的那张。
+  const renderTurnPlans = (turnIndex: number) => {
+    const done = trackedPlans.filter(plan => plan.turnIndex === turnIndex);
+    const pendingHere = pendingPlanInline && (pendingPlan?.turnIndex ?? 0) === turnIndex;
+    if (!done.length && !pendingHere) return null;
+    return <>
+      {done.map(plan => <AgentRunPlanCard
+        key={plan.id}
+        request={plan.request}
+        nodes={liveNodes}
+        language={uiLanguage}
+        decision={plan.decision}
+        decidedAt={plan.decidedAt}
+        onFocusNode={onFocusNode}
+      />)}
+      {pendingHere && pendingPlanCard}
+    </>;
+  };
   return (
     <div ref={rootRef} className="workflow-agent is-embedded agent-conversation">
       <header className="workflow-agent__utility agent-conversation__header">
@@ -1205,6 +1303,7 @@ const userApiKeysRef = useRef(userApiKeys);
       </header>
       <section className="workflow-agent__body">
         {/* When setup is the blocker, the setup card is the one thing to read: drop the duplicate red config error and the browse/skill decks under it. */}
+        <div className="agent-conversation__viewport">
         <div ref={messagesRef} className="agent-conversation__messages"><WorkflowAgentMessages
           messages={transcriptMessages}
           running={sending}
@@ -1222,7 +1321,12 @@ const userApiKeysRef = useRef(userApiKeys);
           onCopyMessage={copyMessage}
           onBranchMessage={kernelRef.current ? branchFromMessage : undefined}
           branchDisabled={sending}
+          onQuoteMessage={message => { setQuote({ messageId: message.id, text: message.text }); focusComposer(); }}
+          renderTurnFooter={renderTurnPlans}
         /></div>
+        <AgentTurnTimeline rootRef={messagesRef} turns={conversationTurns} language={uiLanguage} onJump={() => { stickToBottom.current = false; }} />
+        <AgentScrollToLatest visible={awayFromBottom && hasMessages} language={uiLanguage} onClick={scrollToLatest} />
+        </div>
         {todoItems.length > 0 && !setupGate && <div className='mx-3'><AgentTodoCard items={todoItems} language={language} /></div>}
         {setupBlocker && (
           <div role="alert" data-testid="agent-setup-card" className="agent-card-on-shell mx-3 mb-2 rounded-2xl px-3.5 py-3">
@@ -1275,7 +1379,8 @@ const userApiKeysRef = useRef(userApiKeys);
           onSubmit={data => settleAsk(pendingAsk, { ok: true, data })}
           onCancel={() => settleAsk(pendingAsk, { ok: false, cancelled: true })}
         />}
-        {confirmation && <AgentConfirmCard
+        {pendingPlan && !pendingPlanInline && pendingPlanCard}
+        {confirmation && !isRunPlanRequest(confirmation.request) && <AgentConfirmCard
           key={confirmation.id}
           summary={confirmation.summary}
           request={confirmation.request}
@@ -1316,6 +1421,11 @@ const userApiKeysRef = useRef(userApiKeys);
             void dropComposerFiles(Array.from(event.dataTransfer.files));
           }}
         >
+          {quote && <div className="agent-quote-bar" role="group" aria-label={t('agentPanel.quoteReply')} data-testid="agent-quote-bar">
+            <div className="agent-quote-bar__head"><Quote size={12} aria-hidden="true" /><strong>{t('agentPanel.quoteReply')}</strong></div>
+            <p className="agent-quote-bar__text" title={quote.text}>&gt; {quotePreview(quote.text)}</p>
+            <button type="button" className="agent-quote-bar__close" aria-label={t('agentPanel.quoteCancel')} title={t('agentPanel.quoteCancel')} onClick={() => { setQuote(null); focusComposer(); }}><X size={12} /></button>
+          </div>}
           {attachDragActive && <div className="agent-composer__drop" aria-hidden="true"><span>{language === 'zho' ? '松手加入本轮对话' : 'Release to attach'}</span></div>}
           <ProductionSkillDeck
             attachment={skillAttachment}
@@ -1534,10 +1644,3 @@ function ReferenceGroup({ label, items, onSelect, icon, empty }: { label: string
     : <p>{empty}</p>}</section>;
 }
 
-
-// 消息区真正的滚动层可能是外层容器，也可能是 WorkflowAgentMessages 的根节点（取决于样式），两者都处理。
-function messageScrollers(root: HTMLElement | null): HTMLElement[] {
-  if (!root) return [];
-  const inner = root.firstElementChild;
-  return inner instanceof HTMLElement ? [root, inner] : [root];
-}
