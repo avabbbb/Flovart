@@ -2,7 +2,7 @@
 // decode(points, box?) 每次点击都跑。transformers.js 由调用方注入（worker 里懒加载，测试里注入假实现），
 // 本模块不静态 import 它，保证不进主 chunk。
 import { toSamPrompt, type NormalizedBox, type PickPoint } from '../../components/workflow/subjectMask';
-import { segmentationLoadOptions, type SegmentationDevice, type SegmentationRuntimeConfig } from './segmentationConfig';
+import { defaultOnnxWasmBaseUrl, onnxWasmPaths, segmentationLoadOptions, type SegmentationDevice, type SegmentationRuntimeConfig } from './segmentationConfig';
 
 /** 用到的 transformers.js 子集（类型只描述本模块真正调用的部分）。 */
 export interface TransformersLike {
@@ -10,7 +10,7 @@ export interface TransformersLike {
     remoteHost: string;
     allowLocalModels: boolean;
     allowRemoteModels?: boolean;
-    backends: { onnx: { wasm?: { wasmPaths?: unknown } } };
+    backends: { onnx: { wasm?: { wasmPaths?: unknown }; versions?: { web?: string } } };
   };
   SamModel: { from_pretrained(id: string, options: Record<string, unknown>): Promise<SamModelLike> };
   AutoProcessor: { from_pretrained(id: string, options: Record<string, unknown>): Promise<SamProcessorLike> };
@@ -70,11 +70,17 @@ export function createSamEngine(
         const lib = await loadLibrary();
         lib.env.remoteHost = config.modelBaseUrl;
         lib.env.allowLocalModels = false;
-        if (config.wasmBaseUrl && lib.env.backends.onnx.wasm) lib.env.backends.onnx.wasm.wasmPaths = config.wasmBaseUrl;
         const progress_callback = (info: SamProgress) => options.onProgress?.(info);
-        const processor = await lib.AutoProcessor.from_pretrained(config.modelId, { progress_callback });
         const preferGpu = await (options.detectDevice || detectWebGpu)();
         const devices: SegmentationDevice[] = preferGpu ? ['webgpu', 'wasm'] : ['wasm'];
+        // 在创建任何 ORT 会话之前定下 wasm 文件：没有 WebGPU 时用普通版（约 14.3 MB），不再拉 26.9 MB 的 asyncify 版。
+        // 有 WebGPU 时用 asyncify 版；WebGPU 失败退回 WASM 时 asyncify 版同样能跑 WASM 执行器，不用重新下载。
+        const wasm = lib.env.backends.onnx.wasm;
+        if (wasm) {
+          const paths = onnxWasmPaths(devices[0], config.wasmBaseUrl || defaultOnnxWasmBaseUrl(lib.env.backends.onnx.versions?.web));
+          if (paths) wasm.wasmPaths = paths;
+        }
+        const processor = await lib.AutoProcessor.from_pretrained(config.modelId, { progress_callback });
         let lastError: unknown;
         for (const device of devices) {
           try {

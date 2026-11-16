@@ -68,3 +68,31 @@ export function segmentationLoadOptions(device: SegmentationDevice) {
       dtype: { vision_encoder: 'q8', prompt_encoder_mask_decoder: 'q8' },
     };
 }
+
+/**
+ * onnxruntime-web 的 wasm 运行时文件。transformers.js 4.x 默认一律加载 asyncify 版
+ * （ort-wasm-simd-threaded.asyncify.wasm，约 26.9 MB）：WebGPU 执行器需要它，纯 WASM 并不需要。
+ * 纯 WASM 设备改用普通版（ort-wasm-simd-threaded.wasm，约 14.3 MB），少下载近一半，
+ * 也低于 Cloudflare Pages 单文件 25 MiB 上限，可以放进 VITE_SEGMENTATION_WASM_BASE_URL 自托管。
+ * transformers.js 自己在 Safari < 26 且无 WebGPU 时也是这样切到普通版，ORT 的 webgpu 包接受这种覆盖。
+ */
+export const ORT_WASM_FILE_STEM = 'ort-wasm-simd-threaded';
+
+export function onnxWasmVariant(device: SegmentationDevice): '' | '.asyncify' {
+  return device === 'webgpu' ? '.asyncify' : '';
+}
+
+/** jsDelivr 上与打包进来的 onnxruntime-web 同版本的 dist 目录；拿不到版本时返回 undefined（交给 transformers.js 默认）。 */
+export function defaultOnnxWasmBaseUrl(ortVersion: string | undefined): string | undefined {
+  const version = typeof ortVersion === 'string' ? ortVersion.trim() : '';
+  if (!version || !/^[0-9A-Za-z.+-]+$/.test(version)) return undefined;
+  return `https://cdn.jsdelivr.net/npm/onnxruntime-web@${version}/dist/`;
+}
+
+/** 给 ORT 的 env.wasm.wasmPaths：按设备选文件变体；目录优先用配置的镜像 / 自托管地址。 */
+export function onnxWasmPaths(device: SegmentationDevice, baseUrl: string | undefined): { mjs: string; wasm: string } | undefined {
+  if (!baseUrl) return undefined;
+  const base = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
+  const stem = ORT_WASM_FILE_STEM + onnxWasmVariant(device);
+  return { mjs: `${base}${stem}.mjs`, wasm: `${base}${stem}.wasm` };
+}

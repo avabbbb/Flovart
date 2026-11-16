@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { createSamEngine, detectWebGpu, EMBEDDING_CACHE_LIMIT, type TransformersLike } from '../services/segmentation/samEngine';
 import {
   DEFAULT_SEGMENTATION_MODEL_BASE_URL,
+  defaultOnnxWasmBaseUrl,
   normalizeBaseUrl,
+  onnxWasmPaths,
+  onnxWasmVariant,
   resolveSegmentationConfig,
   segmentationLoadOptions,
 } from '../services/segmentation/segmentationConfig';
@@ -41,7 +44,7 @@ describe('segmentationConfig', () => {
 /** 假的 transformers.js：原图 4x2，reshaped 8x4（[h,w] = [4,8]），3 个候选。 */
 function fakeTransformers(options: { failWebGpu?: boolean } = {}) {
   const calls = { embed: 0, loads: [] as string[], lastInputs: undefined as Record<string, unknown> | undefined };
-  const env = { remoteHost: '', allowLocalModels: true, backends: { onnx: { wasm: { wasmPaths: undefined as unknown } } } };
+  const env = { remoteHost: '', allowLocalModels: true, backends: { onnx: { wasm: { wasmPaths: undefined as unknown }, versions: { web: '1.31.0-dev.20260914-8d85527a0' } } } };
   class Tensor { constructor(public type: string, public data: unknown, public dims: number[]) {} }
   const model = Object.assign(async (inputs: Record<string, unknown>) => {
     calls.lastInputs = inputs;
@@ -77,6 +80,29 @@ function fakeTransformers(options: { failWebGpu?: boolean } = {}) {
   return { lib, calls, env, model };
 }
 
+describe('onnx wasm file selection', () => {
+  it('picks the plain runtime for WASM and asyncify only for WebGPU', () => {
+    expect(onnxWasmVariant('wasm')).toBe('');
+    expect(onnxWasmVariant('webgpu')).toBe('.asyncify');
+    expect(onnxWasmPaths('wasm', 'https://mirror.example.com/ort')).toEqual({ mjs: 'https://mirror.example.com/ort/ort-wasm-simd-threaded.mjs', wasm: 'https://mirror.example.com/ort/ort-wasm-simd-threaded.wasm' });
+    expect(onnxWasmPaths('webgpu', undefined)).toBeUndefined();
+  });
+
+  it('pins the default CDN to the bundled onnxruntime-web version', () => {
+    expect(defaultOnnxWasmBaseUrl('1.31.0')).toBe('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0/dist/');
+    expect(defaultOnnxWasmBaseUrl(undefined)).toBeUndefined();
+    expect(defaultOnnxWasmBaseUrl('1.0/../evil')).toBeUndefined();
+  });
+
+  it('leaves transformers.js defaults alone when the version is unknown', async () => {
+    const fake = fakeTransformers();
+    (fake.env.backends.onnx as { versions?: unknown }).versions = undefined;
+    fake.env.backends.onnx.wasm.wasmPaths = 'preset';
+    await createSamEngine(async () => fake.lib, resolveSegmentationConfig(), { detectDevice: async () => false }).prepare();
+    expect(fake.env.backends.onnx.wasm.wasmPaths).toBe('preset');
+  });
+});
+
 describe('samEngine (fake transformers)', () => {
   const blob = new Blob(['img']);
 
@@ -86,7 +112,8 @@ describe('samEngine (fake transformers)', () => {
     const result = await engine.segment(blob, [{ x: 0.5, y: 0.5, label: 1 }, { x: 0, y: 1, label: 0 }], { box: { x: 0, y: 0, w: 0.5, h: 1 } });
     expect(fake.env.remoteHost).toBe('https://hf-mirror.com/');
     expect(fake.env.allowLocalModels).toBe(false);
-    expect(fake.env.backends.onnx.wasm.wasmPaths).toBe('/ort/');
+    // 没有 WebGPU：用普通版 wasm（约 14.3 MB），不拉 asyncify 版；目录用配置的自托管地址。
+    expect(fake.env.backends.onnx.wasm.wasmPaths).toEqual({ mjs: '/ort/ort-wasm-simd-threaded.mjs', wasm: '/ort/ort-wasm-simd-threaded.wasm' });
     expect(fake.calls.loads).toEqual(['wasm']);
     const inputs = fake.calls.lastInputs as Record<string, { type: string; data: ArrayLike<number | bigint>; dims: number[] }>;
     expect(inputs.image_embeddings).toBe('E');
@@ -106,6 +133,11 @@ describe('samEngine (fake transformers)', () => {
     const engine = createSamEngine(async () => fake.lib, resolveSegmentationConfig(), { detectDevice: async () => true });
     expect(await engine.prepare()).toEqual({ device: 'wasm' });
     expect(fake.calls.loads).toEqual(['webgpu', 'wasm']);
+    // 先试 WebGPU：用 asyncify 版（WebGPU 执行器需要），默认走与打包版本一致的 jsDelivr 目录；退回 WASM 时沿用。
+    expect(fake.env.backends.onnx.wasm.wasmPaths).toEqual({
+      mjs: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/dist/ort-wasm-simd-threaded.asyncify.mjs',
+      wasm: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/dist/ort-wasm-simd-threaded.asyncify.wasm',
+    });
     await engine.segment(blob, [{ x: 0.1, y: 0.1, label: 1 }], { imageKey: 'a' });
     await engine.segment(blob, [{ x: 0.2, y: 0.1, label: 1 }], { imageKey: 'a' });
     expect(fake.calls.embed).toBe(1);
