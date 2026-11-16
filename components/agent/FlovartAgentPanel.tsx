@@ -572,6 +572,16 @@ const userApiKeysRef = useRef(userApiKeys);
         if (!active) return;
         // Cold-open failure: classify via the executor/host taxonomy so the
         // panel can offer a real next step instead of a jargon dead end.
+        // 网页端没有可用的文本模型时，托管 Agent 也只能转发给桌面 Runtime：真正缺的是文本模型 Key，
+        // 不是「协作方离线」（只配了图片 / 视频服务时以前会误报需要 Codex / Claude / OpenCode）。
+        if (!isTauri() && !resolveBrowserAgentTextRoute(userApiKeysRef.current)) {
+          setStatus('ready');
+          setWorkspaceStatus('ready');
+          setSetupBlocker('credential');
+          setMessages([{ id: 'agent-text-config', role: 'error', text: translations[language].agentPanel.textRouteRequired }]);
+          activity.current('error');
+          return;
+        }
         const blocker = classifyAgentSetupError(error);
         setStatus('error');
         setWorkspaceStatus('error');
@@ -847,9 +857,10 @@ const userApiKeysRef = useRef(userApiKeys);
       // Agents-offline / credential wall: never dump '仅桌面端可用'. When the
       // missing piece is an agent-text route the blocker is credential (a key
       // fixes it); otherwise the managed host is simply not running (offline).
-      const blocker: AgentSetupBlocker = needsConfiguration ? 'credential' : 'offline';
+      const missingTextRoute = !isTauri() && !browserRouteSignature;
+      const blocker: AgentSetupBlocker = needsConfiguration || missingTextRoute ? 'credential' : 'offline';
       setSetupBlocker(blocker);
-      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: localizedAgentSetupMessage(blocker, undefined, language) }]);
+      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: missingTextRoute ? translations[language].agentPanel.textRouteRequired : localizedAgentSetupMessage(blocker, undefined, language) }]);
       return;
     }
     const referenceContext = references.length ? `引用上下文：\n${references.map(reference => `- @${reference.label}（${reference.type === 'node' ? `工作流节点 nodeId=${reference.id}` : `我的素材 assetId=${reference.id}`}）`).join('\n')}` : '';
