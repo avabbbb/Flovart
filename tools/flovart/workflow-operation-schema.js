@@ -126,7 +126,7 @@ export const WORKFLOW_OPERATION_ITEM_SCHEMA = Object.freeze({
       ids: { ...idList, description: '高级：全部连接 id 的完整新顺序（与 targetNodeId/orderedSourceIds 二选一）。' },
     }, '调整参考顺序：给 targetNodeId + orderedSourceIds（推荐），或完整的连接 ids。'),
     op('group_nodes', ['ids', 'batchId'], { ids: idList, batchId: nonEmptyString, source: { type: 'string' } }, '把节点编成一个批次组。'),
-    op('ungroup_nodes', ['ids'], { ids: idList }, '解散批次组。'),
+    op('ungroup_nodes', ['ids'], { ids: idList }, '解散批次组；也用于拆开多结果叠放：ids 给首图节点 id 会把它的全部备选（metadata.alternates）拆成画布上的独立节点（排在首图右侧），给备选 id 只拆这几张；拆出的节点沿用备选 id。'),
     op('set_batch_primary', ['batchId', 'nodeId'], { batchId: nonEmptyString, nodeId: nonEmptyString }, '设置批次主节点。'),
   ],
 });

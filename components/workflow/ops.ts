@@ -1,4 +1,4 @@
-import { findAlternateOwner, promoteAlternate } from './batchAlternates';
+import { findAlternateOwner, nodeAlternates, promoteAlternate, splitAlternates } from './batchAlternates';
 import { nanoid } from 'nanoid';
 import { createWorkflowNode } from './constants';
 import { resolveWorkflowInputs } from './inputResolver';
@@ -415,6 +415,20 @@ function normalizeDocumentNode(node: WorkflowNode, existing: WorkflowNode[]): Wo
     }
     if (op.type === 'ungroup_nodes') {
       const ids = new Set(op.ids);
+      // 多结果叠放（metadata.alternates）：传首图节点 id 拆出它的全部备选，传备选 id 只拆这些；
+      // 拆出的备选成为真实节点（位置由 splitAlternates 按首图右侧网格计算，备选 id 不冲突时沿用为节点 id）。
+      const existingIds = new Set(snapshot.nodes.map(node => node.id));
+      const createdIds: string[] = [];
+      const splitNodes = snapshot.nodes.flatMap(node => {
+        const alternates = nodeAlternates(node);
+        if (!alternates.length || node.isLocked) return [node];
+        const picked = ids.has(node.id) ? alternates.map(item => item.id) : alternates.filter(item => ids.has(item.id)).map(item => item.id);
+        if (!picked.length) return [node];
+        const { primary, nodes: created } = splitAlternates(node, picked, existingIds, () => { let id = nanoid(); while (existingIds.has(id)) id = nanoid(); existingIds.add(id); return id; });
+        created.forEach(item => { existingIds.add(item.id); createdIds.push(item.id); });
+        return [primary, ...created];
+      });
+      if (createdIds.length) snapshot = { ...snapshot, nodes: splitNodes, selectedNodeIds: createdIds };
       snapshot = {
         ...snapshot,
         nodes: snapshot.nodes.map(node => ids.has(node.id)

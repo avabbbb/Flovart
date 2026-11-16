@@ -93,6 +93,27 @@ describe('batch alternates model', () => {
   });
 });
 
+// 2026-11-16 用户报告：Agent 对带备选的节点调 ungroup_nodes 是空操作，没法把 4 张拆成独立节点。
+describe('ungroup_nodes splits stacked alternates into real nodes', () => {
+  it('splits every alternate when given the owner id, keeping alternate ids as node ids', () => {
+    const owner = prependAlternates(media('root', 'image'), ['a', 'b', 'c'].map(id => alternateFromNode(media(id, 'image'))));
+    const result = applyWorkflowOps(snapshot([owner]), [{ type: 'ungroup_nodes', ids: ['root'] }]);
+    expect(result.rejections).toEqual([]);
+    expect(result.snapshot.nodes.map(node => node.id)).toEqual(['root', 'a', 'b', 'c']);
+    expect(nodeAlternates(result.snapshot.nodes[0])).toEqual([]);
+    expect(result.snapshot.nodes.slice(1).map(node => node.metadata.storageKey)).toEqual(['key-a', 'key-b', 'key-c']);
+    result.snapshot.nodes.slice(1).forEach(node => expect(node.position.x).toBeGreaterThan(owner.position.x + owner.width));
+    expect(result.snapshot.selectedNodeIds).toEqual(['a', 'b', 'c']);
+  });
+
+  it('splits only the alternates named by id and leaves the rest stacked', () => {
+    const owner = prependAlternates(media('root', 'image'), ['a', 'b'].map(id => alternateFromNode(media(id, 'image'))));
+    const result = applyWorkflowOps(snapshot([owner]), [{ type: 'ungroup_nodes', ids: ['b'] }]);
+    expect(result.snapshot.nodes.map(node => node.id)).toEqual(['root', 'b']);
+    expect(nodeAlternates(result.snapshot.nodes[0]).map(item => item.id)).toEqual(['a']);
+  });
+});
+
 describe('legacy stacked batches fold into the primary on load', () => {
   it.each(['image', 'video'] as const)('folds a 4-result %s stack into one node with 3 alternates (no stranded member)', type => {
     const { nodes, changed } = foldResultBatches(legacyStack(type), []);

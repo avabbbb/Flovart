@@ -46,4 +46,19 @@ describe('agent media view', () => {
     const result = await view!.execute('t1', { nodeIds: ['missing'] } as never);
     expect(result.content).toEqual([{ type: 'text', text: 'missing：节点不存在' }]);
   });
+
+  // 2026-11-16 用户报告：多结果的备选 id（metadata.alternates）在 media_view 里报「节点不存在」。
+  it('resolves alternate ids through their owner node instead of reporting a missing node', async () => {
+    const confirm = async () => true;
+    const owner = {
+      id: 'owner', type: 'image', title: '图片生成', position: { x: 0, y: 0 }, width: 320, height: 180,
+      metadata: { storageKey: 'k-owner', alternates: [{ id: 'alt-2', type: 'image', title: '第 2 张', metadata: { storageKey: 'k-alt-2', mimeType: 'image/png' } }] },
+    };
+    const tools = createBrowserAgentTools({ projectId: 'p', confirm, activeChangeSetId: '', getNodes: () => [owner] } as unknown as Parameters<typeof createBrowserAgentTools>[0]);
+    const view = tools.find(tool => tool.name === MEDIA_VIEW_TOOL_NAME)!;
+    const result = await view.execute('t2', { nodeIds: ['alt-2', 'ghost'] } as never);
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).not.toContain('alt-2：节点不存在');
+    expect(text).toContain('ghost：节点不存在');
+  });
 });
