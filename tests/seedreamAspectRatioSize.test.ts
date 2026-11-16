@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { generateImageWithProvider, sizeFromAspectRatio } from '../services/aiGateway';
+import { generateImageWithProvider, routeMinPixels, sizeFromAspectRatio } from '../services/aiGateway';
 import { getRouteSchema } from '../services/runningHubRouteCatalog';
 import { getProductModel } from '../services/productModelCatalog';
 
@@ -18,16 +18,19 @@ const FLASH_2K: Record<string, [number, number]> = {
   '2:3': [1364, 2046],
   '21:9': [2044, 876],
 };
+// 2026-11-16 实测：RunningHub Seedream 5 Flash 要求面积 ≥ 921600（1024×576 被 1007 拒绝）。
+// 1K 时长边按 1024 取；面积不够就保持比例放大到刚好达标。
 const FLASH_1K: Record<string, [number, number]> = {
   '1:1': [1024, 1024],
-  '16:9': [1024, 576],
-  '9:16': [576, 1024],
-  '4:3': [1024, 768],
-  '3:4': [768, 1024],
-  '3:2': [1023, 682],
-  '2:3': [682, 1023],
-  '21:9': [1022, 438],
+  '16:9': [1280, 720],
+  '9:16': [720, 1280],
+  '4:3': [1112, 834],
+  '3:4': [834, 1112],
+  '3:2': [1176, 784],
+  '2:3': [784, 1176],
+  '21:9': [1470, 630],
 };
+const FLASH_MIN_PIXELS = 921_600;
 const V45_2K: Record<string, [number, number]> = {
   '1:1': [2048, 2048],
   '16:9': [2048, 1152],
@@ -60,8 +63,9 @@ describe('Seedream width/height sizing', () => {
     const schema = getRouteSchema(routeId)!;
     for (const [ratio, [width, height]] of Object.entries(table)) {
       it(`${routeId} ${ratio}${resolution ? ` @${resolution}` : ''} → ${width}x${height} (exact ratio, within schema)`, () => {
-        const size = sizeFromAspectRatio(ratio, schema.params, resolution);
+        const size = sizeFromAspectRatio(ratio, schema.params, resolution, routeMinPixels(routeId));
         expect(size).toEqual({ width, height });
+        if (routeId === FLASH) expect(width * height).toBeGreaterThanOrEqual(FLASH_MIN_PIXELS);
         expect(width * Number(ratio.split(':')[1])).toBe(height * Number(ratio.split(':')[0]));
         expect(Math.abs(width / height - ratioOf(ratio))).toBeLessThan(1e-9);
         const w = schema.params.find(p => p.field === 'width')!;
@@ -115,9 +119,10 @@ describe('Seedream request body sent to RunningHub', () => {
     });
   }
 
-  it('uses the node resolution only as the long edge (1K → 1024x576 for 16:9)', async () => {
+  it('1K + 16:9 meets the RunningHub minimum area instead of sending 1024x576 (→ 1280x720)', async () => {
     const body = await submittedBody(FLASH, '16:9', '1K');
-    expect(body).toMatchObject({ width: 1024, height: 576 });
+    expect(body).toMatchObject({ width: 1280, height: 720 });
+    expect(Number(body.width) * Number(body.height)).toBeGreaterThanOrEqual(FLASH_MIN_PIXELS);
     expect(body).not.toHaveProperty('resolution');
   });
 

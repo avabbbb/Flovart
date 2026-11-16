@@ -1485,6 +1485,19 @@ function buildRouteMediaFields(
 
 const RESOLUTION_LONG_EDGE: Record<string, number> = { '1k': 1024, '1.5k': 1536, '2k': 2048, '4k': 4096 };
 
+/**
+ * 线路要求的最小输出面积（宽×高）。官方文档 schema 只写了单边下限，面积下限来自真实报错：
+ * 2026-11-16 RunningHub Seedream 5 Flash 1K + 16:9（1024×576）返回 1007「image area is too small, minimum 921600」。
+ */
+const ROUTE_MIN_PIXELS: ReadonlyArray<[prefix: string, minPixels: number]> = [
+    ['seedream-v5-flash/', 921_600],
+];
+
+export function routeMinPixels(routeId: string): number {
+    const id = routeId.trim().toLowerCase();
+    return ROUTE_MIN_PIXELS.find(([prefix]) => id.startsWith(prefix))?.[1] ?? 0;
+}
+
 function gcd(a: number, b: number): number {
     return b === 0 ? a : gcd(b, a % b);
 }
@@ -1500,6 +1513,7 @@ export function sizeFromAspectRatio(
     aspectRatio: string,
     params: RouteParamSpec[],
     resolution?: string,
+    minPixels = 0,
 ): { width: number; height: number } | null {
     const widthParam = params.find(param => param.field === 'width');
     const heightParam = params.find(param => param.field === 'height');
@@ -1521,12 +1535,14 @@ export function sizeFromAspectRatio(
         requestedLongEdge || Math.max(Number(widthParam.default) || 2048, Number(heightParam.default) || 2048),
     );
     const fits = (k: number) => a * k % step === 0 && b * k % step === 0;
-    // 先找不超过长边的最大 k；比例太极端、短边低于下限时再往上找满足下限的最小 k。
+    const bigEnough = (k: number) => Math.min(a, b) * k >= minimum && a * b * k * k >= minPixels;
+    // 先找不超过长边的最大 k；比例太极端、短边或总面积低于下限时再往上找满足下限的最小 k（保持比例放大）。
     for (let k = Math.floor(longEdge / Math.max(a, b)); k >= 1; k -= 1) {
-        if (fits(k) && Math.min(a, b) * k >= minimum) return { width: a * k, height: b * k };
+        if (fits(k) && bigEnough(k)) return { width: a * k, height: b * k };
     }
-    for (let k = Math.ceil(minimum / Math.min(a, b)); Math.max(a, b) * k <= maximum; k += 1) {
-        if (fits(k)) return { width: a * k, height: b * k };
+    const startK = Math.max(Math.ceil(minimum / Math.min(a, b)), Math.ceil(Math.sqrt(minPixels / (a * b))), 1);
+    for (let k = startK; Math.max(a, b) * k <= maximum; k += 1) {
+        if (fits(k) && bigEnough(k)) return { width: a * k, height: b * k };
     }
     return null;
 }
@@ -1584,7 +1600,7 @@ function buildRunningHubRoutePayload(
         // 没有比例字段、只收 width/height 的线路（Seedream）：按比例换算精确宽高。
         // 官方 schema 写明 resolution 优先级高于 width/height，留着 resolution 宽高就会被忽略、
         // 比例由模型自己决定，所以换算成功后去掉 resolution，只发宽高（resolution 只用来定长边）。
-        const size = sizeFromAspectRatio(options.aspectRatio, schema.params, options.resolution || String(payload.resolution || ''));
+        const size = sizeFromAspectRatio(options.aspectRatio, schema.params, options.resolution || String(payload.resolution || ''), routeMinPixels(schema.routeId));
         if (size) {
             Object.assign(payload, size);
             delete payload.resolution;
