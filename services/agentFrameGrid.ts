@@ -159,14 +159,45 @@ export function describeFrameGrid(input: {
   layout: Pick<FrameGridLayout, 'cols' | 'rows'>;
   page?: number;
   totalPages?: number;
+  /** 视频原始分辨率（实测），给了就写进说明 */
+  width?: number;
+  height?: number;
 }): string {
   const { nodeId, title, duration, times, layout } = input;
   const span = times.length ? formatTimecode(times[0]) + '–' + formatTimecode(times[times.length - 1]) : '';
-  let text = nodeId + '：视频「' + title + '」（时长 ' + formatTimecode(duration) + '）帧网格 ' + times.length + ' 帧 '
+  const size = input.width && input.height ? '，' + describeMediaSize(input.width, input.height) : '';
+  let text = nodeId + '：视频「' + title + '」（时长 ' + formatTimecode(duration) + size + '）帧网格 ' + times.length + ' 帧 '
     + layout.cols + '×' + layout.rows + '，' + span + '，左上→右下按时间排列，每格左上角标 #序号 时间码';
   if (input.totalPages && input.totalPages > 1) {
     const page = input.page ?? 1;
     text += '；第 ' + page + '/' + input.totalPages + ' 页' + (page < input.totalPages ? '，page=' + (page + 1) + ' 看下一页' : '');
   }
   return text;
+}
+
+/** 常见生成比例（横 → 竖），用于把实测宽高吸附成模型参数里的 aspectRatio。 */
+export const COMMON_ASPECT_RATIOS = ['21:9', '16:9', '3:2', '4:3', '5:4', '1:1', '4:5', '3:4', '2:3', '9:16'] as const;
+
+/** 吸附到最接近的常见比例（按对数距离，横竖对称）；尺寸无效返回 ''。 */
+export function nearestAspectRatio(width: number, height: number, candidates: readonly string[] = COMMON_ASPECT_RATIOS): string {
+  if (!(width > 0) || !(height > 0)) return '';
+  const target = Math.log(width / height);
+  let best = '';
+  let bestDistance = Infinity;
+  for (const ratio of candidates) {
+    const [w, h] = ratio.split(':').map(Number);
+    if (!(w > 0) || !(h > 0)) continue;
+    const distance = Math.abs(Math.log(w / h) - target);
+    if (distance < bestDistance) { best = ratio; bestDistance = distance; }
+  }
+  return best;
+}
+
+/** 实测尺寸说明：「原始 1920×1080，比例≈16:9」。给 Agent 反推 / 复刻时直接当参数用，不必看图猜。 */
+export function describeMediaSize(width: number, height: number): string {
+  const w = Math.round(width);
+  const h = Math.round(height);
+  if (!(w > 0) || !(h > 0)) return '';
+  const ratio = nearestAspectRatio(w, h);
+  return '原始 ' + w + '×' + h + (ratio ? '，比例≈' + ratio : '');
 }

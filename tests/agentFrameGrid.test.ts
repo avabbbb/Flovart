@@ -77,3 +77,21 @@ describe('agent frame grid', () => {
     expect(describeFrameGrid({ nodeId: 'v1', title: 'x', duration: 5, times: [1], layout: { cols: 1, rows: 1 } })).not.toContain('页');
   });
 });
+
+describe('measured media size for reverse prompts', async () => {
+  const { describeMediaSize, nearestAspectRatio, describeFrameGrid } = await import('../services/agentFrameGrid');
+  it('snaps to the nearest common aspect ratio', () => {
+    expect(nearestAspectRatio(1920, 1080)).toBe('16:9');
+    expect(nearestAspectRatio(1080, 1920)).toBe('9:16');
+    expect(nearestAspectRatio(1000, 1000)).toBe('1:1');
+    expect(nearestAspectRatio(2560, 1080)).toBe('21:9');
+    expect(nearestAspectRatio(1024, 768)).toBe('4:3');
+    expect(nearestAspectRatio(0, 10)).toBe('');
+  });
+  it('describes the original size and ratio, and adds it to the video grid note', () => {
+    expect(describeMediaSize(1920, 1080)).toBe('原始 1920×1080，比例≈16:9');
+    expect(describeMediaSize(0, 0)).toBe('');
+    const note = describeFrameGrid({ nodeId: 'v1', title: '片段', duration: 8, times: [0, 4], layout: { cols: 2, rows: 1 }, width: 1080, height: 1920 });
+    expect(note).toContain('原始 1080×1920，比例≈9:16');
+  });
+});

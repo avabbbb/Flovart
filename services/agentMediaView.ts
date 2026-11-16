@@ -8,6 +8,7 @@ import { extractVideoFrame, extractVideoFramesAt } from './videoFrameExtractor';
 import {
   FRAME_GRID_DEFAULT_COUNT,
   describeFrameGrid,
+  describeMediaSize,
   frameGridLabel,
   normalizeFrameTimes,
   planFrameGridLayout,
@@ -69,14 +70,16 @@ export async function loadAgentNodeMedia(
       const { storageKey, href, artifactRef } = node.metadata;
       const blob = await loadWorkflowMediaBlob(storageKey, href, artifactRef);
       if (node.type === 'image') {
-        images.push(await toImageContent(blob));
-        notes.push(node.id + '：图片「' + node.title + '」');
+        const sized = await toSizedImageContent(blob);
+        images.push(sized.image);
+        const size = describeMediaSize(sized.width, sized.height);
+        notes.push(node.id + '：图片「' + node.title + '」' + (size ? '（' + size + '）' : ''));
         continue;
       }
       if (layout === 'grid') {
         const grid = await loadVideoFrameGrid(blob, { times, grid: options.grid });
         images.push(grid.image);
-        notes.push(describeFrameGrid({ nodeId: node.id, title: node.title, duration: grid.duration, times: grid.times, layout: grid.layout, page: grid.page, totalPages: grid.totalPages }));
+        notes.push(describeFrameGrid({ nodeId: node.id, title: node.title, duration: grid.duration, times: grid.times, layout: grid.layout, page: grid.page, totalPages: grid.totalPages, width: grid.width, height: grid.height }));
         continue;
       }
       if (times.length) {
@@ -106,7 +109,14 @@ export async function loadAgentNodeMedia(
 }
 
 export async function toImageContent(blob: Blob): Promise<ImageContent> {
+  return (await toSizedImageContent(blob)).image;
+}
+
+/** 同 toImageContent，另外带回原图实测宽高（缩放前）。 */
+async function toSizedImageContent(blob: Blob): Promise<{ image: ImageContent; width: number; height: number }> {
   const bitmap = await createImageBitmap(blob);
+  const width = bitmap.width;
+  const height = bitmap.height;
   try {
     // 长边超过 AGENT_MEDIA_MAX_EDGE 时等比缩小，不放大。
     const divisor = Math.max(1, Math.max(bitmap.width, bitmap.height) / AGENT_MEDIA_MAX_EDGE);
@@ -121,7 +131,7 @@ export async function toImageContent(blob: Blob): Promise<ImageContent> {
     const jpeg = await promise;
     if (!jpeg) throw new Error('画面编码失败');
     const dataUrl = await workflowBlobToDataUrl(jpeg);
-    return { type: 'image', data: dataUrl.slice(dataUrl.indexOf(',') + 1), mimeType: 'image/jpeg' };
+    return { image: { type: 'image', data: dataUrl.slice(dataUrl.indexOf(',') + 1), mimeType: 'image/jpeg' }, width, height };
   } finally {
     bitmap.close();
   }
@@ -131,7 +141,9 @@ export async function toImageContent(blob: Blob): Promise<ImageContent> {
 async function loadVideoFrameGrid(
   blob: Blob,
   options: { times: readonly number[]; grid?: AgentVideoGridOptions },
-): Promise<{ image: ImageContent; duration: number; times: number[]; layout: FrameGridLayout; page: number; totalPages: number }> {
+): Promise<{ image: ImageContent; duration: number; times: number[]; layout: FrameGridLayout; page: number; totalPages: number; width: number; height: number }> {
+  let sourceWidth = 0;
+  let sourceHeight = 0;
   let canvas: HTMLCanvasElement | null = null;
   let ctx: CanvasRenderingContext2D | null = null;
   let layout: FrameGridLayout | null = null;
@@ -140,6 +152,8 @@ async function loadVideoFrameGrid(
   const result = await extractVideoFramesAt(
     blob,
     (duration, size) => {
+      sourceWidth = size.width;
+      sourceHeight = size.height;
       let times: number[];
       if (options.times.length) {
         times = normalizeFrameTimes(options.times, duration);
@@ -185,6 +199,8 @@ async function loadVideoFrameGrid(
     layout,
     page,
     totalPages,
+    width: sourceWidth,
+    height: sourceHeight,
   };
 }
 
