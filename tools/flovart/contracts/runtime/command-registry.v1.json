@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "833b47e3d9fdbdef1b7b082aa66f63d9d2346cd9a6e574540b4d886b0912814d",
+  "registryHash": "94e0731da6884964c1387a84b856e1a57e4015a4834d8d95bca55643d0da3a75",
   "commands": [
     {
       "name": "runtime.status",
