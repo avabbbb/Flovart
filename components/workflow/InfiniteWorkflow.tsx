@@ -15,6 +15,7 @@ import { saveMediaUrl } from '../../services/desktopNetwork';
 import type { AssetLibrary, PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../types';
 import type { RouteFallbackResolution } from '../../services/routeMapping';
 import { STUDIO_MEDIA_BATCH_DRAG_TYPE, STUDIO_MEDIA_DRAG_TYPE } from '../studio/StudioMediaBrowser';
+import { useStudioHubStore } from '../../stores/useStudioHubStore';
 import { mediaKindOf } from '../studio/assetLibraryShared';
 import type { AssetSuggestion } from '../MentionList';
 import type { MentionData } from '../MediaMentionExtension';
@@ -2558,6 +2559,8 @@ export function InfiniteWorkflow({
   const addSharedMedia = useCallback(async (media: WorkflowSharedMedia) => {
     await addSharedMediaAt(media, viewportCenter());
   }, [addSharedMediaAt, viewportCenter]);
+  // 放大的 History 窗口「插入画布」走这里，和工具栏历史面板同一条路径。
+  useEffect(() => useStudioHubStore.getState().register('insertHistory', media => { void addSharedMedia(media); }), [addSharedMedia]);
 
   const removeMedia = useCallback((node: WorkflowNodeData) => {
     if (node.isLocked) return;

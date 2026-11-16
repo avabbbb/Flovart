@@ -1,7 +1,9 @@
 import { Check, Clapperboard, ExternalLink, Film, Heart, Layers, Palette, Pencil, Plus, RefreshCw, Sparkles, Trash2, WandSparkles } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { getBundledProductionSkill, listBundledProductionSkills } from '../../services/productionSkillCatalog';
+import { createProductionSkillAttachment, createSkillAttachment, getBundledProductionSkill, listBundledProductionSkills, type ProductionSkillAttachment } from '../../services/productionSkillCatalog';
+import type { SkillInputSlot } from '../../services/skillInputs';
+import { userSkillAttachment } from '../../services/userSkillContext';
 import { createLocalSkillRegistry, skillRegistryErrorMessage, type LocalSkillManifest } from '../../services/localSkillRegistry';
 import { hubSkillExternalUrl } from '../../services/skillHubClient';
 import { productionSkillHandle } from '../../services/productionSkillLaunch';
@@ -690,4 +692,25 @@ export function pickTextFile(accept: string): Promise<{ text: string; name: stri
     };
     input.click();
   });
+}
+
+/** 把目录里的一条 Skill 解析成 Composer 附件。Skill 浮层与放大的 Skills 窗口共用，保证两处选用结果一致。 */
+export async function resolveSkillAttachment(skill: DeckSkill, copy: SkillCopy): Promise<{ attachment: ProductionSkillAttachment; inputs?: readonly SkillInputSlot[] }> {
+  if (skill.source === 'mine') {
+    const record = useUserSkillsStore.getState().skills.find(item => item.id === skill.id);
+    if (!record) throw new Error(copy.noMatch);
+    return { attachment: userSkillAttachment(record) };
+  }
+  if (skill.source === 'bundled') {
+    const bundled = getBundledProductionSkill(skill.id);
+    if (!bundled) throw new Error(copy.missingBundled + ': ' + skill.id);
+    return { attachment: await createProductionSkillAttachment(bundled), inputs: bundled.inputs };
+  }
+  const registry = await createLocalSkillRegistry();
+  if (!registry) throw new Error(copy.desktopRequired);
+  const manifest = await registry.getSkillManifest(skill.id);
+  return {
+    attachment: createSkillAttachment({ id: manifest.id, version: manifest.version, contentHash: manifest.contentHash, displayName: manifest.displayName, trustTier: manifest.trustTier }),
+    inputs: manifest.inputs,
+  };
 }

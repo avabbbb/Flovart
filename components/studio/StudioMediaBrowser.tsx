@@ -1,6 +1,7 @@
-import { Download, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
+import { Download, Maximize2, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import { loadWorkflowMediaBlob, useWorkflowMediaUrl } from '../workflow/media';
+import { STUDIO_HUB_COPY } from './studioHubCopy';
 import { FolderTree, type FolderTreeProps } from './FolderTree';
 import type { AssetFolder } from '../../types';
 import { displayError } from '../../services/displayError';
@@ -44,12 +45,14 @@ interface StudioMediaBrowserProps {
   projects?: { id: string; title: string }[];
   /** 当前画布；画布筛选默认跟随它。 */
   activeProjectId?: string | null;
+  /** 提供时在标题旁显示「展开」，打开放大的资源窗口。 */
+  onExpand?: () => void;
 }
 
 type MediaFilter = 'all' | 'image' | 'video';
 const UNASSIGNED_PROJECT = '__unassigned__';
 
-function StudioMediaPreview({ item }: { item: StudioMediaItem }) {
+export function StudioMediaPreview({ item }: { item: StudioMediaItem }) {
   const media = useWorkflowMediaUrl(undefined, item.href);
   if (!media.url) {
     return (
@@ -63,7 +66,7 @@ function StudioMediaPreview({ item }: { item: StudioMediaItem }) {
     : <video src={media.url} aria-label={item.name} muted playsInline preload="metadata" className="h-full w-full object-cover" />;
 }
 
-function StudioMediaDownload({ item, isChinese }: { item: StudioMediaItem; isChinese: boolean }) {
+export function StudioMediaDownload({ item, isChinese }: { item: StudioMediaItem; isChinese: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const onDownload = async () => {
@@ -102,7 +105,7 @@ function StudioMediaDownload({ item, isChinese }: { item: StudioMediaItem; isChi
   );
 }
 
-export function StudioMediaBrowser({ mode, items, language, onInsert, onRename, onRemove, onReversePrompt, folders, onAddFolder, onRenameFolder, onDeleteFolder, projects, activeProjectId }: StudioMediaBrowserProps) {
+export function StudioMediaBrowser({ mode, items, language, onInsert, onRename, onRemove, onReversePrompt, folders, onAddFolder, onRenameFolder, onDeleteFolder, projects, activeProjectId, onExpand }: StudioMediaBrowserProps) {
   const [query, setQuery] = useState('');
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -168,7 +171,12 @@ export function StudioMediaBrowser({ mode, items, language, onInsert, onRename, 
             <h2 className="truncate text-xs font-bold" style={{ color: 'var(--isl-ink)' }}>{title}</h2>
         <p className="mt-0.5 text-[10px]" style={{ color: 'var(--isl-ink-soft)' }}>{isChinese ? '点击添加，或直接拖到工作流' : 'Click to add, or drag into the Workflow'}</p>
           </div>
-          <span className="shrink-0 text-[11px] tabular-nums" style={{ color: 'var(--isl-ink-soft)' }}>{filtered.length}/{items.length}</span>
+          <span className="ml-auto shrink-0 text-[11px] tabular-nums" style={{ color: 'var(--isl-ink-soft)' }}>{filtered.length}/{items.length}</span>
+          {onExpand && (
+            <button type="button" className="isl-icon-btn flex h-7 w-7 shrink-0 items-center justify-center" aria-label={STUDIO_HUB_COPY[language].openLarge} title={STUDIO_HUB_COPY[language].openLarge} onClick={onExpand}>
+              <Maximize2 size={13} aria-hidden="true" />
+            </button>
+          )}
         </div>
         <label className="isl-well flex h-9 items-center gap-2 px-2.5 focus-within:ring-2 focus-within:ring-[var(--isl-mint)]">
           <Search size={14} aria-hidden="true" style={{ color: 'var(--isl-ink-ghost)' }} />

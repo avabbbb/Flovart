@@ -9,6 +9,7 @@ import { useApiKeys, normalizeApiKeyEntry } from './hooks/useApiKeys';
 import { useToast } from './hooks/useToast';
 import ToastStack from './components/Toast';
 import { ConfirmHost } from './components/ConfirmHost';
+import { StudioHub } from './components/studio/StudioHub';
 import { requestUiConfirm } from './services/uiConfirm';
 import { AppShell } from './components/AppShell';
 import { StudioTopMenu, type StudioMenuModel } from './components/studio/StudioTopMenu';
@@ -839,6 +840,7 @@ const App: React.FC = () => {
                 <BrowserImportBridge />
             </Suspense>
             <ToastStack toasts={toast.toasts} onDismiss={toast.dismiss} />
+            <StudioHub language={language} historyItems={workflowSharedMedia} onRemoveHistory={id => setGenerationHistory(prev => prev.filter(item => item.id !== id))} />
             <ConfirmHost />
         </>}
     />;

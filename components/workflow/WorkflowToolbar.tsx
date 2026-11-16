@@ -6,6 +6,7 @@ import { useMemo, useRef, useState } from 'react';
 import { ResponsivePopover } from '../ResponsivePopover';
 import { useWorkflowSharedMedia, type WorkflowSharedMedia } from './WorkflowConfigPanel';
 import { StudioMediaBrowser } from '../studio/StudioMediaBrowser';
+import { useStudioHubStore } from '../../stores/useStudioHubStore';
 import { useWorkflowStore } from './store';
 import type { WorkflowNodeType } from './types';
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
@@ -252,7 +253,7 @@ export function WorkflowToolbar({
     </ResponsivePopover>
   ) : openPopover === 'library' ? (
     <ResponsivePopover anchorRef={popoverAnchorRef} preferredSide="up" width={360} role="dialog" ariaLabel={copy.generationHistory} className="workflow-toolbar__history-browser" dataTestId="workflow-toolbar-history" onRequestClose={() => setOpenPopover(null)}>
-      <StudioMediaBrowser mode="history" items={sharedMedia} language={language} projects={historyProjects} activeProjectId={activeProjectId} onInsert={media => { onAddSharedMedia(media); closePopover(true); }} />
+      <StudioMediaBrowser mode="history" items={sharedMedia} language={language} projects={historyProjects} activeProjectId={activeProjectId} onInsert={media => { onAddSharedMedia(media); closePopover(true); }} onExpand={() => { closePopover(true); useStudioHubStore.getState().openHub('history', activeProjectId || null); }} />
     </ResponsivePopover>
   ) : null;
   return (

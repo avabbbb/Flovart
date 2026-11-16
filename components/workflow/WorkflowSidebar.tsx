@@ -1,8 +1,10 @@
-import { Eye, EyeOff, Folder, FolderOpen, GripVertical, Image, Layers, Music, PanelLeftClose, Pencil, SlidersHorizontal, Type, Video, X } from 'lucide-react';
+import { Eye, EyeOff, Folder, FolderOpen, GripVertical, Image, Layers, Maximize2, Music, PanelLeftClose, Pencil, SlidersHorizontal, Type, Video, X } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import type { WorkflowNode, WorkflowProject } from './types';
 import { AssetLibraryBrowser } from '../studio/AssetLibraryBrowser';
 import { LocalFolderBrowser } from './LocalFolderBrowser';
+import { useStudioHubStore } from '../../stores/useStudioHubStore';
+import { STUDIO_HUB_COPY } from '../studio/studioHubCopy';
 import type { LocalFolderEntry } from '../../services/localFolderSource';
 import type { AssetItem, AssetLibrary } from '../../types';
 import { useWorkflowMediaUrl } from './media';
@@ -325,6 +327,11 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = ({
               </div>
             ) : (
               <div className="min-h-0 flex-1 overflow-auto">
+                <div className="flex justify-end px-2 pt-1">
+                  <button type="button" className="isl-icon-btn flex h-7 items-center gap-1 px-2 text-[11px]" title={STUDIO_HUB_COPY[language].openLarge} onClick={() => useStudioHubStore.getState().openHub('library')}>
+                    <Maximize2 size={12} aria-hidden="true" /><span>{STUDIO_HUB_COPY[language].expand}</span>
+                  </button>
+                </div>
                 <LocalFolderBrowser language={language} onInsert={entries => onInsertLocalFolderEntries?.(entries)} />
               </div>
             )}

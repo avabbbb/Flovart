@@ -29,6 +29,12 @@ const runThumbnailTask = createThumbnailLimiter(3);
 export interface LocalFolderBrowserProps {
   language: 'en' | 'zho';
   onInsert: (entries: LocalFolderEntry[]) => void | Promise<void>;
+  /** 受控的当前文件夹（放大的 Library 窗口侧栏切换文件夹时传入）；undefined 表示自己管理。 */
+  sourceId?: string | null;
+  /** 文件夹列表变化时回调（Library 侧栏用它列出子项）。 */
+  onSourcesChange?: (sources: LocalFolderSource[]) => void;
+  /** 当前文件夹变化时回调。 */
+  onActiveChange?: (sourceId: string | null) => void;
 }
 
 type KindFilter = 'all' | LocalFolderMediaKind;
@@ -155,7 +161,7 @@ function LocalFolderThumb({ entry }: { entry: LocalFolderEntry }) {
   );
 }
 
-export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language, onInsert }) => {
+export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language, onInsert, sourceId, onSourcesChange, onActiveChange }) => {
   const zho = language === 'zho';
   const supported = isLocalFolderSupported();
   const [sources, setSources] = useState<LocalFolderSource[]>([]);
@@ -173,10 +179,18 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
   const [dropping, setDropping] = useState(false);
   const [inserting, setInserting] = useState(false);
 
+  const onSourcesChangeRef = useRef(onSourcesChange);
+  onSourcesChangeRef.current = onSourcesChange;
+  useEffect(() => { if (sourceId !== undefined && sourceId !== null) setActiveId(sourceId); }, [sourceId]);
+  const onActiveChangeRef = useRef(onActiveChange);
+  onActiveChangeRef.current = onActiveChange;
+  useEffect(() => { onActiveChangeRef.current?.(activeId); }, [activeId]);
+
   const refreshSources = useCallback(async () => {
     const list = await listLocalFolderSources();
     setSources(list);
     setActiveId(current => current && list.some(item => item.id === current) ? current : list[0]?.id ?? null);
+    onSourcesChangeRef.current?.(list);
     return list;
   }, []);
 

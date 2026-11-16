@@ -5,15 +5,12 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type RefO
 import '../../styles/skillHub.css';
 
 import {
-  createProductionSkillAttachment,
-  createSkillAttachment,
   getBundledProductionSkill,
   type ProductionSkillAttachment,
 } from '../../services/productionSkillCatalog';
-import { createLocalSkillRegistry, skillRegistryErrorMessage } from '../../services/localSkillRegistry';
+import { skillRegistryErrorMessage } from '../../services/localSkillRegistry';
 import { hubSkillExternalUrl } from '../../services/skillHubClient';
 import { buildProductionSkillStarterPrompt } from '../../services/productionSkillLaunch';
-import type { SkillInputSlot } from '../../services/skillInputs';
 import { isUserSkillAttachment, userSkillAttachment } from '../../services/userSkillContext';
 import { useSkillHubStore } from '../../stores/useSkillHubStore';
 import { useStudioHubStore } from '../../stores/useStudioHubStore';
@@ -22,6 +19,7 @@ import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
 import {
   parseSkillImport,
   pickTextFile,
+  resolveSkillAttachment,
   SKILL_COPY,
   SkillDetail,
   SkillEditor,
@@ -194,23 +192,8 @@ export function ProductionSkillDeck({
     setLoading(true);
     setDeckError(null);
     try {
-      let inputs: readonly SkillInputSlot[] | undefined;
-      if (skill.source === 'mine') {
-        const record = useUserSkillsStore.getState().skills.find(item => item.id === skill.id);
-        if (!record) throw new Error(copy.noMatch);
-        onChange(userSkillAttachment(record));
-      } else if (skill.source === 'bundled') {
-        const bundled = getBundledProductionSkill(skill.id);
-        if (!bundled) throw new Error(copy.missingBundled + ': ' + skill.id);
-        inputs = bundled.inputs;
-        onChange(await createProductionSkillAttachment(bundled));
-      } else {
-        const registry = await createLocalSkillRegistry();
-        if (!registry) throw new Error(copy.desktopRequired);
-        const manifest = await registry.getSkillManifest(skill.id);
-        inputs = manifest.inputs;
-        onChange(createSkillAttachment({ id: manifest.id, version: manifest.version, contentHash: manifest.contentHash, displayName: manifest.displayName, trustTier: manifest.trustTier }));
-      }
+      const { attachment: next, inputs } = await resolveSkillAttachment(skill, copy);
+      onChange(next);
       if (seedPrompt) onPromptChange?.(buildProductionSkillStarterPrompt({ id: skill.id, version: skill.version || '', displayName: skill.name, inputs }));
       setOpen(false);
       setQuery('');

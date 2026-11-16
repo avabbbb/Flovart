@@ -1,7 +1,8 @@
 import { WorkflowStartScreen } from './WorkflowStartScreen';
 import { buildSampleCanvasSeed, workflowFitOnOpen } from './templates';
 import { nanoid } from 'nanoid';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useStudioHubStore } from '../../stores/useStudioHubStore';
 import type { PromptEnhanceMode, PromptEnhanceResult, UserApiKey } from '../../types';
 import type { RouteFallbackResolution } from '../../services/routeMapping';
 import '../../styles/workflow.css';
@@ -462,6 +463,9 @@ export function WorkflowWorkspace({
     return commitProjectPatch(current.id, { nodes: [...current.nodes, ...nodes], selectedNodeIds: nodes.map(node => node.id) }, intent);
   };
 
+  // 放大的 Library 窗口插入本地文件走同一个实现（每次渲染更新 ref，注册只做一次）。
+  const insertLocalFolderEntriesRef = useRef<(entries: LocalFolderEntry[]) => Promise<void>>(async () => {});
+  useEffect(() => useStudioHubStore.getState().register('insertLibrary', entries => insertLocalFolderEntriesRef.current(entries)), []);
   const insertLocalFolderEntries = async (entries: LocalFolderEntry[]) => {
     if (!activeProject) return;
     setWorkspaceNotice('');
@@ -544,8 +548,9 @@ export function WorkflowWorkspace({
     }
   };
 
-  if (!hydrated) return <div className="workflow-loading">正在加载 Workflow...</div>;
+  insertLocalFolderEntriesRef.current = insertLocalFolderEntries;
 
+  if (!hydrated) return <div className="workflow-loading">正在加载 Workflow...</div>;
   return (
     <section className="workflow-workspace" data-theme={theme} data-language={language}>
       <WorkflowSidebar
