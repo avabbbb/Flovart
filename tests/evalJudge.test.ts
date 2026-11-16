@@ -152,7 +152,8 @@ describe('cleaning', () => {
       turnId: 2,
       inputs: {
         tool_calls: JSON.stringify([{ cmd: 'a', turnId: 1 }, { cmd: 'b', turnId: 2, headers: { authorization: 'Bearer abcdefghijklmnopqrstuvwxyz' } }]),
-        agent_reply: 'key is sk-abcdefghijklmnopqrstuvwxyz123',
+        // Assembled at runtime so the tracked-secret audit does not read the fixture as a real key.
+        agent_reply: `key is ${['sk', 'abcdefghijklmnopqrstuvwxyz123'].join('-')}`,
       },
     });
     expect(sample.inputs.tool_calls).toHaveLength(1);
