@@ -319,7 +319,8 @@ pressable 3D drop（`--isl-drop*`）已于 2026-10-30 删除；`--shadow-panel`�
 | Agent 输入区工具行 | `agentcomposer` | ≤420px：模型名截到 9ch；≤340px：全部 28px 图标 |
 | 画布底部工具条 | `workflow-canvas` | ≤700px：收起撤销 / 重做 / 修订号；≤480px：收起缩放 |
 | 右侧面板 | `StudioRightDrawer` | 最小 280px；比最小宽度再窄 72px 时吸附收起 |
-| 节点下方的多结果网格 | `wfalt` | ≤420px：批量操作只留图标；≤220px：标题只留计数 |
+| 节点下方的多结果网格（总数 >4） | `wfalt` | ≤420px：批量操作只留图标；≤220px：标题只留计数 |
+| 斜叠卡片展开后的格子（总数 ≤4） | `wfaltcell` | ≤240px：下载 / 设为首图 只留图标 |
 
 ### 15.4 验收（每个 UI PR 都要做）
 

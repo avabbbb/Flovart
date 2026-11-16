@@ -1,18 +1,16 @@
 import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type SyntheticEvent } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { ChevronDown, Download, Eye, Images, Play, Split, Star, Trash2 } from 'lucide-react';
-import { useWorkflowMediaUrl } from './media';
-import { ALTERNATE_STRIP_MAX, nodeAlternates } from './batchAlternates';
+import { ChevronDown, Download, Eye, Split, Star, Trash2 } from 'lucide-react';
+import { AlternateThumb } from './alternateMedia';
+import { nodeAlternates, usesAlternateStack } from './batchAlternates';
+import { workflowAlternatesStackExtent } from './WorkflowAlternatesStack';
 import type { WorkflowMediaAlternate, WorkflowNode } from './types';
 
 /**
- * 多结果的备选（DESIGN 01 §13.3）：挂在首图节点下方，宽度跟节点一致，随节点移动。
- * ≤4 个：一行紧凑缩略图；更多：带多选的网格，内部滚动，不铺到画布上。
+ * 多结果的备选网格（DESIGN 01 §13.3）：结果总数 > ALTERNATE_STACK_MAX_TOTAL（4）时挂在首图节点下方，
+ * 宽度跟节点一致，随节点移动；带多选，内部滚动，不铺到画布上。总数 ≤4 走斜叠卡片（WorkflowAlternatesStack）。
  * 不是玻璃 chrome（节点附属内容，DESIGN §9.1 第 1 层），只用实底 + 发丝线。
  */
 
-const SNAPPY = { type: 'spring', visualDuration: 0.22, bounce: 0 } as const;
-const STRIP_THUMB = 46;
 const DOCK_GAP = 10;
 const GRID_HEADER = 32;
 const GRID_GAP = 6;
@@ -30,38 +28,21 @@ function gridGeometry(width: number, count: number) {
   return { columns, cell, body: Math.round(body) };
 }
 
-/** 备选区在节点下方占的高度（世界坐标，含与节点的间距），画布据此把 PromptBar 放到它下面。 */
-export function workflowAlternatesDockHeight(node: Pick<WorkflowNode, 'width' | 'metadata'>, collapsed = false) {
+/**
+ * 备选在节点盒子之外占的范围（世界坐标，相对节点右缘 / 下缘），画布据此把 PromptBar 放到它下面。
+ * 网格：只向下长；叠放：收起时只有斜出的边角，展开时 2 列网格向右、向下长。
+ */
+export function workflowAlternatesExtent(
+  node: Pick<WorkflowNode, 'width' | 'height' | 'metadata'>,
+  state: { gridCollapsed?: boolean; stackExpanded?: boolean } = {},
+) {
   const count = nodeAlternates(node).length;
-  if (!count) return 0;
-  if (count <= ALTERNATE_STRIP_MAX) return DOCK_GAP + STRIP_THUMB + 2;
-  return DOCK_GAP + GRID_HEADER + (collapsed ? 0 : gridGeometry(node.width, count).body) + 2;
+  if (!count) return { right: 0, bottom: 0 };
+  if (usesAlternateStack(node)) return workflowAlternatesStackExtent(node, Boolean(state.stackExpanded));
+  return { right: 0, bottom: DOCK_GAP + GRID_HEADER + (state.gridCollapsed ? 0 : gridGeometry(node.width, count).body) + 2 };
 }
 
 const stop = (event: SyntheticEvent) => event.stopPropagation();
-
-function formatDuration(ms?: number) {
-  if (!ms || !Number.isFinite(ms)) return '';
-  const total = Math.round(ms / 1000);
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
-}
-
-function AlternateThumb({ alternate }: { alternate: WorkflowMediaAlternate }) {
-  const video = alternate.type === 'video';
-  const source = useWorkflowMediaUrl(
-    video ? alternate.metadata.posterStorageKey : alternate.metadata.storageKey,
-    video ? alternate.metadata.poster : alternate.metadata.href,
-    video ? undefined : alternate.metadata.artifactRef,
-  );
-  return (
-    <>
-      {source.url
-        ? <img className="workflow-alternates__media" src={source.url} alt="" draggable={false} loading="lazy" />
-        : <span className="workflow-alternates__media workflow-alternates__media--empty" aria-hidden="true">{video ? <Play size={14} /> : <Images size={14} />}</span>}
-      {video && <span className="workflow-alternates__video-mark" aria-hidden="true"><Play size={9} fill="currentColor" />{formatDuration(alternate.metadata.durationMs)}</span>}
-    </>
-  );
-}
 
 export interface WorkflowAlternatesDockProps {
   node: WorkflowNode;
@@ -78,9 +59,7 @@ export interface WorkflowAlternatesDockProps {
 
 export function WorkflowAlternatesDock({ node, language = 'zho', onPreview, onPromote, onRemove, onSplit, onExport, collapsed = false, onToggleCollapsed }: WorkflowAlternatesDockProps) {
   const en = language === 'en';
-  const reduceMotion = useReducedMotion();
   const alternates = nodeAlternates(node);
-  const total = alternates.length + 1;
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const idsKey = alternates.map(item => item.id).join('|');
   // 备选变化（删除、拆出、设为首图换槽）后，去掉已经不存在的勾选。
@@ -92,7 +71,7 @@ export function WorkflowAlternatesDock({ node, language = 'zho', onPreview, onPr
     });
   }, [idsKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const geometry = useMemo(() => gridGeometry(node.width, alternates.length), [node.width, alternates.length]);
-  if (!alternates.length) return null;
+  if (!alternates.length || usesAlternateStack(node)) return null;
 
   const swallow = { onPointerDown: (event: ReactPointerEvent) => event.stopPropagation(), onDoubleClick: stop };
   const label = (index: number, alternate: WorkflowMediaAlternate) => {
@@ -100,36 +79,6 @@ export function WorkflowAlternatesDock({ node, language = 'zho', onPreview, onPr
     return en ? `Alternate ${index + 1} (${kind})` : `备选 ${index + 1}（${kind}）`;
   };
   const promoteTitle = en ? 'Make primary' : '设为首图';
-
-  if (alternates.length <= ALTERNATE_STRIP_MAX) {
-    return (
-      <div className="workflow-alternates" data-variant="strip" data-testid="workflow-alternates" style={{ top: `calc(100% + ${DOCK_GAP}px)` }} onDoubleClick={stop}>
-        <AnimatePresence initial={false}>
-          {alternates.map((alternate, index) => (
-            <motion.div
-              key={alternate.id}
-              layout={!reduceMotion}
-              className="workflow-alternates__cell"
-              data-alternate-id={alternate.id}
-              initial={reduceMotion ? false : { opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.12 } }}
-              transition={SNAPPY}
-              style={{ width: STRIP_THUMB, height: STRIP_THUMB }}
-            >
-              <button type="button" className="workflow-alternates__thumb" aria-label={(en ? 'Preview ' : '预览') + label(index, alternate)} title={alternate.title || label(index, alternate)} {...swallow} onClick={event => { event.stopPropagation(); onPreview(index + 1); }}>
-                <AlternateThumb alternate={alternate} />
-              </button>
-              <button type="button" className="workflow-alternates__promote" aria-label={`${promoteTitle}：${label(index, alternate)}`} title={promoteTitle} {...swallow} onClick={event => { event.stopPropagation(); onPromote(alternate.id); }}><Star size={11} /></button>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-        <button type="button" className="workflow-alternates__count" title={en ? `Preview all ${total} results` : `预览全部 ${total} 个结果`} aria-label={en ? `Preview all ${total} results` : `预览全部 ${total} 个结果`} {...swallow} onClick={event => { event.stopPropagation(); onPreview(0); }}>
-          <Images size={12} /><span>{total}</span>
-        </button>
-      </div>
-    );
-  }
 
   const selectedIds = alternates.filter(item => selected.has(item.id)).map(item => item.id);
   const allSelected = selectedIds.length === alternates.length;

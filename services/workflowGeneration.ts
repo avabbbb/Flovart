@@ -527,7 +527,7 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
       return liveKey !== previousStorageKey && liveKey !== singleMediaRecord?.storageKey;
     };
     // 多张生成：第一张原位替换源节点（首图），其余作为首图节点的备选（metadata.alternates），不是画布节点；
-    // 画布在节点下方以缩略图条 / 网格显示（DESIGN 01 §13.3）。stackedIds 记录这些“待成为备选”的结果。
+    // 画布上总数 ≤4 显示成首图后面的斜叠卡片，更多是节点下方的网格（DESIGN 01 §13.3）。stackedIds 记录这些“待成为备选”的结果。
     let singleMediaPushed = false;
     const stackedIds = new Set<string>();
     const sourcePromptMetadata = (() => {

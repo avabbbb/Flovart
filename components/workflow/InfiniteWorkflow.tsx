@@ -1,4 +1,5 @@
 import { FAN_SPRING, fanPose } from '../ui/ImageFan';
+import { BATCH_GRID_GAP, BATCH_STACK_SPRING, batchCellCloseTransition, batchCellOpenTransition, batchCellStackedPose } from './batchStackMotion';
 import { workflowFitOnOpen } from './templates';
 import { pickVideoFile, promptUndecodableVideo } from '../../services/undecodableVideoPrompt';
 import { anchorApprovalPatch } from '../../services/anchorApproval';
@@ -53,8 +54,9 @@ import { WorkflowQuickToggles } from './WorkflowQuickToggles';
 import { WorkflowNode } from './WorkflowNode';
 import { workflowNodePluginContextFromProject } from './nodePluginSdk';
 import { MediaPreviewModal } from './MediaPreviewModal';
-import { WorkflowAlternatesDock, workflowAlternatesDockHeight } from './WorkflowAlternatesDock';
-import { alternateAsNode, isAlternateMediaType, nodeAlternates, primaryVariantId, removeAlternates, splitAlternates } from './batchAlternates';
+import { WorkflowAlternatesDock, workflowAlternatesExtent } from './WorkflowAlternatesDock';
+import { WorkflowAlternatesStack } from './WorkflowAlternatesStack';
+import { alternateAsNode, isAlternateMediaType, nodeAlternates, primaryVariantId, removeAlternates, splitAlternates, usesAlternateStack } from './batchAlternates';
 import { WorkflowNodePromptBar, type WorkflowModelOptions } from './WorkflowNodePromptBar';
 import type { PromptIntent } from './promptIntent';
 import { WorkflowNodeToolbar, type WorkflowImageToolHandlers, type WorkflowVideoToolHandlers, type WorkflowAudioToolHandlers, type WorkflowAvSplitAudio } from './WorkflowNodeToolbar';
@@ -240,7 +242,7 @@ function WorkflowBatchStack({ head, others = [], count, historyOpen = false, onP
       animate="rest"
       whileHover="hover"
       exit={{ opacity: 0, transition: { duration: 0.12 } }}
-      transition={{ type: 'spring', stiffness: 380, damping: 26, mass: 0.8 }}
+      transition={BATCH_STACK_SPRING}
       onPointerDown={onPointerDown}
       onDoubleClick={event => { event.stopPropagation(); onExpand(); }}
     >
@@ -256,8 +258,6 @@ function WorkflowBatchStack({ head, others = [], count, historyOpen = false, onP
     </motion.div>
   );
 }
-
-const BATCH_GRID_GAP = 12;
 
 function WorkflowBatchCell({ node, index, count, column, row, cellWidth, cellHeight, primary, onCollapse, onSetPrimary, onPointerDown, language }: {
   node: WorkflowNodeData;
@@ -281,16 +281,16 @@ function WorkflowBatchCell({ node, index, count, column, row, cellWidth, cellHei
   const download = useWorkflowMediaUrl(node.metadata.storageKey, node.metadata.href);
   const left = column * (cellWidth + BATCH_GRID_GAP);
   const top = row * (cellHeight + BATCH_GRID_GAP);
-  // 展开时从叠放位置（主图所在格）弹出到网格位；收起时反向飞回叠放位置。
-  const stacked = { x: -left + Math.min(index, 2) * 5, y: -top + Math.min(index, 2) * 3, scale: 0.96, opacity: index === 0 ? 1 : 0 };
+  // 展开时从叠放位置（主图所在格）弹出到网格位；收起时反向飞回叠放位置（与首图节点上的备选叠放共用，batchStackMotion.ts）。
+  const stacked = batchCellStackedPose(index, left, top);
   return (
     <motion.div
       className={'workflow-batch-cell' + (primary ? ' is-primary' : '')}
       data-testid="workflow-batch-cell"
       style={{ left, top, width: cellWidth, height: cellHeight, zIndex: count - index }}
       initial={stacked}
-      animate={{ x: 0, y: 0, scale: 1, opacity: 1, transition: { type: 'spring', stiffness: 420, damping: 32, mass: 0.7, delay: index * 0.04 } }}
-      exit={{ ...stacked, transition: { type: 'spring', stiffness: 520, damping: 40, delay: (count - 1 - index) * 0.025 } }}
+      animate={{ x: 0, y: 0, scale: 1, opacity: 1, transition: batchCellOpenTransition(index) }}
+      exit={{ ...stacked, transition: batchCellCloseTransition(index, count) }}
       onPointerDown={onPointerDown}
     >
       {node.type === 'video'
@@ -515,6 +515,8 @@ export function InfiniteWorkflow({
   // 多结果画廊：ownerId = 首图节点；ids 给出时只对比这些备选（首图总在第一张）。条目每次从最新数据派生。
   const [galleryPreview, setGalleryPreview] = useState<{ ownerId: string; ids: string[] | null; index: number } | null>(null);
   const [collapsedAlternateDocks, setCollapsedAlternateDocks] = useState<Set<string>>(() => new Set());
+  // 少量多结果的斜叠卡片默认收起；展开的首图节点 ID（纯界面状态，不入历史）。
+  const [expandedAlternateStacks, setExpandedAlternateStacks] = useState<Set<string>>(() => new Set());
   const [activeMedia, setActiveMedia] = useState<{ projectId: string; nodeId: string } | null>(null);
   const [interactionPreview, setInteractionPreview] = useState<InteractionPreview | null>(null);
   const slashMenuRef = useRef<{ x: number; y: number } | null>(null);
@@ -2869,13 +2871,16 @@ export function InfiniteWorkflow({
     // 首图节点被删 / 失去全部备选：关闭画廊。
     if (galleryPreview && (!galleryOwner || !nodeAlternates(galleryOwner).length)) setGalleryPreview(null);
   }, [galleryOwner, galleryPreview]);
-  const overlayBounds = selectedNodeData.length ? selectedNodeData.reduce((bounds, node) => ({
-    left: Math.min(bounds.left, node.position.x),
-    top: Math.min(bounds.top, node.position.y),
-    right: Math.max(bounds.right, node.position.x + node.width),
-    // 节点下方挂着备选条 / 网格时，PromptBar 放在它下面，不压住缩略图。
-    bottom: Math.max(bounds.bottom, node.position.y + node.height + workflowAlternatesDockHeight(node, collapsedAlternateDocks.has(node.id))),
-  }), { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity }) : null;
+  const overlayBounds = selectedNodeData.length ? selectedNodeData.reduce((bounds, node) => {
+    // 节点挂着备选（下方网格 / 展开的叠放网格）时，PromptBar 放在它们下面，不压住缩略图。
+    const extent = workflowAlternatesExtent(node, { gridCollapsed: collapsedAlternateDocks.has(node.id), stackExpanded: expandedAlternateStacks.has(node.id) });
+    return {
+      left: Math.min(bounds.left, node.position.x),
+      top: Math.min(bounds.top, node.position.y),
+      right: Math.max(bounds.right, node.position.x + node.width + extent.right),
+      bottom: Math.max(bounds.bottom, node.position.y + node.height + extent.bottom),
+    };
+  }, { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity }) : null;
   // The workflow root already reflects the space left by docked panels. Keep
   // overlay geometry local to that measured container instead of subtracting
   // the drawer a second time in JavaScript.
@@ -3020,15 +3025,17 @@ export function InfiniteWorkflow({
       if (!cullingEnabled) return true;
       if (selectedNodes.has(node.id)) return true;
       if (interactionPreview?.kind === 'node' && interactionPreview.positions.has(node.id)) return true;
-      const width = node.width || 320;
-      const height = node.height || 200;
+      // 备选（下方网格 / 展开的叠放网格）是节点的子元素：把它们占的范围算进可见判断，节点本体出屏时备选不跟着消失。
+      const extent = workflowAlternatesExtent(node, { gridCollapsed: collapsedAlternateDocks.has(node.id), stackExpanded: expandedAlternateStacks.has(node.id) });
+      const width = (node.width || 320) + extent.right;
+      const height = (node.height || 200) + extent.bottom;
       return node.position.x < visibleWorldRect.right && node.position.x + width > visibleWorldRect.left
         && node.position.y < visibleWorldRect.bottom && node.position.y + height > visibleWorldRect.top;
     });
     // 子画布框先渲染（位于子节点下层）；折叠时只保留标题条高度。
     const frames = visible.filter(node => node.type === 'subgraph').map(node => (node.metadata.collapsed ? { ...node, height: 72 } : node));
     return [...frames, ...visible.filter(node => node.type !== 'subgraph')];
-  }, [cullingEnabled, displayNodes, hiddenByBatch, hiddenBySubgraph, interactionPreview, selectedNodes, visibleWorldRect]);
+  }, [collapsedAlternateDocks, cullingEnabled, displayNodes, expandedAlternateStacks, hiddenByBatch, hiddenBySubgraph, interactionPreview, selectedNodes, visibleWorldRect]);
 
   const connectionNodes = useMemo(() => {
     const visibleIds = new Set(renderNodes.map(node => node.id));
@@ -3427,7 +3434,16 @@ export function InfiniteWorkflow({
             subgraphChildCount={node.type === 'subgraph' ? subgraphChildren.counts.get(node.id) || 0 : undefined}
             onToggleCollapse={node.type === 'subgraph' && !node.isLocked ? () => applyOps([{ type: 'update_node', id: node.id, metadata: { collapsed: !node.metadata.collapsed } }]) : undefined}
             onPreviewMedia={target => { if (nodeAlternates(target).length) setGalleryPreview({ ownerId: target.id, ids: null, index: 0 }); else setPreviewNode(target); }}
-            alternatesDock={isAlternateMediaType(node.type) && nodeAlternates(node).length ? (
+            alternatesDock={isAlternateMediaType(node.type) && nodeAlternates(node).length ? (usesAlternateStack(node) ? (
+              <WorkflowAlternatesStack
+                node={node}
+                language={language}
+                expanded={expandedAlternateStacks.has(node.id)}
+                onToggleExpanded={() => setExpandedAlternateStacks(current => { const next = new Set(current); if (next.has(node.id)) next.delete(node.id); else next.add(node.id); return next; })}
+                onPreview={index => setGalleryPreview({ ownerId: node.id, ids: null, index })}
+                onPromote={alternateId => promoteNodeAlternate(node.id, alternateId)}
+              />
+            ) : (
               <WorkflowAlternatesDock
                 node={node}
                 language={language}
@@ -3439,7 +3455,7 @@ export function InfiniteWorkflow({
                 onSplit={ids => splitNodeAlternates(node.id, ids)}
                 onExport={ids => { const owner = projectRef.current.nodes.find(item => item.id === node.id); if (owner) void exportSelectedMedia(nodeAlternates(owner).filter(item => ids.includes(item.id)).map(item => alternateAsNode(owner, item))); }}
               />
-            ) : undefined}
+            )) : undefined}
             onNeedPoster={() => requestVideoPoster(node.id)}
             onChangeTitle={title => { if (!node.isLocked) applyOps([{ type: 'update_node', id: node.id, patch: { title } }]); }}
             onToggleAnchorApproval={node.anchor ? () => {

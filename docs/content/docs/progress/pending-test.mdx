@@ -7,7 +7,7 @@ title: 待测试确认
 > **2026-09-27 当前状态**：第一宿主仍是 Resolve Studio 21.1。main 已合入 Resolve 面板、候选导入状态与 durable artifact 的源码实现；它们仍未在 Resolve Studio 21.1 真机运行。宿主 native MCP 由 Resolve 提供，Flovart 不应再造一套 MCP Server。AE 源码/候选完整性工作保留为 Experimental evidence，不是当前第一交付 gate。
 ## 画布多结果：首图节点 + 备选（2026-11-16）
 
-- 已实现：多张 / 多条生成（及流水线版本）收在一个节点上，其余结果是节点下方的备选条（≤4）或可多选网格（>4），画廊预览、设为首图、导出、拆成独立节点、删除；旧叠放批次加载时折叠；修复拖走批次后原位残留不可点元素。
+- 已实现：多张 / 多条生成（及流水线版本）收在一个节点上，其余结果是首图后面的斜叠卡片（总数 ≤4，可展开成 2 列网格）或节点下方可多选网格（总数 >4），画廊预览、设为首图、导出、拆成独立节点、删除；旧叠放批次加载时折叠；修复拖走批次后原位残留不可点元素。
 - 已验证（本地）：tsc（仅既有 dsh-plugin 依赖缺失）、相关 vitest、`test:critical`、`docs:check`、`build`；Chromium 对真实 `runWorkflowGeneration`（fake Provider）复现与修复对照；亮 / 暗截图。记录见 [质量记录](../../../quality/2026-11-16-batch-alternates.md)。
 - 待确认：真实 Provider 多张 / 多条生成、大量备选（数十个）的滚动与导出性能、真实旧项目（含手动连过线的叠放成员）的迁移结果。
 

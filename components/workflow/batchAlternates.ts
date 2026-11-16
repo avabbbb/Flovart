@@ -21,8 +21,17 @@ const ALTERNATE_SOURCE_KEYS = [
   'prompt', 'richTextDocument', 'config', 'sourceOperationNodeId', 'operationTakeId', 'operationOutputRole',
 ] as const satisfies readonly (keyof WorkflowNodeMetadata)[];
 
-/** ≤ 这个数用节点下方的缩略图条，更多用带多选的网格。 */
-export const ALTERNATE_STRIP_MAX = 4;
+/**
+ * 结果总数（首图 + 备选）≤ 这个数时，首图节点显示成原来的斜叠卡片（悬停散开，点“N 张”展开成 2 列网格）；
+ * 更多时用节点下方带多选的停靠网格。阈值按总数算：4 张 = 首图 + 3 个备选。
+ */
+export const ALTERNATE_STACK_MAX_TOTAL = 4;
+
+/** 这个节点的备选用斜叠卡片展示（有备选且总数不超过 ALTERNATE_STACK_MAX_TOTAL）。 */
+export function usesAlternateStack(node: Pick<WorkflowNode, 'metadata'> | null | undefined) {
+  const count = nodeAlternates(node).length;
+  return count > 0 && count + 1 <= ALTERNATE_STACK_MAX_TOTAL;
+}
 
 export const isAlternateMediaType = (type: string): type is 'image' | 'video' => type === 'image' || type === 'video';
 
@@ -258,10 +267,10 @@ export function foldResultBatches(nodes: WorkflowNode[], connections: readonly W
 
 interface Rect { x: number; y: number; width: number; height: number }
 const FOLD_GAP = 40;
-/** 节点占的画布区域；有备选的节点把下方备选条 / 网格也算进去（条高按 ~72px 粗估，网格更高，宁大勿小）。 */
+/** 节点占的画布区域；有备选的节点把叠放卡片斜出的边角 / 下方网格也算进去（网格按节点宽 0.6 粗估，宁大勿小）。 */
 function footprint(node: WorkflowNode): Rect {
   const alternates = nodeAlternates(node).length;
-  const dock = alternates ? (alternates > 3 ? Math.round(node.width * 0.6) : 72) : 0;
+  const dock = alternates ? (usesAlternateStack(node) ? 24 : Math.round(node.width * 0.6)) : 0;
   return { x: node.position.x, y: node.position.y, width: node.width, height: node.height + dock };
 }
 const intersects = (a: Rect, b: Rect) => a.x < b.x + b.width + FOLD_GAP / 2 && b.x < a.x + a.width + FOLD_GAP / 2 && a.y < b.y + b.height + FOLD_GAP / 2 && b.y < a.y + a.height + FOLD_GAP / 2;
