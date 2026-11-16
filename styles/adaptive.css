@@ -249,6 +249,32 @@ body,
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
 }
 
+/* 2026-11-16：面板外壳的毛玻璃画在 ::before 上。外壳自身带 backdrop-filter / will-change:opacity 时会成为
+   backdrop root，里面的浮层（Skill、@ 引用、预览卡）的 backdrop-filter 就采不到聊天文字，看起来像“透明”。
+   把玻璃挪到伪元素后，外壳不再是 backdrop root，浮层才能真正把背后的文字糊掉。 */
+.compact-right-panel[data-open='true'] {
+  isolation: isolate;
+  background: transparent !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.compact-right-panel[data-open='true']::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--isl-card) 78%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
+  pointer-events: none;
+}
+
+.compact-right-panel[data-open='true'][data-docked='false']::before {
+  background: color-mix(in srgb, var(--isl-card) 72%, transparent);
+}
+
 .compact-right-panel[data-docked='true'] .agent-conversation {
   --agent-panel: transparent;
 }

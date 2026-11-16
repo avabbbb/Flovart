@@ -327,7 +327,8 @@ body {
 
 .compact-sidebar-panel,
 .compact-right-panel {
-    will-change: transform, opacity;
+    /* 不写 will-change: opacity：它会让面板成为 backdrop root，里面浮层的磨砂失效（见 adaptive.css）。 */
+    will-change: transform;
 }
 
 .compact-sidebar-panel,
