@@ -47,8 +47,8 @@ import { pushAgentGroup } from '../../stores/useAgentGroupInboxStore';
 import { buildTextAssetPrompt, canGenerateTextAssets, textAssetSpec } from './textAssets';
 import { WorkflowCreateMenu, type WorkflowCreateMenuState } from './WorkflowCreateMenu';
 import type { WorkflowSharedMedia } from './WorkflowConfigPanel';
-import { WorkflowStoryboard } from './WorkflowStoryboard';
-import { buildProductionBible } from './productionBible';
+import { WorkflowStoryboardView, WorkflowViewSwitch } from './WorkflowStoryboardView';
+import { buildProductionBible, buildStoryboardView } from './productionBible';
 import { WorkflowMiniMap } from './WorkflowMiniMap';
 import { WorkflowQuickToggles } from './WorkflowQuickToggles';
 import { WorkflowNode } from './WorkflowNode';
@@ -1614,7 +1614,30 @@ export function InfiniteWorkflow({
   }, [focusBounds]);
 
   // 故事板（P2）：镜头表来自制作圣经，只在项目里有 shot 元数据时露出入口。
-  const [storyboardOpen, setStoryboardOpen] = useState(false);
+  // 故事板第二视图（P1-4）：同一份 workflow 推导，不另建 store。
+  const [workflowView, setWorkflowView] = useState<'workflow' | 'storyboard'>('workflow');
+  const storyboardView = useMemo(() => buildStoryboardView(project), [project]);
+  const [storyboardMergeBusy, setStoryboardMergeBusy] = useState(false);
+  const mergeStoryboard = useCallback(async (sourceNodeIds: string[]) => {
+    if (sourceNodeIds.length < 2) return;
+    const transaction = { id: nanoid(), projectId: projectRef.current.id, nodeId: sourceNodeIds[0], frame: currentFrame() };
+    if (!videoControls.begin(transaction)) { setNotice('请先完成或关闭当前视频工具'); return; }
+    setStoryboardMergeBusy(true);
+    setNotice('正在按镜号拼接成片…');
+    try {
+      const result = await runWorkflowVideoMergeOperation(transaction.projectId, sourceNodeIds, imageToolRuntime);
+      if (!videoControls.owns(transaction)) return;
+      if (result.status === 'committed' && projectRef.current.id === transaction.projectId) {
+        pushHistory(transaction.frame);
+        setNotice('成片拼接完成');
+      }
+    } catch (error) {
+      if (videoControls.owns(transaction)) setNotice(displayError(error, '成片拼接失败'));
+    } finally {
+      setStoryboardMergeBusy(false);
+      videoControls.settle(transaction);
+    }
+  }, [currentFrame, imageToolRuntime, pushHistory, videoControls]);
   const productionBible = useMemo(() => buildProductionBible(project), [project]);
 
   // focusNodeRequest 是一次性事件：按 nonce 只处理一次。否则 focusNode/selectNodes
@@ -3182,21 +3205,15 @@ export function InfiniteWorkflow({
         setContextMenu({ type: 'pane', x: event.clientX, y: event.clientY });
       }}
     >
-      {productionBible.shots.length > 0 && !storyboardOpen && (
-        <button
-          type="button"
-          data-workflow-overlay
-          style={{ position: 'absolute', right: 16, top: 72, zIndex: 80, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(127,127,127,0.3)', background: 'var(--workflow-panel-bg, rgba(255,255,255,0.97))', color: 'inherit', cursor: 'pointer' }}
-          onPointerDown={event => event.stopPropagation()}
-          onClick={() => setStoryboardOpen(true)}
-        >{(language === 'en' ? 'Storyboard · ' : '故事板 · ') + productionBible.shots.length}</button>
+      {(productionBible.shots.length > 0 || productionBible.anchors.length > 0 || workflowView === 'storyboard') && (
+        <WorkflowViewSwitch value={workflowView} onChange={setWorkflowView} language={language} shotCount={productionBible.shots.length} />
       )}
-      {storyboardOpen && (
-        <WorkflowStoryboard
-          bible={productionBible}
+      {workflowView === 'storyboard' && (
+        <WorkflowStoryboardView
+          view={storyboardView}
           language={language}
-          onClose={() => setStoryboardOpen(false)}
-          onFocus={id => { selectNodes([id]); focusNode(id); }}
+          mergeBusy={storyboardMergeBusy}
+          onOpenNode={id => { setWorkflowView('workflow'); selectNodes([id]); focusNode(id); setPromptFocusSignal(value => value + 1); }}
           onReference={ids => {
             const members = projectRef.current.nodes.filter(item => ids.includes(item.id));
             if (!members.length) return;
@@ -3205,6 +3222,7 @@ export function InfiniteWorkflow({
               label: members.length === 1 ? members[0].title : (language === 'en' ? 'Storyboard · ' + members.length + ' shots' : '故事板 · ' + members.length + ' 个镜头'),
             });
           }}
+          onMerge={ids => { void mergeStoryboard(ids); }}
         />
       )}
       <WorkflowToolbar
