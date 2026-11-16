@@ -163,6 +163,9 @@ the browser itself is offline.
 - In `workflow.generate` prompts, refer to inputs as `@ref:<nodeId>` or
   `@"Node name"`; anything mentioned gets connected (`autoLinked`), and
   disconnecting a source removes its chip (`prunedMentions`).
+- Runs block until a terminal status (`succeeded` / `failed` / `timeout` /
+  `unknown_after_submit`); never poll `workflow.inspect` while a run is in
+  progress, and never retry `unknown_after_submit`.
 - Pick or change a model → `workflow.models.list` first (live catalog with
   per-mode configuration and reference min/max). On `MODE_UNSUPPORTED`,
   `REFERENCE_COUNT_OUT_OF_RANGE` or `REFERENCE_LIMIT`, switch to one of the

@@ -1,3 +1,4 @@
+import { terminalFromFailure, terminalFromRunResult, type WorkflowRunTerminal } from './workflowRunTerminal';
 import { planMentionPrunes, type MentionPrune } from '../components/workflow/promptReferenceAlignment';
 import { WORKFLOW_NODE_PATCH_FIELDS, WORKFLOW_OPERATION_FIELDS } from '../tools/flovart/workflow-operation-schema.js';
 import { nanoid } from 'nanoid';
@@ -254,6 +255,12 @@ const error = (
   message: string,
   details: Pick<NonNullable<WorkflowCommandResult['error']>, 'expectedRevision' | 'actualRevision' | 'changedObjectIds'> = {},
 ): WorkflowCommandResult => ({ ok: false, commandId, error: { code, message, ...details } });
+/** 运行失败的统一错误：保留原错误码，details.run 给出统一终态（P0-3）。 */
+const runError = (commandId: string, terminal: WorkflowRunTerminal, message?: string): WorkflowCommandResult => ({
+  ok: false,
+  commandId,
+  error: { code: terminal.failedReason?.code || 'RUN_FAILED', message: message || terminal.failedReason?.message || 'Workflow 生成失败。', details: { run: terminal } },
+});
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const requiredString = (value: unknown, label: string) => {
   const text = typeof value === 'string' ? value.trim() : '';
@@ -528,7 +535,7 @@ export function workflowRunPayload(run: WorkflowRunResult) {
     || (run.artifact ? [{ nodeId: run.nodeId, artifactId: run.artifact.artifactId, kind: run.artifact.kind, mimeType: run.artifact.mimeType }] : []);
   return {
     runId: run.runId,
-    status: run.status,
+    status: terminalFromRunResult(run).status,
     ...(run.artifact ? { artifact: run.artifact } : {}),
     batch: {
       ...(outputs?.batchId ? { batchId: outputs.batchId } : {}),
@@ -720,14 +727,10 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
             else await executor.stopNode!(runCommandFor(nodeId), { surface, correlationId: envelope.id });
           } catch (cause) {
             const normalized = normalizeWorkflowExecutionError(cause);
-            return error(envelope.id, normalized.code, normalized.message);
+            if (command === 'workflow.node.stop') return error(envelope.id, normalized.code, normalized.message);
+            return runError(envelope.id, terminalFromFailure(normalized.code, normalized.message, normalized.runId));
           }
-          if (executionResult?.status === 'failed') {
-            return error(envelope.id, executionResult.error?.code || 'RUN_FAILED', executionResult.error?.message || 'Workflow 生成失败，请重试。');
-          }
-          if (executionResult?.status === 'cancelled') {
-            return error(envelope.id, 'RUN_CANCELLED', '生成已停止或被新的运行取代，未产生结果。');
-          }
+          if (executionResult && executionResult.status !== 'completed') return runError(envelope.id, terminalFromRunResult(executionResult));
           const latestProject = dependencies.getState().projects.find(item => item.id === project.id) || project;
           dependencies.updateProject(project.id, draftLogPatch(latestProject, envelope, true, { nodeIds: [nodeId] }));
           result = { ok: true, commandId: envelope.id, result: {
@@ -740,22 +743,21 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
           const runs = await Promise.all(nodeIds.map(async nodeId => {
             try {
               const executionResult = await executor.runNode(runCommandFor(nodeId), { surface, correlationId: envelope.id + ':' + nodeId });
-              if (executionResult?.status === 'failed') {
-                return { nodeId, ok: false, error: { code: executionResult.error?.code || 'RUN_FAILED', message: executionResult.error?.message || 'Workflow 生成失败，请重试。' } };
+              if (executionResult && executionResult.status !== 'completed') {
+                const terminal = terminalFromRunResult(executionResult);
+                return { nodeId, ok: false, status: terminal.status, runId: executionResult.runId, failedReason: terminal.failedReason, error: terminal.failedReason! };
               }
-              if (executionResult?.status === 'cancelled') {
-                return { nodeId, ok: false, error: { code: 'RUN_CANCELLED', message: '生成已停止或被新的运行取代，未产生结果。' } };
-              }
-              return { nodeId, ok: true, ...(executionResult ? workflowRunPayload(executionResult) : {}) };
+              return { nodeId, ok: true, ...(executionResult ? workflowRunPayload(executionResult) : { status: 'succeeded' as const }) };
             } catch (cause) {
               const normalized = normalizeWorkflowExecutionError(cause);
-              return { nodeId, ok: false, error: { code: normalized.code, message: normalized.message } };
+              const terminal = terminalFromFailure(normalized.code, normalized.message, normalized.runId);
+              return { nodeId, ok: false, status: terminal.status, failedReason: terminal.failedReason, error: terminal.failedReason! };
             }
           }));
           const succeeded = runs.filter(run => run.ok).map(run => run.nodeId);
           if (!succeeded.length) {
             const first = runs.map(run => ('error' in run ? run.error : undefined)).find(Boolean);
-            return error(envelope.id, first?.code || 'RUN_FAILED', '批量运行的 ' + runs.length + ' 个节点全部失败：' + (first?.message || ''));
+            return { ok: false, commandId: envelope.id, error: { code: first?.code || 'RUN_FAILED', message: '批量运行的 ' + runs.length + ' 个节点全部失败：' + (first?.message || ''), details: { runs: runs.map(run => ({ nodeId: run.nodeId, status: run.status, failedReason: 'failedReason' in run ? run.failedReason : undefined })) } } };
           }
           const latestProject = dependencies.getState().projects.find(item => item.id === project.id) || project;
           dependencies.updateProject(project.id, draftLogPatch(latestProject, envelope, true, { nodeIds: succeeded }));
@@ -814,12 +816,12 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
             executionResult = await executor.runNode({ projectId: project.id, nodeId: plan.nodeId, promptIntent: plan.promptIntent }, { surface, correlationId: envelope.id });
           } catch (cause) {
             const normalized = normalizeWorkflowExecutionError(cause);
-            return error(envelope.id, normalized.code, '提示词已写入节点 ' + plan.nodeId + '；运行失败：' + normalized.message);
+            return runError(envelope.id, terminalFromFailure(normalized.code, normalized.message, normalized.runId), '提示词已写入节点 ' + plan.nodeId + '；运行失败：' + normalized.message);
           }
-          if (executionResult.status === 'failed') {
-            return error(envelope.id, executionResult.error?.code || 'RUN_FAILED', '提示词已写入节点 ' + plan.nodeId + '；运行失败：' + (executionResult.error?.message || 'Workflow 生成失败，请重试。'));
+          if (executionResult.status !== 'completed') {
+            const terminal = terminalFromRunResult(executionResult);
+            return runError(envelope.id, terminal, '提示词已写入节点 ' + plan.nodeId + '；' + (executionResult.status === 'cancelled' ? '' : '运行失败：') + terminal.failedReason!.message);
           }
-          if (executionResult.status === 'cancelled') return error(envelope.id, 'RUN_CANCELLED', '提示词已写入节点 ' + plan.nodeId + '；生成已停止或被新的运行取代，未产生结果。');
           result = { ok: true, commandId: envelope.id, result: { ...summary, draftVersion, ran: true, run: workflowRunPayload(executionResult) } };
         }
       } else if (command === 'workflow.note.write') {

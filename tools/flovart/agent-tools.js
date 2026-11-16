@@ -178,7 +178,7 @@ const DEFINITIONS = [
     name: 'flovart_workflow_node_run',
     aliases: ['flovart_workflow_run', 'flovart_run'],
     surfaces: ALL,
-    description: '原位运行已有的图片/视频生成节点（nodeId），或用 nodeIds 一次确认后并行运行多个。会扣费并请用户确认。返回 runId、batch（batchId、headNodeId、memberNodeIds）与每张产物 takes。改提示词再跑请用 flovart_generate。',
+    description: '原位运行已有的图片/视频生成节点（nodeId），或用 nodeIds 一次确认后并行运行多个。会扣费并请用户确认。会阻塞到终态再返回，不要自己轮询 inspect。终态 status 只有 succeeded / failed / timeout / unknown_after_submit：成功返回 runId、batch（batchId、headNodeId、memberNodeIds）与每张产物 takes；失败时 error.details.run 带 {status, runId, failedReason, retryable}，批量时每个 runs[] 都有 status。timeout 先 inspect 再用同一 idempotencyKey 重试；unknown_after_submit 可能已计费，禁止重试或换线路。改提示词再跑请用 flovart_generate。',
     fields: {
       nodeIds: { type: 'array', items: { type: 'string' }, description: '批量运行的节点 id（与 nodeId 二选一）' },
     },
