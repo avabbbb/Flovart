@@ -796,10 +796,10 @@ function createLocalGrepTool(guard: (command: string, params: Record<string, unk
   return {
     name: LOCAL_GREP_TOOL_NAME,
     label: 'files.grep',
-    description: '本地文件搜索（grep）：在用户连接过的本地文件夹里逐行匹配文本文件，返回 [文件夹/路径] 与 *行号|内容。pattern 是正则（非法时按字面量）；path 可限定子目录；case=false 忽略大小写；limit 默认 200。只搜文本文件，单文件上限 512KB，30s 超时。',
+    description: '本地文件搜索（grep）：在用户连接过的本地文件夹里逐行匹配文本文件，返回 [文件夹/路径] 与 *行号|内容。pattern 是正则（非法时按字面量）；path 相对文件夹根目录，可以是子目录或单个文件，";" 分隔多个，可用文件夹名开头限定某一个文件夹，省略或 "." 搜索全部；case=false 忽略大小写；limit 默认 200。path 不存在会报 Path not found（不是“没有匹配”）；没有连接文件夹或权限失效会直接报错。只搜文本文件，单文件上限 512KB，30s 超时。',
     parameters: Type.Object({
       pattern: Type.String({ description: '正则或字面量搜索词' }),
-      path: Type.Optional(Type.String({ description: '文件夹内的子目录，例如 references/shots' })),
+      path: Type.Optional(Type.String({ description: '相对文件夹根目录的子目录或文件，例如 references/shots 或 notes.md；";" 分隔多个；省略表示全部' })),
       case: Type.Optional(Type.Boolean({ description: '是否区分大小写，默认 true' })),
       limit: Type.Optional(Type.Number({ description: '最多返回多少条匹配，默认 200' })),
     }),
@@ -815,7 +815,16 @@ function createLocalGrepTool(guard: (command: string, params: Record<string, unk
       });
       return {
         content: [{ type: 'text', text: formatGrepMatches(result) }],
-        details: { matchCount: result.matches.length, scannedFiles: result.scannedFiles, truncated: result.truncated, skippedFolders: result.skippedFolders },
+        details: {
+          matchCount: result.matches.length,
+          scannedFiles: result.scannedFiles,
+          truncated: result.truncated,
+          skippedFolders: result.skippedFolders,
+          staleFolders: result.staleFolders,
+          missingPaths: result.missingPaths,
+          // 范围不存在 / 没有可读文件夹是工具错误，不能和「搜过了没匹配」混在一起。
+          ...(result.error ? { isError: true } : {}),
+        },
       };
     },
   };

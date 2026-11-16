@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Agent `flovart_grep`（对齐 OMP grep 语义）：path 不存在报 `Path not found`，不再回落成“没有匹配”；没有连接文件夹、权限失效、文件夹已被移动 / 删除分别直接报错；省略 path、`.`、`./` 都表示根目录；path 支持单个文件、`;` 分隔多个范围与文件夹名前缀；遍历中途目录消失不再中断整次搜索。
 - CLI: `video.status` → `task.get`, `export.project` → `workflow.inspect`; `generate.images-batch` submits one Runtime `generate.image` per item with derived idempotency keys (no more file-state shadow).
 - Pipeline: image clips take `motion` (push / pull / pan / tilt / shake / impact, flash), rendered by Remotion; `beatGridCuts` helper.
 - New bundled Skill `still-mad` (静止系 MAD): beat-cut still images through the pipeline.
