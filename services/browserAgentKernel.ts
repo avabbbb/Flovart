@@ -775,6 +775,7 @@ const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，Flovart 生成式 
 - flovart_workflow_inspect：读取当前项目的节点、连线、配置与 revision。处理项目前先调用，不得猜测项目、节点或连接 ID。媒体地址在结果里会被脱敏为 [media]，这不代表节点没有内容。
 - flovart_workflow_selection_get：读取用户当前选中的节点。
 - flovart_generate：生成图片/视频的唯一入口。只建或复用一个生成节点，prompt 直接写进它的 Prompt Bar，references 同时变成 @chip 与连线（顺序即 chip 顺序），按引用自动选文生/图生/首尾帧/全能参考；run=true 时原位运行（扣费，会请用户确认），返回批次与每张产物。
+- flovart_shortcut_list / flovart_shortcut_apply：Slash 快捷工具（九机位宫格、角色三视图、四格 / 25 格分镜、光影矫正、人像增强）。apply 永远只动一个节点、count=1：宫格类在已有参考的节点上原地出一张宫格图，目标只是一张图时右侧新建一个节点引用它；非宫格类右侧新建一个节点。单格需要时再 image.split-grid@1，不要自己建 N 个节点。
 - flovart_models_list：列出模型的真实能力（各生成方式是否已配置、参考上限、张数、比例、分辨率、时长，含 RunningHub 动态模型）。选/换模型前先调，不要猜 modelId 或逐个试。
 - flovart_workflow_node_run：重跑已写好提示词的生成节点（nodeId 或 nodeIds 批量，一次确认费用），返回 batch 与 takes。
 - flovart_workflow_node_stop：停止某个节点正在进行的生成。

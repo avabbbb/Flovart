@@ -22,6 +22,8 @@ npm run flovart:cli -- workflow.selection.get --json
 npm run flovart:cli -- workflow.models.list --mode image --json
 npm run flovart:cli -- workflow.generate --type image --title "主视觉" --prompt "雨夜霓虹街头的产品特写" --aspect-ratio 16:9 --idempotency-key key-1 --json
 npm run flovart:cli -- workflow.generate --type video --title "图生视频" --prompt "@ref:<image-id> 镜头缓慢推进" --references '[{"nodeId":"<image-id>","role":"first_frame"}]' --duration-sec 5 --run --idempotency-key shot-1-v1 --json
+npm run flovart:cli -- workflow.shortcut.list --json
+npm run flovart:cli -- workflow.shortcut.apply --scene multi-camera-9 --node-id <image-id> --idempotency-key grid-1 --json
 npm run flovart:cli -- workflow.media.import --url https://example.com/ref.png --attach-to-node-id <video-id> --idempotency-key import-1 --json
 npm run flovart:cli -- workflow.node.run --node-id <image-id> --idempotency-key shot-1-v2 --json
 npm run flovart:cli -- workflow.node.run --node-ids <shot-1>,<shot-2>,<shot-3> --idempotency-key batch-1-v1 --json
@@ -29,7 +31,7 @@ npm run flovart:cli -- workflow.focus.nodes --node-ids <shot-1>,<shot-2> --json
 npm run flovart:cli -- workflow.node.stop --node-id <image-id> --json
 ```
 
-The stable Agent surface is `workflow.inspect`, `workflow.selection.get`, `workflow.focus.nodes`, `workflow.apply`, `workflow.generate`, `workflow.models.list`, `workflow.media.import`, `workflow.note.write`, `workflow.node.run`, `workflow.node.stop` and `workflow.node.tool`. Tool names, descriptions and full parameter schemas are the same in the built-in Agent, the local Agent, MCP and DSH (`tools/flovart/agent-tools.js`). Granular `workflow.node.*`, connection, selection, and viewport commands remain compatibility adapters and route through the same visible Workflow contract.
+The stable Agent surface is `workflow.inspect`, `workflow.selection.get`, `workflow.focus.nodes`, `workflow.apply`, `workflow.generate`, `workflow.models.list`, `workflow.shortcut.list`, `workflow.shortcut.apply`, `workflow.media.import`, `workflow.note.write`, `workflow.node.run`, `workflow.node.stop` and `workflow.node.tool`. Tool names, descriptions and full parameter schemas are the same in the built-in Agent, the local Agent, MCP and DSH (`tools/flovart/agent-tools.js`). Granular `workflow.node.*`, connection, selection, and viewport commands remain compatibility adapters and route through the same visible Workflow contract.
 
 ## Generating: one node, prompt in its Prompt Bar
 
@@ -43,6 +45,16 @@ The stable Agent surface is `workflow.inspect`, `workflow.selection.get`, `workf
 - Updating only `metadata.prompt` with `workflow.apply` keeps the node's existing @chips (re-linked by label, missing ones appended); use `workflow.generate` to rewrite a prompt with different references.
 
 `workflow.models.list` returns `{ models: [{ id, name, capability, source: static|runninghub-doc, available, isDefault, modes: [{ mode, configured, maxReferences }], counts, aspectRatios, resolutions, durations }], defaultModelIds }` from the browser's live catalog under the user's API keys.
+
+## Slash shortcuts: one node, count=1
+
+`workflow.shortcut.list` returns the same registry the canvas `/` menu and the Prompt Bar `/` popover use: `{ shortcuts: [{ scene, label, kind: grid|single, grid?: { rows, cols }, splitTool?, minSources, maxSources }] }`.
+
+`workflow.shortcut.apply { scene, nodeId?, text?, run?, dryRun? }` goes through the same path as `workflow.generate` and always touches one node with `count=1`:
+
+- grid tools (`multi-camera-9`, `character-3-view`, `story-4-grid`, `storyboard-25`): when the target already has an image reference, or the tool needs no source, the template is written into the target's Prompt Bar (`placement: "in-place"`); when the target is just a generated image, one new node is created to its right and @-references it (`placement: "new-node"`). Split the grid later with `image.split-grid@1`.
+- single tools (`lighting-fix`, `portrait-enhance`): always one new node to the right of the source image.
+- `text` fills the template's Content part (defaults to the target's existing description). `run: true` is paid and confirmed like `workflow.generate`.
 
 ## Node types and generation settings
 

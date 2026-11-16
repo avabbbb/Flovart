@@ -15,6 +15,7 @@ import { displayError } from './displayError';
 import { buildProductionBible } from '../components/workflow/productionBible';
 import { buildWorkflowPromptDocument, promptDocumentMentions } from '../components/workflow/promptDocument';
 import { generateModeOf, listWorkflowModels, planWorkflowGenerate, WorkflowGenerateError } from './workflowGenerateCommand';
+import { SLASH_SHORTCUTS, SlashShortcutError, buildShortcutApplyOps, describeSlashShortcuts, getSlashShortcut } from '../components/workflow/slashShortcuts';
 import type { UserApiKey } from '../types';
 
 export interface WorkflowCommandEnvelope {
@@ -135,7 +136,7 @@ const DOCUMENT_MUTATION_COMMANDS = new Set([
   'workflow.apply', 'workflow.node.create', 'workflow.node.create-connected', 'workflow.node.update',
   'workflow.node.delete', 'workflow.node.move', 'workflow.node.resize', 'workflow.connect', 'workflow.disconnect',
 ]);
-const WORKFLOW_READ_COMMANDS = new Set(['workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.models.list']);
+const WORKFLOW_READ_COMMANDS = new Set(['workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.models.list', 'workflow.shortcut.list']);
 const SENSITIVE_KEY = /(?:api.?key|authorization|token|secret|password|storage.?key|file.?path|local.?path|data.?url)/i;
 const MEDIA_KEY = /^(?:href|poster|src|url)$/i;
 const LOCAL_PATH = /^(?:[a-z]:\\|\\\\|\/home\/|\/Users\/|\/tmp\/)/i;
@@ -482,7 +483,7 @@ function requiresWorkflowConfirmation(envelope: WorkflowCommandEnvelope) {
     }
   }
   // 只写 Prompt Bar 不扣费；run=true 时与 node.run 同等，需要确认。
-  if (envelope.command === 'workflow.generate') return envelope.args.run === true || envelope.args.run === 'true';
+  if (envelope.command === 'workflow.generate' || envelope.command === 'workflow.shortcut.apply') return envelope.args.run === true || envelope.args.run === 'true';
   if (!WORKFLOW_MUTATION_COMMANDS.has(envelope.command) || !isExternalAgent) return false;
   if (envelope.command === 'workflow.project.delete' || envelope.command === 'workflow.node.delete' || envelope.command === 'workflow.node.run') return true;
   if (envelope.command !== 'workflow.node.tool') return false;
@@ -695,6 +696,8 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         };
       } else if (command === 'workflow.models.list') {
         result = { ok: true, commandId: envelope.id, result: listWorkflowModels(args, dependencies.getUserApiKeys?.() || []) };
+      } else if (command === 'workflow.shortcut.list') {
+        result = { ok: true, commandId: envelope.id, result: { shortcuts: describeSlashShortcuts() } };
       } else if (!project) {
         return error(envelope.id, 'NOT_FOUND', '当前没有可用的 Workflow 项目。');
       } else if (command === 'workflow.node.run' || command === 'workflow.node.stop') {
@@ -760,26 +763,47 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
           dependencies.updateProject(project.id, draftLogPatch(latestProject, envelope, true, { nodeIds: succeeded }));
           result = { ok: true, commandId: envelope.id, result: { projectId: project.id, runs, failed: runs.length - succeeded.length } };
         }
-      } else if (command === 'workflow.generate') {
-        const mutationId = String(args.mutationId || envelope.idempotencyKey || '').trim() || 'generate-' + envelope.id;
+      } else if (command === 'workflow.generate' || command === 'workflow.shortcut.apply') {
+        const isShortcut = command === 'workflow.shortcut.apply';
+        const mutationId = String(args.mutationId || envelope.idempotencyKey || '').trim() || (isShortcut ? 'shortcut-' : 'generate-') + envelope.id;
         const expectedRevision = args.expectedRevision === undefined ? (project.draftVersion || 1) : finiteNumber(args.expectedRevision, 'expectedRevision');
         let plan: ReturnType<typeof planWorkflowGenerate>;
+        let shortcutSummary: Record<string, unknown> | undefined;
         try {
-          plan = planWorkflowGenerate({
-            nodes: project.nodes,
-            connections: project.connections,
-            args,
-            mutationId,
-            keys: dependencies.getUserApiKeys?.() || [],
-            place: (node, upstreamIds) => autoPlaceWorkflowNode(project.nodes, node, upstreamIds),
-          });
+          if (isShortcut) {
+            const scene = typeof args.scene === 'string' ? args.scene.trim() : '';
+            const shortcut = getSlashShortcut(scene);
+            if (!shortcut) return error(envelope.id, 'NOT_FOUND', '没有这个快捷工具：' + (scene || '（空）') + '；先调用 workflow.shortcut.list。可用：' + SLASH_SHORTCUTS.map(item => item.scene).join('、'));
+            const applied = buildShortcutApplyOps({
+              shortcut,
+              nodes: project.nodes,
+              connections: project.connections,
+              targetId: typeof args.nodeId === 'string' && args.nodeId.trim() ? args.nodeId.trim() : undefined,
+              text: typeof args.text === 'string' ? args.text : undefined,
+              mutationId,
+              keys: dependencies.getUserApiKeys?.() || [],
+              place: (node, upstreamIds) => autoPlaceWorkflowNode(project.nodes, node, upstreamIds),
+            });
+            plan = applied.plan;
+            shortcutSummary = { scene: shortcut.scene, placement: applied.placement, sourceIds: applied.sourceIds, ...(applied.grid ? { grid: applied.grid, splitTool: 'image.split-grid@1' } : {}) };
+          } else {
+            plan = planWorkflowGenerate({
+              nodes: project.nodes,
+              connections: project.connections,
+              args,
+              mutationId,
+              keys: dependencies.getUserApiKeys?.() || [],
+              place: (node, upstreamIds) => autoPlaceWorkflowNode(project.nodes, node, upstreamIds),
+            });
+          }
         } catch (cause) {
-          if (!(cause instanceof WorkflowGenerateError)) throw cause;
+          if (!(cause instanceof WorkflowGenerateError) && !(cause instanceof SlashShortcutError)) throw cause;
           const compatible = Array.isArray(cause.details?.compatibleModels) ? cause.details.compatibleModels as Array<{ id: string; configured?: boolean }> : [];
           const hint = compatible.length ? ' 可用模型：' + compatible.slice(0, 8).map(item => item.id + (item.configured ? '' : '（未配置）')).join('、') : '';
           return { ok: false, commandId: envelope.id, error: { code: cause.code, message: cause.message + hint, ...(cause.details ? { details: cause.details } : {}) } };
         }
         const summary = {
+          ...(shortcutSummary || {}),
           projectId: project.id,
           nodeId: plan.nodeId,
           created: plan.created,
@@ -797,7 +821,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         const committed = commitDocument(envelope, project, tagWorkflowNodeOrigin(plan.operations, envelope.source), {
           mutationId,
           expectedRevision,
-          intent: (plan.created ? '新建生成节点并写入提示词：' : '写入提示词：') + plan.nodeId,
+          intent: (isShortcut ? '快捷工具「' + String(shortcutSummary?.scene) + '」：' : '') + (plan.created ? '新建生成节点并写入提示词：' : '写入提示词：') + plan.nodeId,
         });
         if (!committed.ok) return committed;
         const draftVersion = (committed.result as { draftVersion?: number }).draftVersion;
@@ -1102,7 +1126,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
   const inFlightRuns = new Map<string, Promise<WorkflowCommandResult>>();
   return (envelope: WorkflowCommandEnvelope): Promise<WorkflowCommandResult> => {
     // 同一 idempotencyKey 的并发重复 run（Agent 重试、双击）共享一次执行；结果缓存只在完成后写入，挡不住并发。
-    const key = (envelope?.command === 'workflow.node.run' || envelope?.command === 'workflow.generate') && envelope.idempotencyKey ? envelope.source + ':' + envelope.idempotencyKey : undefined;
+    const key = (envelope?.command === 'workflow.node.run' || envelope?.command === 'workflow.generate' || envelope?.command === 'workflow.shortcut.apply') && envelope.idempotencyKey ? envelope.source + ':' + envelope.idempotencyKey : undefined;
     if (!key) return execute(envelope);
     const pending = inFlightRuns.get(key);
     if (pending) return pending;

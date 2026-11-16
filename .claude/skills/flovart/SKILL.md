@@ -164,6 +164,13 @@ the browser itself is offline.
   per-mode configuration and reference limits). On `MODE_UNSUPPORTED` or
   `REFERENCE_LIMIT`, use a model from the returned list; do not try models one
   by one.
+- Multi-angle 3×3 grid, character turnaround, 2×2 / 5×5 storyboard grid,
+  relight or portrait enhance → `workflow.shortcut.apply --scene <id>`
+  (Agent tool `flovart_shortcut_apply`; ids from `workflow.shortcut.list`).
+  Always one node and `count=1`: grid tools render one grid image in place
+  (or in one new node to the right of a bare image), non-grid tools create one
+  node to the right. Split a grid later with `image.split-grid@1`; never build
+  N nodes for a grid.
 - Bring an image from a URL or the asset library onto the canvas →
   `workflow.media.import` (optionally `attachToNodeId` to use it as a reference).
 - Write a note only when the user asks for one → `workflow.note.write`. Notes

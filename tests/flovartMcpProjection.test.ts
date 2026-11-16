@@ -47,6 +47,8 @@ describe('Flovart MCP projection', () => {
       'flovart_workflow_apply',
       'flovart_generate',
       'flovart_models_list',
+      'flovart_shortcut_list',
+      'flovart_shortcut_apply',
       'flovart_note_write',
       'flovart_media_import',
       'flovart_workflow_node_run',

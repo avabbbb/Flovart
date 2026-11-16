@@ -48,6 +48,8 @@ export function describeWorkflowDraftCommand(command: string, args: Record<strin
       return `停止节点「${nodeId}」`;
     case 'workflow.generate':
       return (nodeId ? `在节点「${nodeId}」写入提示词` : `新建${type || ''}生成节点并写入提示词`) + (args.run === true ? '并运行' : '');
+    case 'workflow.shortcut.apply':
+      return `快捷工具「${String(args.scene || '')}」` + (nodeId ? `作用于「${nodeId}」` : '') + (args.run === true ? '并运行' : '');
     case 'workflow.note.write':
       return args.noteId ? `更新备注「${String(args.noteId)}」` : '写备注';
     case 'workflow.media.import':

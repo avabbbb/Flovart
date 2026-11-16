@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "833b47e3d9fdbdef1b7b082aa66f63d9d2346cd9a6e574540b4d886b0912814d",
+  "registryHash": "5dac3e3e05682490f6254969564dd4f674d4275d39cef7f0e723be99efd29d9e",
   "commands": [
     {
       "name": "runtime.status",
@@ -574,6 +574,27 @@
         "generateAudio": "boolean?",
         "params": "object?",
         "shot": "object?",
+        "run": "boolean?",
+        "dryRun": "boolean?",
+        "expectedRevision": "number?",
+        "mutationId": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.shortcut.list",
+      "summary": "List the slash shortcut tools (stable scene ids) shared by the canvas / menu, the Prompt Bar / popover and agents: grid tools render ONE grid image in place (count=1, split later with image.split-grid@1); single tools create ONE generation node to the right of the source image.",
+      "args": {},
+      "availability": "available"
+    },
+    {
+      "name": "workflow.shortcut.apply",
+      "summary": "Apply one slash shortcut by scene to one image node: grid tools write the template into the target node's Prompt Bar and run in place when it already has an image reference (or needs no source), otherwise create one node to the right that @-references the image; non-grid tools always create one node to the right. Always one node, count=1; run=true is paid and confirmed.",
+      "args": {
+        "projectId": "string?",
+        "scene": "string",
+        "nodeId": "string?",
+        "text": "string?",
         "run": "boolean?",
         "dryRun": "boolean?",
         "expectedRevision": "number?",

@@ -17,6 +17,7 @@ export const WORKFLOW_MUTATION_COMMANDS = new Set([
   'workflow.node.run',
   'workflow.node.stop',
   'workflow.generate',
+  'workflow.shortcut.apply',
   'workflow.note.write',
   'workflow.media.import',
 ]);
