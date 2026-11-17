@@ -21,7 +21,7 @@ Primary legal jurisdiction: Hong Kong Special Administrative Region.
 
 [中文版本](./TERMS_OF_SERVICE.zh-CN.md)
 
-These Terms govern the official Flovart Desktop Edition, the Official WebUI at `https://avabbbb.github.io/Flovart/`, the official Flovart Edge Extension, and any optional service expressly linked to these Terms. The source code is separately licensed under the MIT License; these Terms do not reduce or add restrictions to rights granted by that license.
+These Terms govern the official Flovart Desktop Edition, the Official WebUI at `https://flovart.avabbbb.com`, the official Flovart Edge Extension, and any optional service expressly linked to these Terms. The source code is separately licensed under the MIT License; these Terms do not reduce or add restrictions to rights granted by that license.
 
 You accept these Terms when you expressly check the acceptance box in Desktop Edition or the Official WebUI before first persisting a Provider Secret or making a Provider request, or when you continue using the Edge Extension after its first-use disclosure. If you do not agree, do not connect a Provider or use the Edge Extension.
 

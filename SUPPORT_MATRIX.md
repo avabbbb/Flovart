@@ -25,7 +25,19 @@ onboarding 或宣传中呈现为与 Beta 路径同等就绪。`Stable` 只表示
 | Photoshop UXP panel | Experimental | `npm run studio:build`、manifest v4、shared `CreativeHostAdapter` 与 layer contract/mock tests；真实 UXP layer → I2I → new layer 是 External Gate |
 | Premiere Pro UXP panel | Experimental | `npm run studio:build`、manifest v5 / 25.6+、clip/frame contract/mock tests；真实 UXP → artifact → Project import 是 External Gate |
 | After Effects | Experimental | 当前轻面板为 `dist-studio/after-effects` CEP/ExtendScript bridge；planned native effect 为独立 C++ Effect SDK 路径。不得假设 AE 已有可发布 UXP host；两条路径均需独立真实宿主认证 |
-| DaVinci Resolve Studio 21.1 | Experimental | **当前第一宿主方向**：优先验证 Blackmagic native MCP + Flovart Skill / legacy `flovart` CLI；`dist-studio/resolve` Workflow Integration 降为轻面板 / measured fallback，planned OFX 独立后置。真实 native MCP 连接、selection → durable artifact → Media Pool tracer 仍是 External Gate |
+| DaVinci Resolve Studio 21.1 | Experimental | **当前第一宿主方向**，同时是 Iris 的第一个上下文连接器（见下方 Iris 段）：优先验证 Blackmagic native MCP + Flovart Skill / legacy `flovart` CLI；`dist-studio/resolve` Workflow Integration 降为轻面板 / measured fallback，planned OFX 独立后置。真实 native MCP 连接、selection → durable artifact → Media Pool tracer 仍是 External Gate |
+
+## Iris（个人 Agent）
+
+Iris 是顶栏第二个 surface（原名 逆向 / Reverse，2026-11-17 改名）：对话优先、画布为产出面的全能后期助手。Web 版设计为不连任何宿主也完整可用；宿主连接器是可选增强。下表只记录当前证据，不代表已上线。
+
+| Path | Status | Evidence / boundary |
+| --- | --- | --- |
+| Iris Web 个人 Agent | Planned | 顶栏 tab 目前是 coming-soon 占位（“优化中”，`App.tsx` `reverse-coming-soon`）；逆向拆解纯函数（`services/reverse/`）与 Canvas 子画布已实现，但不能据此宣称 Iris 可用 |
+| Resolve 上下文连接器 | Experimental（底层） | 复用上方 Resolve 行的 native MCP 路线；Iris 侧的只读上下文同步未实现，真实连接仍是 External Gate |
+| Premiere UXP 上下文连接器 | Planned | 复用 Premiere UXP 面板路线；未实现 |
+| CapCut 国际版草稿 | Planned | 草稿是否明文可读待验证；未实现 |
+| 剪映（中国版）草稿 | Blocked / 待验证 | 剪映 6.0+ 草稿加密（待验证），外部可能无法读取；不做破解，只走导出文件 / 上传 |
 
 ## Native effects and deeper Agent integration
 

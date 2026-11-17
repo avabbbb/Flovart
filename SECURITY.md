@@ -60,8 +60,9 @@ Out of scope:
 
 - Third-party provider account behavior, billing, pricing, cancellation, or ToS — those
   belong to the provider, per the [support matrix](SUPPORT_MATRIX.md).
-- The documentation site and demo page (`avabbbb.github.io/Flovart`) content issues
-  that cannot affect a local install.
+- Content issues on the official WebUI (`flovart.avabbbb.com`) that cannot affect a local
+  install. Flaws in its same-origin LLM proxy (`/api/llm-proxy/`, `server/llmProxy.ts`, served
+  by the `flovart` Cloudflare Worker in `worker/index.ts`) are in scope.
 - Issues that require a real third-party host login (real Codex/DSH/WorkBuddy
   account, real UXP host) — those remain External Gates until certified; report them if
   you can demonstrate the flaw in repository-controlled code.
@@ -92,7 +93,9 @@ Out of scope:
 
 Flovart does **not** bundle model services and does not hold your provider keys. Keys are
 entered by the user, stored locally (the Web path uses a localforage vault that is obfuscated at rest: its key derives from browser data, so it stops casual reading but not malware or same-origin scripts),
-and sent only to the provider endpoint the user configured. Agent and CLI paths receive
+and sent only to the provider endpoint the user configured. (Exception on the official WebUI:
+for the few allowlisted gateways that reject browser CORS, the request and key pass through the
+same-origin proxy of the `flovart` Cloudflare Worker in transit; it does not store or log them.) Agent and CLI paths receive
 redacted readiness/capability state, not raw credentials. A leaked key is almost always a
 device-side or provider-side incident — rotate it at the provider first, then report the
 Flovart path that exposed it if one exists.
@@ -190,7 +193,7 @@ Flovart 目前不提供独立的安全邮箱，与[服务条款](docs/TERMS_OF_S
 不在范围内：
 
 - 第三方 Provider 的账号、计费、定价、取消或条款行为——按[支持矩阵](SUPPORT_MATRIX.md)归属 Provider。
-- 文档站与 Demo 页（`avabbbb.github.io/Flovart`）中不影响本地安装的内容问题。
+- 官方 WebUI（`flovart.avabbbb.com`）中不影响本地安装的内容问题。其同源 LLM 代理（`/api/llm-proxy/`、`server/llmProxy.ts`，由 `worker/index.ts` 的 Cloudflare Worker `flovart` 提供）的缺陷在范围内。
 - 必须依赖真实第三方宿主登录（真实 Codex/DSH/WorkBuddy 账号、真实 UXP 宿主）才能触发的问题——
   在认证前仍属 External Gate；若能在仓库自有代码中演示缺陷则仍可报告。
 - 需要物理接触用户设备或本机已有特权执行才能造成的拒绝服务。
@@ -215,6 +218,6 @@ Flovart 目前不提供独立的安全邮箱，与[服务条款](docs/TERMS_OF_S
 ### Provider API Key 由用户自备、仅保存在本地
 
 Flovart **不**捆绑模型服务，也不持有你的 Provider Key。Key 由用户输入、保存在本地
-（Web 路径使用本地混淆存储的 localforage Vault：密钥来自浏览器信息，只能防止随手查看，不能防恶意软件或同源脚本），只发往用户自己配置的 Provider 端点。
+（Web 路径使用本地混淆存储的 localforage Vault：密钥来自浏览器信息，只能防止随手查看，不能防恶意软件或同源脚本），只发往用户自己配置的 Provider 端点（官方 WebUI 的例外：少数不支持浏览器 CORS 的白名单网关，请求与 Key 会在传输中经过 Cloudflare Worker `flovart` 的同源代理，代理不保存、不记录）。
 Agent 与 CLI 只能拿到脱敏后的就绪/能力状态，拿不到原始凭据。Key 泄漏几乎都是设备侧或
 Provider 侧事件——先去 Provider 处轮换 Key，再报告可能暴露它的 Flovart 路径（如果存在）。

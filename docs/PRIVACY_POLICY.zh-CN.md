@@ -10,7 +10,7 @@
 
 [English controlling version](./PRIVACY_POLICY.md)
 
-本政策说明位于 `https://avabbbb.github.io/Flovart/` 的 Official WebUI、Desktop Edition、Edge Extension 及相关项目功能如何处理数据。英文版为控制版本；本中文版为完整官方翻译。你所在地依法不得排除的强制性权利不受语言条款影响。
+本政策说明位于 `https://flovart.avabbbb.com` 的 Official WebUI、Desktop Edition、Edge Extension 及相关项目功能如何处理数据。英文版为控制版本；本中文版为完整官方翻译。你所在地依法不得排除的强制性权利不受语言条款影响。
 
 Flovart 是本地优先创作工具。默认情况下，官方 Desktop Edition 不要求账号，发布者也不运营用于保存 Workflow、提示词、生成文件或 API Key 的托管后端。
 
@@ -73,7 +73,7 @@ Desktop Edition 只有在用户发起或批准相关动作后，才可能把导�
 
 官方 Edge Extension 不保存 Provider Secret。卸载扩展或清除扩展数据可删除其非秘密偏好。当前版本不会自动合并 Official WebUI 与 Desktop Edition 工作区；请分别清理各 origin / profile，或在可用时使用显式导出、导入。
 
-Official WebUI 由 GitHub Pages 提供静态托管。GitHub 可能按照其隐私声明处理请求和安全数据；GitHub 文档说明访问者 IP 地址会为安全目的被记录和保存。Flovart 不把 GitHub Pages 用作 Browser Workspace、提示词、媒体或 Provider Secret 的后端。
+Official WebUI 由一个 Cloudflare Worker（Cloudflare Workers + 静态资源）提供。Cloudflare 可能按照其隐私政策处理请求和安全数据，包括访问者 IP 地址。该 Worker 提供静态应用，并运行一个范围很窄的同源代理 `/api/llm-proxy/`：对少数不接受浏览器直接请求的 AI 网关与公开 API 文档（目前为 `opencode.ai` 上的 OpenCode 与 RunningHub API 文档），浏览器把请求发给 Worker，再由 Worker 转发给该网关。仅对这些网关，请求（包括你的 API Key 和提示词）会经 TLS 在传输中经过 Worker；代理不保存、不记录 Key 或提示词，不转发 Cookie，只接受同源请求。其他 Provider 请求由浏览器直接发往 Provider。Flovart 不把该 Worker 用作 Browser Workspace、媒体或 Provider Secret 的后端。
 
 发布者通常无法恢复你删除的本地数据，也无法删除第三方 Provider、自定义端点、浏览器同步、云备份或独立部署所持有的副本。相关删除请求应向实际持有数据的主体提出。
 

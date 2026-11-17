@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://avabbbb.github.io/Flovart/"><strong>Try live demo</strong></a> ·
+  <a href="https://flovart.avabbbb.com"><strong>Try live demo</strong></a> ·
   <a href="https://github.com/avabbbb/Flovart/releases"><strong>Download preview</strong></a> ·
   <a href="docs/overview/quick-start.en.md">Get started</a> ·
   <a href="SUPPORT_MATRIX.md">Compatibility</a>
@@ -40,9 +40,9 @@
 
 [![Watch Flovart: Your footage. Plus one layer.](pic/readme/vision/Flovart_Promo_60s_v4-poster.jpg)](https://github.com/avabbbb/Flovart/raw/refs/heads/main/pic/readme/vision/Flovart_Promo_60s_v4.mp4)
 
-**Keep the original. Describe the change. Compare candidates.** Flovart brings your coding Agent and a visible creative Workflow together. Canvas handles generation and the visible Workflow, Reverse breaks down reference videos, and Agent connects your preferred assistant.
+**Keep the original. Describe the change. Compare candidates.** Flovart brings your coding Agent and a visible creative Workflow together. Canvas handles generation and the visible Workflow, Agent connects your preferred assistant, and **Iris** (coming soon) is a personal post-production agent you talk to, with the canvas as its output.
 
-The film shows the Resolve-first design target: point at a frame, generate creative layers, compare takes, and return an approved result. **Concept film, recorded before the Flovart name was restored; its closing card still says Iris.** Native host integration and alpha-layer/new-track output remain experimental or planned. Resolve P0 targets explicit **Add to Media Pool**.
+The film shows the Resolve-first design target: point at a frame, generate creative layers, compare takes, and return an approved result. **Concept film, recorded before the Flovart name was restored.** Its closing card says Iris; today Iris is the name of Flovart's personal-agent tab (coming soon), not the product name. Native host integration and alpha-layer/new-track output remain experimental or planned. Resolve P0 targets explicit **Add to Media Pool**.
 
 **0.3.0 closed beta:** Windows EXE and macOS DMG builds are distributed through [Releases](https://github.com/avabbbb/Flovart/releases). Platform builds are tested separately; installers do not certify creative-host or paid-provider support. See the [Support Matrix](SUPPORT_MATRIX.md).
 
@@ -50,7 +50,7 @@ The film shows the Resolve-first design target: point at a frame, generate creat
 
 This is the **north star for Flovart product interaction and UI**. The product we are building should feel like this:
 
-- **Stay in the editor first.** Resolve remains the source of truth; Flovart appears as a narrow contextual layer around the clip you are already working on.
+- **Iris works on its own; connecting your editor just adds context.** On the web, Iris is a conversation-first personal agent whose output lands on the Flovart canvas — no editor required. Optionally connect a local host plugin (DaVinci Resolve first, then Premiere and CapCut / 剪映) so Iris picks up your timeline and selection without uploads. When you work inside the editor, Resolve stays the source of truth and Flovart appears as a narrow contextual layer around the clip you are already on.
 - **Draw where. Say what. Get a layer.** Point at the frame, describe the intent, then generate reviewable AI-layer candidates instead of replacing the source clip.
 - **Candidates before commits.** Compare results visually, keep every version, and never let a late result silently replace the version you explicitly chose.
 - **Human + Agent, one visible state.** Agent activity, revisions and out-of-date results are visible on the same Workflow that the creator can edit by hand.
@@ -58,7 +58,7 @@ This is the **north star for Flovart product interaction and UI**. The product w
 - **Return to the host non-destructively.** Approved results flow back through a reviewable handoff — Media Pool first, then a new layer/track only when that host capability is actually verified.
 - **Local-first by default.** Footage, project context and durable results stay close to the creator's machine; external model calls are explicit and provider-scoped.
 
-For implementation status and real-host gates, see the [Support Matrix](SUPPORT_MATRIX.md). Product/system details live in the [main design](docs/design/00-overview.md), [Agent Integration](docs/design/12-agent.md), [Adaptive Layout](docs/design/01-interaction.md), and the [Resolve 21.1 Product & UI Spec](integrations/studio/resolve/PRODUCT_UI_SPEC.md).
+For implementation status and real-host gates, see the [Support Matrix](SUPPORT_MATRIX.md). Product/system details live in the [main design](docs/design/00-overview.md), [Agent Integration](docs/design/12-agent.md), [Interaction Design](docs/design/01-interaction.md), [Iris](docs/design/11-iris.md), and the [Resolve 21.1 Product & UI Spec](integrations/studio/resolve/PRODUCT_UI_SPEC.md).
 
 **Jump to:** [Quick start](#quick-start) · [Why Flovart?](#why-flovart) · [Core capabilities](#core-capabilities) · [Bring your own models](#bring-your-own-models) · [Compatibility](#integrations-and-compatibility) · [Architecture](#architecture) · [Local-first and security](#local-first-and-security) · [Roadmap](#creative-app-roadmap) · [Contributing](#contributing)
 
@@ -123,7 +123,7 @@ The canvas is still a power surface for multi-shot work, complex references and 
 | Automation | Explicit inspect/apply/run operations with revision and approval boundaries |
 | Data | Local-first storage with documented browser and runtime boundaries |
 
-Compose image, text, video, audio and configuration nodes, keep projects and references close to your workspace, and extend providers, hosts and node operations through explicit contracts. The top-level product surfaces are **Canvas** (the spatial Workflow), **Reverse** (reference-video reverse engineering), and **Agent** (the local/external coding-agent connection hub). The built-in **Assistant / Context / History** stays in a contextual drawer beside Canvas and is not duplicated inside Agent — see [Features](docs/content/docs/overview/features.en.mdx).
+Compose image, text, video, audio and configuration nodes, keep projects and references close to your workspace, and extend providers, hosts and node operations through explicit contracts. The top-level product surfaces are **Canvas** (the spatial Workflow), **Iris** (the personal post-production agent: conversation first, canvas as output, optional editor connectors; coming soon — the tab is a placeholder today), and **Agent** (the local/external coding-agent connection hub). Canvas + Agent are the Workflow production tools. The built-in **Assistant / Context / History** stays in a contextual drawer beside Canvas and is not duplicated inside Agent — see [Features](docs/content/docs/overview/features.en.mdx).
 
 ## One workflow, human + agent
 
@@ -163,6 +163,8 @@ Flovart does not bundle model services. Configure a provider in the app, choose 
 | Premiere Pro UXP panel | Experimental |
 | After Effects | Experimental |
 | DaVinci Resolve Studio | Experimental |
+| Iris web personal agent | Planned (tab is a placeholder) |
+| Iris editor connectors (Resolve → Premiere → CapCut / 剪映) | Planned; 剪映 6.0+ drafts are encrypted (to be verified) |
 
 `Experimental`, `Planned` and External Gate items are not Stable claims. Evidence, boundaries and release gates live in the [Support Matrix](SUPPORT_MATRIX.md), which is the single source of truth; this table is not a second compatibility policy.
 
@@ -175,7 +177,8 @@ flowchart LR
   L --> W
   W --> P["Provider adapters"]
   W --> R["Local assets + artifacts"]
-  RV["Reverse workspace"] -->|"workflow.apply"| W
+  IR["Iris (personal agent)"] -->|"workflow.apply"| W
+  HC["Editor connector (optional)"] -.->|"context"| IR
 ```
 
 The existing `flovart` CLI name is a compatibility surface during the Flovart rebrand. CLI and the experimental stdio MCP share operation semantics and the current Browser Workflow binding. Deterministic operations do not require a second AI to reinterpret them.
@@ -185,10 +188,10 @@ Native-effect work keeps two short paths: one shared generation function produce
 ## Local-first and security
 
 - Projects, assets and generation history are stored primarily in the browser today; cloud sync is not promised.
-- The current Web path stores API keys locally through the encrypted `localforage` vault, while the frontend calls the configured model service directly. Treat the browser as part of the secret boundary.
+- The current Web path stores API keys locally through the encrypted `localforage` vault, while the frontend calls the configured model service directly (on the official WebUI, a few allowlisted gateways that reject browser CORS go through the same-origin proxy of its Cloudflare Worker; keys pass in transit and are not stored or logged). Treat the browser as part of the secret boundary.
 - Web, Desktop WebView and extension storage are normally isolated. Cross-entry synchronization through a restricted runtime bridge is still pending.
 - Never put API keys in a prompt, log or repository. Agent and CLI paths receive redacted readiness and capability state, not raw credentials.
-- Use only the repository, the [live demo](https://avabbbb.github.io/Flovart/) and desktop artifacts published by the repository's Actions as official project channels. Review each provider's terms and the rights for your inputs and outputs.
+- Use only the repository, the [official WebUI](https://flovart.avabbbb.com) (a Cloudflare Worker named `flovart`) and desktop artifacts published by the repository's Actions as official project channels. Review each provider's terms and the rights for your inputs and outputs.
 
 Found a vulnerability? Report it privately through the [security policy](SECURITY.md).
 
@@ -209,6 +212,8 @@ Current Resolve selection
 The original timeline remains unchanged in P0. Adding a candidate to a new track is a later gate; Replace / Commit comes only after target revalidation and recovery behavior are proven. Resolve OFX is deferred until a real workflow demonstrates the need for host-persisted effect parameters, keyframes or offline effect rendering.
 
 After Effects, Premiere Pro and Photoshop work remains Experimental and is not used to claim certified host support.
+
+The same host integrations double as optional **Iris context connectors**: read-only first, Resolve first, then Premiere (UXP) and CapCut / 剪映. 剪映 6.0+ drafts are encrypted and may not be readable from outside (to be verified); Flovart will not break that encryption. See [Creative Hosts §7](docs/design/14-creative-hosts.md).
 
 These are directions, not Stable support; follow [the roadmap](docs/content/docs/progress/todo.mdx), [pending verification](docs/content/docs/progress/pending-test.mdx) and the [Support Matrix](SUPPORT_MATRIX.md) for the evidence trail.
 

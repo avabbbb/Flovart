@@ -75,10 +75,13 @@ title: 后续待办
 - [ ] 现有媒体操作：补齐图片处理等尚未贯通的实际入口，统一来源与版本；减少重复 Prompt、引用数组和多处 Provider 参数处理。
 - [ ] 大图性能（剩余）：缩略图按需生成与离屏播放器暂停继续按实际性能问题优化；不先增加可替换画布端口或语义 LOD 平台。
 - [ ] Config 节点删除、Scene Prediction 与音频生成继续留作后续需求，按具体任务分别验证，不阻塞原生效果。
-- [ ] 逆向演进为全能助手（[01 交互设计](../../../design/01-interaction.md) §11–§12）：prompt 首页、画布上可见的多 Agent 光标、docked 侧栏 trace / 计划 / 审批、预览与版本对比；Hypit 式拆解收为工具与面板。依赖 [16 号提案](../../../design/16-agent-video-pipeline.md) 的 run / trace。
+- [ ] Iris Web（I0，[11 Iris](../../../design/11-iris.md)、[01 交互设计](../../../design/01-interaction.md) §11–§12）：替换当前“优化中”占位，做对话优先的个人 Agent，画布为产出面；多 Agent 光标、对话里的计划 / trace / 审批卡、预览与版本对比；Hypit 式拆解收为工具与面板。依赖 [16 号提案](../../../design/16-agent-video-pipeline.md) 的 run / trace。先按 01 §12 重画原型。
+- [ ] Iris Resolve 只读上下文连接器（I1，[14](../../../design/14-creative-hosts.md) §7）：复用 Resolve native MCP，读当前项目、时间线与选择，免上传；写回仍只 Add to Media Pool。
+- [ ] Iris 连接器调研（I2）：Premiere UXP；CapCut 国际版草稿格式（待验证）；剪映 6.0+ 草稿加密与 11.7 起外部可读性（待验证），不做破解。
+- [ ] 内部标识迁移（单独 PR）：`canvasView: 'reverse'` → `'iris'`、`components/reverse/` 等目录改名，需持久化迁移与测试。
 - [ ] 真实操作录制与剪辑 Hub（[计划草案](../../../plans/recordly-capture-hub.md)）：先做 Recordly 连接器，把导出的录屏导入当前 pipeline run；再定 Rust 录制 + Snipaste 式截图伴生工具走 AGPL 伴生还是净室自研。Recordly 源码不进主仓库。
-- [ ] 视频流水线剩余：逆向 docked 侧栏与 Agent 光标、DSH 投影、WhisperX 真机转写、三级镜头 / 设备样机 / 点击圈、配音正增益（Remotion 音量上限 1）。
-- [ ] 逆向与 Canvas 用同一组 `workflow.*` 命令与明确素材引用交接，保持单一 Workflow 权威；大文件需要进度、取消和内存限制。
+- [ ] 视频流水线剩余：Iris 对话栏 trace 与 Agent 光标、DSH 投影、WhisperX 真机转写、三级镜头 / 设备样机 / 点击圈、配音正增益（Remotion 音量上限 1）。
+- [ ] Iris 与 Canvas 用同一组 `workflow.*` 命令与明确素材引用交接，保持单一 Workflow 权威；大文件需要进度、取消和内存限制。
 - [ ] Agent 空间中接入真实外部对话/任务/产物回执，保持外部 Agent 为主入口；内置 Assistant 继续保持可选，不新增重复控制面或第二套主记忆。
 - [ ] 保留现有 Production Skill、VOX、已批准参考图与局部重跑能力；后续只补实际用到的步骤，不以完整成片平台为本轮前置。
 - [ ] 画布工具遗留（2026-11-11/12 迭代记录归档时并入）：拆分图层缺内置语义端点（LayerD / BiRefNet sidecar 或自托管 `/split-layers`）；精确帧率需 ffprobe 元数据；视频剪辑逐帧重编码偏慢（缩略图时间轴、关键帧、后台进度）；分组框 padding / 嵌套 / 组级右键菜单；Agent 不能生成自由手绘蒙版；视频反推只取首帧；音频变调用 `asetrate + atempo`，非 44.1k 源可能偏差；已从 UI 移除的标注 / 打光 / 风格 / 移动对话框代码待清理。

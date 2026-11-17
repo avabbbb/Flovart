@@ -9,7 +9,7 @@ Flovart is currently a local-first, agent-native visual production workspace. Hu
 | Surface | Responsibility | Boundary |
 | --- | --- | --- |
 | **Canvas** | GenAI generation and the base Workflow: nodes, assets, connections, generation, versions | Primary creation surface |
-| **Reverse** | Reference-video reverse engineering (script, transcript evidence, alignment, timeline) with explicit "convert to canvas" through `workflow.apply`. Planned (design target, not yet available): becoming the all-in-one assistant workspace where agents work visibly on the canvas | Not a second Workflow authority; not a chat-only page |
+| **Iris** (formerly Reverse) | All-in-one post-production assistant (personal agent). **Not available yet**: the tab is a coming-soon placeholder. Design target: a conversation-first web agent whose output lands on the Flovart canvas, usable without any editor; optional local editor connectors (Resolve first, then Premiere and CapCut / 剪映) sync context so you don't upload. Hypit-style reference-video breakdown is one of its tools | Not a second Workflow authority; a chat with no canvas output is not Iris; never requires an editor connection |
 | **Agent** | Agent connections and state: discover, prepare, inspect and switch local/external coding agents such as Codex and WorkBuddy | **Not a chat page**; does not embed the built-in Assistant |
 
 Canvas has a contextual right drawer: **Assistant / Context / History**. The built-in Assistant has no extra privilege over external agents and does not manage host installation or connection.
@@ -34,7 +34,7 @@ Real support levels for Codex, Claude Code, OpenCode, WorkBuddy and TeleAgent ar
 
 Canvas supports image, video, audio, text and configuration nodes plus references, connections, local media tools and visible results.
 
-Reverse writes to Canvas only through an explicit `workflow.apply` (a subgraph node); it does not silently mirror Canvas state.
+Iris's reverse-breakdown tool writes to Canvas only through an explicit `workflow.apply` (a subgraph node); it does not silently mirror Canvas state.
 
 ## Providers and local data
 

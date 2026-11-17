@@ -2,6 +2,8 @@
 
 五种部署方式，选择适合你的：
 
+> 不想安装？官方在线版在 [flovart.avabbbb.com](https://flovart.avabbbb.com)。它由名为 `flovart` 的 Cloudflare Worker 提供（Workers + 静态资源，入口 `worker/index.ts`）：除静态页面外只运行一个同源 LLM 代理 `/api/llm-proxy/*`，给少数不支持浏览器 CORS 的白名单网关转发请求，不保存、不记录 Key 与提示词。项目数据仍保存在你的浏览器本地。
+
 ## 方式一：本地运行
 
 ```bash
@@ -71,7 +73,7 @@ docker compose up --build -d
 
 访问 http://localhost:1635。
 
-当前 Compose 只用于 Web、Hub 与 PostgreSQL 的本地联调；静态资源生产路径、安全配置和正式部署尚未完成验收，不能据此宣称生产部署已就绪。
+当前 Compose 只用于 Web、Hub 与 PostgreSQL 的本地联调，与官方在线版的 Cloudflare Worker 部署无关；静态资源生产路径、安全配置和正式部署尚未完成验收，不能据此宣称生产部署已就绪。
 
 ## 方式五：浏览器扩展
 

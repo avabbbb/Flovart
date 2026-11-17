@@ -9,7 +9,7 @@ Flovart 当前是 local-first、agent-native 的视觉制作工作台。人和 C
 | Surface | 当前职责 | 当前边界 |
 | --- | --- | --- |
 | **画布 Canvas** | GenAI 生成与 Workflow 基本盘：节点、素材、连线、生成与版本 | 当前主要创作面 |
-| **逆向 Reverse** | 参考视频逆向拆解（Script、转写证据、对齐、Timeline），经 `workflow.apply` 显式“转为画布”。规划中（设计目标，尚不可用）：演进为全能助手工作区，Agent 在画布上可见地工作 | 不是第二份 Workflow 权威；不是只有聊天的页面 |
+| **Iris**（原 逆向 Reverse） | 全能后期助手（Personal agent）。**当前不可用**：tab 是“优化中”占位。设计目标：Web 版对话优先、Flovart 画布为产出面，不装剪辑软件也能用；可选连接本地剪辑软件（Resolve 先，Premiere、剪映 / CapCut 后续）同步上下文，免手动上传；Hypit 式参考视频逆向拆解是它的一组工具 | 不是第二份 Workflow 权威；没有画布产出的纯聊天页不算 Iris；不以连接剪辑软件为前提 |
 | **Agent** | Agent 连接与状态：Codex、WorkBuddy 等本地/外部 Coding Agent 的发现、准备、状态与切换 | **不是聊天页**，不嵌内置 Assistant |
 
 Canvas 旁边有右侧 contextual drawer：**Assistant / Context / History**。Assistant 是 Flovart 内置助手；它不拥有比外部 Agent 更高的工具权限，也不承担 Host 连接管理。
@@ -34,7 +34,7 @@ Codex、Claude Code、OpenCode、WorkBuddy、TeleAgent 的真实支持级别分�
 
 Canvas 支持图片、视频、音频、文本与配置等 Workflow 节点，以及引用、连线、局部媒体工具和可见结果。
 
-逆向只通过一次明确的 `workflow.apply`（子画布节点）写入 Canvas，不与 Canvas 隐式双写状态。
+Iris 的逆向拆解工具只通过一次明确的 `workflow.apply`（子画布节点）写入 Canvas，不与 Canvas 隐式双写状态。
 
 ## Provider 与本地数据
 

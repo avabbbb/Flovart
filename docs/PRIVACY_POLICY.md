@@ -10,7 +10,7 @@ Primary legal jurisdiction: Hong Kong Special Administrative Region.
 
 [中文版本](./PRIVACY_POLICY.zh-CN.md)
 
-This Privacy Policy explains how Flovart handles data when you use the Official WebUI at `https://avabbbb.github.io/Flovart/`, desktop builds, browser extension bridge, source code, and related project features.
+This Privacy Policy explains how Flovart handles data when you use the Official WebUI at `https://flovart.avabbbb.com`, desktop builds, browser extension bridge, source code, and related project features.
 
 Flovart is designed as a local-first creative workspace. By default, the official Desktop Edition does not require an account and the publisher does not operate a hosted backend for your canvas, workflows, prompts, generated files, or API keys.
 
@@ -107,7 +107,7 @@ The current release does not automatically merge the Official WebUI workspace wi
 
 You can delete non-secret browser extension preferences by removing the extension or clearing extension storage. Provider Secrets are not stored by the official Edge Extension.
 
-The Official WebUI is statically hosted by GitHub Pages. GitHub may process request and security data under its own privacy statement; GitHub documents that visitor IP addresses are logged and stored for security purposes. Flovart does not use GitHub Pages as a backend for your Browser Workspace, prompts, media, or Provider Secrets.
+The Official WebUI is served by a Cloudflare Worker (Cloudflare Workers with static assets). Cloudflare may process request and security data, including visitor IP addresses, under its own privacy policy. The Worker serves the static app and runs one narrow same-origin proxy at `/api/llm-proxy/`: for a short allowlist of AI gateways and public API documentation that do not accept direct browser requests (currently OpenCode at `opencode.ai` and RunningHub API docs), your browser sends the request to the Worker, which forwards it to that gateway. For those gateways only, the request — including your API key and prompt — passes through the Worker in transit over TLS; the proxy does not store or log keys or prompts, forwards no cookies, and accepts only same-origin requests. All other Provider requests go directly from your browser to the Provider. Flovart does not use the Worker as a backend for your Browser Workspace, media, or Provider Secrets.
 
 You can delete desktop app data by removing the app data directory used by your operating system.
 

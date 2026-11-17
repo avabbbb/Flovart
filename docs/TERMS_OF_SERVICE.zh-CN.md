@@ -21,7 +21,7 @@ AIGC:
 
 [English controlling version](./TERMS_OF_SERVICE.md)
 
-本协议适用于官方 Flovart Desktop Edition、位于 `https://avabbbb.github.io/Flovart/` 的 Official WebUI、官方 Flovart Edge Extension，以及明确链接本协议的可选服务。源代码另行依照 MIT License 授权；本协议不减少该开源许可证授予的权利，也不向其增加额外限制。
+本协议适用于官方 Flovart Desktop Edition、位于 `https://flovart.avabbbb.com` 的 Official WebUI、官方 Flovart Edge Extension，以及明确链接本协议的可选服务。源代码另行依照 MIT License 授权；本协议不减少该开源许可证授予的权利，也不向其增加额外限制。
 
 当你在 Desktop Edition 或 Official WebUI 首次持久保存 Provider Secret 或首次发起 Provider 请求前主动勾选同意，或者在 Edge Extension 首次使用说明后继续使用扩展时，即表示接受本协议。如果你不同意，请勿连接 Provider 或使用 Edge Extension。
 
