@@ -716,8 +716,8 @@ const App: React.FC = () => {
                     two Workflow views. */}
                 {canvasView === 'reverse' ? (
                     <div className="grid h-full place-content-center gap-2 px-6 text-center" style={{ color: 'var(--isl-ink)' }} data-testid="reverse-coming-soon">
-                        <div className="text-base font-bold">{language === 'zho' ? '逆向工作台正在优化' : 'Reverse is being refined'}</div>
-                        <div className="text-sm" style={{ color: 'var(--isl-ink-soft)' }}>{language === 'zho' ? '后续版本上线。内测期间请先使用画布与 Agent，已有的逆向工程数据会保留。' : 'Coming in a later release. Use Canvas and Agent during the beta; existing Reverse projects are kept.'}</div>
+                        <div className="text-base font-bold">{language === 'zho' ? 'Iris 正在优化' : 'Iris is being refined'}</div>
+                        <div className="text-sm" style={{ color: 'var(--isl-ink-soft)' }}>{language === 'zho' ? '全能后期助手，后续版本上线。内测期间请先使用画布与 Agent，已有的逆向工程数据会保留。' : 'Your all-in-one post-production agent, coming in a later release. Use Canvas and Agent during the beta; existing reverse-breakdown projects are kept.'}</div>
                     </div>
                 ) : canvasView === 'agent' ? (
                     <AgentConnectionsPage project={activeWorkflowProject} language={language} />

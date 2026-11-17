@@ -2365,14 +2365,14 @@ export function InfiniteWorkflow({
     // Ctrl+Z still restores the nodes — the toast advertises that affordance.
     onNotify?.(language === 'zho' ? `已删除 ${deletableIds.length} 个节点 — Ctrl+Z 撤销` : `Deleted ${deletableIds.length} node${deletableIds.length > 1 ? 's' : ''} — Ctrl+Z to undo`, 'info');
   }, [applyOps, commitFrame, language, onNotify, selectedConnectionId]);
-  // 双击子画布：切到 Reverse 并选中对应逆向工程。
+  // 双击子画布：切到 Iris（内部视图 'reverse'）并选中对应逆向工程。
   const openSubgraphInReverse = useCallback((node: WorkflowNodeData) => {
     const reverseProjectId = node.metadata.reverseProjectId;
     if (!reverseProjectId) return;
     const reverse = useReverseStore.getState();
     const target = reverse.projects.find(item => item.id === reverseProjectId);
     if (!target) {
-      onNotify?.(language === 'zho' ? '对应的逆向工程已不存在' : 'The linked Reverse project no longer exists', 'warning');
+      onNotify?.(language === 'zho' ? '对应的逆向工程已不存在' : 'The linked reverse-breakdown project no longer exists', 'warning');
       return;
     }
     reverse.setTab(target.direction);

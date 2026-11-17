@@ -53,8 +53,8 @@ function SubgraphFrameSurface({ node, childCount, onToggleCollapse, language }: 
   const toggleLabel = isGroup
     ? (collapsed ? (en ? 'Expand group' : '展开分组') : (en ? 'Collapse group' : '折叠分组'))
     : (collapsed ? (en ? 'Expand subgraph' : '展开子画布') : (en ? 'Collapse subgraph' : '折叠子画布'));
-  // 分组框没有对应的逆向工程：不显示"双击在逆向中打开"，改成右键菜单提示。
-  const hint = isGroup ? (en ? 'Right-click: run group / download all' : '右键：整组执行 / 下载全部') : (en ? 'Double-click to open in Reverse' : '双击在逆向中打开');
+  // 分组框没有对应的逆向工程：不显示"双击在 Iris 中打开"，改成右键菜单提示。
+  const hint = isGroup ? (en ? 'Right-click: run group / download all' : '右键：整组执行 / 下载全部') : (en ? 'Double-click to open in Iris' : '双击在 Iris 中打开');
   return <div className="workflow-subgraph" data-testid="workflow-subgraph-frame" data-group-kind={isGroup ? 'group' : undefined} data-collapsed={collapsed ? 'true' : 'false'}>
     <div className="workflow-subgraph-header">
       <Clapperboard size={14} />

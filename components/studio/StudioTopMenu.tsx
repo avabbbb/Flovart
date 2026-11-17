@@ -317,7 +317,8 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
       <nav className="studio-top-menu__modes flex min-w-0 items-center justify-center gap-0.5" aria-label={isChinese ? '画布视图' : 'Canvas view'} role="tablist">
         {(['spatial', 'reverse', 'agent'] as const).map(view => {
           const isActive = canvasView === view;
-          const label = view === 'spatial' ? (isChinese ? '画布' : 'Canvas') : view === 'reverse' ? (isChinese ? '逆向' : 'Reverse') : 'Agent';
+          // 'reverse' 是内部视图 id（持久化值不改）；对外名称是 Iris（2026-11-17 由“逆向”改名）。
+          const label = view === 'spatial' ? (isChinese ? '画布' : 'Canvas') : view === 'reverse' ? 'Iris' : 'Agent';
           return (
             <button
               key={view}

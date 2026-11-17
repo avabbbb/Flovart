@@ -38,4 +38,11 @@ describe('shared studio shell', () => {
     fireEvent.click(screen.getByRole('button', { name: '设置' }));
     expect(model.actions.openSettings).toHaveBeenCalledOnce();
   });
+
+  it.each(['zho', 'en'] as const)('names the second top-level tab Iris and keeps it marked as coming soon (%s)', language => {
+    render(<MemoryRouter><StudioTopMenu model={{ ...menuModel('workflow'), language }} /></MemoryRouter>);
+    const tabs = screen.getAllByRole('tab').map(tab => tab.textContent);
+    expect(tabs).toEqual(language === 'zho' ? ['画布', 'Iris优化中', 'Agent'] : ['Canvas', 'IrisSoon', 'Agent']);
+    expect(tabs.join(' ')).not.toMatch(/逆向|Reverse/);
+  });
 });
