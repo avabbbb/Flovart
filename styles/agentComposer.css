@@ -263,13 +263,17 @@
 
 /* ── 对话导航：轮次时间轴 / 回到最新消息（参考 RunningHub）── 只用现有 token，明暗两套自动跟随。 */
 .agent-conversation .agent-conversation__viewport { position: relative; display: flex; min-height: 0; flex: 1; flex-direction: column; }
-.agent-turn-rail { position: absolute; top: 50%; left: -11px; z-index: 6; display: flex; max-height: 70%; flex-direction: column; gap: 5px; padding: 4px 0; transform: translateY(-50%); }
-.agent-turn-rail__item { position: relative; display: flex; align-items: center; }
+.agent-turn-rail { position: absolute; top: 50%; right: 2px; align-items: flex-end; z-index: 6; display: flex; max-height: 70%; flex-direction: column; gap: 8px; padding: 4px 0; transform: translateY(-50%); }
+.agent-turn-rail__item { position: relative; display: flex; align-items: center; justify-content: flex-end; }
 .agent-turn-rail__tick { display: block; width: 8px; height: 2px; border: 0; border-radius: 2px; padding: 0; background: color-mix(in srgb, var(--isl-ink-ghost) 55%, transparent); cursor: pointer; transition: width .15s ease, background-color .15s ease; }
 .agent-turn-rail__tick::before { content: ''; display: block; height: 10px; margin-top: -4px; } /* 扩大点击区 */
-.agent-turn-rail__tick:hover, .agent-turn-rail__tick:focus-visible { width: 12px; background: var(--isl-ink-soft); outline: none; }
-.agent-turn-rail__tick.is-active { width: 12px; background: var(--isl-ink); }
-.agent-turn-rail__preview { position: absolute; top: 50%; left: 18px; z-index: 7; display: grid; width: 248px; gap: 4px; border: 1px solid var(--agent-line, var(--isl-border)); border-radius: 10px; padding: 9px 11px; color: var(--isl-ink); background: var(--isl-card); box-shadow: var(--card-on-shell-shadow, 0 8px 24px rgba(0, 0, 0, .18)); transform: translateY(-50%); pointer-events: none; }
+.agent-turn-rail::before { content: ''; position: absolute; inset: -12px -2px -12px -14px; } /* 吸附感应区，比刻度宽（刻度在右缘，向左延伸） */
+.agent-turn-rail__tick { width: calc(8px + 14px * var(--mag, 0)); opacity: calc(.7 + .3 * var(--mag, 0)); position: relative; z-index: 1; }
+.agent-turn-rail.is-magnet .agent-turn-rail__tick { transition: width .12s cubic-bezier(.2, .8, .2, 1), background-color .12s ease; }
+.agent-turn-rail__tick:hover, .agent-turn-rail__tick:focus-visible { background: var(--isl-ink-soft); outline: none; }
+.agent-turn-rail__tick:focus-visible { width: 18px; }
+.agent-turn-rail__tick.is-active { width: max(12px, calc(8px + 14px * var(--mag, 0))); background: var(--isl-ink); }
+.agent-turn-rail__preview { position: absolute; top: 50%; right: 30px; z-index: 7; display: grid; width: 248px; gap: 4px; border: 1px solid var(--agent-line, var(--isl-border)); border-radius: 10px; padding: 9px 11px; color: var(--isl-ink); background: var(--isl-card); box-shadow: var(--card-on-shell-shadow, 0 8px 24px rgba(0, 0, 0, .18)); transform: translateY(-50%); pointer-events: none; }
 .agent-turn-rail__preview strong { display: -webkit-box; overflow: hidden; font-size: 12px; font-weight: 700; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .agent-turn-rail__preview p { display: -webkit-box; margin: 0; overflow: hidden; color: var(--isl-ink-soft); font-size: 11px; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
 .agent-turn-rail__preview small { color: var(--isl-ink-ghost); font-size: 10px; }
@@ -278,7 +282,7 @@
 .agent-scroll-latest__btn:hover { background: var(--agent-subtle, var(--isl-surface-2)); }
 .agent-scroll-latest__btn:focus-visible { outline: 2px solid color-mix(in srgb, var(--isl-mint) 60%, transparent); outline-offset: 2px; }
 .agent-scroll-latest__btn[data-tip]:hover::after, .agent-scroll-latest__btn[data-tip]:focus-visible::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%; border-radius: 6px; padding: 3px 8px; color: var(--isl-card); background: var(--isl-ink); font-size: 11px; line-height: 1.5; white-space: nowrap; transform: translateX(-50%); pointer-events: none; }
-@media (max-width: 560px) { .agent-turn-rail { left: -7px; } .agent-turn-rail__tick { width: 5px; } .agent-turn-rail__preview { width: 200px; } }
+@media (max-width: 560px) { .agent-turn-rail { right: 0; } .agent-turn-rail__tick { width: 5px; } .agent-turn-rail__preview { width: 200px; } }
 
 /* ── 引用回复：输入框上方的引用条 + 用户气泡里的引用块 ── */
 .agent-quote-bar { position: relative; display: grid; gap: 2px; margin: 0 0 2px; border-radius: 12px; padding: 7px 30px 7px 10px; color: var(--isl-ink-soft); background: var(--agent-subtle, var(--isl-surface-2)); font-size: 11px; }
@@ -355,3 +359,5 @@
   .agent-conversation .agent-composer .agent-composer__controls { align-items: flex-end; }
   .agent-conversation .agent-composer .agent-composer__tools { flex-wrap: wrap; row-gap: 4px; }
 }
+/* 轮次刻度在右缘：给消息区留出一条刻度槽，刻度不压到「你」的气泡上。 */
+.agent-conversation__viewport:has(> .agent-turn-rail) > .agent-conversation__messages { padding-right: 16px; }

@@ -1,5 +1,5 @@
 import { ChevronDown } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { translations } from '../../utils/translations';
 import { activeTurnIndex, type ConversationTurn } from './agentConversationNav';
 
@@ -15,6 +15,13 @@ export function activeMessageScroller(root: HTMLElement | null): HTMLElement | n
   const [outer, inner] = messageScrollers(root);
   if (inner && inner.scrollHeight > inner.clientHeight + 1) return inner;
   return outer ?? null;
+}
+
+/** 吸附强度：距离指针 0px 为 1，约 25px 外衰减到 0（高斯）。 */
+export function magnetStrength(distance: number, radius = 9) {
+  if (!Number.isFinite(distance)) return 0;
+  const value = Math.exp(-(distance * distance) / (2 * radius * radius));
+  return value < 0.02 ? 0 : value;
 }
 
 function prefersReducedMotion() {
@@ -50,7 +57,25 @@ export function AgentTurnTimeline({ rootRef, turns, language, onJump }: {
   const copy = translations[language].agentPanel;
   const [active, setActive] = useState(-1);
   const [preview, setPreview] = useState<number | null>(null);
+  const railRef = useRef<HTMLElement | null>(null);
   const count = turns.length;
+
+  /** 吸附：指针在刻度条附近移动时，离指针越近的刻度越长（像 Dock 放大），并吸附到最近一轮显示预览。 */
+  const magnetize = useCallback((clientY: number | null) => {
+    const rail = railRef.current;
+    if (!rail) return;
+    const ticks = Array.from(rail.querySelectorAll<HTMLElement>('.agent-turn-rail__tick'));
+    let nearest = -1;
+    let best = Number.POSITIVE_INFINITY;
+    ticks.forEach((tick, index) => {
+      if (clientY === null) { tick.style.removeProperty('--mag'); return; }
+      const rect = tick.getBoundingClientRect();
+      const distance = Math.abs(rect.top + rect.height / 2 - clientY);
+      tick.style.setProperty('--mag', magnetStrength(distance).toFixed(3));
+      if (distance < best) { best = distance; nearest = index; }
+    });
+    setPreview(clientY === null ? null : nearest);
+  }, []);
 
   const measure = useCallback(() => {
     const root = rootRef.current;
@@ -92,7 +117,14 @@ export function AgentTurnTimeline({ rootRef, turns, language, onJump }: {
   };
 
   return (
-    <nav className="agent-turn-rail" aria-label={copy.turnTimeline} onMouseLeave={() => setPreview(null)}>
+    <nav
+      ref={railRef}
+      className={`agent-turn-rail${preview !== null ? ' is-magnet' : ''}`}
+      aria-label={copy.turnTimeline}
+      onPointerMove={event => { if (event.pointerType !== 'touch') magnetize(event.clientY); }}
+      onPointerLeave={() => magnetize(null)}
+      onClick={event => { if (event.target === event.currentTarget && preview !== null) jump(preview); }}
+    >
       {turns.map(turn => (
         <div key={turn.userMessageId} className="agent-turn-rail__item">
           <button
@@ -100,7 +132,6 @@ export function AgentTurnTimeline({ rootRef, turns, language, onJump }: {
             className={`agent-turn-rail__tick${turn.index === active ? ' is-active' : ''}`}
             aria-label={`${copy.turnLabel(turn.index + 1)}${turn.question ? '：' + turn.question : ''}`}
             aria-current={turn.index === active ? 'true' : undefined}
-            onMouseEnter={() => setPreview(turn.index)}
             onFocus={() => setPreview(turn.index)}
             onBlur={() => setPreview(current => (current === turn.index ? null : current))}
             onClick={() => jump(turn.index)}
