@@ -2,20 +2,20 @@
 
 四类：**current truth**（当前产品与系统的唯一依据）→ **提案**（未接受）→ **指南与记录**（使用、进度、开发日志）→ **归档**（只读历史）。支持等级只看 [SUPPORT_MATRIX](../SUPPORT_MATRIX.md)；AI / 自动化开发约束见 [AGENTS.md](../AGENTS.md)。
 
-产品地图：顶栏 **画布 Canvas**（GenAI 生成与 Workflow 基本盘）｜**逆向 Reverse**（全能助手：强模型把电脑与画布当工具、多 Agent 协作；逆向拆解是其工具）｜**Agent**（Agent 连接与状态管理）。详见 [00](design/00-overview.md) §3.1。
+产品地图：顶栏 **画布 Canvas**（GenAI 生成与 Workflow 基本盘）｜**Iris**（全能后期助手 · Personal agent：对话优先、画布为产出面，Web 独立可用，可选连接本地剪辑软件同步上下文；原名 逆向，当前为即将推出的占位）｜**Agent**（Agent 连接与状态管理）。Canvas + Agent 是 Workflow 生产工具。详见 [00](design/00-overview.md) §3.1。
 
 ## 1. Current truth（`docs/design/`，共 11 份，上限 12，见 AGENTS.md §9）
 
 | 文档 | 内容 |
 | --- | --- |
 | [00 总体设计](design/00-overview.md) | 产品一句话、三个 surface 与交接、原则、关键决策、状态归属、路线图、对外口径、术语 |
-| [01 交互设计](design/01-interaction.md) | 交互与行为：三条总规则、状态模型、核心流程、产品地图、逆向全能助手工作区（prompt 首页、多 Agent 光标、飞入组装、trace 同步、预览、版本对比）、Canvas 交互、run / trace、参考先行、交互模式、参考表；[可点击原型](design/prototypes/index.html) |
+| [01 交互设计](design/01-interaction.md) | 交互与行为：三条总规则、状态模型、核心流程、产品地图、Iris 个人 Agent 工作区（对话首页、对话栏 + 画布产出面、多 Agent 光标、飞入组装、trace 同步、预览、版本对比、宿主上下文连接器）、Canvas 交互、run / trace、参考先行、交互模式、参考表；[可点击原型](design/prototypes/index.html) |
 | [DESIGN.md](design/DESIGN.md) | 视觉与动效 token（Refero 式分层）：mood、颜色、字体、按钮、图标、间距、层级与玻璃、圆角、组件、底层逻辑、Do & Don't、动效（三档弹簧） |
 | [10 Canvas / Workflow](design/10-canvas-workflow.md) | 可见生产图、mutation、素材语义、分镜 / 锚点 / 拼接等制作机制 |
-| [11 Reverse](design/11-reverse.md) | 逆向 = 全能助手的定位；Hypit 架构复刻的逆向拆解（作为工具与面板）、转为 Canvas 子画布 |
+| [11 Iris](design/11-iris.md) | Iris = 全能后期助手（Personal agent）的定位与现状；Hypit 架构复刻的逆向拆解（作为工具与面板）、转为 Canvas 子画布 |
 | [12 Agent](design/12-agent.md) | Skill + CLI、MCP 投影、Agent 连接与状态中心、内置 Agent 的放置、安全边界 |
 | [13 Generation & Runtime](design/13-generation-runtime.md) | 一条生成路径、Provider 路由、任务与计划卡、素材版本、流式与媒体用量 |
-| [14 Creative Hosts](design/14-creative-hosts.md) | Resolve 首发、叠加层、上轨道、原生效果 |
+| [14 Creative Hosts](design/14-creative-hosts.md) | Resolve 首发、叠加层、上轨道、原生效果；Iris 宿主上下文连接器（Resolve → Premiere → 剪映 / CapCut） |
 | [15 Web, Community & Extension](design/15-web-community-extension.md) | 网站后端、社区、浏览器导入、发行 |
 | [20 质量与治理](design/20-quality-and-governance.md) | 证据分级、评测、文档结构与规则 |
 
@@ -25,7 +25,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
-| [16 Agent 视频流水线](design/16-agent-video-pipeline.md) | 宣传片流水线能力矩阵、工具集、run / trace 模型、素材归档、放置（2026-11-13 改为逆向 = 全能助手主场）、P0–P2 计划与验收；P0 已在 main 实现（§12） |
+| [16 Agent 视频流水线](design/16-agent-video-pipeline.md) | 宣传片流水线能力矩阵、工具集、run / trace 模型、素材归档、放置（2026-11-13 改为逆向 = 全能助手主场，2026-11-17 改名 Iris）、P0–P2 计划与验收；P0 已在 main 实现（§12） |
 | [远景：三条产品线](plans/vision-three-tracks.md) | 截图 + 录制（A）、视频逆向 + Agent 辅助制作（B）、创作者 UXP 插件（C，AE / PS 内读取工程上下文、直接操作图层与时间线，首个场景静止系 MAD）；方向探索，不改现行优先级 |
 | [真实操作录制与剪辑 Hub 计划](plans/recordly-capture-hub.md) | Recordly 连接器 → Rust 录制 + Snipaste 式截图伴生工具 → 视频制作 Hub；录制截图为本体、反推 / 发送到画布 / Agent 为可插拔模块；许可证边界（Recordly AGPL）与分期 H0–H3（草案） |
 | [多模态 AIGC 评测平台计划](plans/aigc-eval-platform.md) | 在 `eval/` 内补 L4 题库：条目 / 生成 / 评分 Schema、场景 × 能力 × 难度 × dev/test/holdout、客观轨 grader 与稳定性撤回、可用 / 满意 / 惊喜率、结果库与静态看板、「设为首图」偏好事件（M0 已实现，口径以 eval.md §4.1 为准） |

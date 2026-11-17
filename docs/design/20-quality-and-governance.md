@@ -49,7 +49,7 @@ docs/
 ├─ index.md                  入口
 ├─ design/                   设计（≤ 12 份，含提案）
 │  ├─ 00-overview.md         总体设计
-│  ├─ 01-interaction.md      交互与行为（产品地图、逆向工作区、状态、流程、参考先行）
+│  ├─ 01-interaction.md      交互与行为（产品地图、Iris 工作区、状态、流程、参考先行）
 │  ├─ DESIGN.md              视觉与动效 token（Refero 式 DESIGN.md 分层）
 │  ├─ 10–15 模块文档          每个模块一份
 │  ├─ 16+ 提案               PROPOSAL，同时最多 2 份，接受后蒸馏并归档

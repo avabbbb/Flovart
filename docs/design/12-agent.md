@@ -7,9 +7,9 @@
 | 概念 | 是什么 | 不是什么 |
 | --- | --- | --- |
 | **外部 Agent 接入** | Codex、Claude Code、OpenCode、WorkBuddy 等通过 Skill + CLI（或 MCP 投影）调用 Flovart | 第二套业务实现 |
-| **Agent surface** | 顶栏 Agent 连接与状态中心：runtime、模型 / Provider 路由、外部 Agent（Codex、Claude Code、DSH）的发现、准备、健康、每个 Agent 的状态与切换；向逆向供应 Agent 与模型 | 对话、run 编辑、Tasks / Artifacts 工作区 |
-| **逆向（全能助手）** | 内置 Agent 的主场：prompt 首页、画布上可见的多 Agent 光标、docked 侧栏 trace / 计划 / 审批（[01](01-interaction.md) §11–§12） | 只有聊天的整页、第二份 Workflow 或业务实现 |
-| **Assistant drawer** | Canvas 旁的轻量上下文助手，调用同一批受控操作；多步制作“在逆向中继续”进入同一 run | Host picker、Agent 安装、更高权限、独立 run 主场 |
+| **Agent surface** | 顶栏 Agent 连接与状态中心：runtime、模型 / Provider 路由、外部 Agent（Codex、Claude Code、DSH）的发现、准备、健康、每个 Agent 的状态与切换；向 Iris 供应 Agent 与模型 | 对话、run 编辑、Tasks / Artifacts 工作区 |
+| **Iris（全能后期助手 · Personal agent）** | 内置 Agent 的主场：对话优先，画布是产出面；画布上可见的多 Agent 光标、对话里的计划 / trace / 审批卡；可选宿主上下文连接器（[01](01-interaction.md) §11–§12、[11](11-iris.md)） | 没有画布产出的纯聊天页、第二份 Workflow 或业务实现、把宿主连接设为前提 |
+| **Assistant drawer** | Canvas 旁的轻量上下文助手，调用同一批受控操作；多步制作“在 Iris 中继续”进入同一 run | Host picker、Agent 安装、更高权限、独立 run 主场 |
 
 三者不复制彼此的 UI、会话、Host picker 或状态。
 
@@ -21,7 +21,7 @@
 - 生成与素材（宿主路径）：任务提交、`task.get`、`artifact.locate` 等，只有实现、schema、验证齐备后才写进 Skill。
 - 命令注册表 `tools/flovart/registry.js` 是唯一来源；文档里出现的命令必须在注册表中（`npm run docs:check` 校验）。
 
-命名：产品与 CLI 统一使用 Flovart / `flovart`。历史宣传片中的 `iris layer.*` 仅为概念示意，不是可执行命令；以当前 CLI contract 为准。
+命名：产品与 CLI 统一使用 Flovart / `flovart`。历史宣传片中的 `iris layer.*` 是旧代号（Iris 曾是 Flovart 的旧品牌）的概念示意，不是可执行命令，也与现在的 Iris surface 无关；以当前 CLI contract 为准。
 
 ## 3. Transport
 

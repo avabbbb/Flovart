@@ -29,7 +29,7 @@ Flovart 是给**剪辑师、创作者和他们的 Coding Agent** 用的本地创
 
 | 名称 | 字号 / 行高 | 字重 | 用法 |
 | --- | --- | --- | --- |
-| display | 20 / 28px | 600 | 仅首页（逆向 prompt 首页“今天想做点什么？”）、首次使用 |
+| display | 20 / 28px | 600 | 仅首页（Iris 对话首页“今天想做点什么？”）、首次使用 |
 | title | 15 / 22px | 600 | 面板标题、空态标题、视图标题 |
 | body-strong | 13 / 20px | 600 | 卡片标题、抽屉 / 侧栏分区标题、run 名 |
 | body | 12 / 18px | 400 | 正文、对话、trace 行、表格 |
@@ -71,7 +71,7 @@ Flovart 是给**剪辑师、创作者和他们的 Coding Agent** 用的本地创
 | 维度 | 规格 |
 | --- | --- |
 | Mood | 暖纸面、单一薄荷、扁平分层、紧凑密度（§1） |
-| Layout | 顶栏三个 surface：**画布 Canvas｜逆向 Reverse｜Agent**（职责见 [01](01-interaction.md) §11）；下方工作区 = 主 surface + 可停靠侧栏；Canvas / 逆向 的主体是无限画布 |
+| Layout | 顶栏三个 surface：**画布 Canvas｜Iris｜Agent**（职责见 [01](01-interaction.md) §11）；下方工作区 = 主 surface + 可停靠侧栏；Canvas 的主体是无限画布，Iris = 对话栏 + 无限画布（产出面） |
 | Content width | 页面型内容 `--content-max: 1280px`；表单 `--form-max: 680px`；侧栏 `--sidebar-width: clamp(220px, 24vw, 320px)`；宿主面板 280–480px |
 | Grid | 画布 24px 点阵（`.workflow-bg--dots`，墨 16%）或线格（`--lines`，13%），可开关；吸附网格同 24px；页面用 `--space-*` 间距而非列栅格 |
 | Icons | `lucide-react`（^1.20）线性图标，常用 12–18px（15px 75 处、14px 66 处），描边默认 2 |

@@ -1,7 +1,7 @@
 # 提案：Agent 驱动的产品宣传片流水线（Agent Video Pipeline）
 
-> 状态：**PROPOSAL**（2026-11-13；§6 放置同日修订为“逆向 = 全能助手主场”）。本文是提案，不是 current truth；被接受后按 AGENTS.md §9 蒸馏进 [00 总体设计](00-overview.md)、[12 Agent](12-agent.md)、[13 Generation & Runtime](13-generation-runtime.md)、[10 Canvas / Workflow](10-canvas-workflow.md)，再归档本文。
-> **实施进度（2026-11-15）**：P0 的工具层与 trace 已在 `main` 实现并端到端跑通（见 §12）：trace 在 Runtime 共用的 `flovart-state.db`（migration 5）；Remotion 文字 / 字幕 / 音频轨、`capture.ui`、MCP 投影、CJK 字体已上线；配音经 RunningHub 调 MiniMax speech 已真实实测。Canvas 抽屉 run 卡片与画布版本分组是轻量入口，逆向 docked 侧栏与 Agent 光标、DSH 投影、直连 MiniMax 与 WhisperX 实测尚未完成，本文仍是提案。桌面级真实操作录制另见 [录制与剪辑 Hub 计划](../plans/recordly-capture-hub.md)。
+> 状态：**PROPOSAL**（2026-11-13；§6 放置同日修订为“逆向 = 全能助手主场”；2026-11-17 逆向改名 Iris，改为对话优先、画布为产出面）。本文是提案，不是 current truth；被接受后按 AGENTS.md §9 蒸馏进 [00 总体设计](00-overview.md)、[12 Agent](12-agent.md)、[13 Generation & Runtime](13-generation-runtime.md)、[10 Canvas / Workflow](10-canvas-workflow.md)，再归档本文。
+> **实施进度（2026-11-15）**：P0 的工具层与 trace 已在 `main` 实现并端到端跑通（见 §12）：trace 在 Runtime 共用的 `flovart-state.db`（migration 5）；Remotion 文字 / 字幕 / 音频轨、`capture.ui`、MCP 投影、CJK 字体已上线；配音经 RunningHub 调 MiniMax speech 已真实实测。Canvas 抽屉 run 卡片与画布版本分组是轻量入口，Iris 对话栏与 Agent 光标、DSH 投影、直连 MiniMax 与 WhisperX 实测尚未完成，本文仍是提案。桌面级真实操作录制另见 [录制与剪辑 Hub 计划](../plans/recordly-capture-hub.md)。
 > 标注约定沿用总纲：**已实现** = 代码在主干；**已验证** = 有 Support Matrix 证据；**设计目标** = 尚未实现；**假设** = 待真实环境确认。本文“Flovart 今天”一列全部来自 2026-11-13 `main`（`b92e29b`）真实代码核对，不来自旧文档。
 
 ## 0. 一句话
@@ -47,7 +47,7 @@
 | 能力 | 用于 | Flovart 今天 | 差距 / 需要的工作 | 优先级 |
 | --- | --- | --- | --- | --- |
 | C1 Brief / 定位 | 全片目标、画幅、时长 | **部分**：`flovart_ask` 表单提问、`flovart_todo` 清单、`flovart_web_search`（`services/browserAgentKernel.ts`、`agent/todo.js`）；没有结构化 Brief | 定义 `brief` 作为 run 的第一个 artifact（受众、渠道、核心一句、画幅、语言、时长、预算） | P0 |
-| C2 参考片拆解 | 学镜头关系 | **部分**：Reverse 纯函数层（`services/reverse/narrative.ts`、`align.ts`、`caption.ts`、`composition.ts`）、节点工具 `video-extract-frame`、`reverse-prompt`、`flovart_workflow_media_view` 抽任意秒数帧 | Reverse 拆解结果可作为 run 输入（`reverseProjectId`）；Agent 侧有读取 Reverse 工程的只读入口 | P1 |
+| C2 参考片拆解 | 学镜头关系 | **部分**：Iris 逆向拆解纯函数层（`services/reverse/narrative.ts`、`align.ts`、`caption.ts`、`composition.ts`）、节点工具 `video-extract-frame`、`reverse-prompt`、`flovart_workflow_media_view` 抽任意秒数帧 | Reverse 拆解结果可作为 run 输入（`reverseProjectId`）；Agent 侧有读取 Reverse 工程的只读入口 | P1 |
 | C3 读产品仓库 | 找卖点与路径 | **部分**：`flovart_grep` 只搜已授权本地文件夹的文本（`services/agentLocalGrep.ts`）；内置 Agent 提示词明确“不得访问 Shell、任意文件” | 内置 Agent 保持只读授权目录；需要跑脚本 / 启动项目时交给外部 Coding Agent（见 §6） | P1 |
 | C4 演示数据注入 | 干净的演示状态 | **缺**（属于用户产品仓库，不是 Flovart 能力） | 不在 Flovart 内实现；由外部 Coding Agent 在用户仓库完成，Flovart 只记录为 trace 中的外部步骤 | P2 |
 | C5 真实 UI 采集 | 截图 / 录屏 / 原生动效 | **缺**：Agent 无截图 / 录屏工具；仓库有 `playwright` 依赖但只用于测试 | 新增 Runtime 能力 `capture.ui`（本机 Playwright 打开用户给的本地 URL，按步骤截图 / 录屏 → durable artifact）；P0 先用“外部 Agent 或用户放进授权文件夹 → `asset.import`” | P1（P0 走导入） |
@@ -59,7 +59,7 @@
 | C11 时长与词级时间戳 | 镜头卡点 | **部分**：`services/reverse/evidence.ts` 能导入 WhisperX / `hypit.transcript@1` JSON；`align.ts` 做叙事↔词对齐；没有转写执行器 | Runtime 新增 `audio.transcribe`（本机 WhisperX 或用户自装 hypit CLI），产出证据 artifact；ffprobe 测时长 | **P0** |
 | C12 字幕 | 底部字幕 | **部分**：`services/reverse/caption.ts`（CaptionDocument + Timing）；Runtime `media.render` 用 ffmpeg 烧字幕；Remotion `ProductionVideo.tsx` 不画字幕 | 合成 spec 增加 caption 轨，Remotion 组件渲染并保留安全区 | P0 |
 | C13 音乐 / 音效 / 闪避 | 混音 | **缺**：`production.rs` 中 `audio.music` 直接 `CAPABILITY_UNAVAILABLE`；无 ducking | 合成 spec 支持多音轨（voice / music / sfx）与音量包络；音乐先只支持导入，不做生成 | P1 |
-| C14 代码合成（Remotion） | 时间线 | **部分**：`remotion/Root.tsx` + `components/reverse/ProductionVideo.tsx` 只按镜头顺序铺图片 / 视频；`services/reverse/productionSpec.ts` 的 ProductionSpec V1 只从 Reverse 派生，无音频 / 文字 / 动画 | ProductionSpec V2（= 合成 spec）：视频 / 图片 / 文字 / 字幕 / 音频轨、镜头 `locked`、关键帧；可由 Agent 修订 | **P0** |
+| C14 代码合成（Remotion） | 时间线 | **部分**：`remotion/Root.tsx` + `components/reverse/ProductionVideo.tsx` 只按镜头顺序铺图片 / 视频；`services/reverse/productionSpec.ts` 的 ProductionSpec V1 只从逆向工程派生，无音频 / 文字 / 动画 | ProductionSpec V2（= 合成 spec）：视频 / 图片 / 文字 / 字幕 / 音频轨、镜头 `locked`、关键帧；可由 Agent 修订 | **P0** |
 | C15 屏幕跟踪合成 | 真实 UI 长进实景 | **缺** | P1 先支持手动四角关键帧 + 透视（Remotion 内实现）；自动跟踪、手指遮罩 P2 | P2 |
 | C16 ffmpeg 处理 | 剪、拼、抽帧、探测 | **部分**：浏览器 ffmpeg.wasm 节点工具（trim / merge / extract-frame / av-split / audio-trim / speed / pitch / stem-split，`components/workflow/operationRegistry.ts`、`services/videoTools.ts`、`services/audioTools.ts`）；Runtime 原生 ffmpeg / ffprobe 只用于 `media.render` | 增加受控 `media.probe`（时长、编码、黑帧、静音、响度）；不开放任意 ffmpeg 命令行 | P0 |
 | C17 渲染导出 | MP4 | **部分**：`scripts/render-production.mjs`（Remotion `renderMedia`）存在但没有任何调用方；Runtime `media.render` 是 ffmpeg 拼接 + 字幕 + 旁白（`local_media.rs`） | `composition.render` = Runtime 任务，engine 选 `remotion`（调用上述脚本）或 `ffmpeg-concat`；结果是 durable artifact | **P0** |
@@ -82,7 +82,7 @@
 | C13 音乐 / 闪避 | **部分**：音乐导入与固定 25% 闪避；无音乐生成、无可调包络 | §12.3 |
 | C15 屏幕跟踪合成 | **缺** | P1 / P2 |
 | C16–C21 | **有**：`media.probe`、`composition.render`、`media.frames`、`review.submit` + `composition.patch`、版本与画布分组、`run.archive` | §12.1 |
-| C23 trace | **有**：命令边界自动记 Step；逆向侧栏 UI 未做 | §12 |
+| C23 trace | **有**：命令边界自动记 Step；Iris 中的 trace UI 未做 | §12 |
 | 三级镜头 / 设备样机 / 点击圈 / 卡片展开 | **缺** | 与 Hub 计划 H1 同一组能力 |
 
 矩阵要点：
@@ -166,7 +166,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 ### 4.4 重试与恢复
 
 - Runtime 任务沿用现有语义：UI 关闭不取消；重启先恢复；`unknown_submit` 先查询不重提。
-- 页面刷新后：逆向读取 `pipeline.run.get`，从最后一个未完成 Step 继续；已完成 Step 不重放（幂等键命中返回原结果）。
+- 页面刷新后：Iris 读取 `pipeline.run.get`，从最后一个未完成 Step 继续；已完成 Step 不重放（幂等键命中返回原结果）。
 - 晚到结果作为新产物挂在原 Step 上，不覆盖用户已选版本。
 
 ## 5. 素材管理与归档
@@ -178,17 +178,19 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 - **归档**（`run.archive`）：在用户选定目录生成 `<run 名>/final/`、`spec/`（各版合成 spec JSON）、`stems/`（voice / music / sfx）、`rejected/`、`reviews.md`、`manifest.json`（sha256 清单）。归档复制字节；画布与 Runtime 只存引用。
 - 用户授权文件夹仍是引用语义（`local-folder:<folderId>/<相对路径>`），进入 run 时由 `asset.import` 生成指纹，文件变化时提示重新定位。
 
-## 6. 放在哪里：逆向（全能助手）是主场
+## 6. 放在哪里：Iris（原 逆向）是主场
 
+> **2026-11-17**：顶栏第二个 tab 由 逆向 改名 **Iris**（个人 Agent），交互改为对话优先、画布为产出面（[01](01-interaction.md) §12）。下文已按新名更新；侧栏分区的描述以 01 §12.5 为准。
+>
 > **2026-11-13 修订**：本节原结论“在 Canvas 的 Assistant 抽屉里发起和驱动 run”已被 2026-11-13 的产品放置决定取代。下文为现行方案；原结论与代码依据保留在 §6.4 作为历史，不再生效。产品地图见 [00](00-overview.md) §3.1，交互见 [01](01-interaction.md) §11–§12。
 
 ### 6.1 结论
 
-- **逆向 Reverse（顶栏中间，全能助手）是 run 的主场**：prompt 首页发起（可拖入参考视频）；run 开始后主体是画布（与 Canvas 同一 Workflow），画布本身是 Agent 的工具之一——`workflow.inspect / apply / node.run / viewport.set` 以带标签的 Agent 光标可见地执行；trace、计划 / 待办与审批在右侧 docked 侧栏；评审修补以版本 v1…vN 呈现。
+- **Iris（顶栏中间，个人 Agent）是 run 的主场**：从对话发起（可拖入参考视频，或由已连接的宿主带入上下文）；画布是产出面（与 Canvas 同一 Workflow），也是 Agent 的工具之一——`workflow.inspect / apply / node.run / viewport.set` 以带标签的 Agent 光标可见地执行；trace、计划 / 待办与审批作为卡片出现在对话栏；评审修补以版本 v1…vN 呈现。
 - **画布 Canvas**：GenAI 生成与 Workflow 基本盘；被 run 调用；节点上带 `runId` / `version` 与 `origin=agent`。
 - **Agent 页**：供应 run 使用的 Agent、模型 / Provider 路由与 Runtime 健康；不放对话、不放 run 编辑。
-- **Canvas Assistant 抽屉**：保留为轻量上下文入口（就地问答、单步操作）；多步请求或已有 run 时显示 run 条与“在逆向中继续”，切换后进入**同一个 run**（同一 runId，不复制会话）。
-- **逆向拆解**（Hypit 式转写 / 对齐 / timeline）是 run 的一组工具和侧栏中的一个面板，不再是独立工作台；“用作宣传片参考”即把参考视频拖入 prompt 首页。
+- **Canvas Assistant 抽屉**：保留为轻量上下文入口（就地问答、单步操作）；多步请求或已有 run 时显示 run 条与“在 Iris 中继续”，切换后进入**同一个 run**（同一 runId，不复制会话）。
+- **逆向拆解**（Hypit 式转写 / 对齐 / timeline）是 run 的一组工具和一个面板，不再是独立工作台；“用作宣传片参考”即把参考视频拖进 Iris 对话。
 
 ### 6.2 为何改变（相对原抽屉方案）
 
@@ -197,13 +199,13 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 | 抽屉宽度有限，trace + 计划 + 审批 + 对话 + 待处理卡挤在一列（见 01 §19.4 D10） | docked 侧栏可加宽、分区可见；画布占主体 |
 | run 的过程只在列表里，画布上的写入“突然出现” | 每次写入都是可见光标动作，trace 与元素双向高亮 |
 | 多 Agent / 外部 caller 无法区分谁在做什么 | 每个子 Agent / caller 一个带标签的光标与 trace 徽标 |
-| 与“全页聊天禁令”的边界不清 | 逆向是 prompt 优先的画布工作区（主体是画布与产物），不是只有对话的页面；AGENTS.md 规则相应改为“禁止只有聊天的整页” |
+| 与“全页聊天禁令”的边界不清 | Iris 对话优先，但每个 run 的计划、素材与版本都落到画布上；没有画布产出的纯聊天页不算 Iris（AGENTS.md §2） |
 
 ### 6.3 各面的职责
 
-- **逆向（主场）**：首页发起 run；侧栏“计划”显示 Step 清单与审批（预算一次确认）；“运行”显示 trace（Step、caller、版本、评审轮，点开定位到画布元素 / 帧）；“对话”是输入与 run 卡片；“逆向拆解”面板。外部 Agent 驱动时，其写入作为带 caller 徽标的 Step 与光标出现在逆向。
+- **Iris（主场）**：对话发起 run；对话里的计划卡显示 Step 清单与审批（预算一次确认）；run 卡片展开“运行”trace（Step、caller、版本、评审轮，点开定位到画布元素 / 帧）与“逆向拆解”面板。外部 Agent 驱动时，其写入作为带 caller 徽标的 Step 与光标出现在 Iris。
 - **Canvas**：同一份可见生产状态（素材节点、各版成片分组）；抽屉显示 run 条与跳转。
-- **Agent 页**：Runtime 是否在线、ffmpeg / Node / Remotion 浏览器 / WhisperX 是否就绪、TTS / 视频 Provider 路由就绪、外部 Agent（Codex / Claude Code / DSH）连接；可选只读“最近 run”跳转（跳到逆向）。
+- **Agent 页**：Runtime 是否在线、ffmpeg / Node / Remotion 浏览器 / WhisperX 是否就绪、TTS / 视频 Provider 路由就绪、外部 Agent（Codex / Claude Code / DSH）连接；可选只读“最近 run”跳转（跳到 Iris）。
 
 ### 6.4 历史：原抽屉方案的代码依据（已被 6.1 取代）
 
@@ -220,7 +222,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 
 ```text
 用户 PC
-├─ Flovart Web / Tauri 窗口：逆向（全能助手）+ Canvas（内置 Agent 内核，LLM 走用户配置的文本路由）
+├─ Flovart Web / Tauri 窗口：Iris（个人 Agent）+ Canvas（内置 Agent 内核，LLM 走用户配置的文本路由）
 ├─ Local Runtime（Rust，src-tauri/src/runtime/）
 │   ├─ SQLite：tasks / events / production_* / run_steps / review_rounds / usage_ledger
 │   ├─ Artifact store（内容寻址）
@@ -246,7 +248,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 
 ### P0：本机最小端到端 trace（不依赖付费也能跑通）
 
-目标：内置 Agent 在逆向（全能助手）里，从 brief + 两张授权文件夹里的真实截图出发，跑出 15–20 秒小样，并完成至少一轮“评审 → 定向修补 → 重渲染”。
+目标：内置 Agent 在 Iris 里，从 brief + 两张授权文件夹里的真实截图出发，跑出 15–20 秒小样，并完成至少一轮“评审 → 定向修补 → 重渲染”。
 
 1. **Trace 存储**：Runtime 新增 `run_steps`、`review_rounds` 迁移；命令边界自动记 Step；`pipeline.run.start` / `pipeline.run.get`。
 2. **内置 Agent 工具集**：run 激活时追加 pipeline 工具与 `task.get` / `task.cancel`、`asset.list`；系统提示词增加评审循环规则（findings 必须带时间点、锁不可越权、轮数上限）。
@@ -255,12 +257,12 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 5. **TTS**：MiniMax speech 路由 + Fake Provider fixture；输出时长与参数快照；`speechText` / `displayText` 分离。
 6. **时间戳**：`audio.transcribe`（WhisperX / hypit；测试用 fixture 证据）+ `timeline.align` 暴露。
 7. **评审工具**：`media.probe`（时长、黑帧、静音）、`media.frames`（支持 artifact 与两版对比）、`review.submit`。
-8. **逆向 UI**：prompt 首页发起；docked 侧栏“计划 / 运行”按 run 显示 Step / 版本 / 评审轮；画布上以带标签光标执行写入；成片版本以节点分组出现在画布。
+8. **Iris UI**：对话发起；对话栏的计划卡与 run 卡片按 run 显示 Step / 版本 / 评审轮；画布上以带标签光标执行写入；成片版本以节点分组出现在画布。
 9. **预算**：run 级预算一次确认（任务数 / 金额 / 最大轮数），复用 spend mandate 与 `run_budgets`。
 
 ### P1：贴近参考文章的完整制作
 
-~~`capture.ui`~~（已实现，见 §12.3；桌面级录制转入 [Hub 计划](../plans/recordly-capture-hub.md)）；多音轨与 ducking、音乐导入；`run.archive`；Reverse → run 输入；手动四角关键帧的屏幕合成；声线 A/B 变体对比卡；从 15 秒小样扩成完整片（模板化复用已锁定的风格）；Skill 增加 pipeline 命令文档；Agent 页显示 pipeline 依赖就绪状态。
+~~`capture.ui`~~（已实现，见 §12.3；桌面级录制转入 [Hub 计划](../plans/recordly-capture-hub.md)）；多音轨与 ducking、音乐导入；`run.archive`；逆向拆解 → run 输入；手动四角关键帧的屏幕合成；声线 A/B 变体对比卡；从 15 秒小样扩成完整片（模板化复用已锁定的风格）；Skill 增加 pipeline 命令文档；Agent 页显示 pipeline 依赖就绪状态。
 
 ### P2：进阶
 
@@ -272,7 +274,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 
 前置：本机 Runtime 在线；Fake Provider 提供图像 / 视频 / TTS fixture；授权文件夹内有 2 张产品截图；转写用 fixture 证据（另做一次真实 WhisperX 冒烟）。
 
-1. 在逆向首页输入 brief（可拖入参考）→ 进入画布并出现计划卡，预算确认一次，`pipeline.run.get` 返回 runId 与 brief artifact。
+1. 在 Iris 对话里输入 brief（可拖入参考）→ 画布出现并在对话里出现计划卡，预算确认一次，`pipeline.run.get` 返回 runId 与 brief artifact。
 2. Agent 自主完成：`asset.import`（2 张截图）→ 三栏脚本（含 `speechText` / `displayText`）→ `audio.tts` → `audio.transcribe` → `timeline.align` → `composition.patch`（v1）→ `composition.render(still)` → `composition.render(draft)`。
 3. Agent 调用 `media.probe` 与 `media.frames` 后提交 `review.submit(v1, verdict=revise)`，至少一条 finding 带具体时间点（例如“第 8 秒结果停留不足 0.8 秒”）。
 4. Agent 调用 `composition.patch(baseVersion=v1)` 生成 v2：**只有** findings 涉及的片段变化，locked 片段的 spec 与 v1 字节一致。
@@ -280,7 +282,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 6. trace 中 Step 顺序完整、每步有 status 与产物；v1、v2 两版渲染都是带 sha256 的 durable artifact，都可在画布分组中打开；Fake 路径费用为 0 且 `usage_ledger` 记录与 Step 一致。
 7. **恢复**：在第 2 步渲染进行中刷新页面，run 从未完成 Step 继续，不重复提交已完成任务；对 `composition.render` 用同一 mutationId 重放返回同一 taskId。
 8. **边界**：缺 ffmpeg / Node / Remotion 浏览器时返回 `CAPABILITY_UNAVAILABLE`，run 进入 block 并提示诊断；超出 `maxRounds` 自动停下并说明。
-9. **同一操作外部可用**：用 CLI 对同一 runId 读取 `pipeline.run.get`、提交一条 `review.submit(reviewer=user)`，逆向 trace 实时出现该条（caller=cli）。
+9. **同一操作外部可用**：用 CLI 对同一 runId 读取 `pipeline.run.get`、提交一条 `review.submit(reviewer=user)`，Iris trace 实时出现该条（caller=cli）。
 
 ### 10.2 测试分层
 
@@ -289,7 +291,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 | 纯函数 | spec V2 修订与锁、diff、对齐映射、字幕定时 | 现有 Vitest 套件旁新增用例 |
 | Runtime | 迁移、Step 记录、幂等、恢复、`remotion` 引擎调用、probe | `cargo test --manifest-path src-tauri/Cargo.toml` |
 | 注册表 / 文档 | 新命令 schema、Skill 投影一致 | `npm run docs:check` |
-| 浏览器 | 逆向首页 → 画布转场、侧栏 trace 分组、光标写入、画布版本分组，0 console error | Chrome for Testing + Playwright |
+| 浏览器 | Iris 对话首页 → 对话栏 + 画布转场、trace 分组、光标写入、画布版本分组，0 console error | Chrome for Testing + Playwright |
 | 端到端 | §10.1 全流程（Fake Provider） | 新增 e2e 脚本，产物放 `.tmp/` / `artifacts/` |
 | 真实 Provider | 一次 MiniMax TTS + 一次 Seedance 小样，用户批准的预算内；记录扣费、429、取消、unknown-submit | 人工 trial，证据进 Support Matrix |
 
@@ -302,8 +304,8 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 
 ## 11. 与现有规则的关系
 
-- 不新增顶级 surface（复用顶栏中间的逆向），不引入只有聊天的整页、Tasks / Artifacts 工作区、Production Crew / Director / Operator 必经层；run 是一个可选的长流程容器，单步生成照旧不需要 run。
-- 不复制 Hypit 代码；转写走用户自装的 WhisperX / hypit CLI，结果作为 artifact 导回（Reverse 许可边界不变）。
+- 不新增顶级 surface（复用顶栏中间的 Iris），不引入只有聊天的整页、Tasks / Artifacts 工作区、Production Crew / Director / Operator 必经层；run 是一个可选的长流程容器，单步生成照旧不需要 run。
+- 不复制 Hypit 代码；转写走用户自装的 WhisperX / hypit CLI，结果作为 artifact 导回（逆向拆解的许可边界不变）。
 - 单一权威：trace 在 Runtime，Workflow 图在 Browser Workflow，会话在各自 Agent；彼此只存引用。
 - 对外口径：P0 完成前不宣传“一键成片”或“自动做完宣传片”；完成后也只能说“Agent 协助迭代制作”，并跟随 Support Matrix。
 
