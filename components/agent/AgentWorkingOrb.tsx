@@ -1,9 +1,8 @@
-// Agent 工作状态：Thinking Orbs 点阵球 + 静态标签的全圆角胶囊。
-// 参考 Inspora 5-8 · Jakub Antalik「Thinking orbs」（npm thinking-orbs，MIT）：动效只在球里，
-// 字是静的、无扫光 / 打字机；换阶段时旧胶囊模糊 + 右滑 + 淡出，新胶囊淡入。状态全部来自真实事件（agentWorkingPhase）。
+// Agent 工作状态：奶蛙思考动画（同一作者 OfferU 的 NaiwaThinking）+ 静态标签的全圆角胶囊。
+// 动效只在奶蛙身上，字是静的、无扫光 / 打字机；换阶段时旧胶囊模糊 + 右滑 + 淡出，新胶囊淡入。
+// 状态全部来自真实事件（agentWorkingPhase），写在 data-state 上；奶蛙本身只有一种动作，不按状态变形。
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ThinkingOrb } from 'thinking-orbs';
-import { useResolvedTheme } from '../../hooks/useResolvedTheme';
+import { NaiwaThinking } from '../brand/NaiwaThinking';
 import type { AgentOrbState } from './agentWorkingPhase';
 import '../../styles/agentWorking.css';
 import '../../styles/fluid.css';
@@ -11,21 +10,16 @@ import '../../styles/fluid.css';
 /** 换阶段的离场时长，与 agentWorking.css 里 .agent-orb-phase[data-leaving] 的 --motion-medium 对齐。 */
 const LEAVE_MS = 320;
 
-/**
- * 点阵球的墨色跟随应用主题（含 DSH 嵌入时宿主驱动的 themeMode），不用 ThinkingOrb 的 theme="auto"：
- * 系统暗色 + 应用浅色时 auto 会画出浅色点。浅色界面用深色点（"light"），暗色界面用浅色点（"dark"）。
- */
-export function useOrbTheme(): 'dark' | 'light' {
-  return useResolvedTheme() === 'dark' ? 'dark' : 'light';
-}
-
-/** thinking-orbs 的手调尺寸：20（行内）/ 32（紧凑，插值）。 */
+/** 奶蛙尺寸：20（行内，不带气泡）/ 32（工作胶囊，带「…」气泡）。小于 20 认不出是奶蛙，不提供。 */
 export type AgentOrbSize = 20 | 32;
 
-/** 只要一颗球（待执行的工具行、输入框「运行中」）。 */
+/** 只要一只奶蛙（运行中的工具行、输入框「运行中」）。20px 不带气泡。 */
 export function AgentOrbIcon({ state, size = 20, label }: { state: AgentOrbState; size?: AgentOrbSize; label?: string }) {
-  const theme = useOrbTheme();
-  return <ThinkingOrb state={state} size={size} theme={theme} aria-label={label} aria-hidden={label ? undefined : true} className="agent-orb" />;
+  return (
+    <span className="agent-orb" data-state={state} data-size={size} role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
+      <NaiwaThinking size={size} bubble={size >= 32} />
+    </span>
+  );
 }
 
 type Phase = { key: string; label: string; state: AgentOrbState };
@@ -68,10 +62,9 @@ export function AgentWorkingOrb({ label, state, meta, size = 32 }: {
 }
 
 function OrbPhase({ phase, size, leaving }: { phase: Phase; size: AgentOrbSize; leaving?: boolean }) {
-  const theme = useOrbTheme();
   return (
     <span className="agent-orb-phase" data-leaving={leaving ? '' : undefined} aria-hidden={leaving || undefined}>
-      <ThinkingOrb state={phase.state} size={size} theme={theme} aria-hidden className="agent-orb" />
+      <span className="agent-orb" data-state={phase.state} data-size={size} aria-hidden="true"><NaiwaThinking size={size} bubble={size >= 32} /></span>
       <span className="agent-orb-label">{phase.label}…</span>
     </span>
   );

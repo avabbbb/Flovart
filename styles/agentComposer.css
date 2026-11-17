@@ -206,8 +206,8 @@
 }
 @keyframes agent-composer-spin { to { transform: rotate(360deg); } }
 @keyframes agent-composer-dot { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-2px); } }
-/* 窄：只留 20px 点阵球，文字在 title / 读屏里 */
-@container agentcomposer (max-width: 420px) { .agent-composer__running-label { padding: 0 3px; } .agent-composer__running-label > span { display: none; } }
+/* 窄：只留 20px 奶蛙（.agent-orb），文字在 title / 读屏里 */
+@container agentcomposer (max-width: 420px) { .agent-composer__running-label { padding: 0 3px; } .agent-composer__running-label > span:not(.agent-orb) { display: none; } }
 
 /* 窄抽屉：工具都成 28px 圆形图标钮 */
 @container agentcomposer (max-width: 340px) {

@@ -1,8 +1,8 @@
-// Agent 面板「正在做什么」→ Thinking Orbs 点阵球状态 + 静态标签（参考 Inspora 5-8 · Jakub Antalik「Thinking orbs」）。
+// Agent 面板「正在做什么」→ 工作阶段状态 + 静态标签（胶囊里的动画是奶蛙思考，见 AgentWorkingOrb.tsx）。
 // 纯函数：只看本轮回合状态与本轮消息，面板与测试共用。状态全部来自真实事件，不用动画掩盖未知状态（AGENTS.md §6）。
 import type { AgentTurnPhase } from './agentPanelState';
 
-/** thinking-orbs 的九种状态。 */
+/** 工作阶段的九种状态（沿用自 thinking-orbs 的命名；现在只写在 data-state 上，奶蛙动画不随它变）。 */
 export type AgentOrbState =
   | 'working'
   | 'searching'
