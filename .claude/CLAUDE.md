@@ -13,6 +13,6 @@ When operating Flovart from outside the app, prefer:
 - `workflow.apply`;
 - `workflow.node.run`.
 
-The visible Browser Workflow remains the current authority for these stable operations. The top-level Agent page is connection/control only; the built-in Assistant stays beside Canvas/Table.
+The visible Browser Workflow remains the current authority for these stable operations. The top-level surfaces are Canvas | Iris | Agent. The Agent page is connection/control only; the built-in Assistant drawer stays beside Canvas. Iris is the second surface (personal agent / all-in-one post-production assistant), not a product name: never use Iris to mean Flovart.
 
 Do not bypass Flovart by writing React/Zustand state, browser storage, Runtime databases or Provider private APIs directly. Use the same idempotency/revision rules documented by the canonical Skill.

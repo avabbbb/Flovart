@@ -4,19 +4,20 @@ Read [AGENTS.md](../AGENTS.md) first. The canonical document map is [docs/index.
 
 ## Current product truth
 
-- Top-level surfaces: Canvas | Reverse (逆向) | Agent. The old Table view has been removed.
-- Canvas owns GenAI generation and the base Workflow: nodes, generation tasks, assets, versions.
-- Reverse is the all-in-one assistant: a prompt-first workspace where a strong model operates the computer and the canvas as tools, with labeled multi-agent cursors, a docked trace/plan/approval panel, and review rounds as versions. The Hypit-style reverse breakdown is one of its tools/panels. It writes to Canvas only through the same `workflow.*` commands. It is not a chat-only page.
-- Agent manages agent connections and state: runtimes, models/providers, external agents (Codex, Claude Code, DSH), health and per-agent status. It supplies the agents and models Reverse runs; no chat, no run editing.
-- The Canvas Assistant drawer is a lightweight contextual entry that hands multi-step work off to the same run in Reverse. Do not embed it inside Agent and do not put Host connection management in it.
+- Top-level surfaces: Canvas | Iris | Agent. Iris was named Reverse (逆向) until 2026-11-17; the internal `canvasView: 'reverse'` value and the `reverse` directories are unchanged. The old Table view has been removed.
+- Canvas + Agent are Flovart's Workflow production tools. Canvas owns GenAI generation and the base Workflow: nodes, generation tasks, assets, versions.
+- Iris is the personal agent (all-in-one post-production assistant). The web version stands on its own: a conversation-first agent whose output surface is the Flovart infinite canvas (plans, assets and versions land on the canvas, visible and editable), and it works without any editor installed. Optional local host connectors (DaVinci Resolve first, then Premiere and 剪映 / CapCut) sync editor context so the user does not have to upload. The Hypit-style reverse breakdown is one of its tools/panels. It writes to Canvas only through the same `workflow.*` commands. A chat page with no canvas output is not Iris. Today the tab is a coming-soon placeholder.
+- Iris is a surface name, not a product name. Older docs that call Flovart itself "Iris" (Iris Link, Iris CLI, Iris Studio) use a retired codename; treat those as Flovart.
+- Agent manages agent connections and state: runtimes, models/providers, external agents (Codex, Claude Code, DSH), health and per-agent status. It supplies the agents and models Iris runs; no chat, no run editing.
+- The Canvas Assistant drawer is a lightweight contextual entry that hands multi-step work off to the same run in Iris. Do not embed it inside Agent and do not put Host connection management in it.
 - Visual tokens live in [DESIGN.md](../docs/design/DESIGN.md); interaction behavior in [01-interaction.md](../docs/design/01-interaction.md). Glass only on floating chrome. Check references (Inspora, Awwwards, GSAP Showcase, Refero) before UI/motion work and cite them in the PR.
 - Do not restore Production Crew / Director / Operator, Production Skill Marketplace, old Canvas/Art dual state, or enterprise org/credits/approval as mandatory product layers.
 
 ## Code boundaries
 
-- Root App.tsx composes the Studio surfaces; components/studio/StudioTopMenu.tsx owns the visible Canvas/Reverse/Agent switch.
+- Root App.tsx composes the Studio surfaces; components/studio/StudioTopMenu.tsx owns the visible Canvas/Iris/Agent switch.
 - Workflow UI/state lives under `components/workflow/`.
-- Reverse UI lives under components/reverse/; Reverse logic lives under services/reverse/.
+- Iris UI still lives under components/reverse/ and its logic under services/reverse/ (directory rename is a separate migration).
 - Agent connection UI lives under `components/agent/`.
 - Shared contextual drawer/chrome lives under `components/studio/`.
 - Provider and execution logic stays in `services/`; do not duplicate it in UI or transports.
