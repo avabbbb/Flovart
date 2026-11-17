@@ -21,6 +21,30 @@ export const VERDICTS = [0, 1, 'NA'];
 
 const FRONT_MATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
 
+/**
+ * Optional `scales` block: graded scales for the subjective track (eval/aigc),
+ * e.g. quality 1–5 with usability / satisfaction / delight thresholds and
+ * multimodal task following 1–3. Binary item verdicts are unaffected.
+ */
+function scaleErrors(scales) {
+  if (scales === undefined || scales === null) return [];
+  if (typeof scales !== 'object' || Array.isArray(scales)) return ['scales must be a mapping'];
+  const errors = [];
+  for (const [name, scale] of Object.entries(scales)) {
+    const { min, max, dims, rates, anchors } = scale ?? {};
+    if (!Number.isInteger(min) || !Number.isInteger(max) || min >= max) { errors.push(`scales.${name}: min and max must be integers with min < max`); continue; }
+    if (!Array.isArray(dims) || !dims.length) errors.push(`scales.${name}: dims must be a non-empty list`);
+    if (!rates || typeof rates !== 'object' || !Object.keys(rates).length) errors.push(`scales.${name}: rates must map a rate name to its threshold`);
+    for (const [rate, threshold] of Object.entries(rates ?? {})) {
+      if (!Number.isInteger(threshold) || threshold < min || threshold > max) errors.push(`scales.${name}.rates.${rate}: threshold must be an integer in ${min}..${max}`);
+    }
+    if (anchors !== undefined) {
+      for (let point = min; point <= max; point += 1) if (!anchors?.[point]) errors.push(`scales.${name}.anchors: missing anchor for ${point}`);
+    }
+  }
+  return errors;
+}
+
 /** Parse one rubric document. Throws with a precise message on contract errors. */
 export function parseRubric(text, source = 'rubric') {
   const match = FRONT_MATTER.exec(text);
@@ -58,6 +82,7 @@ export function parseRubric(text, source = 'rubric') {
   if (!changelog.some(entry => String(entry?.version) === String(meta.version))) {
     errors.push(`changelog has no entry for version ${meta.version}`);
   }
+  errors.push(...scaleErrors(meta.scales));
   if (errors.length) throw new Error(`${source}: ${errors.join('; ')}`);
   return {
     id: String(meta.id),
@@ -70,6 +95,7 @@ export function parseRubric(text, source = 'rubric') {
     sources: meta.sources ?? [],
     items: items.map(item => ({ ...item, evidence: item.evidence ?? [] })),
     fewShot: meta.fewShot ?? [],
+    scales: meta.scales ?? null,
     changelog,
     body,
     source,
