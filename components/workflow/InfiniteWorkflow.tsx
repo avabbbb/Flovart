@@ -24,6 +24,7 @@ import { createWorkflowNode, scriptNodeHeight, WORKFLOW_NODE_SPECS } from './con
 import { buildScriptMaterializeOps } from './scriptMaterialize';
 import { inheritGenerationConfig } from '../../services/generationInheritance';
 import { extractVideoFrame } from '../../services/videoFrameExtractor';
+import { buildPreferenceEvent, recordPreferenceEvent } from '../../services/preferenceEvents';
 import { applyWorkflowMutation, redoWorkflowDraftChangeSet, undoWorkflowDraftChangeSet, workflowDocumentOperationsFromFrames } from './draftAuthority';
 import {
   discardWorkflowMediaRecord,
@@ -2859,7 +2860,11 @@ export function InfiniteWorkflow({
     const alternate = nodeAlternates(owner).find(item => item.id === alternateId);
     if (!owner || !alternate || owner.isLocked) return false;
     // 与 Agent 同一条操作（set_batch_primary 指向备选 ID = 交换媒体）。
-    return applyOps([{ type: 'set_batch_primary', batchId: alternate.batchId || owner.id, nodeId: alternateId }]);
+    const preference = buildPreferenceEvent(owner, alternateId, { projectId: projectRef.current.id });
+    const ok = applyOps([{ type: 'set_batch_primary', batchId: alternate.batchId || owner.id, nodeId: alternateId }]);
+    // 用户的选择是 L4 偏好信号（eval/eval.md §6）：只记 ID、提示词与模型，不记媒体本体。
+    if (ok && preference) void recordPreferenceEvent(preference);
+    return ok;
   };
   const removeNodeAlternates = (ownerId: string, ids: string[]) => {
     const owner = projectRef.current.nodes.find(node => node.id === ownerId);
