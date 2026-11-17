@@ -1,6 +1,6 @@
-import { ArrowDownWideNarrow, Check, ChevronLeft, Clock3, FileUp, FolderOpen, Heart, LayoutTemplate, PanelLeftClose, PanelLeftOpen, Plus, RefreshCw, Search, Sparkles, Trash2, X } from 'lucide-react';
+import { ArrowDownWideNarrow, ArrowLeft, ArrowRight, AudioLines, Check, ChevronLeft, Clapperboard, Clock3, Eye, FileUp, FolderOpen, Heart, Image as ImageIcon, LayoutTemplate, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, RefreshCw, Search, ShieldCheck, Sparkles, Square, Trash2, Type, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import '../../styles/skillHub.css';
@@ -29,6 +29,11 @@ import { useWorkflowStore } from '../workflow/store';
 import { LocalFolderBrowser } from '../workflow/LocalFolderBrowser';
 import { StudioMediaDownload, StudioMediaPreview, type StudioMediaItem } from './StudioMediaBrowser';
 import { STUDIO_HUB_COPY, type StudioHubCopy } from './studioHubCopy';
+import { applySkillOrder, keyboardMoveDelta, loadSkillOrder, reorderVisible, saveSkillOrder } from './skillOrder';
+import { useSkillCardDrag } from './useSkillCardDrag';
+import { PlanSteps, type PlanStep } from '../agent/plan/PlanSteps';
+import { getBundledProductionSkill } from '../../services/productionSkillCatalog';
+import { translations } from '../../utils/translations';
 
 // 放大的资源窗口：一个共享外壳，左侧栏切换 Skills / History / Library，各自带子项；窄宽度收成图标栏。
 // 外观：bleep-app 式磨砂玻璃（--flv-frost-*，半透明），窗外是 Flovart 深色遮罩（--flv-scrim），不用白色蒙层。
@@ -38,7 +43,7 @@ import { STUDIO_HUB_COPY, type StudioHubCopy } from './studioHubCopy';
 const EMPTY_DRAFT: EditorDraft = { name: '', slug: '', description: '', prompt: '', enabled: true };
 const UNASSIGNED = '__unassigned__';
 
-type SkillSort = 'recent' | 'name' | 'source';
+type SkillSort = 'recent' | 'name' | 'source' | 'manual';
 type SkillChip = 'all' | 'enabled' | 'off' | 'updates';
 type HistoryTab = 'all' | 'image' | 'video' | 'favorites';
 type SkillView = { type: 'grid' } | { type: 'detail'; key: string } | { type: 'edit'; id: string | null; initial?: EditorDraft };
@@ -189,7 +194,15 @@ function SkillsPane({ copy, language, section }: { copy: StudioHubCopy; language
   const toggleFavorite = useUserSkillsStore(state => state.toggleFavorite);
   const canAttach = useStudioHubStore(state => Boolean(state.handlers.attachSkill));
   const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<SkillSort>('recent');
+  const cardCopy = translations[language].skillCards;
+  const [skillOrder, setSkillOrder] = useState<string[]>(() => loadSkillOrder());
+  const [sort, setSort] = useState<SkillSort>(() => (loadSkillOrder().length ? 'manual' : 'recent'));
+  const [cardMenu, setCardMenu] = useState<string | null>(null);
+  const [announce, setAnnounce] = useState('');
+  const hintId = useId();
+  const gridRef = useRef<HTMLUListElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const reduceMotion = Boolean(useReducedMotion());
   const [chip, setChip] = useState<SkillChip>('all');
   const [view, setView] = useState<SkillView>({ type: 'grid' });
   const [menu, setMenu] = useState<null | 'create' | 'sort'>(null);
@@ -224,11 +237,12 @@ function SkillsPane({ copy, language, section }: { copy: StudioHubCopy; language
     ));
     const order: Record<DeckSkill['source'], number> = { mine: 0, bundled: 1, local: 2, hub: 3 };
     const sorted = [...filtered];
+    if (sort === 'manual') return applySkillOrder(filtered, skillOrder, skill => skill.key);
     if (sort === 'name') sorted.sort((a, b) => a.name.localeCompare(b.name, language === 'zho' ? 'zh-CN' : 'en'));
     else if (sort === 'source') sorted.sort((a, b) => order[a.source] - order[b.source] || a.name.localeCompare(b.name));
     else sorted.sort((a, b) => (updatedAt.get(b.id) || '').localeCompare(updatedAt.get(a.id) || '') || Number(favoriteIds.has(b.id)) - Number(favoriteIds.has(a.id)));
     return sorted;
-  }, [sectionSkills, query, chip, sort, language, updatedAt, favoriteIds]);
+  }, [sectionSkills, query, chip, sort, skillOrder, language, updatedAt, favoriteIds]);
 
   const sourceLabel = (skill: DeckSkill) => (skill.source === 'mine' ? skillCopy.sourceMine : skill.source === 'bundled' ? skillCopy.sourceBundled : skill.source === 'local' ? skillCopy.sourceLocal : skillCopy.sourceHub);
   const detailSkill = view.type === 'detail' ? all.find(skill => skill.key === view.key) : undefined;
@@ -253,6 +267,53 @@ function SkillsPane({ copy, language, section }: { copy: StudioHubCopy; language
     setError(null);
     try { await installFromHub(skill.id); } catch (installError) { setError(skillRegistryErrorMessage(installError)); } finally { setInstallingId(null); }
   };
+  const visibleKeys = useMemo(() => visible.map(skill => skill.key), [visible]);
+  // 拖动 / 键盘调整顺序：写回完整顺序（不可见的 Skill 留在原位），切到「自定义」排序并存进 localStorage。
+  const reorder = useCallback((key: string, toIndex: number) => {
+    const base = [...skillOrder, ...all.map(skill => skill.key).filter(item => !skillOrder.includes(item))];
+    const next = reorderVisible(base, visibleKeys, key, toIndex);
+    setSkillOrder(next);
+    saveSkillOrder(next);
+    setSort('manual');
+    const skill = all.find(item => item.key === key);
+    if (skill) setAnnounce(cardCopy.moved(skill.name, Math.min(visibleKeys.length, Math.max(1, toIndex + 1)), visibleKeys.length));
+  }, [skillOrder, all, visibleKeys, cardCopy]);
+  const { drag, ghostRef, onPointerDown, captureFlip } = useSkillCardDrag({
+    keys: visibleKeys,
+    gridRef,
+    scrollRef,
+    reduceMotion,
+    canDropOnComposer: key => {
+      const skill = all.find(item => item.key === key);
+      return Boolean(canAttach && skill && skill.enabled && (skill.source !== 'hub' || skill.installed));
+    },
+    onReorder: reorder,
+    onDropOnComposer: key => { const skill = all.find(item => item.key === key); if (skill) void use(skill); },
+  });
+  const focusKey = useRef<string | null>(null);
+  const moveByKeyboard = (skill: DeckSkill, delta: -1 | 1) => {
+    const from = visibleKeys.indexOf(skill.key);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= visibleKeys.length) return;
+    captureFlip();
+    focusKey.current = skill.key;
+    reorder(skill.key, to);
+  };
+  useEffect(() => {
+    const key = focusKey.current;
+    if (!key) return;
+    focusKey.current = null;
+    const card = Array.from(gridRef.current?.querySelectorAll<HTMLElement>('[data-key]') || []).find(element => element.dataset.key === key);
+    card?.querySelector<HTMLElement>('.studio-hub__card-open')?.focus({ preventScroll: false });
+  }, [visibleKeys]);
+  useEffect(() => {
+    if (!cardMenu) return;
+    const close = (event: PointerEvent) => { if (!(event.target as Element | null)?.closest?.('.studio-hub__card-menu, .studio-hub__card-more')) setCardMenu(null); };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [cardMenu]);
+  const dragSkill = drag ? all.find(skill => skill.key === drag.key) : undefined;
+
   const removeMine = async (skill: DeckSkill) => {
     const removed = await useUserSkillsStore.getState().remove(skill.id);
     setView({ type: 'grid' });
@@ -267,7 +328,7 @@ function SkillsPane({ copy, language, section }: { copy: StudioHubCopy; language
     setView({ type: 'edit', id: null, initial: { ...parsed, enabled: true } });
   };
 
-  const sortLabel = sort === 'name' ? copy.sortName : sort === 'source' ? copy.sortSource : copy.sortRecent;
+  const sortLabel = sort === 'manual' ? cardCopy.sortManual : sort === 'name' ? copy.sortName : sort === 'source' ? copy.sortSource : copy.sortRecent;
   const chips: { id: SkillChip; label: string }[] = [
     { id: 'all', label: copy.chipAll }, { id: 'enabled', label: copy.chipEnabled }, { id: 'off', label: copy.chipOff }, { id: 'updates', label: copy.chipUpdates },
   ];
@@ -289,7 +350,7 @@ function SkillsPane({ copy, language, section }: { copy: StudioHubCopy; language
                 </button>
                 {menu === 'sort' && (
                   <div className="skill-hub__menu studio-hub__menu" role="menu">
-                    {([['recent', copy.sortRecent], ['name', copy.sortName], ['source', copy.sortSource]] as const).map(([id, label]) => (
+                    {([['recent', copy.sortRecent], ['name', copy.sortName], ['source', copy.sortSource], ['manual', cardCopy.sortManual]] as const).map(([id, label]) => (
                       <button key={id} type="button" role="menuitemradio" aria-checked={sort === id} onClick={() => { setSort(id); setMenu(null); }}>
                         {sort === id ? <Check size={13} aria-hidden="true" /> : <span className="studio-hub__menu-gap" />}<span>{label}</span>
                       </button>
@@ -321,39 +382,37 @@ function SkillsPane({ copy, language, section }: { copy: StudioHubCopy; language
             ))}
           </div>
           {error && <p className="studio-hub__error" role="alert">{error}</p>}
-          <div className="studio-hub__scroll isl-scrollbar">
+          <p id={hintId} className="studio-hub__sr">{cardCopy.dragHint}</p>
+          <p className="studio-hub__sr" role="status" aria-live="polite">{announce}</p>
+          <div className="studio-hub__scroll isl-scrollbar" ref={scrollRef}>
             {visible.length ? (
-              <ul className="studio-hub__grid">
-                {visible.map(skill => (
-                  <li key={skill.key} className="studio-hub__card" data-off={skill.enabled ? undefined : 'true'}>
-                    <button type="button" className="studio-hub__card-open" aria-label={skillCopy.details(skill.name)} onClick={() => setView({ type: 'detail', key: skill.key })}>
-                      <div className="studio-hub__card-cover" data-tone-seed={skill.seed % 4}>
-                        {skill.cover ? <img src={skill.cover} alt="" /> : <SkillMark seed={skill.seed} large />}
-                        <span className="skill-hub__badge">{sourceLabel(skill)}</span>
-                      </div>
-                      <div className="studio-hub__card-body">
-                        <strong>{skill.name}</strong>
-                        <em>{skill.handle}</em>
-                        <p>{skill.description}</p>
-                      </div>
-                    </button>
-                    <div className="studio-hub__card-foot">
-                      <button type="button" className="studio-hub__like" aria-pressed={favoriteIds.has(skill.id)} aria-label={favoriteIds.has(skill.id) ? skillCopy.unfavorite(skill.name) : skillCopy.favorite(skill.name)} onClick={() => void toggleFavorite(skill.id)}>
-                        <Heart size={14} fill={favoriteIds.has(skill.id) ? 'currentColor' : 'none'} aria-hidden="true" />
-                      </button>
-                      {skill.source === 'hub' && (!skill.installed || skill.updateAvailable) ? (
-                        <button type="button" className="studio-hub__btn" disabled={installingId === skill.id} onClick={() => void install(skill)}>
-                          <RefreshCw size={13} className={installingId === skill.id ? 'is-spinning' : undefined} aria-hidden="true" /><span>{skill.updateAvailable ? copy.update : copy.install}</span>
-                        </button>
-                      ) : !skill.enabled ? (
-                        <span className="skill-hub__state is-off">{copy.off}</span>
-                      ) : (
-                        <button type="button" className="studio-hub__btn is-primary" disabled={!canAttach} title={canAttach ? undefined : copy.useUnavailable} onClick={() => void use(skill)}>
-                          {attachedId === skill.id ? <Check size={13} aria-hidden="true" /> : null}<span>{copy.use}</span>
-                        </button>
-                      )}
-                    </div>
-                  </li>
+              <ul className="studio-hub__grid" ref={gridRef} data-dragging={drag ? 'true' : undefined}>
+                {visible.map((skill, index) => (
+                  <SkillCard
+                    key={skill.key}
+                    skill={skill}
+                    index={index}
+                    total={visible.length}
+                    copy={copy}
+                    skillCopy={skillCopy}
+                    cardCopy={cardCopy}
+                    sourceLabel={sourceLabel(skill)}
+                    favorite={favoriteIds.has(skill.id)}
+                    attached={attachedId === skill.id}
+                    canAttach={canAttach}
+                    installing={installingId === skill.id}
+                    hintId={hintId}
+                    menuOpen={cardMenu === skill.key}
+                    dragging={drag?.key === skill.key}
+                    dropSide={drag && drag.targetIndex === index && drag.key !== skill.key ? (index < drag.fromIndex ? 'before' : 'after') : undefined}
+                    onPointerDown={event => onPointerDown(event, skill.key)}
+                    onMove={delta => moveByKeyboard(skill, delta)}
+                    onOpen={() => setView({ type: 'detail', key: skill.key })}
+                    onMenu={open => setCardMenu(open ? skill.key : null)}
+                    onToggleFavorite={() => void toggleFavorite(skill.id)}
+                    onUse={() => void use(skill)}
+                    onInstall={() => void install(skill)}
+                  />
                 ))}
               </ul>
             ) : (
@@ -386,6 +445,7 @@ function SkillsPane({ copy, language, section }: { copy: StudioHubCopy; language
                 onUninstall={async () => { await uninstallSkill(detailSkill.id); setView({ type: 'grid' }); }}
                 onInstall={() => void install(detailSkill)}
                 onRefresh={() => void refreshLocal()}
+                plan={<SkillPlan skill={detailSkill} language={language} />}
               />
             )}
             {view.type === 'detail' && !detailSkill && <p className="studio-hub__empty">{skillCopy.noMatch}</p>}
@@ -404,6 +464,30 @@ function SkillsPane({ copy, language, section }: { copy: StudioHubCopy; language
           </div>
         </>
       )}
+      {drag && dragSkill && typeof document !== 'undefined' && createPortal(
+        <>
+          {drag.composerRect && (
+            <div
+              className="studio-hub__drop-zone"
+              data-over={drag.overComposer ? 'true' : undefined}
+              aria-hidden="true"
+              style={{ left: drag.composerRect.left, top: drag.composerRect.top, width: drag.composerRect.width, height: drag.composerRect.height }}
+            >
+              <span>{cardCopy.dropToUse(dragSkill.name)}</span>
+            </div>
+          )}
+          <div className="studio-hub__ghost" ref={ghostRef} aria-hidden="true" style={{ width: drag.width, height: drag.height }}>
+            <div className="studio-hub__card studio-hub__ghost-card" data-reduce={reduceMotion ? 'true' : undefined}>
+              <SkillCardFace skill={dragSkill} />
+              <span className="studio-hub__card-foot">
+                <span className="studio-hub__meta-pill" data-source={dragSkill.source}>{sourceLabel(dragSkill)}</span>
+                <span className="studio-hub__ghost-use">{copy.use}</span>
+              </span>
+            </div>
+          </div>
+        </>,
+        document.body,
+      )}
       {undo && (
         <div className="skill-hub__undo studio-hub__toast" role="status">
           <span>{skillCopy.deleted(undo.skill.name)}</span>
@@ -412,6 +496,182 @@ function SkillsPane({ copy, language, section }: { copy: StudioHubCopy; language
       )}
       {notice && !undo && <div className="skill-hub__undo studio-hub__toast" role="status"><Check size={13} aria-hidden="true" /><span>{notice}</span></div>}
     </div>
+  );
+}
+
+type SkillCopy = (typeof SKILL_COPY)[keyof typeof SKILL_COPY];
+type CardCopy = (typeof translations)[keyof typeof translations]['skillCards'];
+
+/** 卡面（内缩封面 + 粗体标题 + 等宽 $slug + 两行渐隐说明）：网格里的卡和手里拖着的浮层共用。 */
+function SkillCardFace({ skill }: { skill: DeckSkill }) {
+  return (
+    <>
+      <span className="studio-hub__card-cover" data-tone-seed={skill.seed % 4}>
+        {skill.cover ? <img src={skill.cover} alt="" draggable={false} /> : <SkillMark seed={skill.seed} large />}
+      </span>
+      <span className="studio-hub__card-body">
+        <strong>{skill.name}</strong>
+        <em className="flv-machine">{skill.handle}</em>
+        <span className="studio-hub__card-desc">{skill.description}</span>
+      </span>
+    </>
+  );
+}
+
+/**
+ * Hub 网格里的 Skill 卡：Bleep App 卡片语言（Inspora · Rolando）——半透明磨砂面、上沿更亮的 1px 细线、柔和宽阴影、16px 圆角；
+ * 封面内缩 10px、自带 10px 圆角；粗体小标题 + 等宽幽灵色 $slug + 两行渐隐说明 + 底部来源胶囊；悬停微浮起并露出右上角「…」。
+ * 按住拖动排序 / 拖到输入框使用（useSkillCardDrag）；聚焦时 Alt + 方向键调整顺序。
+ */
+function SkillCard({
+  skill, index, total, copy, skillCopy, cardCopy, sourceLabel, favorite, attached, canAttach, installing, hintId, menuOpen, dragging, dropSide,
+  onPointerDown, onMove, onOpen, onMenu, onToggleFavorite, onUse, onInstall,
+}: {
+  skill: DeckSkill;
+  index: number;
+  total: number;
+  copy: StudioHubCopy;
+  skillCopy: SkillCopy;
+  cardCopy: CardCopy;
+  sourceLabel: string;
+  favorite: boolean;
+  attached: boolean;
+  canAttach: boolean;
+  installing: boolean;
+  hintId: string;
+  menuOpen: boolean;
+  dragging: boolean;
+  dropSide?: 'before' | 'after';
+  onPointerDown: (event: ReactPointerEvent<HTMLLIElement>) => void;
+  onMove: (delta: -1 | 1) => void;
+  onOpen: () => void;
+  onMenu: (open: boolean) => void;
+  onToggleFavorite: () => void;
+  onUse: () => void;
+  onInstall: () => void;
+}) {
+  const needsInstall = skill.source === 'hub' && (!skill.installed || skill.updateAvailable);
+  const usable = !needsInstall && skill.enabled;
+  const menuItem = (key: string, icon: ReactNode, label: string, action: () => void, disabled = false) => (
+    <button key={key} type="button" role="menuitem" disabled={disabled} onClick={() => { onMenu(false); action(); }}>{icon}<span>{label}</span></button>
+  );
+  return (
+    <li
+      data-key={skill.key}
+      className="studio-hub__card"
+      data-off={skill.enabled ? undefined : 'true'}
+      data-dragging={dragging ? 'true' : undefined}
+      data-drop={dropSide}
+      data-menu={menuOpen ? 'true' : undefined}
+      onPointerDown={onPointerDown}
+      onKeyDown={event => {
+        if (!(event.target as Element).classList.contains('studio-hub__card-open')) return;
+        const delta = keyboardMoveDelta(event);
+        if (!delta) return;
+        event.preventDefault();
+        onMove(delta);
+      }}
+    >
+      <button type="button" className="studio-hub__card-open" aria-label={skillCopy.details(skill.name)} aria-describedby={hintId} draggable={false} onClick={onOpen}>
+        <SkillCardFace skill={skill} />
+      </button>
+      <button
+        type="button"
+        className="studio-hub__card-more"
+        data-no-drag
+        aria-label={cardCopy.more(skill.name)}
+        title={cardCopy.more(skill.name)}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        onClick={() => onMenu(!menuOpen)}
+      >
+        <MoreHorizontal size={15} aria-hidden="true" />
+      </button>
+      {menuOpen && (
+        <div
+          className="skill-hub__menu studio-hub__menu studio-hub__card-menu"
+          role="menu"
+          data-no-drag
+          onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); onMenu(false); } }}
+        >
+          {menuItem('open', <Eye size={13} aria-hidden="true" />, cardCopy.open, onOpen)}
+          {usable && menuItem('use', <Sparkles size={13} aria-hidden="true" />, copy.use, onUse, !canAttach)}
+          {needsInstall && menuItem('install', <RefreshCw size={13} aria-hidden="true" />, skill.updateAvailable ? copy.update : copy.install, onInstall, installing)}
+          {menuItem('like', <Heart size={13} fill={favorite ? 'currentColor' : 'none'} aria-hidden="true" />, favorite ? skillCopy.unlike : skillCopy.like, onToggleFavorite)}
+          {menuItem('earlier', <ArrowLeft size={13} aria-hidden="true" />, cardCopy.moveEarlier, () => onMove(-1), index === 0)}
+          {menuItem('later', <ArrowRight size={13} aria-hidden="true" />, cardCopy.moveLater, () => onMove(1), index >= total - 1)}
+        </div>
+      )}
+      <div className="studio-hub__card-foot" data-no-drag>
+        <span className="studio-hub__meta-pill" data-source={skill.source}>{sourceLabel}</span>
+        <button type="button" className="studio-hub__like" aria-pressed={favorite} aria-label={favorite ? skillCopy.unfavorite(skill.name) : skillCopy.favorite(skill.name)} onClick={onToggleFavorite}>
+          <Heart size={14} fill={favorite ? 'currentColor' : 'none'} aria-hidden="true" />
+        </button>
+        {needsInstall ? (
+          <button type="button" className="studio-hub__btn" disabled={installing} onClick={onInstall}>
+            <RefreshCw size={13} className={installing ? 'is-spinning' : undefined} aria-hidden="true" /><span>{skill.updateAvailable ? copy.update : copy.install}</span>
+          </button>
+        ) : !skill.enabled ? (
+          <span className="skill-hub__state is-off">{copy.off}</span>
+        ) : (
+          <button type="button" className="studio-hub__btn is-primary" disabled={!canAttach} title={canAttach ? undefined : copy.useUnavailable} onClick={onUse}>
+            {attached ? <Check size={13} aria-hidden="true" /> : null}<span>{copy.use}</span>
+          </button>
+        )}
+      </div>
+    </li>
+  );
+}
+
+function stepIcon(kind: string) {
+  if (kind === 'video') return <Clapperboard />;
+  if (kind === 'audio') return <AudioLines />;
+  if (kind === 'text' || kind === 'script') return <Type />;
+  if (kind === 'image') return <ImageIcon />;
+  return <Square />;
+}
+
+/**
+ * Skill 详情里的「这个 Skill 会做什么」：画布配方（我的 Skill 从一组节点保存）给出逐步节点；
+ * 内置 Skill 给出清单里的审核关口。两者都没有就不显示。外观同生成计划卡（PlanSteps）。
+ */
+function SkillPlan({ skill, language }: { skill: DeckSkill; language: 'en' | 'zho' }) {
+  const copy = translations[language].planSteps;
+  const record = useUserSkillsStore(state => (skill.source === 'mine' ? state.skills.find(item => item.id === skill.id) : undefined));
+  const steps: PlanStep[] = useMemo(() => {
+    if (record?.recipe?.steps.length) {
+      return record.recipe.steps.map((step, index) => ({
+        id: `${step.nodeId || 'step'}-${index}`,
+        title: step.title || copy.skillNodeKind[step.type] || step.type,
+        status: 'pending' as const,
+        icon: stepIcon(step.type),
+        description: step.prompt?.trim() || undefined,
+        chip: [copy.skillNodeKind[step.type] || step.type, step.model].filter(Boolean).join(' · '),
+      }));
+    }
+    const bundled = skill.source === 'bundled' ? getBundledProductionSkill(skill.id) : null;
+    if (bundled?.gates.length) {
+      return bundled.gates.map(gate => ({
+        id: gate.id,
+        title: copy.skillGate[gate.type] || gate.id,
+        status: 'pending' as const,
+        icon: <ShieldCheck />,
+        chip: gate.type,
+      }));
+    }
+    return [];
+  }, [record, skill.source, skill.id, copy]);
+  if (!steps.length) return null;
+  const stages = !record?.recipe?.steps.length;
+  return (
+    <PlanSteps
+      compact
+      className="studio-hub__skill-plan"
+      aria-label={copy.skillTitle}
+      title={stages ? copy.skillStages : copy.skillTitle}
+      count={copy.count(steps.length)}
+      steps={steps}
+    />
   );
 }
 

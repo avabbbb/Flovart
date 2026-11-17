@@ -87,9 +87,6 @@
       :root .compact-right-panel .agent-conversation .workflow-agent__composer:focus-within {
         box-shadow: 0 0 0 3px color-mix(in srgb, var(--isl-mint) 18%, transparent), var(--amb-card-shadow) !important;
       }
-      :root .compact-right-panel .agent-plan__chip:not(.agent-plan__chip--running):not(.agent-plan__chip--error) { background: rgba(255, 255, 255, .45); border-color: color-mix(in srgb, var(--isl-ink) 11%, transparent); }
-      :root[data-theme='dark'] .compact-right-panel .agent-plan__chip:not(.agent-plan__chip--running):not(.agent-plan__chip--error) { background: rgba(255, 255, 255, .04); }
-      :root .compact-right-panel .agent-plan__progress { background: color-mix(in srgb, var(--isl-ink) 6%, transparent) !important; }
     }
   }
 }

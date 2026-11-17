@@ -899,3 +899,34 @@
   background: var(--flv-frost-fill-strong);
   box-shadow: var(--flv-frost-highlight), var(--flv-frost-shadow);
 }
+
+/* Agent 面板欢迎区的小 Skill 卡（ProductionSkillDeck .agent-skill-card）：与 Hub 卡同一套 Bleep 卡片语言——
+   半透明磨砂面、上沿更亮的 1px 细线、柔和宽阴影、16px 圆角；图标块内缩自带圆角；粗体标题 + 等宽幽灵色 $slug；悬停微浮起、阴影加深。 */
+.agent-skill-welcome .agent-skill-card {
+  --card-hairline: color-mix(in srgb, var(--isl-ink) 9%, transparent);
+  --card-top: color-mix(in srgb, #fff 70%, transparent);
+  gap: 10px;
+  border: 1px solid var(--card-hairline);
+  border-radius: 16px;
+  padding: 8px 12px 8px 8px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--isl-card) 74%, transparent), color-mix(in srgb, var(--isl-card) 56%, transparent));
+  box-shadow: inset 0 1px 0 var(--card-top), 0 1px 2px color-mix(in srgb, var(--isl-ink) 6%, transparent), 0 10px 26px -16px color-mix(in srgb, var(--isl-ink) 24%, transparent);
+  transition: box-shadow .2s ease, border-color .2s ease;
+}
+:root[data-theme='dark'] .agent-skill-welcome .agent-skill-card {
+  --card-hairline: color-mix(in srgb, var(--isl-ink) 10%, transparent);
+  --card-top: color-mix(in srgb, var(--isl-ink) 16%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--isl-ink) 8%, color-mix(in srgb, var(--isl-surface) 58%, transparent)), color-mix(in srgb, var(--isl-surface) 44%, transparent));
+  box-shadow: inset 0 1px 0 var(--card-top), 0 1px 2px color-mix(in srgb, #000 30%, transparent), 0 12px 28px -16px color-mix(in srgb, #000 70%, transparent);
+}
+.agent-skill-welcome .agent-skill-card:hover,
+.agent-skill-welcome .agent-skill-card:focus-visible { border-color: color-mix(in srgb, var(--isl-ink) 16%, transparent); box-shadow: inset 0 1px 0 var(--card-top), 0 2px 6px color-mix(in srgb, var(--isl-ink) 8%, transparent), 0 20px 40px -18px color-mix(in srgb, var(--isl-ink) 34%, transparent); }
+:root[data-theme='dark'] .agent-skill-welcome .agent-skill-card:hover,
+:root[data-theme='dark'] .agent-skill-welcome .agent-skill-card:focus-visible { box-shadow: inset 0 1px 0 var(--card-top), 0 2px 8px color-mix(in srgb, #000 36%, transparent), 0 22px 44px -18px color-mix(in srgb, #000 82%, transparent); }
+.agent-skill-welcome .agent-skill-card .agent-skill-mark { width: 38px; height: 38px; border-radius: 10px; }
+.agent-skill-welcome .agent-skill-card strong { font-weight: 700; letter-spacing: -0.01em; }
+.agent-skill-welcome .agent-skill-card small { font-family: var(--font-machine, ui-monospace, monospace); font-size: 10.5px; }
+
+/* 从 Hub 拖 Skill 卡到输入框：输入框本身的投放高亮（Hub 窗口外看得见的部分；遮罩上另有 .studio-hub__drop-zone）。 */
+:root .compact-right-panel .agent-conversation .workflow-agent__composer.is-skill-drop-target,
+.agent-composer.is-skill-drop-target { box-shadow: 0 0 0 2px var(--isl-mint), 0 0 24px color-mix(in srgb, var(--isl-mint) 30%, transparent) !important; }

@@ -1,5 +1,5 @@
 import { Check, Clapperboard, ExternalLink, Film, Heart, Layers, Palette, Pencil, Plus, RefreshCw, Sparkles, Trash2, WandSparkles } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { createProductionSkillAttachment, createSkillAttachment, getBundledProductionSkill, listBundledProductionSkills, type ProductionSkillAttachment } from '../../services/productionSkillCatalog';
 import type { SkillInputSlot } from '../../services/skillInputs';
@@ -266,7 +266,7 @@ type ManifestState = { status: 'idle' | 'loading' } | { status: 'ready'; manifes
 
 export function SkillDetail({
   skill, copy, language, attached, hubUrl, installing,
-  onUse, onToggleEnabled, onEdit, onDelete, onUninstall, onInstall, onRefresh, favorite, onToggleFavorite,
+  onUse, onToggleEnabled, onEdit, onDelete, onUninstall, onInstall, onRefresh, favorite, onToggleFavorite, plan,
 }: {
   skill: DeckSkill;
   copy: Copy;
@@ -283,6 +283,8 @@ export function SkillDetail({
   onRefresh: () => void;
   favorite?: boolean;
   onToggleFavorite?: () => void;
+  /** 详情里「这个 Skill 会做什么」的计划步骤（StudioHub 传入 PlanSteps）；没有就不显示。 */
+  plan?: ReactNode;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -344,6 +346,7 @@ export function SkillDetail({
         </div>
       </div>
       {skill.description && <p className="skill-hub__detail-desc">{skill.description}</p>}
+      {plan}
 
       <div className="skill-hub__actions">
         {canUse && (

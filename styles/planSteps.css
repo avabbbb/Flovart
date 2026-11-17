@@ -1,0 +1,183 @@
+/* 共用计划组件（components/agent/plan/PlanSteps.tsx）。
+   结构：Inspora「Agent Plan」@Jeet（头 + 步数胶囊 + 状态；行 + 状态胶囊；单行展开；尾部深色药丸）
+       + Inspora「RAG Pipeline」@Jeet（方圆图标块 + 1px 连接线；运行中块与下方连线填强调色；完成换勾 + 等宽耗时）。
+   颜色只用 DESIGN §11 状态色；外壳在面板里走 .agent-card-on-shell 的环境玻璃（ambientGlass.css）。 */
+
+.flv-plan {
+  --plan-accent: var(--state-think);
+  --plan-done: var(--state-write);
+  --plan-fail: var(--state-blocked);
+  --plan-line: color-mix(in srgb, var(--isl-ink) 12%, transparent);
+  --plan-tile: color-mix(in srgb, var(--isl-ink) 6%, var(--isl-card));
+  --plan-tile-size: 32px;
+  --plan-pad-x: 12px;
+  position: relative;
+  display: grid;
+  gap: 0;
+  margin: 6px 0;
+  border: 1px solid color-mix(in srgb, var(--isl-ink) 7%, transparent);
+  border-radius: 16px;
+  padding: 4px;
+  color: var(--isl-ink);
+  background: color-mix(in srgb, var(--isl-ink) 5%, var(--isl-surface));
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--isl-ink) 5%, transparent), 0 10px 28px -16px color-mix(in srgb, var(--isl-ink) 22%, transparent);
+  font-size: 12.5px;
+  line-height: 1.45;
+  outline: none;
+}
+.flv-plan:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--plan-accent) 45%, transparent); }
+.flv-plan--compact { margin: 0; box-shadow: none; }
+
+/* —— 头 —— */
+.flv-plan__head { display: flex; min-width: 0; align-items: center; gap: 7px; padding: 8px 10px 8px 12px; }
+.flv-plan__title { min-width: 0; overflow: hidden; font-size: 13.5px; font-weight: 700; letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
+.flv-plan__count { flex: 0 0 auto; border-radius: 999px; padding: 1px 8px; color: var(--isl-ink-soft); background: color-mix(in srgb, var(--isl-ink) 8%, transparent); font-size: 10.5px; line-height: 17px; white-space: nowrap; }
+.flv-plan__status { display: inline-flex; min-width: 0; flex: 0 1 auto; align-items: center; gap: 6px; margin-left: auto; overflow: hidden; color: var(--isl-ink-soft); font-size: 11.5px; white-space: nowrap; }
+.flv-plan__status-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.flv-plan__dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 999px; background: var(--state-idle); }
+[data-tone='running'] > .flv-plan__dot { background: var(--plan-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--plan-accent) 20%, transparent); }
+[data-tone='done'] > .flv-plan__dot { background: var(--plan-done); }
+[data-tone='failed'] > .flv-plan__dot,
+[data-tone='blocked'] > .flv-plan__dot { background: var(--plan-fail); }
+.flv-plan__status[data-tone='running'] { color: var(--plan-accent); }
+.flv-plan__status[data-tone='done'] { color: var(--plan-done); }
+.flv-plan__status[data-tone='failed'],
+.flv-plan__status[data-tone='blocked'] { color: var(--plan-fail); }
+
+.flv-plan__meta { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 0 12px 8px; color: var(--isl-ink-soft); font-size: 11px; }
+.flv-plan__meta > * { min-width: 0; overflow-wrap: anywhere; }
+
+/* —— 内层白卡 + 步骤 —— */
+.flv-plan__panel { border-radius: 12px; padding: 4px 0; background: var(--isl-card); box-shadow: 0 1px 2px color-mix(in srgb, var(--isl-ink) 6%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--isl-ink) 5%, transparent); }
+.flv-plan__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.flv-plan__list { display: grid; margin: 0; padding: 0; list-style: none; }
+.flv-plan__step { position: relative; }
+/* 连接线：从本块底部到下一块顶部，1px；运行中那段填强调色，已完成那段淡一点的完成色。 */
+.flv-plan__step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: calc(8px + var(--plan-tile-size) + 3px);
+  bottom: -5px;
+  left: calc(var(--plan-pad-x) + var(--plan-tile-size) / 2 - .5px);
+  width: 1px;
+  border-radius: 1px;
+  background: var(--plan-line);
+  transition: background-color .3s ease;
+}
+.flv-plan__step[data-status='done']:not(:last-child)::after { background: color-mix(in srgb, var(--plan-done) 45%, transparent); }
+.flv-plan__step[data-line='filled']:not(:last-child)::after { background: var(--plan-accent); }
+
+.flv-plan__row {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: calc(var(--plan-tile-size) + 16px);
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 10px;
+  padding: 8px var(--plan-pad-x);
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+button.flv-plan__row { cursor: pointer; }
+button.flv-plan__row:hover .flv-plan__step-title { color: var(--isl-ink); }
+button.flv-plan__row:focus-visible { outline: 2px solid color-mix(in srgb, var(--plan-accent) 55%, transparent); outline-offset: -2px; }
+
+.flv-plan__tile {
+  position: relative;
+  display: grid;
+  width: var(--plan-tile-size);
+  height: var(--plan-tile-size);
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--isl-ink-soft);
+  background: var(--plan-tile);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--isl-ink) 7%, transparent);
+  transition: background-color .25s ease, color .25s ease, box-shadow .25s ease;
+}
+.flv-plan__tile svg { width: 15px; height: 15px; }
+.flv-plan__tile-num { font-size: 11.5px; font-weight: 600; }
+.flv-plan__tile-bang { font-size: 13px; font-weight: 800; }
+.flv-plan__tile[data-status='pending'],
+.flv-plan__tile[data-status='skipped'] { color: var(--isl-ink-ghost); }
+.flv-plan__tile[data-status='running'] { color: #fff; background: var(--plan-accent); box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--plan-accent) 70%, transparent); }
+.flv-plan__tile[data-status='done'] { color: var(--plan-done); background: color-mix(in srgb, var(--plan-done) 13%, var(--isl-card)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--plan-done) 22%, transparent); }
+.flv-plan__tile[data-status='failed'],
+.flv-plan__tile[data-status='blocked'] { color: var(--plan-fail); background: color-mix(in srgb, var(--plan-fail) 12%, var(--isl-card)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--plan-fail) 24%, transparent); }
+/* 运行中：块外一圈细弧在转（减少动效时不转） */
+.flv-plan__tile-spin { position: absolute; inset: -4px; border: 1.5px solid color-mix(in srgb, var(--plan-accent) 16%, transparent); border-top-color: var(--plan-accent); border-radius: 13px; animation: flv-plan-spin 1s linear infinite; }
+@keyframes flv-plan-spin { to { transform: rotate(360deg); } }
+
+.flv-plan__step-title { min-width: 0; flex: 1; overflow: hidden; color: var(--isl-ink); font-weight: 560; text-overflow: ellipsis; white-space: nowrap; }
+.flv-plan__step[data-status='pending'] .flv-plan__step-title { color: var(--isl-ink-soft); }
+.flv-plan__step[data-status='running'] .flv-plan__step-title { font-weight: 680; }
+.flv-plan__step[data-status='skipped'] .flv-plan__row { opacity: .5; }
+.flv-plan__step[data-status='skipped'] .flv-plan__step-title { text-decoration: line-through; }
+.flv-plan__timing { flex: 0 0 auto; color: var(--isl-ink-ghost); font-size: 10.5px; }
+
+.flv-plan__pill { flex: 0 0 auto; border-radius: 999px; padding: 2px 8px; color: var(--isl-ink-soft); background: color-mix(in srgb, var(--isl-ink) 7%, transparent); font-size: 10.5px; font-weight: 600; line-height: 16px; white-space: nowrap; }
+.flv-plan__pill[data-status='running'] { color: var(--plan-accent); background: color-mix(in srgb, var(--plan-accent) 14%, transparent); }
+.flv-plan__pill[data-status='done'] { color: var(--plan-done); background: color-mix(in srgb, var(--plan-done) 14%, transparent); }
+.flv-plan__pill[data-status='failed'],
+.flv-plan__pill[data-status='blocked'] { color: var(--plan-fail); background: color-mix(in srgb, var(--plan-fail) 13%, transparent); }
+.flv-plan__chev { flex: 0 0 auto; margin-right: -2px; color: var(--isl-ink-ghost); transition: transform .18s ease; }
+.flv-plan__step[data-open='true'] .flv-plan__chev { transform: rotate(180deg); }
+
+.flv-plan__detail { overflow: hidden; }
+.flv-plan__detail-inner { display: grid; gap: 8px; padding: 0 var(--plan-pad-x) 10px calc(var(--plan-pad-x) + var(--plan-tile-size) + 10px); }
+.flv-plan__desc { display: -webkit-box; overflow: hidden; color: var(--isl-ink-soft); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
+.flv-plan__detail-foot { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 6px; }
+.flv-plan__chip { max-width: 100%; overflow: hidden; border-radius: 999px; padding: 1px 8px; color: var(--isl-ink-soft); background: color-mix(in srgb, var(--isl-ink) 7%, transparent); font-size: 10.5px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
+.flv-plan__row-actions { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+
+/* —— 尾 —— */
+.flv-plan__foot { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 10px; padding: 9px 6px 5px 10px; }
+.flv-plan__foot-status { display: inline-flex; min-width: 0; flex: 1 1 120px; align-items: center; gap: 6px; color: var(--isl-ink-soft); font-size: 11.5px; }
+.flv-plan__foot-status > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.flv-plan__foot-actions { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px; margin-left: auto; }
+
+/* 按钮：深色药丸主按钮（带 ▶），文字按钮，小号行内按钮，进行中胶囊。 */
+.flv-plan__primary {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 14px 0 12px;
+  color: var(--isl-card);
+  background: var(--isl-ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 6px 14px -8px color-mix(in srgb, var(--isl-ink) 60%, transparent);
+  transition: transform .12s ease, background-color .15s ease;
+}
+.flv-plan__primary:hover:not(:disabled) { background: color-mix(in srgb, var(--isl-ink) 86%, var(--isl-card)); }
+.flv-plan__primary:active:not(:disabled) { transform: scale(.97); }
+.flv-plan__primary:disabled { opacity: .38; cursor: not-allowed; box-shadow: none; }
+.flv-plan__primary svg { width: 12px; height: 12px; fill: currentColor; }
+.flv-plan__text-btn { height: 30px; border: 0; border-radius: 999px; padding: 0 10px; color: var(--isl-ink-soft); background: transparent; font: inherit; font-size: 12px; font-weight: 550; white-space: nowrap; cursor: pointer; }
+.flv-plan__text-btn:hover { color: var(--isl-ink); background: color-mix(in srgb, var(--isl-ink) 7%, transparent); }
+.flv-plan__mini-btn { display: inline-flex; height: 24px; align-items: center; gap: 4px; border: 0; border-radius: 999px; padding: 0 9px; color: var(--isl-ink); background: color-mix(in srgb, var(--isl-ink) 8%, transparent); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.flv-plan__mini-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--isl-ink) 13%, transparent); }
+.flv-plan__mini-btn:disabled { opacity: .45; cursor: default; }
+.flv-plan__badge { display: inline-flex; height: 28px; align-items: center; gap: 6px; border-radius: 999px; padding: 0 11px; color: var(--plan-accent); background: color-mix(in srgb, var(--plan-accent) 13%, transparent); font-size: 11.5px; font-weight: 650; white-space: nowrap; }
+.flv-plan__badge[data-tone='done'] { color: var(--plan-done); background: color-mix(in srgb, var(--plan-done) 13%, transparent); }
+.flv-plan__badge[data-tone='failed'] { color: var(--plan-fail); background: color-mix(in srgb, var(--plan-fail) 12%, transparent); }
+.flv-plan__badge-spin { width: 11px; height: 11px; border: 1.5px solid color-mix(in srgb, currentColor 25%, transparent); border-top-color: currentColor; border-radius: 999px; animation: flv-plan-spin .8s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .flv-plan__tile-spin,
+  .flv-plan__badge-spin { animation: none; }
+  .flv-plan__tile,
+  .flv-plan__chev,
+  .flv-plan__step::after { transition: none; }
+}
+.flv-plan__foot-count { margin-right: 7px; color: var(--isl-ink); font-weight: 650; }

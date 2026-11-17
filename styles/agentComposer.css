@@ -293,57 +293,26 @@
 .agent-quote-bar__close:hover { color: var(--isl-ink); background: color-mix(in srgb, var(--isl-ink) 8%, transparent); }
 .workflow-agent__messages .workflow-agent__message--user > .workflow-agent__quote { max-width: 85%; margin: 0 0 4px; border-left: 2px solid color-mix(in srgb, var(--isl-ink-ghost) 70%, transparent); padding: 2px 0 2px 8px; color: var(--isl-ink-soft); font-size: 11px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
 
-/* ── 生成计划卡（参考 RunningHub）── */
+/* ── 生成计划卡：外观走共用 PlanSteps（styles/planSteps.css）；这里只留卡里特有的明细 / 授权 / 说明。 ── */
 .agent-plan-wrap { display: grid; gap: 6px; margin: 2px 0 14px; }
-.agent-plan { --p-text: var(--isl-ink); --p-muted: var(--isl-ink-soft); --p-ghost: var(--isl-ink-ghost); --p-line: var(--agent-line, var(--isl-border)); display: grid; gap: 10px; border: 1px solid var(--p-line); border-radius: 14px; padding: 12px 14px; color: var(--p-text); background: var(--agent-subtle, var(--isl-surface-2)); font-size: 12px; line-height: 1.5; outline: none; }
-.agent-plan:focus-visible { border-color: color-mix(in srgb, var(--p-text) 35%, var(--p-line)); }
-.agent-plan__model { margin: 0; color: var(--p-muted); font-size: 11px; overflow-wrap: anywhere; }
-.agent-plan__model span { color: var(--p-text); }
-.agent-plan__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.agent-plan__title { min-width: 0; font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
-.agent-plan__status { flex: none; color: var(--p-muted); font-size: 11px; white-space: nowrap; }
-.agent-plan__status--running { color: var(--isl-mint-deep, var(--p-text)); }
-.agent-plan__status--done { color: var(--p-text); }
-.agent-plan__status--failed { color: color-mix(in srgb, #e5484d 75%, var(--p-text)); }
-.agent-plan__row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; }
-.agent-plan__row--toggle { width: 100%; border: 0; padding: 0; color: var(--p-text); background: transparent; font: inherit; cursor: pointer; text-align: left; }
-.agent-plan__row--toggle > strong { font-size: 12px; font-weight: 700; }
-.agent-plan__row--toggle > span { display: inline-flex; align-items: center; gap: 2px; color: var(--p-muted); font-size: 11px; }
-.agent-plan__row--toggle:hover > span { color: var(--p-text); }
-.agent-plan__row--toggle svg { transition: transform .15s ease; }
-.agent-plan__row--toggle svg.is-open { transform: rotate(90deg); }
-.agent-plan__assets { display: grid; gap: 8px; }
+.agent-plan-wrap > .flv-plan { margin: 0; }
+.agent-plan .agent-plan__model,
+.agent-plan .agent-plan__group { display: inline-flex; min-width: 0; align-items: center; gap: 4px; }
+.agent-plan .agent-plan__model .flv-machine,
+.agent-plan .agent-plan__group-name { color: var(--isl-ink); }
+.agent-plan__assets { display: grid; gap: 8px; margin: 6px 2px 0; border-radius: 10px; padding: 6px 8px; background: color-mix(in srgb, var(--isl-ink) 4%, transparent); }
+.agent-plan__toggle { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; border: 0; padding: 2px 0; color: var(--isl-ink); background: transparent; font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.agent-plan__toggle > strong { font-weight: 650; }
+.agent-plan__toggle > span { display: inline-flex; align-items: center; gap: 2px; color: var(--isl-ink-soft); font-size: 11px; }
+.agent-plan__toggle:hover > span { color: var(--isl-ink); }
+.agent-plan__toggle svg { transition: transform .15s ease; }
+.agent-plan__toggle svg.is-open { transform: rotate(90deg); }
 .agent-plan__assets .flovart-plan { max-height: 240px; overflow: auto; font-size: 11px; }
-.agent-plan__group { justify-content: flex-start; color: var(--p-muted); font-size: 11px; }
-.agent-plan__group-name { display: inline-flex; min-width: 0; align-items: center; gap: 4px; color: var(--p-text); overflow-wrap: anywhere; }
-.agent-plan__workflow { display: grid; gap: 6px; }
-.agent-plan__label { color: var(--p-muted); font-size: 11px; }
-.agent-plan__chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.agent-plan__chip { display: inline-flex; max-width: 100%; align-items: center; gap: 4px; border: 1px solid var(--p-line); border-radius: 999px; padding: 2px 9px; color: var(--p-muted); background: transparent; font: inherit; font-size: 11px; cursor: pointer; }
-.agent-plan__chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.agent-plan__chip:hover:not(:disabled) { color: var(--p-text); border-color: color-mix(in srgb, var(--p-text) 35%, var(--p-line)); }
-.agent-plan__chip:disabled { cursor: default; }
-.agent-plan__chip--running { color: var(--isl-mint-deep, var(--p-text)); border-color: color-mix(in srgb, var(--isl-mint) 45%, var(--p-line)); }
-.agent-plan__chip--done { color: var(--p-text); }
-.agent-plan__chip--error { color: color-mix(in srgb, #e5484d 75%, var(--p-text)); border-color: color-mix(in srgb, #e5484d 40%, var(--p-line)); }
-.agent-plan__blocked { margin: 0; color: color-mix(in srgb, #e5484d 75%, var(--p-text)); font-size: 11px; }
-.agent-plan__mandate { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--p-muted); font-size: 11px; }
-.agent-plan__mandate input[type='number'] { width: 48px; height: 22px; padding: 0 6px; border: 1px solid var(--p-line); border-radius: 6px; color: var(--p-text); background: var(--isl-card); font: inherit; }
-.agent-plan__actions { display: grid; gap: 4px; }
-.agent-plan__primary { height: 34px; border: 0; border-radius: 10px; color: var(--isl-card); background: var(--p-text); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
-.agent-plan__primary:hover:not(:disabled) { background: color-mix(in srgb, var(--p-text) 88%, var(--isl-card)); }
-.agent-plan__primary:disabled { opacity: .4; cursor: not-allowed; }
-.agent-plan__secondary { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
-.agent-plan__secondary button { height: 30px; border: 0; border-radius: 8px; color: var(--p-muted); background: transparent; font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; }
-.agent-plan__secondary button:hover { color: var(--p-text); background: color-mix(in srgb, var(--p-text) 7%, transparent); }
-.agent-plan__progress { display: flex; height: 34px; align-items: center; justify-content: center; gap: 6px; border-radius: 10px; color: var(--p-text); background: color-mix(in srgb, var(--p-text) 7%, transparent); font-size: 12px; font-weight: 600; }
-.agent-plan__progress i { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
-.agent-plan__progress--running i { animation: agent-plan-pulse 1.2s ease-in-out infinite; }
-.agent-plan__progress--failed { color: color-mix(in srgb, #e5484d 75%, var(--p-text)); }
+.agent-plan__mandate { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 8px 8px 0; color: var(--isl-ink-soft); font-size: 11px; }
+.agent-plan__mandate input[type='number'] { width: 48px; height: 22px; padding: 0 6px; border: 1px solid color-mix(in srgb, var(--isl-ink) 14%, transparent); border-radius: 6px; color: var(--isl-ink); background: var(--isl-card); font: inherit; }
 .agent-plan__note { margin: 0; padding: 0 4px; color: var(--p-ghost, var(--isl-ink-ghost)); font-size: 11px; line-height: 1.55; overflow-wrap: anywhere; }
 .agent-conversation__body > .agent-plan-wrap, .workflow-agent__body > .agent-plan-wrap { margin: 0 0 8px; max-height: 60%; overflow: auto; }
-@keyframes agent-plan-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-@media (prefers-reduced-motion: reduce) { .agent-plan__progress--running i { animation: none; } .agent-turn-rail__tick { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .agent-turn-rail__tick { transition: none; } }
 
 /* 2026-11-16 窄宽度控件行不再互相压叠：图标按钮保持 28px 不被挤扁；
    ≤360px 思考强度胶囊去掉图标、文字收窄；≤250px 工具换到两行，发送按钮始终贴右下。 */

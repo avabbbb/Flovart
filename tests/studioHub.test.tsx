@@ -13,6 +13,8 @@ import { listBundledProductionSkills } from '../services/productionSkillCatalog'
 import { useSkillHubStore } from '../stores/useSkillHubStore';
 import { HISTORY_FAVORITES_KEY, useStudioHubStore } from '../stores/useStudioHubStore';
 import { useUserSkillsStore } from '../stores/useUserSkillsStore';
+import { SKILL_ORDER_KEY } from '../components/studio/skillOrder';
+import { AgentTodoCard } from '../components/agent/AgentTodoCard';
 
 const PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 const items: StudioMediaItem[] = [
@@ -83,5 +85,54 @@ describe('StudioHub window', () => {
     await waitFor(() => expect((within(dialog).getAllByRole('button', { name: '使用' })[0] as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(within(dialog).getAllByRole('button', { name: '使用' })[0]);
     await waitFor(() => expect(attach).toHaveBeenCalledWith(expect.objectContaining({ id: bundled.id })));
+  });
+
+  it('Skills: Alt + arrow keys reorder the cards, the order persists to localStorage, and a recipe Skill shows its steps as a plan', async () => {
+    localStorage.removeItem(SKILL_ORDER_KEY);
+    const now = new Date().toISOString();
+    useUserSkillsStore.setState({
+      skills: [
+        { id: 'u1', name: '甲 Skill', slug: 'jia', description: '第一个', prompt: 'p', createdAt: now, updatedAt: '2026-01-02', enabled: true },
+        { id: 'u2', name: '乙 Skill', slug: 'yi', description: '第二个', prompt: 'p', createdAt: now, updatedAt: '2026-01-01', enabled: true,
+          recipe: { steps: [{ nodeId: 'n1', type: 'image', title: '主图', model: 'image-g-2', prompt: '雨夜霓虹', params: {}, inputs: [] }, { nodeId: 'n2', type: 'video', title: '短片', params: {}, inputs: [] }], layout: { columns: 2 } } },
+      ] as never,
+      loaded: true,
+    });
+    render(<StudioHub language="zho" historyItems={[]} onRemoveHistory={vi.fn()} />);
+    act(() => useStudioHubStore.getState().openHub('skills', 'mine'));
+    const dialog = await screen.findByRole('dialog');
+    const names = () => within(dialog).getAllByRole('button', { name: /^查看 .* 详情$/ }).map(button => button.getAttribute('aria-label'));
+    await waitFor(() => expect(names()).toEqual(['查看 甲 Skill 详情', '查看 乙 Skill 详情']));
+    const second = within(dialog).getByRole('button', { name: '查看 乙 Skill 详情' });
+    second.focus();
+    fireEvent.keyDown(second, { key: 'ArrowLeft', altKey: true });
+    await waitFor(() => expect(names()).toEqual(['查看 乙 Skill 详情', '查看 甲 Skill 详情']));
+    expect(JSON.parse(localStorage.getItem(SKILL_ORDER_KEY) || '[]').slice(0, 2)).toEqual(['mine:u2', 'mine:u1']);
+    expect(within(dialog).getByRole('button', { name: /自定义/ })).toBeTruthy();
+    expect(within(dialog).getByRole('status', { name: '' }).textContent || '').toContain('已移到第 1 位');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '查看 乙 Skill 详情' }));
+    const plan = await within(dialog).findByRole('region', { name: '这个 Skill 会做什么' });
+    expect(plan).toHaveTextContent('2 个步骤');
+    expect(plan).toHaveTextContent('主图');
+    fireEvent.click(within(plan).getByRole('button', { name: /主图/ }));
+    expect(plan).toHaveTextContent('雨夜霓虹');
+    expect(plan).toHaveTextContent('图片 · image-g-2');
+    localStorage.removeItem(SKILL_ORDER_KEY);
+  });
+
+  it('todo card uses the shared plan layout: step count, status pills and the current step expanded', () => {
+    render(<AgentTodoCard language="zho" items={[
+      { id: '1', content: '读取参考图', status: 'done' },
+      { id: '2', content: '拆分分镜', status: 'active', note: '每镜 3 秒' },
+      { id: '3', content: '批量生成', status: 'pending' },
+    ]} />);
+    const card = screen.getByRole('region', { name: '执行计划' });
+    expect(card).toHaveTextContent('3 个步骤');
+    expect(card).toHaveTextContent('执行中');
+    expect(card).toHaveTextContent('每镜 3 秒');
+    expect(within(card).getByText('完成')).toBeTruthy();
+    expect(within(card).getByText('待执行')).toBeTruthy();
+    expect(card).toHaveTextContent('正在执行第 2 步，共 3 步');
   });
 });

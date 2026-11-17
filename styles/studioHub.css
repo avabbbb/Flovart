@@ -184,10 +184,9 @@
 .studio-hub__empty { margin: 48px auto; max-width: 320px; color: var(--isl-ink-ghost); font-size: 13px; text-align: center; }
 
 /* —— 卡片网格 —— */
-.studio-hub__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(208px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
-.studio-hub__grid.is-media { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); }
+.studio-hub__grid { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(216px, 1fr)); gap: 14px; margin: 0; padding: 2px 2px 8px; list-style: none; }
+.studio-hub__grid.is-media { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 12px; padding: 0; }
 
-.studio-hub__card,
 .studio-hub__media {
   position: relative;
   display: flex;
@@ -199,16 +198,67 @@
   background: color-mix(in srgb, var(--isl-card) 52%, transparent);
   transition: transform var(--spring-snappy-duration) var(--spring-snappy), border-color .15s ease;
 }
-.studio-hub__card:hover,
 .studio-hub__media:hover { border-color: color-mix(in srgb, var(--isl-ink) 22%, transparent); transform: translateY(-1px); }
-.studio-hub__card[data-off='true'] { opacity: .62; }
 
-.studio-hub__card-open { display: grid; border: 0; padding: 0; color: inherit; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+/* Skill 卡：Bleep App 卡片语言（Inspora · Rolando，登记见 docs/design/references.md），按深色默认 + 浅色主题改写。
+   半透明磨砂面（--flv-frost-*）+ 上沿更亮的 1px 细线 + 柔和宽阴影 + 16px 圆角；封面内缩 10px 自带 10px 圆角；
+   悬停微浮起、阴影加深、右上角露出圆形「…」。拖动时原位留空，手里的浮层缩到 0.9、阴影更深（useSkillCardDrag）。 */
+.studio-hub__card {
+  --card-hairline: color-mix(in srgb, var(--isl-ink) 9%, transparent);
+  --card-top: color-mix(in srgb, #fff 70%, transparent);
+  --card-shadow: 0 1px 2px color-mix(in srgb, var(--isl-ink) 6%, transparent), 0 10px 30px -14px color-mix(in srgb, var(--isl-ink) 22%, transparent);
+  --card-shadow-lift: 0 2px 6px color-mix(in srgb, var(--isl-ink) 8%, transparent), 0 22px 44px -18px color-mix(in srgb, var(--isl-ink) 34%, transparent);
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  border: 1px solid var(--card-hairline);
+  border-radius: 16px;
+  padding: 10px;
+  color: var(--isl-ink);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--isl-card) 74%, transparent), color-mix(in srgb, var(--isl-card) 56%, transparent));
+  box-shadow: inset 0 1px 0 var(--card-top), var(--card-shadow);
+  touch-action: manipulation;
+  transition: transform var(--spring-snappy-duration) var(--spring-snappy), box-shadow .2s ease, border-color .2s ease, opacity .15s ease;
+}
+:root[data-theme='dark'] .studio-hub__card {
+  --card-hairline: color-mix(in srgb, var(--isl-ink) 10%, transparent);
+  --card-top: color-mix(in srgb, var(--isl-ink) 16%, transparent);
+  --card-shadow: 0 1px 2px color-mix(in srgb, #000 30%, transparent), 0 14px 34px -16px color-mix(in srgb, #000 70%, transparent);
+  --card-shadow-lift: 0 2px 8px color-mix(in srgb, #000 36%, transparent), 0 26px 50px -18px color-mix(in srgb, #000 82%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--isl-ink) 8%, color-mix(in srgb, var(--isl-surface) 58%, transparent)), color-mix(in srgb, var(--isl-surface) 44%, transparent));
+}
+.studio-hub__card:hover,
+.studio-hub__card:focus-within,
+.studio-hub__card[data-menu='true'] { z-index: 2; border-color: color-mix(in srgb, var(--isl-ink) 16%, transparent); box-shadow: inset 0 1px 0 var(--card-top), var(--card-shadow-lift); transform: translateY(-2px); }
+.studio-hub__grid[data-dragging='true'] .studio-hub__card:not([data-dragging]) { transform: none; }
+.studio-hub__card[data-off='true'] { opacity: .62; }
+/* 拖动中：原位留一个空格子（Bleep 原作不画虚线框）。 */
+.studio-hub__card[data-dragging='true'] { opacity: 0; transition: none; }
+/* 落点：插入侧一条强调色竖线。 */
+.studio-hub__card[data-drop]::after {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--isl-mint);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--isl-mint) 60%, transparent);
+}
+.studio-hub__card[data-drop='before']::after { left: -9px; }
+.studio-hub__card[data-drop='after']::after { right: -9px; }
+
+.studio-hub__card-open { display: flex; min-width: 0; flex-direction: column; gap: 0; border: 0; border-radius: 10px; padding: 0; color: inherit; background: transparent; font: inherit; text-align: left; cursor: pointer; user-select: none; -webkit-user-drag: none; }
+.studio-hub__card-open:focus-visible { outline: 2px solid var(--isl-mint); outline-offset: 4px; }
 .studio-hub__card-cover {
   position: relative;
   display: grid;
-  height: 104px;
+  height: 112px;
+  overflow: hidden;
   place-items: center;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--isl-ink) 6%, transparent);
   background:
     radial-gradient(120% 90% at 20% 10%, color-mix(in srgb, var(--isl-mint) 26%, transparent), transparent 60%),
     radial-gradient(90% 80% at 90% 100%, color-mix(in srgb, var(--isl-sun) 22%, transparent), transparent 65%),
@@ -216,14 +266,139 @@
 }
 .studio-hub__card-cover[data-tone-seed='1'] { background: radial-gradient(120% 90% at 80% 0%, color-mix(in srgb, var(--isl-coral) 24%, transparent), transparent 60%), radial-gradient(90% 80% at 0% 100%, color-mix(in srgb, var(--isl-mint) 20%, transparent), transparent 65%), color-mix(in srgb, var(--isl-surface-2) 70%, transparent); }
 .studio-hub__card-cover[data-tone-seed='2'] { background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--isl-sun) 26%, transparent), transparent 60%), color-mix(in srgb, var(--isl-surface-2) 70%, transparent); }
-.studio-hub__card-cover img { width: 100%; height: 100%; object-fit: cover; }
+.studio-hub__card-cover img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 .studio-hub__card-cover .agent-skill-mark { width: 46px; height: 46px; }
-.studio-hub__card-body { display: grid; gap: 2px; padding: 10px 12px 4px; }
-.studio-hub__card-body strong { overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.studio-hub__card-body em { color: var(--isl-ink-ghost); font-size: 10px; font-style: normal; }
-.studio-hub__card-body p { display: -webkit-box; min-height: 32px; margin: 2px 0 0; overflow: hidden; color: var(--isl-ink-soft); font-size: 11px; line-height: 16px; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.studio-hub__card-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: auto; padding: 6px 10px 10px 8px; }
-.studio-hub__card-foot .studio-hub__btn { height: 28px; }
+.studio-hub__card-body { display: grid; min-width: 0; gap: 1px; padding: 11px 4px 2px; }
+.studio-hub__card-body strong { overflow: hidden; font-size: 13.5px; font-weight: 700; letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
+.studio-hub__card-body em { overflow: hidden; color: var(--isl-ink-ghost); font-size: 10.5px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+/* 两行说明，底部渐隐（Bleep：正文尾巴淡出）。 */
+.studio-hub__card-desc {
+  display: -webkit-box;
+  min-height: 34px;
+  margin: 5px 0 0;
+  overflow: hidden;
+  color: var(--isl-ink-soft);
+  font-size: 11.5px;
+  line-height: 17px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  -webkit-mask-image: linear-gradient(180deg, #000 45%, rgb(0 0 0 / .28) 100%);
+  mask-image: linear-gradient(180deg, #000 45%, rgb(0 0 0 / .28) 100%);
+}
+.studio-hub__card-foot { display: flex; min-width: 0; align-items: center; gap: 4px; margin-top: auto; padding: 8px 0 0 2px; }
+.studio-hub__card-foot .studio-hub__btn { height: 28px; border-radius: 999px; padding: 0 12px; }
+.studio-hub__card-foot .studio-hub__like { margin-left: auto; border-radius: 999px; }
+.studio-hub__meta-pill {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 999px;
+  padding: 3px 9px;
+  color: var(--isl-ink-soft);
+  background: color-mix(in srgb, var(--isl-ink) 7%, transparent);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.studio-hub__meta-pill[data-source='mine'] { color: var(--isl-mint-deep, var(--isl-ink)); background: color-mix(in srgb, var(--isl-mint) 16%, transparent); }
+
+/* 右上角「…」：悬停 / 聚焦 / 菜单打开时出现，压在封面右上角。 */
+.studio-hub__card-more {
+  position: absolute;
+  z-index: 3;
+  top: 16px;
+  right: 16px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--flv-frost-edge);
+  border-radius: 999px;
+  padding: 0;
+  color: var(--isl-ink);
+  background: var(--flv-frost-fill-strong);
+  -webkit-backdrop-filter: var(--flv-frost-blur);
+  backdrop-filter: var(--flv-frost-blur);
+  box-shadow: var(--flv-frost-highlight), 0 4px 12px -4px color-mix(in srgb, #000 40%, transparent);
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(.86);
+  transition: opacity .15s ease, transform var(--spring-snappy-duration) var(--spring-snappy);
+}
+.studio-hub__card:hover .studio-hub__card-more,
+.studio-hub__card:focus-within .studio-hub__card-more,
+.studio-hub__card[data-menu='true'] .studio-hub__card-more { opacity: 1; transform: none; }
+.studio-hub__card-more:hover { background: var(--flv-frost-fallback); }
+.studio-hub__card-more:focus-visible { outline: 2px solid var(--isl-mint); outline-offset: 2px; }
+.studio-hub__grid[data-dragging='true'] .studio-hub__card-more { opacity: 0; }
+.studio-hub__card-menu { position: absolute; top: 50px; right: 12px; min-width: 160px; }
+.studio-hub__card-menu button:disabled { opacity: .45; cursor: default; }
+
+/* 手里的浮层（挂在 body 上，跟着指针）：缩到 0.9、阴影更深、略带磨砂。 */
+.studio-hub__ghost { position: fixed; z-index: 96; top: 0; left: 0; pointer-events: none; will-change: transform; }
+.studio-hub__ghost-card {
+  width: 100%;
+  height: 100%;
+  cursor: grabbing;
+  transform: scale(.9);
+  -webkit-backdrop-filter: var(--flv-frost-blur);
+  backdrop-filter: var(--flv-frost-blur);
+  box-shadow: inset 0 1px 0 var(--card-top), 0 6px 14px color-mix(in srgb, #000 22%, transparent), 0 34px 70px -18px color-mix(in srgb, #000 60%, transparent);
+  animation: studio-hub-lift 240ms cubic-bezier(.2, .9, .25, 1.15);
+}
+:root:not([data-theme='dark']) .studio-hub__ghost-card { background: color-mix(in srgb, var(--isl-card) 84%, transparent); box-shadow: inset 0 1px 0 var(--card-top), 0 6px 14px color-mix(in srgb, var(--isl-ink) 12%, transparent), 0 34px 70px -18px color-mix(in srgb, var(--isl-ink) 40%, transparent); }
+:root[data-theme='dark'] .studio-hub__ghost-card { background: linear-gradient(180deg, color-mix(in srgb, var(--isl-ink) 10%, color-mix(in srgb, var(--isl-surface) 86%, transparent)), color-mix(in srgb, var(--isl-surface) 80%, transparent)); }
+.studio-hub__ghost-card[data-reduce='true'] { animation: none; }
+@keyframes studio-hub-lift { from { transform: scale(1); } to { transform: scale(.9); } }
+.studio-hub__ghost-use { display: inline-flex; height: 28px; align-items: center; border-radius: 999px; padding: 0 12px; color: var(--isl-card); background: var(--isl-ink); font-size: 12px; font-weight: 600; }
+
+/* 拖动时输入框的投放区：画在遮罩之上（输入框本身被深色遮罩压暗）。 */
+.studio-hub__drop-zone {
+  position: fixed;
+  z-index: 90;
+  display: grid;
+  place-items: start center;
+  padding-top: 10px;
+  border: 1.5px dashed color-mix(in srgb, var(--isl-mint) 55%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--isl-mint) 7%, transparent);
+  pointer-events: none;
+  transition: background-color .15s ease, border-color .15s ease, box-shadow .2s ease;
+}
+.studio-hub__drop-zone > span {
+  max-width: calc(100% - 24px);
+  overflow: hidden;
+  border-radius: 999px;
+  padding: 5px 12px;
+  color: var(--isl-ink);
+  background: var(--flv-frost-fill-strong);
+  -webkit-backdrop-filter: var(--flv-frost-blur);
+  backdrop-filter: var(--flv-frost-blur);
+  box-shadow: var(--flv-frost-highlight), var(--flv-frost-shadow);
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: .78;
+  transition: opacity .15s ease;
+}
+.studio-hub__drop-zone[data-over='true'] { border-style: solid; border-color: var(--isl-mint); background: color-mix(in srgb, var(--isl-mint) 18%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--isl-mint) 22%, transparent), 0 0 32px color-mix(in srgb, var(--isl-mint) 35%, transparent); }
+.studio-hub__drop-zone[data-over='true'] > span { opacity: 1; }
+:root.is-skill-dragging,
+:root.is-skill-dragging * { cursor: grabbing !important; user-select: none !important; }
+
+.studio-hub__sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.flv-plan.studio-hub__skill-plan { margin: 6px 0 14px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-hub__card,
+  .studio-hub__card-more { transition: none; }
+  .studio-hub__card:hover,
+  .studio-hub__card:focus-within,
+  .studio-hub__card[data-menu='true'] { transform: none; }
+  .studio-hub__ghost-card { animation: none; transform: scale(.94); }
+}
 
 .studio-hub__like {
   display: inline-flex;
@@ -297,5 +472,7 @@
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   .studio-hub { background: var(--isl-surface); }
   .studio-hub__card,
-  .studio-hub__media { background: var(--isl-card); }
+  .studio-hub__media,
+  :root[data-theme='dark'] .studio-hub__card { background: var(--isl-card); }
 }
+.studio-hub__ghost .studio-hub__ghost-use { margin-left: auto; }

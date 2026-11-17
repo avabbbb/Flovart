@@ -19,45 +19,4 @@
 }
 .flv-machine { font-family: var(--font-machine); font-variant-numeric: tabular-nums; letter-spacing: 0; }
 
-/* 任务清单：Coding agent 式——壳上白卡、顶部细进度条、圆环→转圈→实心勾 */
-/* 执行计划卡（components/agent/AgentTodoCard.tsx）。参照 Inspora「Agent Plan」@Jeet：
-   外层灰壳装头尾，内层白卡装步骤；步骤间虚线；右侧状态胶囊；步数用等宽胶囊。颜色只用 §11 状态色。 */
-.agent-todo-card.agent-plan-card { position: relative; margin: 6px 0; padding: 4px; border-radius: 16px; font-size: 12.5px; background: color-mix(in srgb, var(--isl-ink) 5%, var(--isl-surface)); border: 1px solid color-mix(in srgb, var(--isl-ink) 6%, transparent); overflow: hidden; }
-.agent-plan-card__head { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 7px 10px 8px; color: var(--isl-ink); }
-.agent-plan-card__head > strong { font-size: 13px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; }
-.agent-plan-card__pill { flex: 0 0 auto; border-radius: 999px; padding: 1px 7px; color: var(--isl-ink-soft); background: color-mix(in srgb, var(--isl-ink) 7%, transparent); font-size: 10.5px; }
-.agent-plan-card__status { display: inline-flex; align-items: center; gap: 5px; min-width: 0; margin-left: auto; overflow: hidden; color: var(--isl-ink-soft); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
-.agent-plan-card__dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 999px; background: currentColor; }
-.agent-plan-card[data-phase='running'] .agent-plan-card__status { color: var(--state-think); }
-.agent-plan-card[data-phase='blocked'] .agent-plan-card__status { color: var(--state-blocked); }
-.agent-plan-card[data-phase='complete'] .agent-plan-card__status { color: var(--state-write); }
-
-.agent-plan-card__list { list-style: none; margin: 0; padding: 0 12px; display: grid; border-radius: 12px; background: var(--isl-card); box-shadow: 0 1px 2px color-mix(in srgb, var(--isl-ink) 6%, transparent); }
-.agent-plan-card__list > li { padding: 9px 0; color: var(--isl-ink); border-top: 1px dashed color-mix(in srgb, var(--isl-ink) 14%, transparent); transition: color .2s ease; }
-.agent-plan-card__list > li:first-child { border-top: 0; }
-.agent-plan-card__row { display: flex; align-items: center; gap: 9px; min-width: 0; }
-.agent-plan-card__row .agent-todo-card__text { min-width: 0; flex: 1; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.agent-plan-card__list > li[data-status='active'] .agent-todo-card__text { font-weight: 600; }
-.agent-plan-card__list > li[data-status='done'] { color: var(--state-idle); }
-
-.agent-plan-card__state { flex: 0 0 auto; border-radius: 999px; padding: 2px 8px; color: var(--isl-ink-soft); background: color-mix(in srgb, var(--isl-ink) 7%, transparent); font-size: 10.5px; font-weight: 600; white-space: nowrap; }
-.agent-plan-card__state[data-status='active'] { color: var(--state-think); background: color-mix(in srgb, var(--state-think) 13%, transparent); }
-.agent-plan-card__state[data-status='done'] { color: var(--state-write); background: color-mix(in srgb, var(--state-write) 13%, transparent); }
-.agent-plan-card__state[data-status='blocked'] { color: var(--state-blocked); background: color-mix(in srgb, var(--state-blocked) 12%, transparent); }
-
-.agent-plan-card__detail { overflow: hidden; }
-.agent-todo-card__note { display: block; padding: 5px 0 1px 25px; font-weight: 400; line-height: 1.5; color: var(--isl-ink-soft); }
-.agent-todo-card__note.is-quiet { padding-top: 2px; overflow: hidden; color: var(--isl-ink-ghost); text-overflow: ellipsis; white-space: nowrap; }
-.agent-plan-card__list > li[data-status='blocked'] .agent-todo-card__note { color: var(--state-blocked); }
-.agent-todo-card__text { text-decoration-line: line-through; text-decoration-color: transparent; transition: text-decoration-color .25s ease; }
-.agent-plan-card__list > li[data-status='done'] .agent-todo-card__text { text-decoration-color: currentColor; }
-
-.agent-plan-card__foot { display: flex; align-items: center; gap: 8px; padding: 8px 10px 6px; color: var(--isl-ink-soft); font-size: 11.5px; }
-.agent-plan-card__foot > .flv-machine { color: var(--isl-ink); font-weight: 600; }
-.agent-todo-icon { position: relative; flex: 0 0 auto; width: 16px; height: 16px; margin-top: 1px; display: grid; place-items: center; }
-.agent-todo-icon__ring { width: 14px; height: 14px; border-radius: 999px; border: 1.5px solid color-mix(in srgb, var(--isl-ink) 22%, transparent); }
-.agent-todo-icon__spin { width: 14px; height: 14px; border-radius: 999px; border: 1.5px solid color-mix(in srgb, var(--state-think) 22%, transparent); border-top-color: var(--state-think); animation: agent-todo-spin .8s linear infinite; }
-.agent-todo-icon__done { width: 15px; height: 15px; border-radius: 999px; display: grid; place-items: center; background: var(--state-write); color: #fff; }
-.agent-todo-icon__blocked { width: 15px; height: 15px; border-radius: 999px; display: grid; place-items: center; background: var(--state-blocked); color: #fff; font-size: 10px; font-weight: 700; }
-@keyframes agent-todo-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .agent-todo-icon__spin { animation-duration: 2.4s; } }
+/* 执行计划卡（components/agent/AgentTodoCard.tsx）外观已并入共用计划组件 PlanSteps：styles/planSteps.css。 */
