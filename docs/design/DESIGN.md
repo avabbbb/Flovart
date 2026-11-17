@@ -227,6 +227,7 @@ pressable 3D drop（`--isl-drop*`）已于 2026-10-30 删除；`--shadow-panel`�
 | 主题 | `ThemeMode = 'light' \| 'dark' \| 'system'`（`types/index.ts`）；`html, body` 背景与文字 `--motion-base` 过渡；`color-scheme` 同步 |
 | 断点 | 容器优先：`@container app-shell (width <= 1023px)`、`@container workflow-space (width <= 760px / 900px)`；媒体兜底 360 / 560 / 640 / 720 / 760 / 1023px 与 `max-height: 600px`；断点只表达“放不放得下”，不按设备分支 |
 | Hover / 状态 | hover 只换背景或边框（120–140ms `--ease-standard`）；pressed 背景深一级；focus-visible 2px mint 外偏移 2px；disabled 50% 不透明 |
+| 列表浮层键盘 | **每个列表浮层**（模型 / Provider / 画布切换 / Skill / @ / 历史 / 素材 / 节点类型 / 设置下拉）都必须支持：打开即可输入筛选（搜索框自动聚焦，浮层内别处的可打印键转给搜索框）、↑/↓ 移动高亮（回绕或夹住、跳过分组标题与禁用项、滚到可见、每次筛选后高亮第一项）、Enter 选中、Esc 先清空搜索再关闭、悬停同步高亮；`listbox` / `option` + `aria-activedescendant`，输入法组字（`isComposing`）中不响应。统一用 `hooks/useListboxKeyboard.ts`（`useListboxKeyboard` / `useMenuKeyboard` / `useSearchGridKeyboard`），不另写键盘逻辑。高亮 = hover 同一层背景（`data-listbox-active`）；已选中项再被高亮时叠 1px 内描边，与「选中」区分 |
 | Pointer / 画布 | 画布自有 pan / zoom（`InfiniteWorkflow`）；`data-workflow-overlay` 的浮层 `stopPropagation` 防止误拖画布；手柄命中区 ≥ 24px；拖拽中卡片 `--isl-shadow-lg`、不旋转 |
 | 减弱动效 | `@media (prefers-reduced-motion: reduce)`：`--motion-*` → 0.01ms、`--scale-*` → 1（`styles/motion.css` 等 15 段）；**JS 动画需另接** `MotionConfig reducedMotion="user"` / `useReducedMotion()`（现只有 `ProductionSkillDeck` 用了） |
 | 减弱透明度 | `prefers-reduced-transparency` / `prefers-contrast: more` → 玻璃实底（§9.2，**目标**） |

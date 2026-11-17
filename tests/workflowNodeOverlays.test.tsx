@@ -202,7 +202,7 @@ describe('workflow node overlays', () => {
     fireEvent.click(screen.getAllByTitle('GPT Image 2')[0]);
     expect(screen.getByTestId('prompt-model-progressive')).toHaveAttribute('data-density', 'compact');
     expect(screen.queryByTestId('prompt-model-carousel')).not.toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole('button', { name: /GPT Image 2/ }).at(-1)!);
+    fireEvent.click(screen.getAllByRole('option', { name: /GPT Image 2/ }).at(-1)!);
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ config: expect.objectContaining({ modelId: 'flovart:gpt-image-2' }) }));
   });
 
