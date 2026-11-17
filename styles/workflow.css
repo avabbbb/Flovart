@@ -675,8 +675,8 @@
 .workflow-operation-card__versions{display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:10px}
 .workflow-operation-card__versions button{height:20px;min-width:26px;padding:0 6px;border:1px solid var(--wf-border,rgba(0,0,0,.12));border-radius:10px;color:var(--wf-muted);background:transparent;font-size:10px;font-weight:650;font-variant-numeric:tabular-nums;cursor:pointer}
 .workflow-operation-card__versions button.is-selected{color:var(--isl-ink,#1f1d1a);background:var(--wf-accent);border-color:var(--wf-accent)}
-/* 结果节点上的版本条（生成记录挂在结果节点上，不再有 operation 卡片）：左上角，空版本条不占位。 */
-.workflow-node__versions{position:absolute;z-index:6;top:6px;left:6px;max-width:calc(100% - 12px)}
+/* 结果节点上的版本条（生成记录挂在结果节点上，不再有 operation 卡片）：顶部居中（左上是批次折叠、右上是过期徽标），空版本条不占位。 */
+.workflow-node__versions{position:absolute;z-index:6;top:6px;left:50%;width:max-content;max-width:calc(100% - 64px);transform:translateX(-50%)}
 .workflow-node__versions:empty{display:none}
 .workflow-node__versions .workflow-operation-card__versions{flex-wrap:nowrap;overflow:hidden;padding:3px;border-radius:12px;background:color-mix(in srgb,var(--wf-panel) 88%,transparent);box-shadow:0 0 0 1px var(--wf-border)}
 .workflow-node__versions .workflow-operation-card__newer{white-space:nowrap;color:var(--wf-muted)}

@@ -22,8 +22,43 @@ async function cropOperation() {
 }
 
 describe('workflow operation node surface', () => {
-  it('mounts a visible editable operation card with a stable rerun action', async () => {
-    const operation = await cropOperation();
+  it('creates result nodes (not operation nodes) and shows the take version strip on them', async () => {
+    const created = await cropOperation();
+    expect(created.type).toBe('image');
+    const take = (id: string, storageKey: string) => ({
+      id, status: 'success' as const, recipeHash: 'h', createdAt: '2026-11-18T00:00:00.000Z', completedAt: '2026-11-18T00:00:01.000Z',
+      snapshot: { id: 's-' + id, createdAt: '2026-11-18T00:00:00.000Z', compilerVersion: 'workflow-operation@1', renderedPrompt: '', parameters: {}, inputBindings: [], recipeHash: 'h' },
+      outputNodeIds: [created.id], outputMedia: { storageKey, mimeType: 'image/png' },
+    });
+    const result = {
+      ...created,
+      metadata: { ...created.metadata, status: 'success' as const, storageKey: 'k-2', mimeType: 'image/png', operation: { ...created.metadata.operation!, takes: [take('t1', 'k-1'), take('t2', 'k-2')], selectedTakeId: 't2' } },
+    };
+    const onSelectTake = vi.fn();
+    render(<WorkflowNode
+      node={result}
+      selected
+      onPointerDown={vi.fn()}
+      onConnectStart={vi.fn()}
+      onResizeStart={vi.fn()}
+      onChangeText={vi.fn()}
+      onChangeMetadata={vi.fn()}
+      onRun={vi.fn()}
+      onSelectTake={onSelectTake}
+      onContextMenu={vi.fn()}
+      onReplaceMedia={vi.fn()}
+      onRemoveMedia={vi.fn()}
+    />);
+    expect(screen.queryByTestId('workflow-operation-card')).toBeNull();
+    const strip = screen.getByTestId('workflow-operation-versions');
+    expect(strip).toHaveTextContent('v1');
+    expect(strip).toHaveTextContent('v2');
+    fireEvent.click(screen.getByRole('button', { name: 'v1' }));
+    expect(onSelectTake).toHaveBeenCalledWith('t1');
+  });
+
+  it('still renders a legacy operation node (undo history / imports) as a compatibility card', async () => {
+    const operation = { ...(await cropOperation()), type: 'operation' as const };
     const onRun = vi.fn();
     render(<WorkflowNode
       node={operation}
@@ -45,12 +80,13 @@ describe('workflow operation node surface', () => {
     expect(onRun).toHaveBeenCalledOnce();
   });
 
-  it('derives a video Operation card and mode from the same capability registry', async () => {
-    const operation = await createWorkflowOperationNode({
+  it('derives a legacy video Operation card and mode from the same capability registry', async () => {
+    const created = await createWorkflowOperationNode({
       id: 'trim-operation', capabilityId: 'video.trim@1', position: { x: 400, y: 0 },
       parameters: { startSec: 1, endSec: 4 },
       inputBindings: [createWorkflowOperationInputBinding('trim-input', 'source-video', 'source_video', 0)],
     });
+    const operation = { ...created, type: 'operation' as const };
     render(<WorkflowNode
       node={operation}
       selected
