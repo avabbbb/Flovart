@@ -23,7 +23,7 @@ Flovart 的 Agent 不是答题型 Agent。它驱动画布去生成图和视频�
 | **L1 Prompt / Skill 约束** | Agent 系统提示词、`SKILL.md`、Rubric 本身是否清晰、自洽、完整 | 矛盾数；Skill 与命令注册表不一致的数量 | Rule：`agentSkillPackage` 测试、`docs:check`<br>LLM：`prompt-static` Rubric | 规则层已有；Judge 新增 |
 | **L2 知识与经验（SOP）** | 制作经验有没有被召回和用对（镜头衔接、首尾帧选型、换脸顺序、倒放接片） | SOP 召回覆盖率、引用正确率 | Rule：方案中的 SOP 引用统计<br>LLM：`sop-recall` Rubric | Judge 新增 |
 | **L3 任务执行** | CLI / MCP 调用和画布终态是否正确、稳定 | pass@1、pass^5、参数正确率、费用确认与幂等通过率 | Rule：FlovartBench（predicates、exact hash、硬门禁）<br>LLM：`agent-run` Rubric（规划与表述） | 规则层已有；Judge 新增 |
-| **L4 创作效果** | 生成的图和视频有没有被采纳、值不值这个钱 | 采纳率、重抽次数、每个可用镜头的成本与耗时 | LLM / VLM：`image-output`、`video-shot`、`digital-human` 单项打分 + 备选成对比较<br>实验：Skill / 模型版本 A/B | Judge 与偏好对比较已实现；采纳事件的采集待做 |
+| **L4 创作效果** | 生成的图和视频有没有被采纳、值不值这个钱 | 采纳率、重抽次数、每个可用镜头的成本与耗时 | LLM / VLM：`image-output`、`video-shot`、`digital-human` 单项打分 + 备选成对比较<br>实验：Skill / 模型版本 A/B | Judge 与偏好对比较已实现；AIGC 题库与客观轨 MVP（§4.1）；「设为首图」偏好事件已采集 |
 | **L5 自动化 Benchmark** | 各版本能否持续回归、对比、准入 | 版本间退化率、bad case 回归 | nightly FlovartBench + Judge 回归集 + 准入门禁 | 规则层 CI 已有；Judge 门禁已实现，未接入 CI |
 
 层与层之间是级联的：
@@ -72,13 +72,50 @@ Flovart 的 Agent 不是答题型 Agent。它驱动画布去生成图和视频�
 | 基础能力 | 常规集 | 主流程：建节点、批量生成、首尾帧视频 | `eval/tasks/*`、`eval/judge/samples/` |
 | 基础能力 | 回归集 | 改提示词、换模型、改 Rubric 后必须重跑的样本 | 每次 `docs/quality` 记录里修过的问题 |
 | 基础能力 | Bad Case 集 | 已定位的问题 | 真实 trace（如 2026-11-15 的批量运行竞态、未知命令） |
-| 边界与风险 | 线上回流集 | 用户重抽、丢弃的结果 | 备选里没被选中的 take（待采集） |
+| 边界与风险 | 线上回流集 | 用户重抽、丢弃的结果 | 备选里没被选中的 take（「设为首图」偏好事件，见第 6 节） |
 | 边界与风险 | 对抗集 | 多人同框、指定背景 + 换装、画面要中文字 | 三份制作复盘里的难点 |
 | 边界与风险 | 红队集 | 诱导绕过费用确认、写别的项目、在聊天里要密钥 | `eval/red-team.mjs` + `agent-run` 的 RED 项 |
 | 边界与风险 | 安全集 | 未授权真人换脸 / 声音克隆 | 各 Rubric 的 RED 项 |
 | 评估器 | Judge 验证集 | 带人工标注的样本，专门测 Judge 自己 | `*.labels.json`；与 Rubric 迭代用的样本分开 |
 
 数据集要保鲜：Rubric 或产品改了以后，失效的样本删掉并升版本。Judge 验证集要留出一部分不参与 Rubric 迭代，用来发现过拟合（准确率在测试集、验证集、泛化集上逐级下降，就是过拟合的信号）。
+
+### 4.1 多模态 AIGC 题库（L4）
+
+L4 的生成效果用一个独立题库评，代码在 `eval/aigc/`，设计取舍见 [docs/plans/aigc-eval-platform.md](../docs/plans/aigc-eval-platform.md)。
+
+**条目**（`eval/schema/aigc-item.schema.json`，一条一个 `eval/aigc/items/<id>.json`）：
+
+| 字段 | 取值 | 说明 |
+| --- | --- | --- |
+| `domain` | `t2i`、`i2i-edit`、`t2v`、`i2v`、`flf2v`、`r2v`、`v-edit`、`v-extend`、`digital-human`、`tts`、`agent-run` | 任务域 |
+| `scenario` | `ad`、`fiction`、`pgc`、`consumer-effects`、`social`、`basic` | 场景轴（SeedVideoBench 2.0 的六个场景） |
+| `taskGroup` | `generate`、`reference`、`edit`、`extend`、`combine` | 多模态任务组 |
+| `capabilities` | 点分标签，如 `camera.dolly-in`、`text.zh`、`audio.sync`、`narrative.continuity` | 能力轴；场景 × 能力是两条轴，按格子均衡出题 |
+| `difficulty` | `easy`、`medium`、`hard` | 难度分层（DreamEval），平均数会掩盖模型在哪一档崩 |
+| `split` | `dev`、`test`、`holdout` | dev 可以随便迭代；test 是报告用的；**holdout 不给调提示词、Skill、Rubric 的人看**，用来发现过拟合 |
+| `prompt` | `zh` / `en` / `negative` / `translation` | 中英成对，翻译是否人工核过要标明 |
+| `assets` | 按角色分组：`ref_image`、`first_frame`、`last_frame`、`face_ref`、`ref_video`、`ref_audio`、`ground_truth` | 每个素材带 uri、sha256、mime、授权 |
+| `constraints` | 比例、时长、分辨率、要渲染的文字、要朗读的文本、音频要求、最低动态度 | 客观轨直接按它判 |
+| `checks` | `vqa-yesno`、`ocr-match`、`audio-qa`、`rule` | 逐条可检查的 QA（Seedream 4.0 的做法），可设父项：父项不通过，子项按不通过算 |
+| `status` | `active`、`withdrawn`、`retired` | 非 active 的条目不进任何比率，必须写原因 |
+
+授权与数据卫生（`eval/aigc/lib/dataset.mjs` 校验）：
+
+- 题库只放合成素材，或带授权凭据引用的素材；不提交有版权的媒体。`face_ref` 和 `ref_audio` 只接受本人书面授权（`person-consent`，必须写 `consent.ref`）、自有或合成素材。
+- 声音克隆的参考音频不能就是目标音频（`ref_audio` ≠ `ground_truth`）。
+- 每个任务域必须带它的条件素材：i2v 要首帧，flf2v 要首尾帧，r2v 至少一种参考，视频编辑 / 延展要参考视频，数字人要形象参考。
+
+**生成**（`aigc-take.schema.json`）记录模型、版本、线路、参数、Skill 版本、**改写后的提示词**（有改写器时必须记，例如 MiniMax H3 的托管改写会明显影响质量）、seed、输出、费用、耗时，以及同批备选关系和是否被选中。
+
+**两条轨道，分开报告，不合成一个分数**：
+
+| 轨道 | 判什么 | 怎么判 |
+| --- | --- | --- |
+| 客观轨 | 文件有效、比例、时长、有无音轨、音画时长差（≤0.2 秒）、动态度（防止用近乎静止的视频刷画质分） | `eval/aigc/graders/`，本地 ffprobe / ffmpeg。每个 grader 对同一个 take 跑 N 次，结果不一致的条目**撤回**（不计入比率，写明原因）；无法运行（如远程 URI）不算通过，也不进分母 |
+| 主观轨 | 整体、运动、提示遵循、美学、原图保持、音频质量、音画同步、音频提示遵循、叙事；多模态任务遵循 | 盲评或记录下来的 Judge 整体分（`aigc-rating.schema.json`）。质量类 1–5，多模态任务遵循 1–3；锚点写在 `video-shot` / `digital-human` 的 `scales` 里 |
+
+主观轨报**比率**，不报均分：可用率（≥3）、满意率（≥4）、惊喜率（=5）；多模态任务遵循报完全遵循（=3）与部分及以上（≥2）。每个 take 取评分人的下中位数；所有比率带 95% Wilson 区间，按任务域、场景、难度、划分、模型分组。人工标签随机抽 20% 复核，复核分与原分同档（1–2 / 3 / 4 / 5）的比例 ≥95% 才算这批标签合格。
 
 ## 5. Judge 工程
 
@@ -107,8 +144,8 @@ Flovart 的 Agent 不是答题型 Agent。它驱动画布去生成图和视频�
 | `sop-recall` | L2 | 制作方案是否用上了复盘经验 |
 | `agent-run` | L3 | Agent 的规划与表述（规则层之上） |
 | `image-output` | L4 | 单张图：比例、人物一致性、提示词要点、结构、文字 |
-| `video-shot` | L4 | 单个镜头：首尾帧、动作运镜、面部稳定、结构与中文字 |
-| `digital-human` | L4 | 数字人口播：音画等长、口型与面部稳定、动作、画质、授权 |
+| `video-shot` | L4 | 单个镜头：首尾帧、动作运镜、面部稳定、结构与中文字、音画同步 / 音频质量 / 音频提示遵循、叙事 |
+| `digital-human` | L4 | 数字人口播：音画等长、口型与面部稳定、动作、画质、音频质量、文案遵循、叙事节奏、授权 |
 
 ### 5.2 Prompt：压制幻觉
 
@@ -164,7 +201,7 @@ Judge 温度默认 0.1。
 
 **偏好对从哪来**：一次生成多张时，第一张原位写进节点，其余存进 `metadata.alternates`；用户「设为首图」（Agent 对应 `workflow.batch.pick`）选中的那张就是 chosen，同批没被选的是 rejected。这些样本的提示词和输入完全相同，是天然的对照实验，而且不额外花钱。
 
-> 待做：「设为首图」目前只交换媒体字段，没有留下事件记录。要采集偏好对，需要在 pick 时记录 `{nodeId, chosen, rejected, prompt, model}`（不含媒体本体）。
+「设为首图」成功后，画布在本地记一条偏好事件 `{nodeId, chosen, rejected, prompt, model, time}`（`services/preferenceEvents.ts`）：只有 ID、提示词和模型，不含媒体本体、URL 或存储 key；rejected 是被换下去的首图和同一批的其他备选。Agent 的 `workflow.batch.pick` 是自动挑选，不记。`node eval/aigc/run.mjs prefs-export --events <file>` 把事件转成 `pairs` 的输入：每个节点只取最后一次选择，A / B 位置按哈希决定，标准答案在两侧大致均衡。
 
 三层架构（`lib/autorubrics.mjs`）：
 
@@ -236,6 +273,14 @@ npm run eval:judge -- pairs --rubric image-output --pairs <偏好对.jsonl> --tr
 npm run eval:judge -- screen --violations <违反记录.json>    # Auto Rubrics 第 2 层
 npm run eval:judge -- gate --baseline <旧结果目录> --candidate <新结果目录>
 npm run eval:judge -- sample-size --margin 0.01
+
+# 多模态 AIGC 题库（第 4.1 节）
+npm run eval:aigc:validate                                   # 校验条目、示例 take 与评分
+npm run eval:aigc:demo                                       # 合成媒体 → 客观轨 → 导入评分 → 看板 → 偏好对导出，不花钱
+npm run eval:aigc -- grade --takes <takes.jsonl> --repeats 3 # 客观轨，不稳定的条目撤回
+npm run eval:aigc -- rate --ratings <ratings.jsonl>          # 导入主观轨评分
+npm run eval:aigc:report                                     # 生成 eval/aigc/results/report/index.html
+npm run eval:aigc -- prefs-export --events <events.jsonl>    # 偏好事件 → pairs.jsonl + truth.json
 ```
 
 Judge 模型通过环境变量配置，可以接任何兼容 Chat Completions 的服务：`FLOVART_JUDGE_BASE_URL`、`FLOVART_JUDGE_MODEL`、`FLOVART_JUDGE_API_KEY`（不写进任何结果文件）。图像和视频 Rubric 需要支持图像输入的模型；视频按时间均匀抽关键帧（`ffmpeg -vf fps=…`），作为图像附带，帧的时间点写在 `frames_meta` 里。`--replay <file.jsonl>` 用录下来的输出重评，CI、改解析器后重评都不花钱。
@@ -251,6 +296,7 @@ Judge 模型通过环境变量配置，可以接任何兼容 Chat Completions �
 3. 所有 CLI 调用都经过一个包装脚本，把命令、参数、返回码、关键返回字段追加写进 `trace.jsonl`。
 4. 每个用户请求结束后执行一次 `workflow.inspect`，作为 `final_state`，并记下 Agent 的最终回复。
 5. 把一个请求的 trace 组装成一行样本 `{id, turnId, evalTime, slice, inputs: {user_request, tool_calls, final_state, agent_reply, cost_plan}}`。清洗层会负责脱敏和跨轮隔离。
+6. 偏好事件：在同一个浏览器会话里执行 `await window.__flovartPreferenceEvents.exportJsonl()`，存成 JSONL 后交给 `prefs-export`。
 
 付费生成先用 price-preview 估价；预算和实际花费记在当次的 `docs/quality` 记录里。
 
@@ -276,7 +322,16 @@ eval/
     lib/attribution.mjs    四步归因与路由表
     lib/gate.mjs           准入 / 灰度 / 监控
     samples/               示例样本、回放输出、人工标注
+  aigc/
+    run.mjs                AIGC 题库 CLI：validate / fixtures / grade / rate / report / prefs-export / demo
+    items/*.json           条目（一条一个文件，文件名 = id）
+    samples/               示例 take、评分、偏好事件
+    graders/               客观轨 grader（ffprobe / ffmpeg）
+    lib/                   Schema 校验、数据规则、稳定性撤回、比率、结果库、看板、偏好对导出、合成媒体
+    results/               结果库与看板（不进 git）
+  schema/aigc-*.schema.json  条目、生成、评分的 Schema
 tests/evalJudge.test.ts    Judge 层单测
+tests/aigcEval.test.ts     AIGC 题库单测
 ```
 
 ## 11. Rubric 背后的制作经验
@@ -303,14 +358,26 @@ L2 和 L4 的 Rubric 条目，来自团队三份真实项目的复盘（数字�
 - **Rubrics as Rewards**：同一套 rubric 既做评测也做奖励。对应以后用 Rubric 筛选训练数据。
 - **字节 Seed 的公开报告**：Seedream 4.0 的 MagicBench 和 DreamEval，把评测拆成细粒度的 VQA；Seedance 的 SeedVideoBench 看运动质量、指令遵循、美学和原图保持，用 5 分制打分加 GSB 成对比较。对应 L4 的子项设计和成对比较。这些报告没有公开 rubric 原文和一致率。
 
+2026 年的参照（第 4.1 节的来源；调研时间 2026-11-16）：
+
+- **Seedance 2.0 / SeedVideoBench 2.0**（arXiv 2604.14148，2026-04）：客观指标自动管线与主观盲评分轨；多模态任务分参考、编辑、延展、组合四组；质量维度 1–5 分，多模态任务遵循 1–3 分；报告可用率（≥3）、满意率（≥4）、惊喜率（=5）而不是均分；新增音频质量、音画同步、音频提示遵循，以及叙事质量（镜头语言、情节、风格）；按广告、虚构、PGC、C 端特效、社交、基础六个场景出题。对应第 4.1 节的分轨、比率、场景轴，以及 `video-shot` / `digital-human` 1.1.0 的音画与叙事子项。未公开题量、标注人数与一致率。
+- **MiniMax H3**（2026-07）：托管的提示词改写明显影响生成质量。对应 take 必须记录改写后的提示词。
+- **Seedream 4.0 DreamEval**：每条提示词配可检查的 QA，按 easy / medium / hard 分层。对应条目的 `checks` 与 `difficulty`。
+- **VBench dynamic degree**：用运动幅度防止静止视频在画质和一致性上拿高分。对应客观轨的 `dynamic-degree`。
+- **VBench-2.0 人工复核**：随机抽 20% 的标签复核，通过线 95%。对应主观轨的复核规则。
+- **Seed-TTS / MiniMax-Speech**：TTS 用 WER 与说话人相似度（SIM），参考音频不能是目标音频。对应条目的 `ref_audio` ≠ `ground_truth` 规则；WER / SIM 的 grader 待做。
+
 ## 13. 现状
 
 已完成：Rubric 契约与 Prompt 生成、四层清洗、输出防线、六层漏斗、多轮一致、位置交换、kappa / Wilson / 样本量、Auto Rubrics 的筛选与记忆、四步归因、三阶段门禁、6 份 Rubric、回放示例与单测。
 
+2026-11-17 新增（多模态 AIGC 题库 MVP，第 4.1 节）：条目 / 生成 / 评分三份 Schema 与语义校验；7 条示例条目（覆盖 dev / test / holdout 与一条撤回示例，素材全部现场合成）；6 个客观 grader 与稳定性撤回；可用 / 满意 / 惊喜率与 Wilson 区间；`node:sqlite` 结果库（JSONL 兜底）与静态看板；`video-shot` / `digital-human` 升到 1.1.0（音画三项、叙事、`scales`）；「设为首图」偏好事件采集与 `pairs` 导出；单测。全部不花钱，没有跑真实生成或真实 Judge。
+
 待做：
 
-1. 「设为首图」时记录偏好事件（不含媒体本体），作为 L4 的真实信号。
-2. 视频关键帧的抽帧脚本：从 take 生成 `frames_meta` 和图像输入。
-3. 在真实 Judge 模型上跑首批人工标注（每份 Rubric 至少 100 条），把 kappa 做实。
-4. 把 `gate` 接入 CI，作为 Skill、提示词变更的准入门禁。
-5. 首次用 Auto Rubrics 从偏好对挖出规则后，人工复核再并入 Rubric。
+1. 视频关键帧的抽帧脚本：从 take 生成 `frames_meta` 和图像输入；偏好对按 `refs` 附图。
+2. 在真实 Judge 模型上跑首批人工标注（每份 Rubric 至少 100 条），把 kappa 做实。
+3. 把 `gate` 接入 CI，作为 Skill、提示词变更的准入门禁；之后把可用率区间也纳入准入。
+4. 首次用 Auto Rubrics 从偏好对挖出规则后，人工复核再并入 Rubric。
+5. 题库扩到每个任务域 × 场景至少 5 条，每条补 sha256 与授权凭据；客观轨补 OCR、TTS WER / SIM、首帧相似度；`dynamic-degree` 阈值用人工标注校准。
+6. 主观轨首批人工盲评与 20% 复核（会花钱，先估价）。
