@@ -4,10 +4,10 @@ import { create } from 'zustand';
 import type { ProductionSkillAttachment } from '../services/productionSkillCatalog';
 import type { LocalFolderEntry } from '../services/localFolderSource';
 
-// 放大的 Hub 窗口（Skills / History / Library）的开合状态与跨组件入口。
+// 放大的 Hub 窗口（Skills / History / Timeline / Library）的开合状态与跨组件入口。
 // 窗口挂在 App 顶层；真正的动作（插入画布、给 Composer 附 Skill）由拥有它的组件注册进来，
 // 窗口只调用，不复制业务。
-export type StudioHubKind = 'skills' | 'history' | 'library';
+export type StudioHubKind = 'skills' | 'history' | 'timeline' | 'library';
 
 export const HISTORY_FAVORITES_KEY = 'flovart.history.favorites.v1';
 
@@ -16,6 +16,8 @@ export interface StudioHubHandlers {
   insertHistory?: (item: { id: string; source?: 'history' | 'asset'; sourceId?: string; name: string; href: string; mimeType: string; type: 'image' | 'video'; width?: number; height?: number; prompt?: string; projectId?: string; createdAt?: number }) => void;
   /** 本地文件夹条目 → 插入当前画布（InfiniteWorkflow 注册）。 */
   insertLibrary?: (entries: LocalFolderEntry[]) => void | Promise<void>;
+  /** Timeline「定位节点」：选中并框住这些节点（InfiniteWorkflow 注册，只认当前画布）。 */
+  focusNodes?: (projectId: string, nodeIds: string[]) => boolean;
   /** 选用 Skill → 附到 Agent Composer（ProductionSkillDeck 注册）。 */
   attachSkill?: (attachment: ProductionSkillAttachment) => void;
 }
@@ -23,7 +25,7 @@ export interface StudioHubHandlers {
 interface StudioHubState {
   open: boolean;
   hub: StudioHubKind;
-  /** 侧栏子项：Skill 分组 / 画布 id / 文件夹 id。 */
+  /** 侧栏子项：Skill 分组 / 画布 id（历史、Timeline）/ 文件夹 id。 */
   section: string | null;
   sidebarCollapsed: boolean;
   handlers: StudioHubHandlers;

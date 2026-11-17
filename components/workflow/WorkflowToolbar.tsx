@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { Bot, Camera, FileDown, FileText, Focus, Grid2X2, Hand, History, ImageDown, Keyboard, Magnet, Map, MousePointer2, Plus, Redo2, RotateCcw, Send, SlidersHorizontal, StickyNote, Trash2, Undo2, Video, Image, Music2, Workflow, Spline, ZoomIn, ZoomOut } from 'lucide-react';
+import { Bot, Camera, FileDown, FileText, Focus, GitCommitVertical, Grid2X2, Hand, History, ImageDown, Keyboard, Magnet, Map, MousePointer2, Plus, Redo2, RotateCcw, Send, SlidersHorizontal, StickyNote, Trash2, Undo2, Video, Image, Music2, Workflow, Spline, ZoomIn, ZoomOut } from 'lucide-react';
 import { Tooltip } from 'antd';
 import type React from 'react';
 import { useMemo, useRef, useState } from 'react';
@@ -39,7 +39,7 @@ const TOOLBAR_COPY = {
     wheelPan: 'Wheel: pan', wheelZoom: 'Wheel: zoom',
     addOption: (type: WorkflowNodeType) => ({ image: 'Image', video: 'Video', text: 'Note', script: 'Script', audio: 'Audio', config: 'Generation settings' }[type] || type),
     zoomPercent: (value: number) => `${value}%`,
-    revision: (value: number) => `rev ${value}`, revisionHint: 'Draft revision. Every saved change by you or an Agent advances it.',
+    revision: (value: number) => `rev ${value}`, revisionHint: 'Open the Timeline: every change by you or an Agent, with focus and restore.', openTimeline: 'Timeline',
     rerunStale: (count: number) => `Rerun ${count} stale`, rerunStaleHint: 'Runs only out-of-date nodes, upstream first. Up-to-date results are reused.',
     sendToHost: (host: string) => `Send to ${host}`, sendHint: 'Adds a send request. Confirm it in the host panel to add the result to the Media Pool. Your timeline is not changed.',
     sendStatus: { requested: 'Waiting for host panel', imported: 'In Media Pool', rejected: 'Host rejected', unknown: 'Check the Media Pool' } as Record<string, string>,
@@ -60,7 +60,7 @@ const TOOLBAR_COPY = {
     wheelPan: '滚轮：平移', wheelZoom: '滚轮：缩放',
     addOption: (type: WorkflowNodeType) => ({ image: '图片', video: '视频', text: '备注', script: '脚本', audio: '音频', config: '配置' }[type] || type),
     zoomPercent: (value: number) => `${value}%`,
-    revision: (value: number) => `rev ${value}`, revisionHint: '草稿修订号。你或 Agent 每次保存修改都会推进它。',
+    revision: (value: number) => `rev ${value}`, revisionHint: '打开 Timeline：你和 Agent 的每次修改，可定位、可恢复。', openTimeline: 'Timeline',
     rerunStale: (count: number) => `重跑 ${count} 个过期节点`, rerunStaleHint: '只运行过期的节点，上游先跑；未过期的结果直接复用。',
     sendToHost: (host: string) => `发送到 ${host}`, sendHint: '登记一个发送请求，在宿主面板确认后加入 Media Pool；不会改动你的时间线。',
     sendStatus: { requested: '等待宿主面板确认', imported: '已在 Media Pool', rejected: '宿主拒绝了导入', unknown: '请检查 Media Pool' } as Record<string, string>,
@@ -99,6 +99,7 @@ export function WorkflowToolbar({
   onZoomOut,
   onZoomReset,
   revision,
+  lastChange,
   staleCount = 0,
   onRerunStale,
   hostSend,
@@ -142,6 +143,8 @@ export function WorkflowToolbar({
   onZoomReset?: () => void;
   /** 当前草稿 revision（draftVersion）；人和 Agent 的每次成功 mutation 都会推进它。 */
   revision?: number;
+  /** 最近一次修改的一句话摘要（Timeline 同款），显示在 rev 按钮的提示里。 */
+  lastChange?: string;
   /** 当前需要重跑的节点数（派生）；大于 0 时显示“只重跑过期节点”。 */
   staleCount?: number;
   onRerunStale?: () => void;
@@ -225,6 +228,7 @@ export function WorkflowToolbar({
     <ResponsivePopover anchorRef={popoverAnchorRef} preferredSide="up" width={onSaveSnapshot ? 264 : 174} role="menu" ariaLabel={copy.historyActions} className="workflow-toolbar__compact-menu" onRequestClose={() => setOpenPopover(null)}>
       <button type="button" role="menuitem" disabled={!canUndo} onClick={() => { onUndo(); closePopover(true); }}><Undo2 size={15} />{copy.undo}</button>
       <button type="button" role="menuitem" disabled={!canRedo} onClick={() => { onRedo(); closePopover(true); }}><Redo2 size={15} />{copy.redo}</button>
+      <button type="button" role="menuitem" data-testid="workflow-open-timeline" onClick={() => { closePopover(); useStudioHubStore.getState().openHub('timeline', activeProjectId || null); }}><GitCommitVertical size={15} />{copy.openTimeline}{typeof revision === 'number' && revision > 0 ? ` · ${copy.revision(revision)}` : ''}</button>
       {onSaveSnapshot && (
         <>
           <div className="workflow-toolbar__menu-divider" role="separator" />
@@ -260,7 +264,7 @@ export function WorkflowToolbar({
     <div className="workflow-toolbar-layer">
     <div className="workflow-toolbar theme-aware" role="toolbar" aria-label={copy.workflowToolbar}>
       {typeof revision === 'number' && revision > 0 && (
-        <Tip title={copy.revisionHint}><span className="workflow-canvas-controls__revision" data-testid="workflow-revision" aria-label={`${copy.revision(revision)}. ${copy.revisionHint}`} aria-live="polite">{copy.revision(revision)}</span></Tip>
+        <Tip title={lastChange ? `${lastChange} · ${copy.revisionHint}` : copy.revisionHint}><button type="button" className="workflow-canvas-controls__revision" data-testid="workflow-revision" aria-label={`${copy.revision(revision)}. ${copy.revisionHint}`} onClick={() => { closePopover(); useStudioHubStore.getState().openHub('timeline', activeProjectId || null); }}>{copy.revision(revision)}</button></Tip>
       )}
       {hostSend && (
         hostSend.status

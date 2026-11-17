@@ -27,6 +27,8 @@ export interface StudioMediaItem {
   prompt?: string;
   /** 生成时所属画布 id；仅生成历史使用，旧记录为空。 */
   projectId?: string;
+  /** 生成来源（仅生成历史，新记录才有）：user / agent / external-agent。 */
+  origin?: 'user' | 'agent' | 'external-agent';
 }
 
 interface StudioMediaBrowserProps {

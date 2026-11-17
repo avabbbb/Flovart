@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkflowToolbar } from '../components/workflow/WorkflowToolbar';
 import { useWorkspaceStore } from '../stores/useWorkspaceStore';
+import { useStudioHubStore } from '../stores/useStudioHubStore';
 
 afterEach(() => useWorkspaceStore.setState({ language: 'zho' }));
 
@@ -51,6 +52,15 @@ describe('WorkflowToolbar revision', () => {
   it('shows the current draft revision when one is known', () => {
     render(<WorkflowToolbar tool="select" canUndo={false} canRedo={false} onToolChange={vi.fn()} onAddNode={vi.fn()} onAddSharedMedia={vi.fn()} onUndo={vi.fn()} onRedo={vi.fn()} onFit={vi.fn()} onToggleGrid={vi.fn()} revision={42} />);
     expect(screen.getByTestId('workflow-revision')).toHaveTextContent('rev 42');
+  });
+
+  it('opens the Timeline for the current canvas from the revision pill', () => {
+    useStudioHubStore.setState({ open: false, hub: 'skills', section: null });
+    render(<WorkflowToolbar tool="select" canUndo={false} canRedo={false} onToolChange={vi.fn()} onAddNode={vi.fn()} onAddSharedMedia={vi.fn()} onUndo={vi.fn()} onRedo={vi.fn()} onFit={vi.fn()} onToggleGrid={vi.fn()} revision={548} activeProjectId="p1" lastChange="Agent 移动了「图片 3」" />);
+    const pill = screen.getByTestId('workflow-revision');
+    expect(pill.tagName).toBe('BUTTON');
+    fireEvent.click(pill);
+    expect(useStudioHubStore.getState()).toMatchObject({ open: true, hub: 'timeline', section: 'p1' });
   });
 
   it('hides the revision before the draft has one', () => {

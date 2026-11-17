@@ -89,6 +89,8 @@ export interface GenerationHistoryItem {
   generationParams?: Record<string, unknown>;
   /** 生成时所属画布（工作空间）id；旧记录无此字段，归入「未归属」。 */
   projectId?: string;
+  /** 谁发起的生成：画布上的你 / 内置 Agent / 外部 Agent（CLI、DSH、宿主）。旧记录无此字段。 */
+  origin?: 'user' | 'agent' | 'external-agent';
 }
 
 export interface GenerationRecipe {

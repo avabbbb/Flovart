@@ -678,7 +678,10 @@
 .workflow-operation-card__versions button:disabled{cursor:default;opacity:.7}
 .workflow-operation-card__versions button:focus-visible{outline:2px solid var(--wf-accent);outline-offset:1px}
 .workflow-operation-card__newer{color:var(--wf-muted)}
-.workflow-canvas-controls__revision{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;color:var(--wf-muted);background:color-mix(in srgb,var(--wf-accent) 12%,transparent);font-size:10px;font-weight:650;font-variant-numeric:tabular-nums;white-space:nowrap}
+.workflow-canvas-controls__revision{display:inline-flex;align-items:center;height:22px;padding:0 8px;border:0;border-radius:11px;color:var(--wf-muted);background:color-mix(in srgb,var(--wf-accent) 12%,transparent);font:inherit;font-size:10px;font-weight:650;font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;transition:color var(--spring-snappy-duration) var(--spring-snappy),background-color var(--spring-snappy-duration) var(--spring-snappy)}
+/* rev 是打开 Timeline 的按钮：悬停变亮，键盘有焦点环。 */
+.workflow-canvas-controls__revision:hover{color:var(--wf-text);background:color-mix(in srgb,var(--wf-accent) 22%,transparent)}
+.workflow-canvas-controls__revision:focus-visible{outline:1.5px solid var(--wf-accent);outline-offset:2px}
 @media (prefers-reduced-motion: reduce){.workflow-operation-card__versions button{transition:none}}
 .workflow-node__presence{position:absolute;z-index:6;top:-11px;right:28px;display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 7px;border-radius:9px;color:#fff;background:var(--isl-coral,#e8615a);box-shadow:0 0 0 2px var(--wf-strong,#fff);font-size:10px;font-weight:650;line-height:1;white-space:nowrap;pointer-events:auto;cursor:help}
 .workflow-node__presence--cli{background:var(--isl-ink,#1f1d1a)}

@@ -1,4 +1,4 @@
-import { ArrowDownWideNarrow, ArrowLeft, ArrowRight, AudioLines, Check, ChevronLeft, Clapperboard, Clock3, Eye, FileUp, FolderOpen, Heart, Image as ImageIcon, LayoutTemplate, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, RefreshCw, Search, ShieldCheck, Sparkles, Square, Trash2, Type, X } from 'lucide-react';
+import { ArrowDownWideNarrow, ArrowLeft, ArrowRight, AudioLines, Check, ChevronLeft, Clapperboard, Clock3, Eye, FileUp, FolderOpen, GitCommitVertical, Heart, Image as ImageIcon, LayoutTemplate, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, RefreshCw, Search, ShieldCheck, Sparkles, Square, Trash2, Type, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -29,19 +29,21 @@ import { useWorkflowStore } from '../workflow/store';
 import { LocalFolderBrowser } from '../workflow/LocalFolderBrowser';
 import { StudioMediaDownload, StudioMediaPreview, type StudioMediaItem } from './StudioMediaBrowser';
 import { STUDIO_HUB_COPY, type StudioHubCopy } from './studioHubCopy';
+import { StudioTimeline } from './StudioTimeline';
 import { applySkillOrder, keyboardMoveDelta, loadSkillOrder, reorderVisible, saveSkillOrder } from './skillOrder';
 import { useSkillCardDrag } from './useSkillCardDrag';
 import { PlanSteps, type PlanStep } from '../agent/plan/PlanSteps';
 import { getBundledProductionSkill } from '../../services/productionSkillCatalog';
 import { translations } from '../../utils/translations';
 
-// 放大的资源窗口：一个共享外壳，左侧栏切换 Skills / History / Library，各自带子项；窄宽度收成图标栏。
+// 放大的资源窗口：一个共享外壳，左侧栏切换 Skills / History / Timeline / Library，各自带子项；窄宽度收成图标栏。
 // 外观：bleep-app 式磨砂玻璃（--flv-frost-*，半透明），窗外是 Flovart 深色遮罩（--flv-scrim），不用白色蒙层。
 // 业务不在这里复制：Skill 选用走 skillHubParts.resolveSkillAttachment + Composer 注册的 attachSkill；
 // 插入画布走画布注册的 insertHistory / insertLibrary；本地文件夹直接复用 LocalFolderBrowser。
 
 const EMPTY_DRAFT: EditorDraft = { name: '', slug: '', description: '', prompt: '', enabled: true };
-const UNASSIGNED = '__unassigned__';
+/** 历史子项「Agent」：只看内置 / 外部 Agent 发起的生成（GenerationHistoryItem.origin）。 */
+export const HISTORY_AGENT_SECTION = '__agent__';
 
 type SkillSort = 'recent' | 'name' | 'source' | 'manual';
 type SkillChip = 'all' | 'enabled' | 'off' | 'updates';
@@ -65,6 +67,7 @@ export function StudioHub({ language, historyItems, onRemoveHistory }: StudioHub
   const windowRef = useRef<HTMLDivElement>(null);
   const [folders, setFolders] = useState<LocalFolderSource[]>([]);
   const projects = useWorkflowStore(state => state.projects);
+  const activeProjectId = useWorkflowStore(state => state.activeProjectId);
 
   useEffect(() => {
     if (!open) return;
@@ -86,11 +89,12 @@ export function StudioHub({ language, historyItems, onRemoveHistory }: StudioHub
     { kind: 'history', label: copy.history, icon: Clock3, items: [
       { id: null, label: copy.historyAllCanvases },
       ...projects.map(project => ({ id: project.id, label: project.title })),
-      { id: UNASSIGNED, label: copy.historyUnassigned },
+      { id: HISTORY_AGENT_SECTION, label: copy.historyAgent },
     ] },
+    { kind: 'timeline', label: copy.timeline, icon: GitCommitVertical, items: projects.map(project => ({ id: project.id, label: project.title })) },
     { kind: 'library', label: copy.library, icon: FolderOpen, items: folders.map(folder => ({ id: folder.id, label: folder.name })) },
   ];
-  const activeSection = (kind: StudioHubKind) => (kind === 'skills' ? section || 'all' : section);
+  const activeSection = (kind: StudioHubKind) => (kind === 'skills' ? section || 'all' : kind === 'timeline' ? section || activeProjectId : section);
 
   if (typeof document === 'undefined') return null;
   return createPortal(
@@ -134,7 +138,7 @@ export function StudioHub({ language, historyItems, onRemoveHistory }: StudioHub
                       className="studio-hub__nav"
                       aria-current={current ? 'page' : undefined}
                       title={group.label}
-                      onClick={() => useStudioHubStore.getState().setSection(group.kind, group.kind === 'skills' ? 'all' : null)}
+                      onClick={() => useStudioHubStore.getState().setSection(group.kind, group.kind === 'skills' ? 'all' : group.kind === 'timeline' ? activeProjectId : null)}
                     >
                       <Icon size={16} aria-hidden="true" />
                       <span className="studio-hub__nav-label">{group.label}</span>
@@ -161,7 +165,8 @@ export function StudioHub({ language, historyItems, onRemoveHistory }: StudioHub
             <section className="studio-hub__main">
               <button type="button" className="studio-hub__icon-btn studio-hub__close" aria-label={copy.close} title={copy.close} onClick={close}><X size={16} aria-hidden="true" /></button>
               {hub === 'skills' && <SkillsPane copy={copy} language={language} section={section || 'all'} />}
-              {hub === 'history' && <HistoryPane copy={copy} language={language} items={historyItems} projectFilter={section} knownProjects={projects.map(project => project.id)} onRemove={onRemoveHistory} />}
+              {hub === 'history' && <HistoryPane copy={copy} language={language} items={historyItems} projectFilter={section} onRemove={onRemoveHistory} />}
+              {hub === 'timeline' && <StudioTimeline language={language} projectId={section || activeProjectId} activeProjectId={activeProjectId} />}
               {hub === 'library' && (
                 <div className="studio-hub__pane">
                   <header className="studio-hub__head"><h2>{copy.library}</h2></header>
@@ -675,12 +680,11 @@ function SkillPlan({ skill, language }: { skill: DeckSkill; language: 'en' | 'zh
   );
 }
 
-function HistoryPane({ copy, language, items, projectFilter, knownProjects, onRemove }: {
+function HistoryPane({ copy, language, items, projectFilter, onRemove }: {
   copy: StudioHubCopy;
   language: 'en' | 'zho';
   items: StudioMediaItem[];
   projectFilter: string | null;
-  knownProjects: string[];
   onRemove: (sourceId: string) => void;
 }) {
   const [tab, setTab] = useState<HistoryTab>('all');
@@ -688,12 +692,12 @@ function HistoryPane({ copy, language, items, projectFilter, knownProjects, onRe
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const favorites = useStudioHubStore(state => state.historyFavorites);
   const canInsert = useStudioHubStore(state => Boolean(state.handlers.insertHistory));
-  const known = useMemo(() => new Set(knownProjects), [knownProjects]);
   const visible = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase();
     return items
       .filter(item => {
-        if (projectFilter === UNASSIGNED) { if (item.projectId && known.has(item.projectId)) return false; }
+        // 「Agent」= 内置或外部 Agent 发起的生成；没有画布归属的旧记录仍在「全部画布」里。
+        if (projectFilter === HISTORY_AGENT_SECTION) { if (item.origin !== 'agent' && item.origin !== 'external-agent') return false; }
         else if (projectFilter && item.projectId !== projectFilter) return false;
         if (tab === 'image' && item.type !== 'image') return false;
         if (tab === 'video' && item.type !== 'video') return false;
@@ -701,7 +705,7 @@ function HistoryPane({ copy, language, items, projectFilter, knownProjects, onRe
         return !keyword || `${item.name} ${item.prompt || ''}`.toLocaleLowerCase().includes(keyword);
       })
       .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  }, [items, projectFilter, known, tab, favorites, query]);
+  }, [items, projectFilter, tab, favorites, query]);
   const tabs: { id: HistoryTab; label: string }[] = [
     { id: 'all', label: copy.tabAll }, { id: 'image', label: copy.tabImages }, { id: 'video', label: copy.tabVideos }, { id: 'favorites', label: copy.tabFavorites },
   ];
@@ -760,7 +764,7 @@ function HistoryPane({ copy, language, items, projectFilter, knownProjects, onRe
             })}
           </ul>
         ) : (
-          <p className="studio-hub__empty">{tab === 'favorites' ? copy.favoritesEmpty : copy.historyEmpty}</p>
+          <p className="studio-hub__empty">{tab === 'favorites' ? copy.favoritesEmpty : projectFilter === HISTORY_AGENT_SECTION ? copy.historyAgentEmpty : copy.historyEmpty}</p>
         )}
       </div>
     </div>

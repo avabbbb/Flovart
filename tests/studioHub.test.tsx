@@ -15,6 +15,9 @@ import { HISTORY_FAVORITES_KEY, useStudioHubStore } from '../stores/useStudioHub
 import { useUserSkillsStore } from '../stores/useUserSkillsStore';
 import { SKILL_ORDER_KEY } from '../components/studio/skillOrder';
 import { AgentTodoCard } from '../components/agent/AgentTodoCard';
+import { useWorkflowStore, createWorkflowProject } from '../components/workflow/store';
+import { applyWorkflowDraftChangeSet } from '../components/workflow/draftAuthority';
+import { createWorkflowNode } from '../components/workflow/constants';
 
 const PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 const items: StudioMediaItem[] = [
@@ -134,5 +137,77 @@ describe('StudioHub window', () => {
     expect(within(card).getByText('完成')).toBeTruthy();
     expect(within(card).getByText('待执行')).toBeTruthy();
     expect(card).toHaveTextContent('正在执行第 2 步，共 3 步');
+  });
+});
+
+describe('StudioHub history Agent filter and Timeline', () => {
+  it('history: the "Agent" sub-item (formerly 其它) shows only Agent-originated generations', async () => {
+    const tagged: StudioMediaItem[] = [
+      { ...items[0], origin: 'agent' },
+      { ...items[1], origin: 'user' },
+      { id: 'history:c', source: 'history', sourceId: 'c', name: 'C', href: PIXEL, mimeType: 'image/png', type: 'image', prompt: '外部', createdAt: 0, origin: 'external-agent' },
+    ];
+    render(<StudioHub language="zho" historyItems={tagged} onRemoveHistory={vi.fn()} />);
+    act(() => useStudioHubStore.getState().openHub('history', null));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByRole('button', { name: '其它' })).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Agent' }));
+    expect(within(dialog).getAllByRole('button', { name: /^插入画布/ }).map(button => button.getAttribute('aria-label'))).toEqual(['插入画布 A', '插入画布 C']);
+  });
+
+  it('timeline: lists canvas changes as sentences with rev, selects with the keyboard and focuses nodes', async () => {
+    let project = createWorkflowProject('镜头测试');
+    const step = (actor: 'ui' | 'agent', ops: Parameters<typeof applyWorkflowDraftChangeSet>[1]['ops']) => {
+      const result = applyWorkflowDraftChangeSet(project, { actor, intent: 'test', ops });
+      if (result.ok === false) throw new Error(result.error.message);
+      project = result.project;
+    };
+    step('ui', [{ type: 'add_node', node: { ...createWorkflowNode('n1', 'image', { x: 0, y: 0 }), title: '图片 1' } }]);
+    step('agent', [{ type: 'update_node', id: 'n1', metadata: { prompt: '雨夜' } }]);
+    useWorkflowStore.setState({ projects: [project], activeProjectId: project.id });
+    const focus = vi.fn(() => true);
+    useStudioHubStore.getState().register('focusNodes', focus);
+    render(<StudioHub language="zho" historyItems={[]} onRemoveHistory={vi.fn()} />);
+    act(() => useStudioHubStore.getState().openHub('timeline', project.id));
+    const dialog = await screen.findByRole('dialog');
+    const list = within(dialog).getByRole('listbox');
+    const options = within(list).getAllByRole('option');
+    expect(options[0]).toHaveTextContent('Agent 修改了「图片 1」的提示词');
+    expect(options[0]).toHaveTextContent('rev 3');
+    expect(options[1]).toHaveTextContent('你添加了图片节点「图片 1」');
+    expect(within(dialog).getByText('今天')).toBeTruthy();
+    fireEvent.keyDown(list, { key: 'ArrowDown' });
+    fireEvent.keyDown(list, { key: 'Enter' });
+    expect(options[1]).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(within(dialog).getByRole('button', { name: '定位节点' }));
+    expect(focus).toHaveBeenCalledWith(project.id, ['n1']);
+    expect(useStudioHubStore.getState().open).toBe(false);
+  });
+
+  it('timeline: restoring asks first, saves a safety snapshot and commits one undoable change', async () => {
+    let project = createWorkflowProject('恢复测试');
+    const step = (ops: Parameters<typeof applyWorkflowDraftChangeSet>[1]['ops']) => {
+      const result = applyWorkflowDraftChangeSet(project, { actor: 'ui', intent: 'test', ops });
+      if (result.ok === false) throw new Error(result.error.message);
+      project = result.project;
+    };
+    step([{ type: 'add_node', node: { ...createWorkflowNode('n1', 'image', { x: 0, y: 0 }), title: '图片 1' } }]);
+    step([{ type: 'add_node', node: { ...createWorkflowNode('n2', 'image', { x: 400, y: 0 }), title: '图片 2' } }]);
+    useWorkflowStore.setState({ projects: [project], activeProjectId: project.id });
+    render(<StudioHub language="zho" historyItems={[]} onRemoveHistory={vi.fn()} />);
+    act(() => useStudioHubStore.getState().openHub('timeline', project.id));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByText('你添加了图片节点「图片 1」'));
+    fireEvent.click(within(dialog).getByRole('button', { name: '恢复到此版本' }));
+    const confirm = within(dialog).getByRole('alertdialog');
+    expect(confirm).toHaveTextContent('把画布恢复到 rev 2？');
+    expect(useWorkflowStore.getState().projects[0].nodes).toHaveLength(2);
+    fireEvent.click(within(confirm).getByRole('button', { name: '恢复' }));
+    const restored = useWorkflowStore.getState().projects[0];
+    expect(restored.nodes.map(node => node.id)).toEqual(['n1']);
+    expect(restored.snapshots?.at(-1)?.name).toBe('恢复前 · rev 3');
+    expect(restored.snapshots?.at(-1)?.nodes).toHaveLength(2);
+    expect(restored.draftChangeSets?.at(-1)).toMatchObject({ actor: 'ui', intent: '恢复到 rev 2', status: 'completed' });
+    expect(await within(dialog).findByText('你把画布恢复到 rev 2')).toBeTruthy();
   });
 });

@@ -476,3 +476,196 @@
   :root[data-theme='dark'] .studio-hub__card { background: var(--isl-card); }
 }
 .studio-hub__ghost .studio-hub__ghost-use { margin-left: auto; }
+
+/* —— Timeline（components/studio/StudioTimeline.tsx）——
+   参考 Sebastiano Guerriero「Timeline concept」（https://www.inspora.design/posts/8-0）：
+   一点一句、手绘波浪细线连点、日期标记、宽行距；悬停 = 底色 + 文字变亮；选中 = 播放头（点发光、上方连线长成强调色）。
+   强调色用 Hub 的青绿 --isl-mint（不用原作的洋红）；每行另加等宽 rev 与相对时间。 */
+.studio-timeline__range {
+  position: relative;
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--flv-frost-edge);
+  border-radius: 10px;
+  padding: 2px;
+  background: color-mix(in srgb, var(--isl-surface) 34%, transparent);
+}
+.studio-timeline__range:has(:focus-visible) { outline: 1.5px solid color-mix(in srgb, var(--isl-ink) 55%, transparent); outline-offset: 2px; }
+.studio-timeline__range-btn {
+  position: relative;
+  display: inline-grid;
+  height: 26px;
+  min-width: 40px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--isl-ink-soft);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color var(--spring-snappy-duration) var(--spring-snappy);
+}
+.studio-timeline__range-btn:focus-visible { outline: none; }
+.studio-timeline__range-btn:hover { color: var(--isl-ink); }
+.studio-timeline__range-btn[aria-checked='true'] { color: var(--isl-ink); font-weight: 600; }
+.studio-timeline__range-pill {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--isl-ink) 12%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--isl-card) 22%, transparent);
+}
+.studio-timeline__range-label { position: relative; }
+
+.studio-timeline__notice {
+  margin: 0 20px 6px;
+  border-radius: 10px;
+  padding: 7px 10px;
+  color: var(--isl-ink);
+  background: var(--isl-mint-bg);
+  font-size: 12px;
+}
+
+.studio-timeline__scroll { --tl-dot-x: 22px; --tl-dot-y: 24px; padding-top: 8px; outline: none; }
+.studio-timeline__rail { margin: 0; padding: 0 0 8px; list-style: none; }
+
+.studio-timeline__marker,
+.studio-timeline__row { position: relative; }
+
+/* 每行的连线从本行的点画到下一行的点（向下伸进下一行 --tl-dot-y），行展开时自动拉长。 */
+.studio-timeline__wire {
+  position: absolute;
+  z-index: 0;
+  top: var(--tl-dot-y);
+  left: calc(var(--tl-dot-x) - 6px);
+  width: 12px;
+  /* 绝对定位的 SVG 是替换元素，height:auto 会按 viewBox 比例算高，必须显式给高度：本行点 → 下一行点 = 本行高度。 */
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.studio-timeline__wire path { fill: none; stroke-width: 1.25px; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.studio-timeline__wire-base { stroke: color-mix(in srgb, var(--isl-ink) 18%, transparent); }
+/* 强调段自上而下“长出来”：用 clip-path 而不是 dash（非等比拉伸 + non-scaling-stroke 会让 dash 长度算错）。 */
+.studio-timeline__wire-lit {
+  stroke: var(--isl-mint);
+  clip-path: inset(0 0 100% 0);
+  transition: clip-path var(--spring-smooth-duration) var(--spring-smooth);
+}
+.studio-timeline__wire[data-active='true'] .studio-timeline__wire-lit { clip-path: inset(0 0 0 0); }
+
+.studio-timeline__dot {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--isl-ink) 34%, transparent);
+  box-shadow: 0 0 0 3px transparent;
+  transition: background-color var(--spring-snappy-duration) var(--spring-snappy), box-shadow var(--spring-snappy-duration) var(--spring-snappy);
+}
+
+.studio-timeline__marker {
+  display: flex;
+  height: calc(var(--tl-dot-y) * 2);
+  align-items: center;
+  gap: 16px;
+  padding-left: calc(var(--tl-dot-x) - 4px);
+  color: var(--isl-ink-soft);
+  font-size: 13px;
+}
+.studio-timeline__marker .studio-timeline__dot { background: color-mix(in srgb, var(--isl-ink) 22%, transparent); }
+.studio-timeline__marker-label { font-weight: 600; letter-spacing: 0.01em; }
+
+.studio-timeline__row { padding: 6px 0; }
+.studio-timeline__hit {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 16px;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 12px 0 calc(var(--tl-dot-x) - 4px);
+  color: var(--isl-ink-soft);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--spring-snappy-duration) var(--spring-snappy), color var(--spring-snappy-duration) var(--spring-snappy);
+}
+.studio-timeline__hit:hover { color: var(--isl-ink); background: color-mix(in srgb, var(--isl-ink) 6%, transparent); }
+.studio-timeline__hit:hover .studio-timeline__dot { background: color-mix(in srgb, var(--isl-ink) 58%, transparent); }
+.studio-timeline__scroll:focus-visible .studio-timeline__row[data-cursor='true'] .studio-timeline__hit { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--isl-ink) 30%, transparent); }
+
+.studio-timeline__text { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-timeline__tag {
+  flex: 0 0 auto;
+  border: 1px solid var(--flv-frost-edge);
+  border-radius: var(--isl-r-pill);
+  padding: 1px 7px;
+  color: var(--isl-ink-ghost);
+  font-size: 10.5px;
+}
+.studio-timeline__rev,
+.studio-timeline__time {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--isl-ink-soft) 78%, transparent);
+  font-family: var(--font-machine, ui-monospace, monospace);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.studio-timeline__time { min-width: 7ch; text-align: right; font-family: inherit; font-size: 11px; }
+.studio-timeline__row[data-undone='true'] .studio-timeline__text { color: var(--isl-ink-ghost); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--isl-ink) 25%, transparent); }
+
+/* 选中 = 播放头 */
+.studio-timeline__row[data-selected='true'] .studio-timeline__hit { color: color-mix(in srgb, var(--isl-mint) 22%, var(--isl-ink)); background: color-mix(in srgb, var(--isl-mint) 9%, transparent); }
+.studio-timeline__row[data-selected='true'] .studio-timeline__dot {
+  background: var(--isl-mint);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--isl-mint) 22%, transparent), 0 0 12px color-mix(in srgb, var(--isl-mint) 60%, transparent);
+}
+.studio-timeline__row[data-selected='true'] .studio-timeline__rev { color: var(--isl-mint-deep); }
+:root[data-theme='dark'] .studio-timeline__row[data-selected='true'] .studio-timeline__rev { color: var(--isl-mint); }
+
+.studio-timeline__detail { position: relative; z-index: 1; display: grid; gap: 8px; padding: 8px 12px 6px calc(var(--tl-dot-x) + 20px); }
+.studio-timeline__diff { margin: 0; color: var(--isl-ink-ghost); font-family: var(--font-machine, ui-monospace, monospace); font-size: 11px; }
+.studio-timeline__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.studio-timeline__actions .studio-hub__btn { height: 30px; }
+.studio-timeline__confirm {
+  display: grid;
+  gap: 6px;
+  max-width: 520px;
+  border: 1px solid var(--flv-frost-edge);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: var(--isl-ink-soft);
+  background: color-mix(in srgb, var(--isl-card) 62%, transparent);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.studio-timeline__confirm strong { color: var(--isl-ink); font-size: 13px; }
+.studio-timeline__confirm > div { display: flex; justify-content: flex-end; gap: 6px; margin-top: 2px; }
+.studio-timeline__footer { margin: 4px 0 0; padding-left: calc(var(--tl-dot-x) + 20px); color: var(--isl-ink-ghost); font-size: 11px; }
+
+@container studio-hub (width <= 620px) {
+  .studio-timeline__time { display: none; }
+}
+@container studio-hub (width <= 480px) {
+  .studio-timeline__rev { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-timeline__wire-lit,
+  .studio-timeline__dot,
+  .studio-timeline__hit,
+  .studio-timeline__range-btn { transition: none; }
+}

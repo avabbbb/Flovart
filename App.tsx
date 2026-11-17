@@ -3,6 +3,7 @@ import React, { useState, useCallback, useEffect, useMemo, Suspense } from 'reac
 import { generateId } from './utils/helpers';
 import type { AssetLibrary, UserApiKey, PromptEnhanceMode, GenerationHistoryItem, ThemeMode } from './types';
 import { addAsset, removeAsset, renameAsset, addFolder, renameFolder, removeFolder, loadAssetLibraryAsync, saveAssetLibraryAsync, updateAssetTags, removeAssetFromFolder, batchRemoveAssets, batchAddAssetsToFolder, batchAddAssetTags } from './utils/assetStorage';
+import { historyOriginFromSurface, recordWorkflowRunInTimeline } from './components/workflow/timelineEvents';
 import { loadGenerationHistoryAsync, saveGenerationHistoryAsync, addGenerationHistoryItem } from './utils/generationHistory';
 import { reversePromptStreamWithProvider, enhancePromptWithProvider } from './services/aiGateway';
 import { useApiKeys, normalizeApiKeyEntry } from './hooks/useApiKeys';
@@ -273,6 +274,7 @@ const App: React.FC = () => {
         prompt: string;
         mediaType?: 'image' | 'video';
         projectId?: string;
+        origin?: GenerationHistoryItem['origin'];
     }) => {
         const item: GenerationHistoryItem = {
             id: generateId(),
@@ -285,6 +287,7 @@ const App: React.FC = () => {
             createdAt: Date.now(),
             mediaType: payload.mediaType,
             projectId: payload.projectId,
+            ...(payload.origin ? { origin: payload.origin } : {}),
         };
         setGenerationHistory(prev => addGenerationHistoryItem(prev, item));
     }, []);
@@ -306,6 +309,7 @@ const App: React.FC = () => {
         createdAt: item.createdAt,
         prompt: item.prompt,
         projectId: item.projectId,
+        origin: item.origin,
     })), [generationHistory]);
 
     const handleRunWorkflowNode = useCallback(async (command: WorkflowRunCommand, context: WorkflowExecutionContext): Promise<WorkflowRunAdapterResult | void> => {
@@ -373,7 +377,7 @@ const App: React.FC = () => {
                 });
                 if (gainedDurableTask) return flushWorkflowPersistence();
             },
-            saveHistory: payload => saveGenerationToHistory({ ...payload, projectId }),
+            saveHistory: payload => saveGenerationToHistory({ ...payload, projectId, origin: historyOriginFromSurface(context.surface) }),
         });
         const generatedNode = generated.nodes.find(item => item.id === executableNodeId);
         const failureMessage = generatedNode?.metadata.status === 'error' ? generatedNode.metadata.error : undefined;
@@ -421,7 +425,11 @@ const App: React.FC = () => {
     }, [assetLibrary.items, confirmRouteFallback, saveGenerationToHistory, userApiKeys]);
 
     const workflowExecutor = useMemo(() => createWorkflowExecutor({
-        runNode: (command, context) => handleRunWorkflowNode(command, context),
+        runNode: async (command, context) => {
+            const result = await handleRunWorkflowNode(command, context);
+            recordWorkflowRunInTimeline(command.projectId, command.nodeId, context.surface, result);
+            return result;
+        },
         stopNode: ({ projectId, nodeId }) => {
             if (cancelWorkflowGeneration(projectId, nodeId)) return;
             // No live request behind this node (interrupted run, lost tab, recovery

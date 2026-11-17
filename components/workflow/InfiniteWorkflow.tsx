@@ -111,6 +111,7 @@ import { runWorkflowAudioPitchOperation, runWorkflowAudioSpeedOperation, runWork
 import { exportMediaArchive } from '../../utils/batchMediaExport';
 import { exportWorkflowCanvas, pickWorkflowExportNodes, type WorkflowCanvasExportFormat } from './canvasExport';
 import { addWorkflowSnapshot, createWorkflowSnapshot, removeWorkflowSnapshot, workflowSnapshotFrame } from './snapshots';
+import { actorFromDraftActor, describeChangeSet, timelineSentence } from './timeline';
 import { useToolSession } from './useToolSession';
 import { computeAutoLayout } from './layoutAlgorithm';
 import { usePromptHistoryStore } from '../../stores/usePromptHistoryStore';
@@ -1571,6 +1572,14 @@ export function InfiniteWorkflow({
     );
   }, [focusBounds]);
 
+  // rev 按钮提示：最近一次修改的一句话（和 Timeline 同一个摘要函数）。
+  const lastChangeSummary = useMemo(() => {
+    const last = [...(project.draftChangeSets || [])].reverse().find(changeSet => changeSet.status !== 'failed');
+    if (!last) return undefined;
+    const lang = language === 'en' ? 'en' : 'zho';
+    return timelineSentence(actorFromDraftActor(last.actor), describeChangeSet(last, lang).text, lang);
+  }, [language, project.draftChangeSets]);
+
   // 故事板（P2）：镜头表来自制作圣经，只在项目里有 shot 元数据时露出入口。
   // 故事板第二视图（P1-4）：同一份 workflow 推导，不另建 store。
   const [workflowView, setWorkflowView] = useState<'workflow' | 'storyboard'>('workflow');
@@ -2563,6 +2572,15 @@ export function InfiniteWorkflow({
   }, [addSharedMediaAt, viewportCenter]);
   // 放大的 History 窗口「插入画布」走这里，和工具栏历史面板同一条路径。
   useEffect(() => useStudioHubStore.getState().register('insertHistory', media => { void addSharedMedia(media); }), [addSharedMedia]);
+  // Timeline「定位节点」：只处理当前画布；选中这些节点并框到视口中央（同 F 键）。
+  useEffect(() => useStudioHubStore.getState().register('focusNodes', (targetProjectId, nodeIds) => {
+    if (targetProjectId !== projectRef.current.id) return false;
+    const ids = nodeIds.filter(id => projectRef.current.nodes.some(node => node.id === id && node.isVisible !== false));
+    if (!ids.length) return false;
+    selectNodes(ids);
+    window.requestAnimationFrame(() => frameSelection());
+    return true;
+  }), [frameSelection, selectNodes]);
 
   const removeMedia = useCallback((node: WorkflowNodeData) => {
     if (node.isLocked) return;
@@ -3240,6 +3258,7 @@ export function InfiniteWorkflow({
       <WorkflowToolbar
         tool={tool}
         revision={project.draftVersion}
+        lastChange={lastChangeSummary}
         staleCount={stalePlan.length}
         onRerunStale={() => planWorkflowStaleRerun({ nodes: projectRef.current.nodes, connections: projectRef.current.connections })
           .filter(id => !projectRef.current.nodes.find(node => node.id === id)?.isLocked)

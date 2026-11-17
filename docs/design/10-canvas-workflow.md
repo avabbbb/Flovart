@@ -37,6 +37,7 @@ Canvas 是空间化的 Workflow 创作面：节点、素材、连线、生成与
   - ffmpeg.wasm 默认单线程 core：core-mt 在 COOP/COEP（crossOriginIsolated）下会把渲染进程搞崩（`Crashpad_NotConnectedToHandler`，try/catch 接不住），见 `services/ffmpegClient.ts`。
 - 结果有版本；晚到结果作为新版本，不覆盖用户已选版本。
 - **多结果 = 首图节点 + 备选**（已实现，2026-11-16）：生成 `count > 1`、流水线同一 run 的多个版本，都收在一个节点上——节点本身是首图，其余在 `metadata.alternates`（`WorkflowMediaAlternate`：稳定 `id`、`type: image | video`、`batchId` / `batchIndex`、尺寸、媒体与来源字段），`metadata.mediaVariantId` 是节点当前那份媒体的稳定 ID。备选不是节点、不参与连线；`set_batch_primary` 指向备选 ID 时交换媒体（`batchAlternates.ts` `promoteAlternate`），旧的 `primaryImageId` 指针只在未折叠的旧数据与分镜分组里出现。持久化 v4 在加载 / 导入时把旧的叠放批次折叠成备选（`foldResultBatches`）。展示：总数 ≤4 为首图节点内的斜叠卡片（`WorkflowAlternatesStack`，与分镜分组共用 `batchStackMotion.ts` 的展开几何与弹簧），更多为节点下方网格（`WorkflowAlternatesDock`）；两者都是节点的子元素，备选从不成为画布节点或分组。交互见 [01](01-interaction.md) §13.3。
+- **操作 Timeline**（已实现，2026-11-17）：工具条 `rev N` 是按钮，打开 Hub 的 Timeline（每个画布一页）。数据源是现有的 `draftChangeSets`（每次文档写入的唯一记录，带 actor、before / after 与 rev，保留最近 100 条），摘要由 `components/workflow/timeline.ts` 从 before / after 推出（你 / Agent / 外部 Agent + 动作 + 节点名）；生成结果走 `store.updateProject`、不推进 rev，另记在 `timelineEvents.ts`（独立 localforage 实例 `workflow_timeline_v1`，每画布最近 500 条，不动持久化 v4）。「恢复到此版本」在副本上按撤销逻辑推算目标帧，先把当前画布存成快照（让媒体保持可达），再作为一次新的可撤销 ui 修改提交，不改写历史；只对窗口内、未撤销、非最新的 ChangeSet 开放。生成历史新记录带 `origin`（user / agent / external-agent），历史子项「Agent」按它筛选。
 
 ## 4. 交互要点（补充交互设计）
 

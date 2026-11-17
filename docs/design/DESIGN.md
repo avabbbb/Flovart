@@ -328,7 +328,7 @@ pressable 3D drop（`--isl-drop*`）已于 2026-10-30 删除；`--shadow-panel`�
 | 工具行 | `flex-wrap: nowrap`；文字 span 必须 `min-width:0` 才能截断 |
 | 居中浮条 | `position:absolute; left:50%; translateX(-50%)` 的 shrink-to-fit 只能拿到容器一半宽度，会提前折行 → 加 `width: max-content` |
 | 可拖面板 | 有 `minWidth`；拖过最小宽度 72px 时进入半透明预览，松手收成图标（同 macOS 侧栏），而不是把内容挤爆 |
-| 隐藏 ≠ 删除 | 被收纳的功能必须保留入口：撤销 / 重做 → `Ctrl Z`；修订号 → 历史 |
+| 隐藏 ≠ 删除 | 被收纳的功能必须保留入口：撤销 / 重做 → `Ctrl Z`；修订号 / Timeline → 工具条「历史操作」菜单里的「Timeline」，以及 Hub 侧栏 |
 | `cqw` 基准 | 新加 `container-type` 会改变子元素里 `100cqw` 的参照对象，加之前先 grep 子树里的 `cqw` |
 
 ### 15.3 当前实现（样张）
