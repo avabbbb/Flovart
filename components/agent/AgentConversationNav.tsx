@@ -132,6 +132,7 @@ export function AgentTurnTimeline({ rootRef, turns, language, onJump }: {
             className={`agent-turn-rail__tick${turn.index === active ? ' is-active' : ''}`}
             aria-label={`${copy.turnLabel(turn.index + 1)}${turn.question ? '：' + turn.question : ''}`}
             aria-current={turn.index === active ? 'true' : undefined}
+            onMouseEnter={() => setPreview(turn.index)}
             onFocus={() => setPreview(turn.index)}
             onBlur={() => setPreview(current => (current === turn.index ? null : current))}
             onClick={() => jump(turn.index)}
