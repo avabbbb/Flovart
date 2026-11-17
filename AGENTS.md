@@ -99,10 +99,10 @@ UI / Agent / Host entry → same generation/business function → Provider adapt
 
 ## 7. 代码边界
 
-- Web：React + TypeScript + Vite + Ant Design + Tailwind + Zustand（以 lockfile 为准）；网站后端：Go + Gin + GORM（handler / service / repository / model）；Local Runtime：Rust / Tauri；CLI / Agent：Node。不为原生效果复制第二套调度器。
+- Web：React + TypeScript + Vite + Ant Design + Tailwind + Zustand（以 lockfile 为准）；网页版全静态（无服务端；Cloudflare Worker `worker/index.ts` 只做无状态 `/api/llm-proxy/*`，需要服务端时用 TS 在 Worker 里无状态实现）；Local Runtime：Rust / Tauri；CLI / Agent：Node。不为原生效果复制第二套调度器。
 - Workflow：`components/workflow/`、`stores/workflow/`；Iris：当前代码仍在 `components/reverse/`、`services/reverse/`（`_ref/hypit` 不提交），目录改名单独迁移；Agent：`components/agent/`；共享 chrome：`components/studio/`；宿主：`integrations/studio/`。
 - 浏览器业务数据用 localforage，localStorage 只放极小配置；宿主长期素材必须是 durable file / artifact。
-- 新增数据表同步 `docs/content/docs/backend/backend-database.mdx`，不用未来字段冒充已建表。
+- 存储形态变化同步 `docs/content/docs/backend/backend-database.mdx`，不用未来字段冒充已建表。
 
 ## 8. 验证与发布口径
 

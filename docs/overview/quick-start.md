@@ -73,7 +73,7 @@ docker compose up --build -d
 
 访问 http://localhost:1635。
 
-当前 Compose 只用于 Web、Hub 与 PostgreSQL 的本地联调，与官方在线版的 Cloudflare Worker 部署无关；静态资源生产路径、安全配置和正式部署尚未完成验收，不能据此宣称生产部署已就绪。
+当前 Compose 只运行 Web（Vite）本地开发，与官方在线版的 Cloudflare Worker 部署无关；静态资源生产路径、安全配置和正式部署尚未完成验收，不能据此宣称生产部署已就绪。
 
 ## 方式五：浏览器扩展
 

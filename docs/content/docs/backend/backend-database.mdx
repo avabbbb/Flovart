@@ -1,77 +1,17 @@
 ---
-title: 后端数据库结构
+title: 数据存储
 ---
 
-# 后端数据库结构
+# 数据存储
 
-Flovart Hub（`backend/` 目录）使用 PostgreSQL，GORM AutoMigrate 自动建表。本文件随表结构变化同步更新。
+网页版全静态，没有服务端数据库。原 Go Hub（`backend/`：账号、提示词包、R2 上传，PostgreSQL + GORM）已删除，回滚点为 git tag `go-backend-final`。
 
-## users — 共享生态用户
+- 浏览器：工程、素材、提示词与 API Key 存在本机 localforage / IndexedDB，localStorage 只放极小配置。
+- 线上 Cloudflare Worker（`worker/index.ts`）无状态，只做 `/api/llm-proxy/*` 同源 CORS 转发，不存任何数据。
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | uuid PK | `gen_random_uuid()` 默认 |
-| username | varchar(32) unique | 字母数字下划线，3-32 位 |
-| email | varchar(255) unique | 小写存储 |
-| password | varchar(255) | bcrypt hash，不出现在 JSON |
-| bio | varchar(500) | 个人简介 |
-| avatar_url | varchar(500) | 头像 URL（R2 链接） |
-| role | varchar(16) | `user` \| `admin` |
-| created_at | timestamptz | |
-| updated_at | timestamptz | |
+## 本机 Agent 视频流水线存储
 
-## prompt_packs — 提示词包
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | uuid PK | |
-| slug | varchar(80) unique | URL 友好标识 |
-| title | varchar(120) | |
-| description | varchar(1000) | |
-| author_id | uuid FK → users.id | |
-| mode | varchar(24) | `image` \| `video` \| `text` |
-| tags | text[] | PostgreSQL 数组 |
-| like_count | int | 反规范化计数 |
-| download_count | int | 反规范化计数 |
-| created_at | timestamptz | |
-| updated_at | timestamptz | |
-
-## prompt_items — 提示词包内单条提示词
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| id | uuid PK | |
-| pack_id | uuid FK → prompt_packs.id | |
-| name | varchar(120) | |
-| prompt | text | |
-| sort | int | 包内顺序 |
-
-## prompt_likes — 提示词包收藏关系
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| user_id | uuid PK | |
-| pack_id | uuid PK | |
-| created_at | timestamptz | |
-
-## 索引
-
-- `users.username` 唯一索引
-- `users.email` 唯一索引
-- `prompt_packs.slug` 唯一索引
-- `prompt_packs.title` 普通索引（关键词搜索）
-- `prompt_packs.author_id` 普通索引
-- `prompt_packs.mode` 普通索引
-- `prompt_packs.like_count` 普通索引（热门排序）
-- `prompt_likes(user_id, pack_id)` 复合主键
-
-## 待扩展（工作流生态阶段）
-
-`workflow_packs` / `workflow_items` / `workflow_likes` 表将在工作流生态阶段加入，结构参考 prompt 系列；工作流包不会保存模型配置或 API Key。
-
-## 本机 Agent 视频流水线存储（不属于 Hub）
-
-Agent 视频流水线的 trace 存在用户本机，和 Hub 的 PostgreSQL 无关，也不同步到云端。它与桌面 Production Runtime 共用同一个 `flovart-state.db`（`<app_data_dir>/flovart-state.db`，identifier `com.flovart.desktop`），表由 migration 5（`tools/flovart/contracts/runtime/migrations/0005_agent_pipeline.sql`）建立：Rust `RuntimeStore` 和 Node `tools/flovart/pipeline/store.js` 执行同一份 SQL，并共用 `runtime_migrations` 账本。Node pipeline 边界是唯一写入方；Rust Runtime 只通过 `pipeline.run.get` 读取，返回与 Node `Pipeline.trace()` 相同的 JSON（`npm run e2e:pipeline:parity` 校验）。产物文件放在 `<app_data_dir>/pipeline/`；`FLOVART_PIPELINE_HOME` 可把数据库和产物一起改到指定目录（测试与隔离用）。
+Agent 视频流水线的 trace 存在用户本机，不经过任何服务端，也不同步到云端。它与桌面 Production Runtime 共用同一个 `flovart-state.db`（`<app_data_dir>/flovart-state.db`，identifier `com.flovart.desktop`），表由 migration 5（`tools/flovart/contracts/runtime/migrations/0005_agent_pipeline.sql`）建立：Rust `RuntimeStore` 和 Node `tools/flovart/pipeline/store.js` 执行同一份 SQL，并共用 `runtime_migrations` 账本。Node pipeline 边界是唯一写入方；Rust Runtime 只通过 `pipeline.run.get` 读取，返回与 Node `Pipeline.trace()` 相同的 JSON（`npm run e2e:pipeline:parity` 校验）。产物文件放在 `<app_data_dir>/pipeline/`；`FLOVART_PIPELINE_HOME` 可把数据库和产物一起改到指定目录（测试与隔离用）。
 
 | 表 | 用途 | 关键字段 |
 | --- | --- | --- |
