@@ -322,8 +322,9 @@ const App: React.FC = () => {
         }
         const requestedNode = project.nodes.find(item => item.id === nodeId);
         const capabilityId = requestedNode?.metadata.operation?.capabilityId;
+        // 结果节点上的生成记录决定重跑走哪个执行器（不再有 operation 中间节点）。
         const operationCapability = capabilityId ? getWorkflowOperationCapability(capabilityId) : undefined;
-        if (requestedNode?.type === 'operation' && operationCapability?.executor === 'local-transform' && operationCapability.mediaType === 'video') {
+        if (operationCapability?.executor === 'local-transform' && operationCapability.mediaType === 'video') {
             const { rerunWorkflowVideoOperation } = await import('./services/workflowVideoOperations');
             await rerunWorkflowVideoOperation(projectId, nodeId, {
                 getProject: () => useWorkflowStore.getState().projects.find(item => item.id === projectId) || null,
@@ -332,7 +333,7 @@ const App: React.FC = () => {
             });
             return { status: 'completed' };
         }
-        if (requestedNode?.type === 'operation' && operationCapability?.executor === 'local-transform' && operationCapability.mediaType === 'audio') {
+        if (operationCapability?.executor === 'local-transform' && operationCapability.mediaType === 'audio') {
             const { rerunWorkflowAudioOperation } = await import('./services/workflowAudioOperations');
             await rerunWorkflowAudioOperation(projectId, nodeId, {
                 getProject: () => useWorkflowStore.getState().projects.find(item => item.id === projectId) || null,
@@ -341,7 +342,7 @@ const App: React.FC = () => {
             });
             return { status: 'completed' };
         }
-        if (requestedNode?.type === 'operation' && operationCapability?.mediaType === 'image' && capabilityId !== 'image.generate@1') {
+        if (operationCapability?.mediaType === 'image' && capabilityId !== 'image.generate@1') {
             const { rerunWorkflowImageOperation } = await import('./services/workflowImageOperations');
             await rerunWorkflowImageOperation(projectId, nodeId, {
                 userApiKeys, confirmRouteFallback,

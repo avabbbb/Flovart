@@ -28,12 +28,13 @@ afterEach(async () => {
 
 function ImageHarness({ initial }: { initial: WorkflowProject }) {
   const [project, setProject] = useState(initial);
-  const output = project.nodes.find(node => node.metadata.sourceOperationNodeId);
+  const output = project.nodes.find(node => node.type !== 'operation' && (node.metadata.operation || node.metadata.sourceOperationNodeId));
   return <WorkflowGenerationCapabilitiesProvider>
     <InfiniteWorkflow project={project} updateProject={patch => setProject(current => ({ ...current, ...patch }))} onRunNode={vi.fn()} />
     <output
       data-testid="image-harness-state"
       data-operation-count={project.nodes.filter(node => node.type === 'operation').length}
+      data-result-count={project.nodes.filter(node => node.type !== 'operation' && node.metadata.operation).length}
       data-output-storage-key={output?.metadata.storageKey || ''}
       data-connection-count={project.connections.length}
     />
@@ -140,7 +141,7 @@ describe('workflow image tools UI', () => {
     expect(screen.getByRole('button', { name: '撤销' })).toBeDisabled();
   }, 15_000);
 
-  it('crops as source -> operation -> output, keeps the source untouched, and undoes the whole action', async () => {
+  it('crops as source -> result node directly, keeps the source untouched, and undoes the whole action', async () => {
     class TestImage {
       naturalWidth = 800; naturalHeight = 600; onload: null | (() => void) = null; onerror = null;
       set src(_value: string) { queueMicrotask(() => this.onload?.()); }
@@ -152,19 +153,21 @@ describe('workflow image tools UI', () => {
     fireEvent.click(overflowAction('裁剪图片'));
     fireEvent.click(screen.getByRole('button', { name: '应用裁剪' }));
     const state = screen.getByTestId('image-harness-state');
-    await waitFor(() => expect(state).toHaveAttribute('data-connection-count', '2'));
-    expect(state).toHaveAttribute('data-operation-count', '1');
+    await waitFor(() => expect(state).toHaveAttribute('data-output-storage-key', expect.stringMatching(/^workflow-media-/)));
+    expect(state).toHaveAttribute('data-connection-count', '1');
+    expect(state).toHaveAttribute('data-operation-count', '0');
+    expect(state).toHaveAttribute('data-result-count', '1');
     expect(document.querySelector('[data-workflow-node-id="image"]')).toHaveStyle({ width: '340px', height: '240px' });
     const imageNodes = document.querySelectorAll<HTMLElement>('.workflow-node--image');
     expect(imageNodes).toHaveLength(2);
     expect(imageNodes[1]).toHaveStyle({ width: '420px', height: '315px' });
-    expect(screen.getByTestId('workflow-operation-card')).toHaveTextContent('1 输入 · 1 Take');
+    expect(screen.queryByTestId('workflow-operation-card')).not.toBeInTheDocument();
     const stored = state.getAttribute('data-output-storage-key');
-    expect(stored).toMatch(/^workflow-media-/);
     expect(await workflowMediaStorage.get(stored!)).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '撤销' }));
     await waitFor(() => {
-      expect(state).toHaveAttribute('data-operation-count', '0');
+      expect(state).toHaveAttribute('data-result-count', '0');
+      expect(state).toHaveAttribute('data-connection-count', '0');
       expect(document.querySelectorAll('.workflow-node--image')).toHaveLength(1);
     });
   }, 15_000);

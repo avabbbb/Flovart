@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "aaf747391b167ae0539fb0c982e65d03b92115a8414b1dc1eb2729f9406fb8c5",
+  "registryHash": "769ea876fb8b92535430889e6edf114a6e29209911d4265a01e666b198e7475f",
   "commands": [
     {
       "name": "runtime.status",
@@ -561,7 +561,7 @@
     },
     {
       "name": "workflow.node.run",
-      "summary": "Run one image/video generation node in place (results replace the node; count>1 folds into one batch), or a batch of independent nodes via nodeIds under one confirmation. Returns runId, batch {batchId, headNodeId, memberNodeIds} and every take's artifact.",
+      "summary": "Run one image/video generation node in place (results replace the node; count>1 folds into one batch), or a batch of independent nodes via nodeIds under one confirmation. Running a result node that carries a generation record re-runs that step in place as a new take. Returns runId, batch {batchId, headNodeId, memberNodeIds} and every take's artifact.",
       "args": {
         "projectId": "string?",
         "nodeId": "string?",
@@ -740,7 +740,7 @@
     },
     {
       "name": "workflow.node.tool",
-      "summary": "Run one canvas secondary-processing tool on a visible Workflow node (crop, upscale, remove-background, edit, video-trim, video-extract-frame, audio tools, reverse-prompt, filter, outpaint, mask; reverse-prompt writes the vision model's prompt back to the image/video node).",
+      "summary": "Run one canvas secondary-processing tool on a visible Workflow node (crop, upscale, remove-background, edit, video-trim, video-extract-frame, audio tools, reverse-prompt, filter, outpaint, mask; reverse-prompt writes the vision model's prompt back to the image/video node). Results are written as result nodes wired directly from the source (no intermediate operation node); returns resultNodeId and outputNodeIds.",
       "args": {
         "projectId": "string?",
         "nodeId": "string",

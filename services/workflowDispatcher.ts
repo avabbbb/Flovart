@@ -415,6 +415,9 @@ export function documentOperationsArg(value: unknown): WorkflowDocumentOperation
       if (!isRecord(node) || typeof node.type !== 'string' || !node.type.trim()) {
         throw new Error('operations[' + index + '] ' + operation.type + '.node 必须是带 type 的对象');
       }
+      if (node.type === 'operation') {
+        throw new Error('operations[' + index + '] 不再支持 operation 节点：生成与后处理的结果直接写成 image / video / audio 结果节点（flovart_generate 或 flovart_workflow_node_tool）。');
+      }
       // 新节点没给 id 时由系统生成（结果的 affectedNodeIds 会带回）；绝不落一个 id 为空的节点。
       if (typeof node.id === 'string' && node.id.trim()) return operation as unknown as WorkflowDocumentOperation;
       return { ...operation, node: { ...node, id: nanoid() } } as unknown as WorkflowDocumentOperation;
@@ -1190,9 +1193,11 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         // 把新产出的节点 ID 交回调用方（Agent 据此继续连线或运行），不用再整图 inspect 一次。
         const before = new Set(project.nodes.map(node => node.id));
         const after = dependencies.getState().projects.find(item => item.id === project.id)?.nodes || [];
+        // 没有 operation 中间节点：新建的都是结果节点；resultNodeId 是带生成记录、可原位重跑 / 切换 take 的主结果。
         const outputNodeIds = after.filter(node => !before.has(node.id) && node.type !== 'operation').map(node => node.id);
+        const resultNodeId = after.find(node => !before.has(node.id) && node.metadata.operation)?.id;
         dependencies.updateProject(project.id, draftLogPatch(project, envelope, true, { nodeIds: [nodeId] }));
-        result = { ok: true, commandId: envelope.id, result: { projectId: project.id, nodeId, tool, committed, outputNodeIds } };
+        result = { ok: true, commandId: envelope.id, result: { projectId: project.id, nodeId, tool, committed, outputNodeIds, ...(resultNodeId ? { resultNodeId } : {}) } };
       } else {
         const requestedNodeId = String(args.nodeId || args.id || '');
         if (['workflow.node.update', 'workflow.node.delete', 'workflow.node.move', 'workflow.node.resize'].includes(command)

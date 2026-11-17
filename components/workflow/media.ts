@@ -63,6 +63,9 @@ function collectNodeKeys(nodes: WorkflowNode[], keys = new Set<string>()) {
       if (take.outputMedia?.storageKey) keys.add(take.outputMedia.storageKey);
       if (take.outputMedia?.posterStorageKey) keys.add(take.outputMedia.posterStorageKey);
     });
+    // v6 迁移留存的原 operation 节点 / 原结果节点：还原时还要用到它们的媒体。
+    const legacy = metadata.legacyOperationNode;
+    if (legacy) collectNodeKeys([legacy.node, legacy.resultNodeBefore].filter((item): item is WorkflowNode => Boolean(item)), keys);
   });
   return keys;
 }
