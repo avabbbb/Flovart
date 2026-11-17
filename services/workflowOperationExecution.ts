@@ -313,10 +313,13 @@ export async function commitWorkflowOperation(
     const record = records[index];
     const size = fitWorkflowMediaSize(output.nodeType, record.naturalWidth, record.naturalHeight);
     const gridPositioned = Number.isInteger(output.column) || Number.isInteger(output.row);
-    const desired = {
-      x: primaryBox.x + primaryBox.width + 64 + (output.column || 0) * (size.width + 12) + (output.offsetX || 0),
-      y: (gridPositioned ? primaryBox.y + (output.row || 0) * (size.height + 12) : outputY) + (output.offsetY || 0),
-    };
+    // 网格输出（宫格切分、叠加层候选）：主结果占左上格，兄弟节点按行列排在它右侧 / 下方；其余输出排在主结果右侧一列。
+    const desired = gridPositioned
+      ? {
+        x: primaryBox.x + (output.column || 0) * (size.width + 12) + (output.offsetX || 0),
+        y: primaryBox.y + (output.row || 0) * (size.height + 12) + (output.offsetY || 0),
+      }
+      : { x: primaryBox.x + primaryBox.width + 64 + (output.offsetX || 0), y: outputY + (output.offsetY || 0) };
     const others = latest.nodes.filter(node => node.id !== latestOperation.id);
     const position = findFreePosition([...others, resizedPrimaryShadow, ...placedOutputs], desired, size, 12);
     const node = {

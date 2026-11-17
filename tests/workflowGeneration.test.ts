@@ -859,7 +859,7 @@ describe('workflow generation', () => {
     const prepared = await ensureWorkflowImageGenerateOperation({ project: source, nodeId: 'image-1', createId: () => ids.shift()!, now: '2026-08-05T00:00:00.000Z' });
     const operationNodeId = prepared.operationNodeId;
     const operation = prepared.project.nodes.find(node => node.id === operationNodeId)!;
-    expect(operation.type).toBe('operation');
+    expect(operation.type).toBe('image');
     expect(operation.metadata.operation?.recipe.parameters.submode).toBe('image-to-image');
 
     let latest = prepared.project;

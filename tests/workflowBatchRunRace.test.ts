@@ -33,7 +33,7 @@ describe('batch node.run converts and starts every node', () => {
         await new Promise(resolve => setTimeout(resolve, nodeId === 'shot-a' ? 5 : 0));
         const before = latest();
         const operation = before.nodes.find(node => node.id === prepared.operationNodeId);
-        if (operation?.type !== 'operation') return { status: 'failed', error: { code: 'RUN_FAILED', message: `${nodeId} 未转换为 Operation` } };
+        if (!operation?.metadata.operation) return { status: 'failed', error: { code: 'RUN_FAILED', message: `${nodeId} 未挂上生成记录` } };
         const started = await beginWorkflowOperationTake(operation, { id: createId(), snapshotId: createId() });
         const fresh = latest();
         useWorkflowStore.getState().updateProject(projectId, { nodes: fresh.nodes.map(node => node.id === nodeId ? started.node : node) });
@@ -57,7 +57,8 @@ describe('batch node.run converts and starts every node', () => {
     expect(runs.runs.map(run => [run.nodeId, run.ok])).toEqual([['shot-a', true], ['shot-b', true]]);
     for (const id of ['shot-a', 'shot-b']) {
       const node = latest().nodes.find(item => item.id === id);
-      expect(node?.type).toBe('operation');
+      // 节点保持 image 类型，生成记录挂在节点自身。
+      expect(node?.type).toBe('image');
       expect(node?.metadata.operation?.takes).toHaveLength(1);
       expect(node?.metadata.status).toBe('loading');
     }
