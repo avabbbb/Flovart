@@ -21,6 +21,7 @@ import {
   createWorkflowOperationInputBinding,
   createWorkflowOperationNode,
   workflowOperationInputConnections,
+  workflowOperationResultNodeType,
 } from '../components/workflow/operations';
 import { workflowMediaStorage } from '../components/workflow/storage';
 import type {
@@ -73,7 +74,6 @@ function requireProject(runtime: WorkflowOperationRuntime, projectId: string): W
   return project;
 }
 
-const OPERATION_SIZE = { width: 240, height: 156 };
 const PLACEMENT_GAP = 24;
 
 function overlaps(
@@ -127,8 +127,8 @@ export function requireWorkflowOperation(
 ): { project: WorkflowProject; operation: WorkflowNode; sourceNodes: WorkflowNode[] } {
   const project = requireProject(runtime, projectId);
   const operation = project.nodes.find(node => node.id === operationNodeId);
-  if (!operation || operation.type !== 'operation' || !operation.metadata.operation) {
-    throw new Error('Operation 节点不存在或已被删除');
+  if (!operation || !operation.metadata.operation) {
+    throw new Error('结果节点不存在、已被删除或没有生成记录');
   }
   const sourceNodes = operation.metadata.operation.recipe.inputBindings.map(binding => {
     const source = project.nodes.find(node => node.id === binding.sourceNodeId);
@@ -199,8 +199,11 @@ export async function startWorkflowOperation(input: {
   validateSourceNodes(input.capabilityId, bindings, sourceNodes);
   const anchor = availableNodes.find(node => node.id === input.anchorNodeId) || sourceNodes.at(-1);
   if (!anchor) throw new Error('Operation 缺少布局锚点');
-  const desiredPosition = { x: anchor.position.x + anchor.width + 64, y: anchor.position.y + Math.max(0, (anchor.height - OPERATION_SIZE.height) / 2) };
-  const position = findFreePosition(availableNodes, desiredPosition, OPERATION_SIZE);
+  // 直接建结果节点（不再有 operation 中间节点）：占位尺寸取结果类型的默认节点尺寸。
+  const placeholder = createWorkflowNode('__placeholder__', workflowOperationResultNodeType(input.capabilityId), { x: 0, y: 0 });
+  const resultSize = { width: placeholder.width, height: placeholder.height };
+  const desiredPosition = { x: anchor.position.x + anchor.width + 64, y: anchor.position.y + Math.max(0, (anchor.height - resultSize.height) / 2) };
+  const position = findFreePosition(availableNodes, desiredPosition, resultSize);
   const operation = await createWorkflowOperationNode({
     id: createId(),
     capabilityId: input.capabilityId,
@@ -290,17 +293,35 @@ export async function commitWorkflowOperation(
     return { status: 'stale', project: latest || null };
   }
 
-  let outputY = latestOperation.position.y;
+  // 结果节点就是带生成记录的节点本身：第一个与它同类型的输出原位写回；
+  // 多输出能力（宫格切分、拆图层、叠加层、音视频分离、人声伴奏分离）其余输出建成兄弟结果节点，
+  // 从首个输入直接连线（operation-output），sourceOperationNodeId 指回主结果节点。
+  const primaryIndexByType = normalized.findIndex(output => output.nodeType === latestOperation.type);
+  const primaryIndex = primaryIndexByType >= 0 ? primaryIndexByType : 0;
+  const primaryOutput = normalized[primaryIndex];
+  const primaryRecord = records[primaryIndex];
+  const primarySize = fitWorkflowMediaSize(primaryOutput.nodeType, primaryRecord.naturalWidth, primaryRecord.naturalHeight);
+  const primaryBox = { x: latestOperation.position.x, y: latestOperation.position.y, width: primarySize.width, height: primarySize.height };
+  const firstInputId = latestOperation.metadata.operation.recipe.inputBindings[0]?.sourceNodeId;
+
+  let outputY = primaryBox.y;
   const placedOutputs: WorkflowNode[] = [];
-  const outputNodes = normalized.map((output, index) => {
+  const siblingIndexes = normalized.map((_, index) => index).filter(index => index !== primaryIndex);
+  const resizedPrimaryShadow = { ...latestOperation, width: primarySize.width, height: primarySize.height } as WorkflowNode;
+  const siblingNodes = siblingIndexes.map(index => {
+    const output = normalized[index];
     const record = records[index];
     const size = fitWorkflowMediaSize(output.nodeType, record.naturalWidth, record.naturalHeight);
     const gridPositioned = Number.isInteger(output.column) || Number.isInteger(output.row);
-    const desired = {
-      x: latestOperation.position.x + latestOperation.width + 64 + (output.column || 0) * (size.width + 12) + (output.offsetX || 0),
-      y: (gridPositioned ? latestOperation.position.y + (output.row || 0) * (size.height + 12) : outputY) + (output.offsetY || 0),
-    };
-    const position = findFreePosition([...latest.nodes, ...placedOutputs], desired, size, 12);
+    // 网格输出（宫格切分、叠加层候选）：主结果占左上格，兄弟节点按行列排在它右侧 / 下方；其余输出排在主结果右侧一列。
+    const desired = gridPositioned
+      ? {
+        x: primaryBox.x + (output.column || 0) * (size.width + 12) + (output.offsetX || 0),
+        y: primaryBox.y + (output.row || 0) * (size.height + 12) + (output.offsetY || 0),
+      }
+      : { x: primaryBox.x + primaryBox.width + 64 + (output.offsetX || 0), y: outputY + (output.offsetY || 0) };
+    const others = latest.nodes.filter(node => node.id !== latestOperation.id);
+    const position = findFreePosition([...others, resizedPrimaryShadow, ...placedOutputs], desired, size, 12);
     const node = {
       ...createWorkflowNode(started.createId(), output.nodeType, position, {
         ...record,
@@ -317,60 +338,41 @@ export async function commitWorkflowOperation(
     };
     placedOutputs.push(node);
     if (!gridPositioned) outputY += size.height + 24;
-    return node;
+    return { node, index };
   });
 
-  // 仅「生成类」单输出（图片生成）结果原位写回 operation 节点自身；处理类（裁剪/放大等）保持 operation→output 链
-  const isGenerate = capability.id === 'image.generate@1';
-  const singleInPlace = isGenerate && normalized.length === 1 && !Number.isInteger(normalized[0].column) && !Number.isInteger(normalized[0].row);
-  const completed = completeWorkflowOperationTake(latestOperation, started.takeId, singleInPlace ? [latestOperation.id] : outputNodes.map(node => node.id), singleInPlace ? { outputMedia: pickTakeMedia(records[0]) } : {});
-
-  if (singleInPlace) {
-    const record = records[0];
-    const size = fitWorkflowMediaSize(normalized[0].nodeType, record.naturalWidth, record.naturalHeight);
-    const next: WorkflowProject = {
-      ...latest,
-      nodes: latest.nodes.map(node => node.id === latestOperation.id
-        ? applySelectedTakeMedia({
-            ...completed,
-            type: normalized[0].nodeType,
-            width: size.width,
-            height: size.height,
-            metadata: {
-              ...completed.metadata,
-              ...record,
-              href: undefined,
-              status: 'success' as const,
-              operationTakeId: started.takeId,
-              sourceOperationNodeId: latestOperation.id,
-              operationOutputRole: normalized[0].role,
-            },
-          })
-        : node),
-      selectedNodeIds: [latestOperation.id],
-      draftVersion: (latest.draftVersion || 1) + 1,
-      updatedAt: new Date().toISOString(),
-    };
-    try {
-      await runtime.onProjectChange(next);
-    } finally {
-      // onProjectChange 抛错（持久化失败等）也必须释放 ingest 持有的引用，避免媒体引用泄漏。
-      records.forEach(recordItem => releaseWorkflowMediaRecord(recordItem.storageKey));
-    }
-    return { status: 'committed', project: next };
-  }
-
-  const connections = outputNodes.map((node, index) => ({
-    id: started.createId(),
-    fromNodeId: latestOperation.id,
-    toNodeId: node.id,
-    kind: 'operation-output' as const,
-    role: normalized[index].role,
-    order: index,
-  }));
+  const outputNodeIds = [latestOperation.id, ...siblingNodes.map(item => item.node.id)];
+  const completed = completeWorkflowOperationTake(latestOperation, started.takeId, outputNodeIds, { outputMedia: pickTakeMedia(primaryRecord) });
+  const primaryNode = applySelectedTakeMedia({
+    ...completed,
+    type: primaryOutput.nodeType,
+    width: primarySize.width,
+    height: primarySize.height,
+    // 首次产出时结果节点标题沿用输出标题（如「左侧人声」）；已改名的保留用户名字。
+    title: latestOperation.title === capability.label ? primaryOutput.title || latestOperation.title : latestOperation.title,
+    metadata: {
+      ...completed.metadata,
+      ...primaryRecord,
+      href: undefined,
+      name: primaryRecord.name,
+      status: 'success' as const,
+      operationTakeId: started.takeId,
+      operationOutputRole: primaryOutput.role,
+    },
+  });
+  const connections = firstInputId
+    ? siblingNodes.map(({ node, index }, order) => ({
+      id: started.createId(),
+      fromNodeId: firstInputId,
+      toNodeId: node.id,
+      kind: 'operation-output' as const,
+      role: normalized[index].role,
+      order,
+    }))
+    : [];
   const next: WorkflowProject = {
     ...latest,
-    nodes: [...latest.nodes.map(node => node.id === latestOperation.id ? completed : node), ...outputNodes],
+    nodes: [...latest.nodes.map(node => node.id === latestOperation.id ? primaryNode : node), ...siblingNodes.map(item => item.node)],
     connections: [...latest.connections, ...connections],
     selectedNodeIds: [latestOperation.id],
     draftVersion: (latest.draftVersion || 1) + 1,

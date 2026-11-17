@@ -61,7 +61,7 @@ function operationInputRole(fromNode: WorkflowNode, toNode: WorkflowNode): Workf
 function connectOperationInput(snapshot: WorkflowSnapshot, connection: WorkflowConnection): WorkflowSnapshot {
   const source = snapshot.nodes.find(node => node.id === connection.fromNodeId);
   const target = snapshot.nodes.find(node => node.id === connection.toNodeId);
-  if (!source || !target || target.type !== 'operation' || !target.metadata.operation) {
+  if (!source || !target || !target.metadata.operation) {
     return { ...snapshot, connections: [...snapshot.connections, connection] };
   }
   const role = operationInputRole(source, target)!;
@@ -80,7 +80,7 @@ function removeOperationInputs(snapshot: WorkflowSnapshot, removed: WorkflowConn
   const removedSourcesByTarget = new Map<string, Set<string>>();
   removed.forEach(connection => {
     const target = snapshot.nodes.find(node => node.id === connection.toNodeId);
-    if (target?.type !== 'operation') return;
+    if (!target?.metadata.operation) return;
     const sources = removedSourcesByTarget.get(target.id) || new Set<string>();
     sources.add(connection.fromNodeId);
     removedSourcesByTarget.set(target.id, sources);
@@ -171,8 +171,9 @@ export function validateWorkflowConnection(
   if (snapshot.connections.some(connection => connection.fromNodeId === fromNodeId && connection.toNodeId === toNodeId)) {
     return { ok: false, reason: '节点之间已存在连接' };
   }
-  if (toNode.type === 'operation') {
-    if (!toNode.metadata.operation) return { ok: false, reason: 'Operation 配方缺失' };
+  if (toNode.type === 'operation' && !toNode.metadata.operation) return { ok: false, reason: 'Operation 配方缺失' };
+  // 带生成记录的结果节点：输入连线即配方的 inputBindings，按注册表校验角色与数量。
+  if (toNode.metadata.operation) {
     const role = operationInputRole(fromNode, toNode);
     if (!role) return { ok: false, reason: '该节点类型不能作为此 Operation 的输入' };
     const existingBinding = toNode.metadata.operation.recipe.inputBindings.some(binding => binding.sourceNodeId === fromNodeId);

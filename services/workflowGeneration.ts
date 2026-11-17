@@ -278,9 +278,10 @@ export async function runWorkflowGeneration(project: WorkflowProject, nodeId: st
   const initialNode = project.nodes.find(node => node.id === nodeId);
   if (!initialNode) return project;
   if (activeRequests.has(requestKey(project.id, nodeId))) return canonical(runtime, project);
-  const isImageOperation = initialNode.type === 'operation' && initialNode.metadata.operation?.capabilityId === 'image.generate@1';
-  if (initialNode.type === 'operation' && !isImageOperation) {
-    return publish(runtime, patchInitiator(canonical(runtime, project), nodeId, { status: 'error', error: '该 Operation 需要对应的图片处理执行器', progress: undefined }));
+  // 生成记录挂在结果节点上（image 节点本身），不看节点类型。
+  const isImageOperation = initialNode.metadata.operation?.capabilityId === 'image.generate@1';
+  if (initialNode.metadata.operation && !isImageOperation) {
+    return publish(runtime, patchInitiator(canonical(runtime, project), nodeId, { status: 'error', error: '该结果节点需要对应的处理执行器重跑', progress: undefined }));
   }
   if (initialNode.type === 'script') return publish(runtime, patchInitiator(canonical(runtime, project), nodeId, { status: 'error', error: '脚本节点请双击打开编辑器进行拆解和批量生成', progress: undefined }));
   const mode = modeFor(initialNode);

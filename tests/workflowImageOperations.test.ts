@@ -38,7 +38,7 @@ function runtime() {
 }
 
 describe('workflow image operation executors', () => {
-  it('commits crop as source -> operation -> output with a durable Take', async () => {
+  it('commits crop as source -> result node (no operation middle node) with a durable Take', async () => {
     const state = runtime();
     const crop = { x: .1, y: .1, width: .8, height: .8 };
     const outcome = await runWorkflowCropOperation('project-1', 'source-1', crop, {
@@ -46,13 +46,15 @@ describe('workflow image operation executors', () => {
       executeCrop: vi.fn().mockResolvedValue(new Blob(['crop'], { type: 'image/png' })),
     });
     expect(outcome.status).toBe('committed');
-    const operation = state.current.nodes.find(node => node.type === 'operation');
-    const output = state.current.nodes.find(node => node.metadata.sourceOperationNodeId === operation?.id);
-    expect(operation?.metadata.operation).toMatchObject({ capabilityId: 'image.crop@1', recipe: { parameters: crop }, selectedTakeId: 'id-2' });
-    expect(operation?.metadata.operation?.takes[0]).toMatchObject({ status: 'success', outputNodeIds: [output?.id] });
+    expect(state.current.nodes.some(node => node.type === 'operation')).toBe(false);
+    const result = state.current.nodes.find(node => node.metadata.operation);
+    expect(result?.type).toBe('image');
+    expect(result?.metadata.storageKey).toBeTruthy();
+    expect(result?.metadata.operation).toMatchObject({ capabilityId: 'image.crop@1', recipe: { parameters: crop }, selectedTakeId: 'id-2' });
+    expect(result?.metadata.operation?.takes[0]).toMatchObject({ status: 'success', outputNodeIds: [result?.id] });
+    expect(result?.metadata.operation?.takes[0].outputMedia?.storageKey).toBe(result?.metadata.storageKey);
     expect(state.current.connections).toEqual([
-      expect.objectContaining({ fromNodeId: 'source-1', toNodeId: operation?.id, kind: 'operation-input' }),
-      expect.objectContaining({ fromNodeId: operation?.id, toNodeId: output?.id, kind: 'operation-output' }),
+      expect.objectContaining({ fromNodeId: 'source-1', toNodeId: result?.id, kind: 'operation-input' }),
     ]);
   });
 
@@ -60,7 +62,7 @@ describe('workflow image operation executors', () => {
     const state = runtime();
     const executeAgent = vi.fn().mockResolvedValue({ dataUrl: 'data:image/png;base64,UkVTVUxU', mimeType: 'image/png', width: 640, height: 360 });
     await runWorkflowUpscaleOperation('project-1', 'source-1', { targetLongEdge: 2048, algorithm: 'high' }, { ...state.deps, executeAgent });
-    const operation = state.current.nodes.find(node => node.type === 'operation');
+    const operation = state.current.nodes.find(node => node.metadata.operation);
     expect(executeAgent).toHaveBeenCalledWith(expect.any(Object), 'upscale', 'gpt-image-2', apiKey, { targetLongEdge: 2048, algorithm: 'high' });
     expect(operation?.metadata.operation?.takes[0]).toMatchObject({ status: 'success', snapshot: { routeId: 'gpt-image-2' } });
   });
@@ -71,7 +73,7 @@ describe('workflow image operation executors', () => {
       ...state.deps,
       executeAgent: vi.fn().mockRejectedValue(new Error('端点不可用')),
     })).rejects.toThrow('端点不可用');
-    const operation = state.current.nodes.find(node => node.type === 'operation');
+    const operation = state.current.nodes.find(node => node.metadata.operation);
     expect(operation?.metadata).toMatchObject({ status: 'error', error: '端点不可用' });
     expect(operation?.metadata.operation?.takes[0]).toMatchObject({ status: 'error', error: '端点不可用' });
   });
@@ -80,15 +82,18 @@ describe('workflow image operation executors', () => {
     const state = runtime();
     const executeCrop = vi.fn().mockResolvedValue(new Blob(['crop'], { type: 'image/png' }));
     await runWorkflowCropOperation('project-1', 'source-1', { x: 0, y: 0, width: .5, height: .5 }, { ...state.deps, executeCrop });
-    const operationId = state.current.nodes.find(node => node.type === 'operation')!.id;
+    const operationId = state.current.nodes.find(node => node.metadata.operation)!.id;
 
     await rerunWorkflowImageOperation('project-1', operationId, { ...state.deps, executeCrop });
 
-    const operations = state.current.nodes.filter(node => node.type === 'operation');
+    const operations = state.current.nodes.filter(node => node.metadata.operation);
     expect(operations).toHaveLength(1);
     expect(operations[0].metadata.operation?.takes).toHaveLength(2);
     expect(operations[0].metadata.operation?.selectedTakeId).toBe(operations[0].metadata.operation?.takes[1].id);
-    expect(state.current.nodes.filter(node => node.metadata.sourceOperationNodeId === operationId)).toHaveLength(2);
+    // 重跑原位写回同一个结果节点：不新增节点，两次 take 的媒体都可在节点上切换。
+    expect(operations[0].id).toBe(operationId);
+    expect(operations[0].metadata.operation?.takes.every(take => take.outputMedia?.storageKey)).toBe(true);
+    expect(state.current.nodes.filter(node => node.metadata.sourceOperationNodeId === operationId)).toHaveLength(0);
     expect(state.current.connections.filter(connection => connection.kind === 'operation-input')).toHaveLength(1);
   });
 
@@ -102,13 +107,16 @@ describe('workflow image operation executors', () => {
     expect(prompt).toContain('在天空画一颗发光星星');
     expect(prompt).toContain('完全透明');
     expect(prompt).toContain('不要包含原图像素');
-    const operation = state.current.nodes.find(node => node.type === 'operation');
+    const operation = state.current.nodes.find(node => node.metadata.operation);
     expect(operation?.metadata.operation).toMatchObject({ capabilityId: 'image.layer@1', recipe: { parameters: { style: 'glow', count: 4 } } });
     const take = operation?.metadata.operation?.takes[0];
     expect(take?.status).toBe('success');
     expect(take?.outputNodeIds).toHaveLength(4);
-    const outputs = state.current.nodes.filter(node => node.metadata.sourceOperationNodeId === operation?.id);
+    // 主结果是第一个候选（原位），其余 3 个是从源图直连的兄弟结果节点，共同排成 2x2。
+    const outputs = [operation!, ...state.current.nodes.filter(node => node.metadata.sourceOperationNodeId === operation?.id)];
     expect(outputs).toHaveLength(4);
+    expect(take?.outputNodeIds[0]).toBe(operation?.id);
+    expect(state.current.connections.filter(connection => connection.kind === 'operation-output').every(connection => connection.fromNodeId === 'source-1')).toBe(true);
     const xs = new Set(outputs.map(node => node.position.x));
     const ys = new Set(outputs.map(node => node.position.y));
     expect(xs.size).toBe(2);
@@ -126,7 +134,7 @@ describe('workflow image operation executors', () => {
       .mockRejectedValueOnce(new Error('限流'));
     await expect(runWorkflowLayerOperation('project-1', 'source-1', { prompt: '加标题', style: 'title' }, { ...state.deps, executeEdit })).rejects.toThrow('限流');
     expect(executeEdit).toHaveBeenCalledTimes(2);
-    const operation = state.current.nodes.find(node => node.type === 'operation');
+    const operation = state.current.nodes.find(node => node.metadata.operation);
     expect(operation?.metadata.operation?.takes[0]).toMatchObject({ status: 'error', error: '限流' });
     expect(state.current.nodes.filter(node => node.metadata.sourceOperationNodeId === operation?.id)).toHaveLength(0);
   });
@@ -136,16 +144,16 @@ describe('workflow image operation executors', () => {
     const executeEdit = vi.fn();
     await expect(runWorkflowLayerOperation('project-1', 'source-1', { prompt: '   ' }, { ...state.deps, executeEdit })).rejects.toThrow();
     expect(executeEdit).not.toHaveBeenCalled();
-    expect(state.current.nodes.some(node => node.type === 'operation')).toBe(false);
+    expect(state.current.nodes.some(node => node.metadata.operation)).toBe(false);
   });
 
   it('reruns a layer operation as a new Take on the same operation node', async () => {
     const state = runtime();
     const executeEdit = vi.fn().mockResolvedValue({ newImageBase64: 'data:image/png;base64,TEFZRVI=', newImageMimeType: 'image/png' });
     await runWorkflowLayerOperation('project-1', 'source-1', { prompt: '加涂鸦', count: 2 }, { ...state.deps, executeEdit });
-    const operationId = state.current.nodes.find(node => node.type === 'operation')!.id;
+    const operationId = state.current.nodes.find(node => node.metadata.operation)!.id;
     await rerunWorkflowImageOperation('project-1', operationId, { ...state.deps, executeEdit });
-    const operations = state.current.nodes.filter(node => node.type === 'operation');
+    const operations = state.current.nodes.filter(node => node.metadata.operation);
     expect(operations).toHaveLength(1);
     expect(operations[0].metadata.operation?.takes).toHaveLength(2);
     expect(operations[0].metadata.operation?.takes[1]).toMatchObject({ status: 'success' });

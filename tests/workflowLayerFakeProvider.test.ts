@@ -84,10 +84,10 @@ describe('image.layer@1 against the fake provider over real HTTP', () => {
     const requests = edits(server);
     expect(requests).toHaveLength(4);
     expect(requests.every(request => request.referenceCount === 1 && !request.hasMask)).toBe(true);
-    const operation = state.current.nodes.find(node => node.type === 'operation');
+    const operation = state.current.nodes.find(node => Boolean(node.metadata.operation));
     const take = operation?.metadata.operation?.takes[0];
     expect(take).toMatchObject({ status: 'success', snapshot: { routeId: 'gpt-image-2' } });
-    const outputs = state.current.nodes.filter(node => node.metadata.sourceOperationNodeId === operation?.id);
+    const outputs = [operation!, ...state.current.nodes.filter(node => node.metadata.sourceOperationNodeId === operation?.id)];
     expect(outputs.map(node => node.id)).toEqual(take?.outputNodeIds);
     expect(new Set(outputs.map(node => node.position.x)).size).toBe(2);
     expect(new Set(outputs.map(node => node.position.y)).size).toBe(2);
@@ -115,7 +115,7 @@ describe('image.layer@1 against the fake provider over real HTTP', () => {
 
     await expect(runWorkflowLayerOperation('project-1', 'source-1', { prompt: '加标题', style: 'title' }, { ...state.deps, executeEdit })).rejects.toThrow();
     expect(edits(server)).toHaveLength(2);
-    const operation = state.current.nodes.find(node => node.type === 'operation');
+    const operation = state.current.nodes.find(node => Boolean(node.metadata.operation));
     expect(operation?.metadata.operation?.takes[0]).toMatchObject({ status: 'error' });
     expect(state.current.nodes.filter(node => node.metadata.sourceOperationNodeId === operation?.id)).toHaveLength(0);
     expect(JSON.stringify(server.getState())).not.toContain('fake-secret');

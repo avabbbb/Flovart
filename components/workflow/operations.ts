@@ -88,13 +88,24 @@ export async function createWorkflowOperationRecipe(input: WorkflowOperationReci
   return recipe;
 }
 
+/** 结果节点的类型：能力声明的第一个输出角色（图片 / 视频 / 音频）。 */
+export function workflowOperationResultNodeType(capabilityId: WorkflowOperationCapabilityId): WorkflowOperationTakeOutputNodeType {
+  return getWorkflowOperationCapability(capabilityId).outputRoles[0]?.nodeType || 'image';
+}
+
+type WorkflowOperationTakeOutputNodeType = 'image' | 'video' | 'audio';
+
+/**
+ * 建一个带生成记录（metadata.operation）的结果节点。
+ * 不再有 operation 中间节点：输入直接连到这个结果节点，能力、配方、takes 与选中都挂在它身上。
+ */
 export async function createWorkflowOperationNode(input: WorkflowOperationRecipeInput & { id: string; position: WorkflowPoint }): Promise<WorkflowNode> {
   const recipe = await createWorkflowOperationRecipe(input);
   const capability = getWorkflowOperationCapability(input.capabilityId);
   const config = capability.id === 'image.generate@1'
     ? { mode: capability.mediaType, modelId: recipe.productModelId, ...recipe.parameters }
     : { mode: capability.mediaType, modelId: recipe.productModelId, operationParameters: recipe.parameters };
-  const node = createWorkflowNode(input.id, 'operation', input.position, {
+  const node = createWorkflowNode(input.id, workflowOperationResultNodeType(input.capabilityId), input.position, {
     prompt: recipe.promptDocument.text,
     richTextDocument: recipe.promptDocument.richTextDocument,
     config,
@@ -388,18 +399,19 @@ export async function ensureWorkflowImageGenerateOperation(input: {
   const base = latestProjectSnapshot(input.project.id, input.project);
   const source = base.nodes.find(node => node.id === input.nodeId);
   if (!source) throw new Error('图片生成节点不存在');
-  if (source.type === 'operation') {
-    if (source.metadata.operation?.capabilityId !== 'image.generate@1') throw new Error('该 Operation 不是图片生成步骤');
+  if (source.metadata.operation) {
+    if (source.metadata.operation.capabilityId !== 'image.generate@1') throw new Error('该节点的生成记录不是图片生成');
     return { project: base, operationNodeId: source.id, created: false };
   }
+  if (source.type === 'operation') throw new Error('旧版 Operation 节点缺少生成记录');
   const mode = source.metadata.config?.mode || (source.type === 'config' || source.type === 'image' ? 'image' : source.type);
   if (mode !== 'image') return { project: base, operationNodeId: source.id, created: false };
 
   const now = input.now || new Date().toISOString();
   const sourceHasMedia = source.type === 'image' && hasMedia(source);
-  // 有媒体节点也原位替换为 operation；原图复制成隐藏输入节点保留图生图参考，画布不再多出可见节点
+  // 有媒体节点也原位挂上生成记录（节点仍是 image）；原图复制成隐藏输入节点保留图生图参考，画布不再多出可见节点
   const hiddenInputId = sourceHasMedia ? input.createId() : undefined;
-  // 原位替换语义：无论是否有媒体，operation 节点都复用源节点 id，连线与引用身份保持不变。
+  // 原位语义：无论是否有媒体，结果节点都复用源节点 id，连线与引用身份保持不变。
   const operationId = source.id;
   const upstream = base.connections
     .filter(connection => connection.toNodeId === source.id)
@@ -437,11 +449,15 @@ export async function ensureWorkflowImageGenerateOperation(input: {
     config: { ...source.metadata.config, ...operation.metadata.config },
   };
   operation.objectVersion = (source.objectVersion || 0) + 1;
-  // 原位升级成 Operation 时保留用户起的名字，不把每个节点都改回「图片生成」。
+  // 结果节点保持源节点的类型、尺寸与位置（image），只是多了生成记录。
+  operation.type = 'image';
+  operation.width = source.width;
+  operation.height = source.height;
+  // 原位挂上生成记录时保留用户起的名字，不把每个节点都改回「图片生成」。
   const defaultTitle = (WORKFLOW_NODE_SPECS as Record<string, { title: string } | undefined>)[source.type]?.title;
   if (source.title?.trim() && source.title !== defaultTitle) operation.title = source.title;
 
-  // 有媒体：隐藏输入节点（isVisible:false）保留原图 + 原节点原位替换成 operation
+  // 有媒体：隐藏输入节点（isVisible:false）保留原图 + 原节点原位挂上生成记录
   const hiddenInput = sourceHasMedia
     ? {
         ...source,
@@ -479,8 +495,8 @@ export async function ensureWorkflowImageGenerateOperation(input: {
   const fresh = latestProjectSnapshot(input.project.id, base);
   if (fresh !== base) {
     const freshSource = fresh.nodes.find(node => node.id === source.id);
-    // 幂等保护：等待期间源节点被并发删除或已转换成 operation 时不再重复创建。
-    if (!freshSource || freshSource.type === 'operation') {
+    // 幂等保护：等待期间源节点被并发删除或已挂上生成记录时不再重复创建。
+    if (!freshSource || freshSource.metadata.operation) {
       return { project: fresh, operationNodeId: source.id, created: false };
     }
   }
@@ -491,7 +507,7 @@ export async function ensureWorkflowImageGenerateOperation(input: {
 }
 
 /**
- * node.run 的图片生成准备：把普通图片节点原位转换为 image.generate Operation 并立即写回 store，
+ * node.run 的图片生成准备：给普通图片节点原位挂上 image.generate 生成记录（仍是 image 节点）并立即写回 store，
  * 然后在创建新 Take 之前重新读取最新状态。批量运行（--node-ids a,b）时各节点并行进入这里，
  * 任何一步都不能拿旧快照整体覆盖 store。
  */

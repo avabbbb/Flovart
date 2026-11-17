@@ -42,8 +42,9 @@ describe('workflow node tools operation projection', () => {
       ...state.runtime,
       executeCrop: vi.fn().mockResolvedValue(new Blob(['crop'], { type: 'image/png' })),
     });
-    expect(state.current.nodes.find(node => node.type === 'operation')?.metadata.operation?.capabilityId).toBe('image.crop@1');
-    expect(state.current.connections.map(connection => connection.kind)).toEqual(['operation-input', 'operation-output']);
+    expect(state.current.nodes.find(node => Boolean(node.metadata.operation))?.metadata.operation?.capabilityId).toBe('image.crop@1');
+    // 输入直连结果节点，没有 operation→output 链。
+    expect(state.current.connections.map(connection => connection.kind)).toEqual(['operation-input']);
   });
 
   it('routes Agent upscale through the explicit upscale Operation executor', async () => {
@@ -52,7 +53,7 @@ describe('workflow node tools operation projection', () => {
       ...state.runtime,
       executeAgent: vi.fn().mockResolvedValue({ dataUrl: 'data:image/png;base64,UkVTVUxU', mimeType: 'image/png', width: 640, height: 360 }),
     });
-    expect(state.current.nodes.find(node => node.type === 'operation')?.metadata.operation).toMatchObject({
+    expect(state.current.nodes.find(node => Boolean(node.metadata.operation))?.metadata.operation).toMatchObject({
       capabilityId: 'image.upscale@1', recipe: { parameters: { targetLongEdge: 2048, algorithm: 'nearest' } },
     });
   });
@@ -64,7 +65,7 @@ describe('workflow node tools operation projection', () => {
       ...state.runtime,
       executeVideoTrim: vi.fn().mockResolvedValue({ blob: new Blob(['trim'], { type: 'video/mp4' }), durationSec: 2 }),
     });
-    expect(state.current.nodes.find(node => node.type === 'operation')?.metadata.operation).toMatchObject({
+    expect(state.current.nodes.find(node => Boolean(node.metadata.operation))?.metadata.operation).toMatchObject({
       capabilityId: 'video.trim@1', recipe: { parameters: { startSec: 1, endSec: 3 } }, takes: [{ status: 'success' }],
     });
   });
@@ -86,7 +87,7 @@ describe('workflow node tools operation projection', () => {
       executeVideoAvSplit: vi.fn().mockResolvedValue({ videoBlob: new Blob(['v'], { type: 'video/mp4' }), audioBlob: new Blob(['a'], { type: 'audio/mpeg' }) }),
       executeAudioStemSplit: vi.fn().mockResolvedValue({ vocalsBlob: new Blob(['vo'], { type: 'audio/mpeg' }), instrumentalBlob: new Blob(['ac'], { type: 'audio/mpeg' }) }),
     });
-    expect(state.current.nodes.find(node => node.type === 'operation')?.metadata.operation).toMatchObject({
+    expect(state.current.nodes.find(node => Boolean(node.metadata.operation))?.metadata.operation).toMatchObject({
       capabilityId: 'video.av-split@1', recipe: { parameters: { audio: 'vocals' } },
     });
   });
@@ -98,7 +99,7 @@ describe('workflow node tools operation projection', () => {
       ...state.runtime,
       executeAudioSpeed: vi.fn().mockResolvedValue(new Blob(['speed'], { type: 'audio/mpeg' })),
     });
-    expect(state.current.nodes.find(node => node.type === 'operation')?.metadata.operation).toMatchObject({
+    expect(state.current.nodes.find(node => Boolean(node.metadata.operation))?.metadata.operation).toMatchObject({
       capabilityId: 'audio.speed@1', recipe: { parameters: { speed: 1.5 } }, takes: [{ status: 'success' }],
     });
   });

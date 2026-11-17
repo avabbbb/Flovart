@@ -38,34 +38,35 @@ function harness() {
 }
 
 describe('workflow audio operation executors', () => {
-  it('commits trim through the shared Operation, Snapshot and typed output chain', async () => {
+  it('commits trim onto a direct result node with the shared Snapshot and typed output', async () => {
     const state = harness();
     await runWorkflowAudioTrimOperation('project-audio', 'audio-1', { startSec: 1, endSec: 4 }, {
       ...state.runtime,
       executeAudioTrim: vi.fn().mockResolvedValue({ blob: new Blob(['trim'], { type: 'audio/wav' }), durationSec: 3 }),
     });
-    const operation = state.current.nodes.find(node => node.type === 'operation');
-    const output = state.current.nodes.find(node => node.metadata.sourceOperationNodeId === operation?.id);
+    const operation = state.current.nodes.find(node => Boolean(node.metadata.operation));
+    const output = operation;
     expect(operation?.metadata.operation).toMatchObject({
       capabilityId: 'audio.trim@1',
       recipe: { parameters: { startSec: 1, endSec: 4 }, inputBindings: [expect.objectContaining({ sourceNodeId: 'audio-1', role: 'source_audio' })] },
       takes: [{ status: 'success', snapshot: { compilerVersion: 'workflow-operation@1' }, outputNodeIds: [output?.id] }],
     });
     expect(output).toMatchObject({ type: 'audio', metadata: { name: 'trim-song.wav', operationOutputRole: 'result_audio' } });
-    expect(state.current.connections.map(connection => connection.kind)).toEqual(['operation-input', 'operation-output']);
+    // 输入直连结果节点：只有一条 operation-input，没有 operation→output 链。
+    expect(state.current.connections.map(connection => connection.kind)).toEqual(['operation-input']);
   });
 
   it('commits speed as MP3 and reruns the same Operation with a new Take', async () => {
     const state = harness();
     const executeAudioSpeed = vi.fn().mockResolvedValue(new Blob(['speed'], { type: 'audio/mpeg' }));
     await runWorkflowAudioSpeedOperation('project-audio', 'audio-1', 1.5, { ...state.runtime, executeAudioSpeed });
-    const operation = state.current.nodes.find(node => node.type === 'operation')!;
-    const output = state.current.nodes.find(node => node.metadata.sourceOperationNodeId === operation.id);
+    const operation = state.current.nodes.find(node => Boolean(node.metadata.operation))!;
+    const output = operation;
     expect(output?.metadata).toMatchObject({ name: 'speed-1.5x-song.mp3', mimeType: 'audio/mpeg', operationOutputRole: 'result_audio' });
 
     await rerunWorkflowAudioOperation('project-audio', operation.id, { ...state.runtime, executeAudioSpeed });
     const rerun = state.current.nodes.find(node => node.id === operation.id)!;
-    expect(state.current.nodes.filter(node => node.type === 'operation')).toHaveLength(1);
+    expect(state.current.nodes.filter(node => Boolean(node.metadata.operation))).toHaveLength(1);
     expect(rerun.metadata.operation?.takes).toHaveLength(2);
     expect(rerun.metadata.operation?.selectedTakeId).toBe(rerun.metadata.operation?.takes[1].id);
   });
@@ -74,8 +75,8 @@ describe('workflow audio operation executors', () => {
     const state = harness();
     const executeAudioPitch = vi.fn().mockResolvedValue(new Blob(['pitch'], { type: 'audio/mpeg' }));
     await runWorkflowAudioPitchOperation('project-audio', 'audio-1', 3, { ...state.runtime, executeAudioPitch });
-    const operation = state.current.nodes.find(node => node.type === 'operation');
-    const output = state.current.nodes.find(node => node.metadata.sourceOperationNodeId === operation?.id);
+    const operation = state.current.nodes.find(node => Boolean(node.metadata.operation));
+    const output = operation;
     expect(operation?.metadata.operation).toMatchObject({ capabilityId: 'audio.pitch@1', recipe: { parameters: { semitones: 3 } } });
     expect(output?.metadata).toMatchObject({ name: 'pitch-up3-song.mp3', mimeType: 'audio/mpeg', operationOutputRole: 'result_audio' });
     expect(executeAudioPitch).toHaveBeenCalledWith(expect.any(Blob), 3, 'song.wav');
@@ -84,14 +85,14 @@ describe('workflow audio operation executors', () => {
   it('rejects invalid parameters before creation and keeps execution failures retryable', async () => {
     const invalid = harness();
     await expect(runWorkflowAudioTrimOperation('project-audio', 'audio-1', { startSec: 4, endSec: 2 }, invalid.runtime)).rejects.toThrow('音频结束时间必须晚于开始时间');
-    expect(invalid.current.nodes.some(node => node.type === 'operation')).toBe(false);
+    expect(invalid.current.nodes.some(node => Boolean(node.metadata.operation))).toBe(false);
 
     const failed = harness();
     await expect(runWorkflowAudioSpeedOperation('project-audio', 'audio-1', 1.5, {
       ...failed.runtime,
       executeAudioSpeed: vi.fn().mockRejectedValue(new Error('ffmpeg 不可用')),
     })).rejects.toThrow('ffmpeg 不可用');
-    expect(failed.current.nodes.find(node => node.type === 'operation')?.metadata).toMatchObject({
+    expect(failed.current.nodes.find(node => Boolean(node.metadata.operation))?.metadata).toMatchObject({
       status: 'error', error: 'ffmpeg 不可用', operation: { takes: [{ status: 'error', error: 'ffmpeg 不可用' }] },
     });
   });

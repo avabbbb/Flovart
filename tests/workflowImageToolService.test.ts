@@ -56,8 +56,8 @@ describe('workflow remaining image operation executors', () => {
     const state = harness();
     const executeAgent = vi.fn().mockResolvedValue({ dataUrl: 'data:image/png;base64,UkVTVUxU', mimeType: 'image/png', width: 640, height: 360 });
     await runWorkflowRemoveBackgroundOperation('project', 'source', { ...state.runtime, executeAgent });
-    const operation = state.current.nodes.find(node => node.type === 'operation');
-    const output = state.current.nodes.find(node => node.metadata.sourceOperationNodeId === operation?.id);
+    const operation = state.current.nodes.find(node => Boolean(node.metadata.operation));
+    const output = operation;
     expect(executeAgent).toHaveBeenCalledWith(expect.objectContaining({ mimeType: 'image/png' }), 'remove-background', 'gpt-image-2', apiKey, {});
     expect(operation?.metadata.operation).toMatchObject({
       capabilityId: 'image.remove-background@1', takes: [{ status: 'success', outputNodeIds: [output?.id] }],
@@ -73,7 +73,7 @@ describe('workflow remaining image operation executors', () => {
       { href: 'data:image/png;base64,TUFTSw==', mimeType: 'image/png' },
       { ...state.runtime, executeEdit },
     );
-    const operation = state.current.nodes.find(node => node.type === 'operation')!;
+    const operation = state.current.nodes.find(node => Boolean(node.metadata.operation))!;
     const mask = state.current.nodes.find(node => node.title === '编辑蒙版')!;
     expect(operation.metadata.operation?.recipe).toMatchObject({
       promptDocument: { text: '替换蒙版区域' }, parameters: { variant: 'mask' },
@@ -95,11 +95,12 @@ describe('workflow remaining image operation executors', () => {
       { name: '背景', dataUrl: 'data:image/png;base64,Qg==', width: 120, height: 90, offsetX: 8, offsetY: 10 },
     ]);
     await runWorkflowSplitLayersOperation('project', 'source', { ...state.runtime, executeSplit });
-    const operation = state.current.nodes.find(node => node.type === 'operation')!;
-    const outputs = state.current.nodes.filter(node => node.metadata.sourceOperationNodeId === operation.id);
+    const operation = state.current.nodes.find(node => Boolean(node.metadata.operation))!;
+    const outputs = [operation, ...state.current.nodes.filter(node => node.metadata.sourceOperationNodeId === operation.id)];
     expect(operation.metadata.operation).toMatchObject({ capabilityId: 'image.split-layers@1', takes: [{ outputNodeIds: outputs.map(node => node.id) }] });
     expect(outputs.map(node => node.title)).toEqual(['主体', '背景']);
-    expect(state.current.connections.filter(connection => connection.kind === 'operation-output')).toHaveLength(2);
+    // 第一层原位写在结果节点，其余层是从源图直连的兄弟结果节点。
+    expect(state.current.connections.filter(connection => connection.kind === 'operation-output')).toHaveLength(1);
   });
 
   it('uses the shared lifecycle for rotate and grid, then reruns the same local Operation', async () => {
@@ -107,7 +108,7 @@ describe('workflow remaining image operation executors', () => {
     await runWorkflowRotateOperation('project', 'source', 'flip-h', {
       ...rotate.runtime, executeRotate: vi.fn().mockResolvedValue(new Blob(['rotate'], { type: 'image/png' })),
     });
-    expect(rotate.current.nodes.find(node => node.type === 'operation')?.metadata.operation).toMatchObject({
+    expect(rotate.current.nodes.find(node => Boolean(node.metadata.operation))?.metadata.operation).toMatchObject({
       capabilityId: 'image.rotate@1', recipe: { parameters: { action: 'flip-h' } },
     });
 
@@ -117,7 +118,7 @@ describe('workflow remaining image operation executors', () => {
       { blob: new Blob(['b'], { type: 'image/png' }), index: 1, row: 0, col: 1 },
     ]);
     await runWorkflowSplitGridOperation('project', 'source', { rows: 1, cols: 2 }, { ...grid.runtime, executeSplitGrid });
-    const operation = grid.current.nodes.find(node => node.type === 'operation')!;
+    const operation = grid.current.nodes.find(node => Boolean(node.metadata.operation))!;
     expect(operation.metadata.operation?.takes[0].outputNodeIds).toHaveLength(2);
     await rerunWorkflowImageOperation('project', operation.id, { ...grid.runtime, executeSplitGrid });
     expect(grid.current.nodes.find(node => node.id === operation.id)?.metadata.operation?.takes).toHaveLength(2);
@@ -128,7 +129,7 @@ describe('workflow remaining image operation executors', () => {
     await expect(runWorkflowRemoveBackgroundOperation('project', 'source', {
       ...failed.runtime, executeAgent: vi.fn().mockRejectedValue(new Error('端点不可用')),
     })).rejects.toThrow('端点不可用');
-    expect(failed.current.nodes.find(node => node.type === 'operation')?.metadata).toMatchObject({
+    expect(failed.current.nodes.find(node => Boolean(node.metadata.operation))?.metadata).toMatchObject({
       status: 'error', error: '端点不可用', operation: { takes: [{ status: 'error' }] },
     });
 
@@ -136,8 +137,8 @@ describe('workflow remaining image operation executors', () => {
     let resolve!: (value: ImageToolResultLike) => void;
     const pending = new Promise<ImageToolResultLike>(done => { resolve = done; });
     const running = runWorkflowRemoveBackgroundOperation('project', 'source', { ...stale.runtime, executeAgent: vi.fn(() => pending) as never });
-    await vi.waitFor(() => expect(stale.current.nodes.some(node => node.type === 'operation')).toBe(true));
-    stale.runtime.onProjectChange({ ...stale.current, nodes: stale.current.nodes.filter(node => node.type !== 'operation') });
+    await vi.waitFor(() => expect(stale.current.nodes.some(node => Boolean(node.metadata.operation))).toBe(true));
+    stale.runtime.onProjectChange({ ...stale.current, nodes: stale.current.nodes.filter(node => !node.metadata.operation) });
     resolve({ dataUrl: 'data:image/png;base64,UkVTVUxU', mimeType: 'image/png', width: 1, height: 1 });
     await expect(running).resolves.toMatchObject({ status: 'stale' });
     expect(stale.runtime.ingestMedia).not.toHaveBeenCalled();
