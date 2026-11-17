@@ -20,12 +20,13 @@ describe('flovart dev startup commands', () => {
     expect(plan.urls).toEqual({ web: 'http://localhost:37522' });
   });
 
-  it('plans backend startup with PostgreSQL dependency', () => {
-    const plan = planStart(['--source', '--backend'], process.cwd());
-
-    expect(plan.mode).toBe('local');
-    expect(plan.services).toEqual(['db', 'hub']);
-    expect(plan.openBrowser).toBe(false);
+  it('no longer plans a Go Hub or PostgreSQL for legacy backend flags', () => {
+    for (const flag of ['--backend', '--hub', '--db']) {
+      const plan = planStart(['--source', flag], process.cwd());
+      expect(plan.mode).toBe('local');
+      expect(plan.services).toEqual([]);
+      expect(plan.openBrowser).toBe(false);
+    }
   });
 
   it('plans full docker startup with detached mode', () => {
@@ -33,7 +34,7 @@ describe('flovart dev startup commands', () => {
 
     expect(plan).toMatchObject({
       mode: 'docker',
-      services: ['db', 'hub', 'web'],
+      services: ['web'],
       detach: true,
       openBrowser: true,
     });
@@ -66,7 +67,7 @@ describe('flovart dev startup commands', () => {
 
   it('keeps install scoped to requested services', () => {
     expect(planInstall(['--source', '--web'], process.cwd()).services).toEqual(['web']);
-    expect(planInstall(['--source', '--backend'], process.cwd()).services).toEqual(['hub']);
+    expect(planInstall(['--source', '--backend'], process.cwd()).services).toEqual([]);
     expect(parseDevArgs(['web', '--plan', '--json'])).toMatchObject({ web: true, plan: true, json: true });
   });
 
@@ -113,27 +114,16 @@ describe('flovart dev startup commands', () => {
     }
   });
 
-  it('keeps Docker services on distinct host ports when preferences overlap', async () => {
-    const ports = await resolveDockerPorts({ services: ['hub', 'web'] }, {
-      FLOVART_HUB_PORT: '46111',
-      FLOVART_WEB_PORT: '46111',
-    });
-
-    expect(ports.hub).toBe(46111);
-    expect(ports.web).toBeGreaterThan(0);
-    expect(ports.web).not.toBe(ports.hub);
-  });
-
-  it('resolves the full Compose dependency closure for a Web-only request', async () => {
-    expect(dockerComposeServices(['web'])).toEqual(['db', 'hub', 'web']);
+  it('runs Compose with the WebUI only (no Go Hub / PostgreSQL)', async () => {
+    expect(dockerComposeServices(['web'])).toEqual(['web']);
+    expect(dockerComposeServices(['db', 'hub', 'web'])).toEqual(['web']);
     const ports = await resolveDockerPorts({ services: ['web'] }, {
       FLOVART_DB_PORT: '46112',
       FLOVART_HUB_PORT: '46113',
       FLOVART_WEB_PORT: '46115',
     });
 
-    expect(Object.keys(ports)).toEqual(['db', 'hub', 'web']);
-    expect(new Set(Object.values(ports)).size).toBe(3);
+    expect(Object.keys(ports)).toEqual(['web']);
   });
 
   it('reuses a discovered Flovart WebUI before starting a duplicate Vite process', async () => {

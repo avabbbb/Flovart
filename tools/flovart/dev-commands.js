@@ -1,6 +1,5 @@
 import { spawn, execFileSync, execSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
-import { existsSync, copyFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
 import { homedir, platform } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -13,30 +12,19 @@ import { clearBrowserLaunchState, isBrowserLaunchPending, readBrowserLaunchState
 
 const FLOVART_HOME = join(homedir(), '.flovart');
 const PROJECT_DIR = join(FLOVART_HOME, 'project');
-const PG_CONTAINER = 'flovart-pg';
-const PG_USER = 'postgres';
-const PG_PASSWORD = 'postgres';
-const PG_DB = 'flovart';
-const PG_PORT = '5433';
-const DOCKER_DEFAULT_PORTS = Object.freeze({ db: 5433, hub: 11452, web: 1635 });
+// 网页版全静态：Go Hub（auth / prompts / uploads）与 PostgreSQL 已移除（回滚点 tag go-backend-final）。
+// 源码开发只剩 web（Vite）一个服务；--hub / --backend / --db 仅为兼容旧命令而保留解析，不再选中任何服务。
+const DOCKER_DEFAULT_PORTS = Object.freeze({ web: 1635 });
 
 const URLS = {
   web: 'http://localhost:37522',
-  hub: 'http://localhost:11452',
-  db: `localhost:${PG_PORT}`,
 };
 
-const SERVICE_ORDER = ['db', 'hub', 'web'];
-
+const SERVICE_ORDER = ['web'];
+const LEGACY_BACKEND_NOTICE = 'Go Hub / PostgreSQL 已移除：网页版全静态，账号、提示词、上传都在本机完成；--hub / --backend / --db 不再启动任何服务。';
 
 export function dockerComposeServices(services = []) {
   const selected = new Set(services);
-  if (selected.has('web')) {
-    selected.add('db');
-    selected.add('hub');
-  } else if (selected.has('hub')) {
-    selected.add('db');
-  }
   return SERVICE_ORDER.filter(name => selected.has(name));
 }
 
@@ -49,8 +37,7 @@ function run(cmd, args, opts = {}) {
 }
 
 function checkCommand(cmd) {
-  const flag = cmd === 'go' ? 'version' : '--version';
-  try { execSync(`${cmd} ${flag}`, { stdio: 'pipe' }); return true; }
+  try { execSync(`${cmd} --version`, { stdio: 'pipe' }); return true; }
   catch { return false; }
 }
 
@@ -59,7 +46,7 @@ function warn(msg) { console.log(`\x1b[33m[flovart]\x1b[0m ${msg}`); }
 function err(msg) { console.error(`\x1b[31m[flovart]\x1b[0m ${msg}`); }
 
 export function resolveProjectDir(cwd = process.cwd()) {
-  if (existsSync(join(cwd, 'package.json')) && existsSync(join(cwd, 'backend'))) {
+  if (existsSync(join(cwd, 'package.json')) && existsSync(join(cwd, 'vite.config.ts'))) {
     return cwd;
   }
   return PROJECT_DIR;
@@ -131,26 +118,14 @@ export function parseDevArgs(argv = []) {
   return options;
 }
 
+export function usesLegacyBackendFlags(options) {
+  return Boolean(options.hub || options.backend || options.db);
+}
+
 function selectedServices(options, fallbackAll = true) {
-  const requested = options.all || options.web || options.hub || options.backend || options.db;
-  const selected = {
-    db: options.db,
-    hub: options.hub,
-    web: options.web,
-  };
-
-  if (options.all || (!requested && fallbackAll)) {
-    selected.db = true;
-    selected.hub = true;
-    selected.web = true;
-  }
-
-  if (options.backend) {
-    selected.db = true;
-    selected.hub = true;
-  }
-
-  if (selected.hub) selected.db = true;
+  const requested = options.all || options.web || usesLegacyBackendFlags(options);
+  const selected = { web: options.web };
+  if (options.all || (!requested && fallbackAll)) selected.web = true;
   return SERVICE_ORDER.filter(name => selected[name]);
 }
 
@@ -201,7 +176,7 @@ export function planInstall(argv = [], cwd = process.cwd()) {
   if (!options.source) {
     return { command: 'install', mode: 'toolkit', version: options.version || 'bootstrapper-compatible', manifestUrl: options.manifestUrl || null };
   }
-  const services = selectedServices(options, true).filter(name => name !== 'db');
+  const services = selectedServices(options, true);
   return {
     command: 'install',
     projectDir: resolveProjectDir(cwd),
@@ -214,7 +189,7 @@ function printHelp(command = 'start') {
     console.log([
       'Usage: flovart install [--version=x.y.z] [--manifest=https://...]',
       '',
-      '普通用户下载并校验版本化 Agent Toolkit，不需要 Git、Go、PostgreSQL 或 Docker。',
+      '普通用户下载并校验版本化 Agent Toolkit，不需要 Git 或 Docker。',
       '源码贡献者在仓库内使用 `flovart install --source` 安装开发依赖。',
     ].join('\n'));
     return;
@@ -226,10 +201,10 @@ function printHelp(command = 'start') {
     '  --agent=codex   启动 Toolkit 内置 Managed Agent companion（兼容参数；不会启动外部 Codex）',
     '  --no-agent      不额外启动 Managed Agent，由 Desktop Runtime 按需管理（默认）',
     '  --plan          只打印启动计划，不真正启动服务',
-    '  --source        在源码仓库运行 Vite/Go 开发服务',
+    '  --source        在源码仓库运行 Vite 开发服务',
     '  --web-port=0    WebUI 使用随机 loopback 端口；默认端口被占用时也会自动切换',
     '  --agent-port=0  Browser Agent 使用随机 loopback 端口；默认端口被占用时也会自动切换',
-    '  --docker        与 --source 搭配运行 SaaS Compose',
+    '  --docker        与 --source 搭配用 Docker Compose 运行 WebUI',
     '  --no-browser-agent  不启动源码 Workflow Browser Agent（仅调试用）',
     '',
     'Examples:',
@@ -266,18 +241,6 @@ function printPlan(plan, json = false) {
   if (plan.openBrowser) log(`  Browser: ${plan.urls?.web || 'dynamic loopback port (actual URL will be reported after startup)'}`);
 }
 
-function ensureEnvFiles(projectDir) {
-  for (const dir of ['backend']) {
-    const dirAbs = join(projectDir, dir);
-    const envFile = join(dirAbs, '.env');
-    const exampleFile = join(dirAbs, '.env.example');
-    if (!existsSync(envFile) && existsSync(exampleFile)) {
-      copyFileSync(exampleFile, envFile);
-      log('Created ' + dir + '/.env from .env.example (edit to customize).');
-    }
-  }
-}
-
 async function installProjectDependencies(projectDir, services) {
   if (services.includes('web')) {
     if (!checkCommand('node')) { err('Node.js is required. Install from https://nodejs.org'); process.exit(1); }
@@ -285,19 +248,6 @@ async function installProjectDependencies(projectDir, services) {
     await run('npm', ['install'], { cwd: projectDir });
   }
 
-  const needsGo = services.includes('hub');
-  if (needsGo) {
-    ensureEnvFiles(projectDir);
-    if (checkCommand('go')) {
-      if (services.includes('hub')) {
-        log('Downloading Hub Go dependencies...');
-        await run('go', ['mod', 'download'], { cwd: join(projectDir, 'backend') });
-      }
-
-    } else {
-      warn('Go not found, skipping backend dependencies. Install Go from https://go.dev to run the backend.');
-    }
-  }
 }
 
 async function updateProject(projectDir, services) {
@@ -327,6 +277,7 @@ export async function install(argv = []) {
     return;
   }
 
+  if (usesLegacyBackendFlags(options)) warn(LEGACY_BACKEND_NOTICE);
   log('Installing Source Development Mode dependencies...');
   const plan = planInstall(argv);
   await installProjectDependencies(plan.projectDir, plan.services);
@@ -386,6 +337,12 @@ export async function start(argv = []) {
       process.exitCode = 1;
     }
     if (options.json || options.detach) return;
+    return;
+  }
+
+  if (usesLegacyBackendFlags(options)) warn(LEGACY_BACKEND_NOTICE);
+  if (plan.services.length === 0) {
+    warn('No services selected. Use `flovart start --source --web`.');
     return;
   }
 
@@ -503,8 +460,8 @@ async function startDocker(projectDir, plan) {
   const args = ['compose', 'up', '--build'];
   // An attached Compose process cannot open or health-check the WebUI until
   // it exits. Opening the browser therefore implies detached Compose mode.
-  if (plan.detach || plan.openBrowser || plan.services.length === 1 && plan.services[0] === 'db') args.push('-d');
-  args.push(...plan.services);
+  if (plan.detach || plan.openBrowser || composeServices.length === 0) args.push('-d');
+  args.push(...composeServices);
 
   const displayPlan = {
     ...plan,
@@ -522,8 +479,6 @@ async function startDocker(projectDir, plan) {
 
 export async function resolveDockerPorts(plan = {}, env = process.env) {
   const requested = {
-    db: env.FLOVART_DB_PORT,
-    hub: env.FLOVART_HUB_PORT,
     web: plan.webPort ?? env.FLOVART_WEB_PORT,
   };
   const ports = {};
@@ -542,37 +497,10 @@ export async function resolveDockerPorts(plan = {}, env = process.env) {
 async function startLocal(projectDir, plan) {
   if (plan.services.includes('web') && !checkCommand('node')) { err('Node.js is required.'); process.exit(1); }
 
-  const hubDir = join(projectDir, 'backend');
-  const needsGo = plan.services.includes('hub');
-  const hasGo = checkCommand('go');
   const children = [];
   const detached = plan.detach || plan.json;
 
-  if (plan.services.includes('db')) {
-    if (checkCommand('docker')) {
-      const pgReady = await ensurePostgres();
-      if (!pgReady && needsGo) warn('PostgreSQL not ready. Go backends may fail to connect.');
-    } else if (needsGo) {
-      warn('Docker not found. Ensure PostgreSQL is running on localhost:' + PG_PORT + ' (db=' + PG_DB + ', user=' + PG_USER + ').');
-    }
-  }
-
-  if (!process.env.JWT_SECRET && !plan.json) {
-    warn('JWT_SECRET not set: using a random dev secret. Hub logins reset on every start; set JWT_SECRET to keep sessions across restarts.');
-  }
-  const env = {
-    ...process.env,
-    DATABASE_URL: process.env.DATABASE_URL || `postgres://${PG_USER}:${PG_PASSWORD}@localhost:${PG_PORT}/${PG_DB}?sslmode=disable`,
-    // Never fall back to a guessable constant: a known-but-fixed JWT secret
-    // lets anyone who reads this repository forge dev-hub auth tokens.
-    JWT_SECRET: process.env.JWT_SECRET || randomBytes(32).toString('hex'),
-    JWT_EXP_HOURS: process.env.JWT_EXP_HOURS || '168',
-    // Local development only serves loopback pages; the Go hub treats this
-    // value as "echo any localhost/127.0.0.1/Tauri origin, with credentials".
-    CORS_ALLOW: process.env.CORS_ALLOW || 'loopback',
-    PORT: process.env.PORT || '11452',
-    HUB_BIND: process.env.HUB_BIND || '127.0.0.1',
-  };
+  const env = { ...process.env };
   if (plan.webPort !== undefined) env.FLOVART_WEB_PORT = String(plan.webPort);
   if (plan.agentPort !== undefined) env.FLOVART_AGENT_PORT = String(plan.agentPort);
 
@@ -603,14 +531,6 @@ async function startLocal(projectDir, plan) {
       agentConnection = await ensureSourceAgent(projectDir, children, { detached, json: plan.json, env });
     } catch (error) {
       agentStartupError = error instanceof Error ? error.message : String(error);
-    }
-  }
-
-  if (needsGo && !hasGo) {
-    warn('Go not found. Backend services were skipped.');
-  } else {
-    if (plan.services.includes('hub')) {
-      children.push(spawn('go', ['run', './cmd/server'], { stdio: detached ? 'ignore' : 'inherit', shell: true, cwd: hubDir, env, detached, windowsHide: detached }));
     }
   }
 
@@ -810,37 +730,6 @@ function stopProcessTree(child) {
   try { child.kill(); } catch {}
 }
 
-async function ensurePostgres() {
-  try {
-    const running = execSync(`docker ps --filter name=${PG_CONTAINER} --format {{.Names}}`, { encoding: 'utf8' }).trim();
-    if (running) {
-      log('PostgreSQL container already running.');
-      return true;
-    }
-
-    const exists = execSync(`docker ps -a --filter name=${PG_CONTAINER} --format {{.Names}}`, { encoding: 'utf8' }).trim();
-    if (exists) {
-      log('Starting existing PostgreSQL container...');
-      await run('docker', ['start', PG_CONTAINER]);
-      return true;
-    }
-
-    log('Creating PostgreSQL container (postgres:16-alpine)...');
-    await run('docker', ['run', '-d', '--name', PG_CONTAINER,
-      '-e', `POSTGRES_USER=${PG_USER}`,
-      '-e', `POSTGRES_PASSWORD=${PG_PASSWORD}`,
-      '-e', `POSTGRES_DB=${PG_DB}`,
-      '-p', `${PG_PORT}:5432`,
-      'postgres:16-alpine'
-    ]);
-    log('Waiting for PostgreSQL to be ready...');
-    await new Promise(r => setTimeout(r, 3000));
-    return true;
-  } catch (e) {
-    warn('Failed to start PostgreSQL via Docker: ' + (e.message || e));
-    return false;
-  }
-}
 
 export async function update(argv = []) {
   const options = parseDevArgs(argv);
@@ -855,6 +744,6 @@ export async function update(argv = []) {
     process.exit(1);
   }
 
-  await updateProject(projectDir, selectedServices(options, true).filter(name => name !== 'db'));
+  await updateProject(projectDir, selectedServices(options, true));
   log('Flovart updated successfully.');
 }

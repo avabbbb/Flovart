@@ -1,5 +1,5 @@
 import type { WorkflowGenerationReferenceRole, WorkflowResourceKind } from '../components/workflow/types';
-import type { PromptItem, PromptPack } from './promptApi';
+import type { PromptItem, PromptPack } from './promptPack';
 
 export type PromptAssetModality = WorkflowResourceKind | 'mixed';
 export type PromptAssetSourceKind = 'bundled' | 'local' | 'remote' | 'user';
