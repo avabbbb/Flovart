@@ -238,7 +238,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
               >
                 <button type='button' role='menuitem' className='isl-opt flex w-full items-center gap-2' onClick={() => { projectActions!.create(); closeProjectMenu(); }}>
                   <Plus size={14} />
-                  <span className='text-xs font-bold'>{isChinese ? '新建工作流' : 'New workflow'}</span>
+                  <span className='min-w-0 flex-1 text-left text-xs font-bold'>{isChinese ? '新建工作流' : 'New workflow'}</span>
                 </button>
                 <label className='mx-1 my-1 flex items-center gap-1.5 rounded-md border px-2 py-1' style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}>
                   <Search size={12} className='shrink-0 opacity-60' />
@@ -282,7 +282,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
                 <div className='mx-1 my-1 h-px' style={{ background: 'var(--isl-border)' }} />
                 <button type='button' role='menuitem' className='isl-opt flex w-full items-center gap-2' disabled={(projectList?.length || 0) === 0} onClick={() => { closeProjectMenu(); setIsEditingTitle(true); }}>
                   <Pencil size={14} />
-                  <span className='text-xs font-bold'>{isChinese ? '重命名当前工作流' : 'Rename workflow'}</span>
+                  <span className='min-w-0 flex-1 text-left text-xs font-bold'>{isChinese ? '重命名当前工作流' : 'Rename workflow'}</span>
                 </button>
                 <button
                   type='button'
@@ -293,7 +293,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
                   onClick={() => setConfirmingDelete(true)}
                 >
                   <Trash2 size={14} />
-                  <span className='text-xs font-bold'>{isChinese ? '删除当前工作流' : 'Delete workflow'}</span>
+                  <span className='min-w-0 flex-1 text-left text-xs font-bold'>{isChinese ? '删除当前工作流' : 'Delete workflow'}</span>
                 </button>
                 {confirmingDelete && (
                   <div
