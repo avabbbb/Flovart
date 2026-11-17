@@ -1,6 +1,6 @@
 import { BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, FileUp, Heart, LayoutTemplate, Plus, RefreshCw, Search, Shuffle, Sparkles, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from 'react';
 
 import '../../styles/skillHub.css';
 
@@ -31,6 +31,7 @@ import {
   type EditorDraft,
 } from './skillHubParts';
 import { nextHighlight, previewPlacement } from './pickerNavigation';
+import { isComposingEvent, isEditableElement, isPrintableKey, useMenuKeyboard } from '../../hooks/useListboxKeyboard';
 
 // Composer 的 Skill 浮层。结构按用户 2026-11-16 截图：标题 + 搜索 / 创建 ▾ / 更多 >，
 // 综合 / 喜欢 / 我的 三个页签，行 = 标题 + 一行说明，悬停抬起并出「详情」，
@@ -117,7 +118,6 @@ export function ProductionSkillDeck({
     setView({ type: 'list' });
     setQuery(searchQuery);
   }, [searchQuery]);
-  useEffect(() => { setHighlight(-1); }, [query, open, view.type, tab]);
   useEffect(() => { if (!open) { setView({ type: 'list' }); setMenu(null); setPreview(null); setSearchOpen(false); } }, [open]);
   useEffect(() => {
     if (!undo) return;
@@ -178,6 +178,16 @@ export function ProductionSkillDeck({
   const visibleHub = useMemo(() => (tab === 'all' ? hubOnly.filter(skill => skillMatches(skill, query)) : []), [tab, hubOnly, query]);
   // 键盘在能直接选用的行之间走（跳过停用与未安装的 Hub 行）。
   const navSkills = useMemo(() => visible.filter(skill => skill.enabled && skill.installed), [visible]);
+  // 每次筛选后高亮第一项（Enter 直接选中）；composer 里刚敲 `/` 还没筛选时保持在输入框（-1）。
+  const createMenuKeys = useMenuKeyboard({ open: menu !== null, onClose: () => setMenu(null) });
+  // 从按钮打开（非 composer 里的 `/`）时把焦点放进浮层，键盘立刻可用：打字即搜索。
+  useEffect(() => {
+    if (!open || searchQuery !== undefined) return;
+    const frame = requestAnimationFrame(() => { if (!pickerRef.current?.contains(document.activeElement)) pickerRef.current?.focus({ preventScroll: true }); });
+    return () => cancelAnimationFrame(frame);
+  }, [open, searchQuery]);
+  const firstNav = navSkills.length && (query || searchQuery === undefined) ? 0 : -1;
+  useEffect(() => { setHighlight(firstNav); }, [query, open, view.type, tab, firstNav]);
   const highlightedKey = highlight >= 0 ? navSkills[highlight]?.key : undefined;
   const rowId = (key: string) => `${listId}-${key.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 
@@ -361,6 +371,39 @@ export function ProductionSkillDeck({
       : tab === 'mine' ? copy.mineEmpty
         : registryStatus === 'unavailable' ? copy.desktopScan : copy.noLocal;
 
+  // 搜索框与浮层其他位置共用：↑/↓ 移动，Enter / Tab 选中，Esc 先清空搜索再关闭。
+  const listKey = (event: ReactKeyboardEvent): boolean => {
+    const key = event.key;
+    const done = () => { event.preventDefault(); event.stopPropagation(); return true; };
+    if (key === 'ArrowDown' || key === 'ArrowUp') {
+      const count = navSkills.length;
+      setHighlight(index => nextHighlight(index, count, key === 'ArrowDown' ? 1 : -1, { exitAbove: true }));
+      return done();
+    }
+    if ((key === 'Enter' || key === 'Tab') && navSkills[highlight]) { void attach(navSkills[highlight]); return done(); }
+    if (key === 'Escape') {
+      if (query && searchQuery === undefined) { setQuery(''); return done(); }
+      setOpen(false);
+      return done();
+    }
+    return false;
+  };
+
+  // 焦点在浮层其他位置（标签页、行按钮）时：可打印字符打开搜索并写进去，方向键 / Enter / Esc 照常。
+  const pickerKey = (event: ReactKeyboardEvent) => {
+    if (view.type !== 'list' || menu || event.defaultPrevented || isComposingEvent(event) || isEditableElement(event.target)) return;
+    if (searchQuery === undefined && isPrintableKey(event) && event.key !== ' ') {
+      setSearchOpen(true);
+      setQuery(value => value + event.key);
+      event.preventDefault();
+      return;
+    }
+    if (searchQuery === undefined && event.key === 'Backspace' && query) { setQuery(value => value.slice(0, -1)); event.preventDefault(); return; }
+    const onButton = (event.target as HTMLElement).tagName === 'BUTTON';
+    if (onButton && (event.key === 'Enter' || event.key === 'Tab')) return;
+    listKey(event);
+  };
+
   const listBody = (
     <>
       <div className="skill-hub__tabs" role="tablist" aria-label={copy.title}>
@@ -384,7 +427,7 @@ export function ProductionSkillDeck({
             placeholder={copy.search}
             value={query}
             onChange={event => setQuery(event.target.value)}
-            onKeyDown={event => { if (keyboardRef?.current?.(event.key)) event.preventDefault(); else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { const count = navSkills.length; setHighlight(index => nextHighlight(index, count, event.key === 'ArrowDown' ? 1 : -1, { exitAbove: true })); event.preventDefault(); } else if ((event.key === 'Enter' || event.key === 'Tab') && navSkills[highlight]) { event.preventDefault(); void attach(navSkills[highlight]); } else if (event.key === 'Escape') { event.preventDefault(); setOpen(false); } }}
+            onKeyDown={event => { if (isComposingEvent(event)) return; if (keyboardRef?.current?.(event.key)) event.preventDefault(); else listKey(event); }}
           />
           {query && <button type="button" className="skill-hub__search-clear" aria-label={copy.cancel} onClick={() => setQuery('')}><X size={12} aria-hidden="true" /></button>}
         </label>
@@ -476,6 +519,8 @@ export function ProductionSkillDeck({
               role="dialog"
               aria-label={language === 'en' ? 'Skill picker' : 'Skill'}
               style={{ maxHeight: availableHeight }}
+              tabIndex={-1}
+              onKeyDown={pickerKey}
             >
               <header className="skill-hub__header">
                 {view.type !== 'list' && (
@@ -492,7 +537,7 @@ export function ProductionSkillDeck({
                         <Plus size={14} aria-hidden="true" /><span>{copy.createMenu}</span><ChevronDown size={12} aria-hidden="true" />
                       </button>
                       {menu && (
-                        <div className="skill-hub__menu" role="menu" aria-label={copy.createMenu}>
+                        <div className="skill-hub__menu" role="menu" aria-label={copy.createMenu} {...createMenuKeys} key={menu}>
                           {menu === 'create' ? (
                             <>
                               <button type="button" role="menuitem" onClick={() => { setMenu(null); setView({ type: 'edit', id: null }); }}><Plus size={13} aria-hidden="true" /><span>{copy.createBlank}</span></button>

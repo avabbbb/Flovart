@@ -1627,6 +1627,20 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
   color: var(--isl-mint-deep);
 }
 
+/* 列表浮层键盘高亮（hooks/useListboxKeyboard）：与 hover 同一层；已选中项再叠 1px mint 内描边，区分「高亮」与「选中」。 */
+.isl-opt[data-listbox-active='true'] {
+  background: var(--isl-surface-2);
+}
+
+:root[data-theme='dark'] .isl-opt[data-listbox-active='true'] {
+  background: color-mix(in srgb, var(--isl-ink) 8%, transparent);
+}
+
+.isl-opt--active[data-listbox-active='true'] {
+  background: var(--isl-mint-bg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--isl-mint) 55%, transparent);
+}
+
 /* ── Chat bubble ── */
 .isl-bubble {
   border-radius: var(--isl-r-lg);

@@ -10,6 +10,7 @@ import { AuthModal } from '../auth/AuthModal';
 import type { ThemeMode } from '../../types';
 import '../../styles/studio.css';
 import { canvasSwitchOriginFromEvent, type CanvasSwitchOrigin } from './canvasSwitchTransition';
+import { useListboxKeyboard, useMenuKeyboard } from '../../hooks/useListboxKeyboard';
 
 export interface StudioMenuStatus {
   tone: 'ready' | 'warning';
@@ -102,6 +103,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
   // 主题下拉（浅色/深色/跟随系统）
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const themeMenuRef = useRef<HTMLDivElement>(null);
+  const themeMenuKeys = useMenuKeyboard({ open: themeMenuOpen, onClose: () => setThemeMenuOpen(false) });
   useEffect(() => {
     if (!themeMenuOpen) return;
     const onClick = (event: MouseEvent) => {
@@ -126,6 +128,19 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
   const filteredProjects = (projectList || [])
     .map((project, index) => ({ project, index }))
     .filter(({ project }) => !normalizedQuery || (project.title || '').toLowerCase().includes(normalizedQuery));
+  // 切换器：打开即可输入筛选，↑/↓ 高亮，Enter 切换，Esc 先清空再关闭。
+  const projectListbox = useListboxKeyboard({
+    items: filteredProjects,
+    open: projectMenuOpen && canManageProjects,
+    query: projectQuery,
+    onQueryChange: setProjectQuery,
+    onClose: closeProjectMenu,
+    initialIndex: filteredProjects.findIndex(({ index }) => index === projectIndex),
+    onSelect: ({ index }) => {
+      if (index !== projectIndex) projectActions!.setActiveByIndex(index, canvasSwitchOriginFromEvent({ currentTarget: projectMenuRef.current }));
+      closeProjectMenu();
+    },
+  });
   const upStatus = useUpdaterStore(s => s.status);
   const upVersion = useUpdaterStore(s => s.availableVersion);
   const upProgress = useUpdaterStore(s => s.downloadProgress);
@@ -219,6 +234,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
                 aria-label={isChinese ? '工作流菜单' : 'Workflow menu'}
                 className='isl-pop absolute left-0 top-full z-[90] mt-1.5 w-[260px] p-1.5'
                 onPointerDown={event => event.stopPropagation()}
+                onKeyDown={projectListbox.getContainerProps().onKeyDown}
               >
                 <button type='button' role='menuitem' className='isl-opt flex w-full items-center gap-2' onClick={() => { projectActions!.create(); closeProjectMenu(); }}>
                   <Plus size={14} />
@@ -227,30 +243,26 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
                 <label className='mx-1 my-1 flex items-center gap-1.5 rounded-md border px-2 py-1' style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-2)' }}>
                   <Search size={12} className='shrink-0 opacity-60' />
                   <input
-                    autoFocus
-                    value={projectQuery}
-                    onChange={event => setProjectQuery(event.target.value)}
-                    onKeyDown={event => {
-                      if (event.key === 'Enter' && filteredProjects[0]) {
-                        if (filteredProjects[0].index !== projectIndex) projectActions!.setActiveByIndex(filteredProjects[0].index, canvasSwitchOriginFromEvent({ currentTarget: projectMenuRef.current }));
-                        closeProjectMenu();
-                      }
-                    }}
-                    placeholder={isChinese ? '搜索工作流' : 'Search workflows'}
-                    aria-label={isChinese ? '搜索工作流' : 'Search workflows'}
-                    className='min-w-0 flex-1 bg-transparent text-xs outline-none'
-                    style={{ color: 'var(--isl-ink)' }}
+                    {...projectListbox.getInputProps({
+                      value: projectQuery,
+                      onChange: event => setProjectQuery(event.target.value),
+                      placeholder: isChinese ? '搜索工作流' : 'Search workflows',
+                      'aria-label': isChinese ? '搜索工作流' : 'Search workflows',
+                      className: 'min-w-0 flex-1 bg-transparent text-xs outline-none',
+                      style: { color: 'var(--isl-ink)' },
+                    })}
                   />
                 </label>
-                <div className='max-h-[280px] overflow-y-auto' role='group' aria-label={isChinese ? '全部工作流' : 'All workflows'}>
-                  {filteredProjects.map(({ project, index }) => {
+                <div {...projectListbox.getListboxProps({ className: 'max-h-[280px] overflow-y-auto', 'aria-label': isChinese ? '全部工作流' : 'All workflows' })}>
+                  {filteredProjects.map(({ project, index }, position) => {
                     const isActive = index === projectIndex;
                     return (
                       <button
                         key={project.id}
                         type='button'
-                        role='menuitemradio'
-                        aria-checked={isActive}
+                        tabIndex={-1}
+                        {...projectListbox.getOptionProps(position)}
+                        aria-selected={isActive}
                         className={'isl-opt flex w-full items-center gap-2' + (isActive ? ' isl-opt--active' : '')}
                         title={project.title}
                         onClick={event => { if (!isActive) projectActions!.setActiveByIndex(index, canvasSwitchOriginFromEvent(event)); closeProjectMenu(); }}
@@ -410,6 +422,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
               aria-label={isChinese ? '主题选择' : 'Theme selection'}
               className="isl-pop absolute right-0 top-full z-[90] mt-1.5 min-w-[140px] p-1.5"
               onPointerDown={event => event.stopPropagation()}
+              {...themeMenuKeys}
             >
               {([
                 { mode: 'light' as ThemeMode, icon: <Sun size={13} />, label: isChinese ? '浅色模式' : 'Light' },
@@ -419,7 +432,8 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
                 <button
                   key={item.mode}
                   type="button"
-                  role="menuitem"
+                  role="menuitemradio"
+                  aria-checked={themeMode === item.mode}
                   className={`isl-opt flex items-center gap-2 ${themeMode === item.mode ? 'isl-opt--active' : ''}`}
                   onClick={() => { actions.setThemeMode(item.mode); setThemeMenuOpen(false); }}
                 >

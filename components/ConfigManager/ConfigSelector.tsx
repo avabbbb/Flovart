@@ -10,6 +10,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { ModelItem, UserApiKey } from '../../types';
 import { DEFAULT_PROVIDER_MODELS, PROVIDER_LABELS } from '../../services/aiGateway';
 import { ResponsivePopover } from '../ResponsivePopover';
+import { handleMenuKeyDown, useListboxKeyboard } from '../../hooks/useListboxKeyboard';
 
 interface ConfigSelectorProps {
   configs: UserApiKey[];
@@ -92,6 +93,17 @@ export const ConfigSelector: React.FC<ConfigSelectorProps> = ({
   const serviceLabel = activeConfig?.name || (activeConfig ? PROVIDER_LABELS[activeConfig.provider] || activeConfig.provider : '选择服务');
   const modelLabel = activeModel?.name || activeModel?.id || '选择模型';
   const filteredModels = models.filter(model => `${model.name || ''} ${model.id}`.toLowerCase().includes(modelQuery.trim().toLowerCase()));
+  const modelListbox = useListboxKeyboard({
+    items: filteredModels,
+    open: openMenu === 'model' || openMenu === 'combined',
+    query: modelQuery,
+    onQueryChange: setModelQuery,
+    onClose: () => closeMenu(),
+    initialIndex: filteredModels.findIndex(model => model.id === activeModelId),
+    onSelect: model => { onModelChange(model.id); closeMenu(); },
+    // 「服务 + 模型」合并浮层先聚焦服务列表（ResponsivePopover 负责）。
+    autoFocus: openMenu === 'model',
+  });
 
   if (configs.length === 0) {
     return (
@@ -103,7 +115,7 @@ export const ConfigSelector: React.FC<ConfigSelectorProps> = ({
   }
 
   const renderConfigOptions = () => (
-    <div className="config-selector__options" role="menu" aria-label="AI 服务">
+    <div className="config-selector__options" role="menu" aria-label="AI 服务" onKeyDown={event => handleMenuKeyDown(event.currentTarget, event)}>
       {configs.map(config => {
         const label = config.name || PROVIDER_LABELS[config.provider] || config.provider;
         return (
@@ -125,22 +137,22 @@ export const ConfigSelector: React.FC<ConfigSelectorProps> = ({
   );
 
   const renderModelOptions = () => (
-    <div className="config-selector__model-list">
+    <div className="config-selector__model-list" onKeyDown={modelListbox.getContainerProps().onKeyDown}>
       {models.length > 5 && (
         <label className="config-selector__search">
           <span className="sr-only">搜索模型</span>
-          <input value={modelQuery} onChange={event => setModelQuery(event.target.value)} placeholder="搜索模型…" />
+          <input {...modelListbox.getInputProps({ value: modelQuery, onChange: event => setModelQuery(event.target.value), placeholder: '搜索模型…' })} />
         </label>
       )}
-      <div className="config-selector__options" role="menu" aria-label="可用模型">
-        {filteredModels.length ? filteredModels.map(model => {
+      <div {...modelListbox.getListboxProps({ className: 'config-selector__options', 'aria-label': '可用模型' })}>
+        {filteredModels.length ? filteredModels.map((model, index) => {
           const label = model.name || model.id;
           return (
             <button
               key={model.id}
               type="button"
-              role="menuitemradio"
-              aria-checked={model.id === activeModelId}
+              {...modelListbox.getOptionProps(index)}
+              aria-selected={model.id === activeModelId}
               className={`isl-opt ${model.id === activeModelId ? 'isl-opt--active' : ''}`}
               title={model.id}
               onClick={() => { onModelChange(model.id); closeMenu(); }}

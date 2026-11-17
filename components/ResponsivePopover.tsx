@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
+import { focusInitialMenuItem, handleMenuKeyDown } from '../hooks/useListboxKeyboard';
 
 export type ResponsivePopoverSide = 'up' | 'down';
 
@@ -34,6 +35,7 @@ export function ResponsivePopover({
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRequestRef = useRef(onRequestClose);
   const restoreFocusRef = useRef(true);
+  const typeaheadRef = useRef({ text: '', at: 0 });
   const [position, setPosition] = useState({ left: 12, top: 12, maxHeight: 320, side: 'up' as ResponsivePopoverSide, ready: false });
   closeRequestRef.current = onRequestClose;
 
@@ -120,6 +122,8 @@ export function ResponsivePopover({
   useEffect(() => {
     const panel = panelRef.current;
     if (!panel || !position.ready) return;
+    // 菜单：焦点给当前选中项（或第一项），↑/↓ 从那里开始。
+    if (role === 'menu' && focusInitialMenuItem(panel)) return;
     const firstControl = panel.querySelector<HTMLElement>(
       'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
     );
@@ -139,6 +143,9 @@ export function ResponsivePopover({
     };
     const closeFromEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape') return;
+      // 浮层里的搜索框有内容时，Esc 先由列表键盘（useListboxKeyboard）清空搜索，第二次 Esc 才关闭。
+      const target = event.target as HTMLElement | null;
+      if (target instanceof HTMLInputElement && target.getAttribute('role') === 'combobox' && target.value && panel.contains(target)) return;
       event.preventDefault();
       event.stopPropagation();
       restoreFocusRef.current = true;
@@ -199,6 +206,7 @@ export function ResponsivePopover({
         animate={{ opacity: position.ready ? 1 : 0, scale: position.ready ? 1 : 0.97 }}
         transition={{ type: 'spring', stiffness: 420, damping: 34, mass: 0.7 }}
         onPointerDown={event => event.stopPropagation()}
+        onKeyDown={role === 'menu' ? event => { if (panelRef.current) handleMenuKeyDown(panelRef.current, event, { typeahead: typeaheadRef.current }); } : undefined}
         onWheel={event => event.stopPropagation()}
       >
         {children}

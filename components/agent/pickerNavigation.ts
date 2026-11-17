@@ -1,17 +1,14 @@
 // Composer 里两个浮层（@ 引用、Skill）共用的键盘与筛选规则：焦点始终留在输入框，
 // 高亮用 aria-activedescendant 表达；↑/↓ 移动，Enter / Tab 选中，Esc 关闭，悬停同步高亮。
+// 通用的下标移动在 hooks/useListboxKeyboard.ts，其余列表浮层直接用那个 hook。
+import { moveListboxIndex } from '../../hooks/useListboxKeyboard';
 
 /**
  * 下一个高亮下标。-1 表示仍在输入框。
  * exitAbove：在第一项按 ↑ 回到输入框（-1）；否则夹住在 0。到末尾按 ↓ 停在最后一项（不回绕，避免误跳）。
  */
 export function nextHighlight(index: number, count: number, delta: 1 | -1, options: { exitAbove?: boolean; wrap?: boolean } = {}): number {
-  if (count <= 0) return -1;
-  if (index < 0) return delta > 0 ? 0 : (options.wrap ? count - 1 : -1);
-  const next = index + delta;
-  if (next < 0) return options.wrap ? count - 1 : options.exitAbove ? -1 : 0;
-  if (next >= count) return options.wrap ? 0 : count - 1;
-  return next;
+  return moveListboxIndex(Math.min(index, count - 1), count, delta, options);
 }
 
 /** 列表变短后把高亮夹回范围内。 */

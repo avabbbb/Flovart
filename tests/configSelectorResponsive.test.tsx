@@ -67,10 +67,10 @@ describe('ConfigSelector responsive contract', () => {
     expect(onConfigChange).toHaveBeenCalledWith('google');
 
     fireEvent.click(screen.getByTitle('GPT Image 2'));
-    expect(screen.getByRole('menu', { name: '可用模型' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'GPT Image 2' }));
+    expect(screen.getByRole('listbox', { name: '可用模型' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('option', { name: 'GPT Image 2' }));
     expect(onModelChange).toHaveBeenCalledWith('gpt-image-2');
-    await waitFor(() => expect(screen.queryByRole('menu', { name: '可用模型' })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('listbox', { name: '可用模型' })).not.toBeInTheDocument());
   });
 
   it('supports long model names, search and Escape focus recovery', () => {
@@ -80,11 +80,11 @@ describe('ConfigSelector responsive contract', () => {
 
     const search = screen.getByPlaceholderText('搜索模型…');
     fireEvent.change(search, { target: { value: 'deliberately long' } });
-    expect(screen.getByRole('menuitemradio', { name: /deliberately long display name/ })).toHaveAttribute(
+    expect(screen.getByRole('option', { name: /deliberately long display name/ })).toHaveAttribute(
       'title',
       'video-model-with-a-deliberately-long-identifier',
     );
-    expect(screen.queryByRole('menuitemradio', { name: 'Model 3' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Model 3' })).not.toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByTestId('config-selector-popover')).not.toBeInTheDocument();

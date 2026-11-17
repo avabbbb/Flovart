@@ -1,5 +1,6 @@
 import { Box, Brain, Check, KeyRound, Loader2, Plus, Search } from 'lucide-react';
 import { useMemo, useState, useSyncExternalStore } from 'react';
+import { useListboxKeyboard } from '../../hooks/useListboxKeyboard';
 import type { AICapability, ModelItem, RouteMappingBinding, UserApiKey } from '../../types';
 import { isAgentTextKey, isAgentTextMapping, resolveAgentTextRoutes } from '../../services/agentTextRoutes';
 import { fetchModelsForProvider } from '../../services/modelFetcher';
@@ -86,6 +87,7 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
       .map(key => ({ key, models: keyModels(key).filter(model => !normalized || model.id.toLowerCase().includes(normalized) || (model.name || '').toLowerCase().includes(normalized)) }))
       .filter(group => group.models.length > 0);
   }, [keys, query]);
+  const flat = useMemo(() => groups.flatMap(group => group.models.map(model => ({ keyId: group.key.id, model }))), [groups]);
   const showForm = adding || keys.length === 0;
   const label = ui(language, '选择模型', 'Choose model');
 
@@ -98,6 +100,18 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
     }
     onOpenChange(false);
   };
+
+  const listbox = useListboxKeyboard({
+    items: flat,
+    open: open && keys.length > 0,
+    query,
+    onQueryChange: setQuery,
+    onClose: () => onOpenChange(false),
+    onSelect: item => select(item.keyId, item.model.id),
+    initialIndex: flat.findIndex(item => item.keyId === currentKeyId && item.model.id === current?.model),
+    // 「添加 Key」表单展开时让表单先拿焦点。
+    autoFocus: !showForm,
+  });
 
   const importModels = async () => {
     const url = baseUrl.trim();
@@ -150,7 +164,7 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
         <Box size={14} /><span>{current ? current.model : label}</span>
       </button>
       {open && (
-        <div className="agent-mode-menu agent-model-menu agent-model-picker" role="dialog" aria-label={label}>
+        <div {...listbox.getContainerProps({ className: 'agent-mode-menu agent-model-menu agent-model-picker', role: 'dialog', 'aria-label': label })}>
           <div className="agent-model-picker__head">
             <strong>{label}</strong>
             {keys.length > 0 && <button type="button" aria-label={ui(language, '添加 Key', 'Add key')} aria-pressed={adding} onClick={() => { setAdding(value => !value); setError(null); }}><Plus size={14} /></button>}
@@ -166,17 +180,18 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
               {error && <p className="agent-model-picker__error" role="alert">{error}</p>}
             </form>
           )}
-          {keys.length > 0 && <label className="agent-model-picker__search"><Search size={13} /><input aria-label={ui(language, '搜索模型', 'Search models')} placeholder={ui(language, '搜索模型', 'Search models')} value={query} onChange={event => setQuery(event.target.value)} /></label>}
+          {keys.length > 0 && <label className="agent-model-picker__search"><Search size={13} /><input {...listbox.getInputProps({ 'aria-label': ui(language, '搜索模型', 'Search models'), placeholder: ui(language, '搜索模型', 'Search models'), value: query, onChange: event => setQuery(event.target.value) })} /></label>}
           {keys.length > 0 && (
-            <div className="agent-model-menu__list" role="listbox" aria-label={label}>
+            <div {...listbox.getListboxProps({ className: 'agent-model-menu__list', 'aria-label': label })}>
               {groups.length === 0 && <p className="agent-model-menu__empty">{ui(language, '没有匹配的模型', 'No matching models')}</p>}
               {groups.map(group => (
                 <section key={group.key.id} className="agent-model-picker__group">
                   <small>{keyLabel(group.key)}</small>
                   {group.models.map(model => {
                     const selected = group.key.id === currentKeyId && model.id === current?.model;
+                    const index = flat.findIndex(item => item.keyId === group.key.id && item.model === model);
                     return (
-                      <button key={model.id} type="button" role="option" aria-selected={selected} onClick={() => select(group.key.id, model.id)}>
+                      <button key={model.id} type="button" tabIndex={-1} {...listbox.getOptionProps(index)} aria-selected={selected} onClick={() => select(group.key.id, model.id)}>
                         <span><strong>{model.name || model.id}</strong>{model.name && model.name !== model.id && <small>{model.id}</small>}</span>
                         {selected && <Check size={14} />}
                       </button>
