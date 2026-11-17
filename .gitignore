@@ -112,3 +112,6 @@ eval/references/*.html
 
 # Judge runs (results.jsonl / summary.json / report.md) are generated evidence.
 eval/judge/results/
+
+# AIGC eval store (sqlite / JSONL), generated fixtures and the HTML dashboard.
+eval/aigc/results/
