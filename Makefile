@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs shell clean rebuild status stats web backend db
+.PHONY: help build up down restart logs shell clean rebuild status stats web
 
 COMPOSE ?= docker compose
 
@@ -9,10 +9,8 @@ help:
 	@echo ""
 	@echo "可用命令:"
 	@echo "  make build       - 构建 Docker 镜像"
-	@echo "  make up          - 启动全部容器（后台运行）"
-	@echo "  make web         - 启动 Web 及依赖服务"
-	@echo "  make backend     - 启动 Hub + 数据库"
-	@echo "  make db          - 只启动 PostgreSQL"
+	@echo "  make up          - 启动 Web 容器（后台运行）"
+	@echo "  make web         - 启动 Web 容器"
 	@echo "  make down        - 停止并删除容器"
 	@echo "  make restart     - 重启容器"
 	@echo "  make logs        - 查看实时日志"
@@ -28,22 +26,14 @@ build:
 	$(COMPOSE) build
 
 up:
-	@echo "正在启动全部容器..."
+	@echo "正在启动容器..."
 	$(COMPOSE) up -d --build
 	@echo "容器已启动：Web http://localhost:1635"
 
 web:
-	@echo "正在启动 Web 及依赖服务..."
+	@echo "正在启动 Web..."
 	$(COMPOSE) up -d --build web
 	@echo "Web: http://localhost:1635"
-
-backend:
-	@echo "正在启动后端与数据库..."
-	$(COMPOSE) up -d --build db hub
-
-db:
-	@echo "正在启动 PostgreSQL..."
-	$(COMPOSE) up -d db
 
 down:
 	@echo "正在停止容器..."

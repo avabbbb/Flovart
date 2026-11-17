@@ -8,9 +8,9 @@
 
 ## 2. 网站后端
 
-- Go + Gin + GORM，沿用 handler / service / repository / model 分工（`backend/`）。
-- 只处理网站与社区业务；不为本机生成增加云端服务。
-- 新增数据表同步 [数据库结构](../content/docs/backend/backend-database.mdx)；响应格式见 [后端响应](../content/docs/backend/api-response.mdx)。不用未来字段冒充已建表。
+- 网页版全静态：原 Go Hub（`backend/`，账号 / 提示词包 / R2 上传）已删除，回滚点 git tag `go-backend-final`。
+- 线上只有无状态 Cloudflare Worker（`worker/index.ts`），仅 `/api/llm-proxy/*`；确需服务端的新能力用 TS 在 Worker 内无状态实现，不为本机生成增加云端服务。
+- 存储形态见 [数据存储](../content/docs/backend/backend-database.mdx)。不用未来字段冒充已建表。
 
 ## 3. 社区
 

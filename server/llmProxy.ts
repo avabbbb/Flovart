@@ -1,5 +1,5 @@
 /**
- * Same-origin LLM proxy core (shared by the Cloudflare Pages Function and the
+ * Same-origin LLM proxy core (shared by the Cloudflare Worker entry worker/index.ts and the
  * Vite dev middleware).
  *
  * Why: some OpenAI-compatible gateways (OpenCode Go / Zen at opencode.ai) do

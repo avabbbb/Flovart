@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PromptPack } from '../services/promptApi';
+import type { PromptPack } from '../services/promptPack';
 import {
   createPromptAsset,
   promptAssetFromPromptItem,

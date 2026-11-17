@@ -42,7 +42,7 @@
     "build:agent-toolkit": "node tools/flovart/scripts/build-agent-toolkit.mjs",
     "version:check": "node scripts/check-release-version.mjs",
     "publish:cli": "cd tools/flovart && npm publish",
-    "deploy:cf": "vite build && npx wrangler pages deploy dist",
+    "deploy:cf": "vite build && npx wrangler deploy",
     "eval:validate": "node eval/run.mjs validate",
     "eval:oracle": "node eval/run.mjs oracle",
     "eval:core": "node eval/run.mjs run --group core",

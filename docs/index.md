@@ -19,7 +19,7 @@
 | [15 Web, Community & Extension](design/15-web-community-extension.md) | 网站后端、社区、浏览器导入、发行 |
 | [20 质量与治理](design/20-quality-and-governance.md) | 证据分级、评测、文档结构与规则 |
 
-实现附录（在代码目录内）：[Resolve 21.1 Product & UI Spec](../integrations/studio/resolve/PRODUCT_UI_SPEC.md)、[Studio host packages](../integrations/studio/README.md) 与各宿主 `*_REAL_HOST_CHECKLIST.md`、[Workflow CLI](../skills/flovart/commands/workflow.md)、[后端响应](content/docs/backend/api-response.mdx) / [数据库结构](content/docs/backend/backend-database.mdx)。
+实现附录（在代码目录内）：[Resolve 21.1 Product & UI Spec](../integrations/studio/resolve/PRODUCT_UI_SPEC.md)、[Studio host packages](../integrations/studio/README.md) 与各宿主 `*_REAL_HOST_CHECKLIST.md`、[Workflow CLI](../skills/flovart/commands/workflow.md)、[数据存储](content/docs/backend/backend-database.mdx)。
 
 ## 2. 提案（PROPOSAL / 进行中的计划，不是 current truth）
 

@@ -73,7 +73,7 @@ docker compose up --build -d
 
 Visit http://localhost:1635.
 
-The current Compose stack is for local Web, Hub, and PostgreSQL integration only and is unrelated to the official WebUI's Cloudflare Worker deployment. Static production assets, security settings, and deployment have not completed release acceptance and must not be presented as production-ready.
+The current Compose stack only runs the Web (Vite) dev server and is unrelated to the official WebUI's Cloudflare Worker deployment. Static production assets, security settings, and deployment have not completed release acceptance and must not be presented as production-ready.
 
 ## Option 5: Browser Extension
 
