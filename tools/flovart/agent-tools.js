@@ -339,7 +339,7 @@ const DEFINITIONS = [
     command: 'workflow.node.tool',
     name: 'flovart_workflow_node_tool',
     surfaces: ALL,
-    description: '在节点上执行画布后处理工具（与节点工具条同一实现：裁剪、放大、去背景、编辑、剪辑、截帧、音频分离/变速/变调、反推提示词、滤镜、扩图、蒙版等），结果写成新节点并自动连线，返回 outputNodeIds。调用 AI 服务的工具会请用户确认。',
+    description: '在节点上执行画布后处理工具（与节点工具条同一实现：裁剪、放大、去背景、编辑、剪辑、截帧、音频分离/变速/变调、反推提示词、滤镜、扩图、蒙版等），结果直接写成 image / video / audio 结果节点并从源节点直接连线（没有 operation 中间节点），返回 resultNodeId（带生成记录的主结果，可用 flovart_workflow_node_run 原位重跑、多次结果在节点上切换版本）与 outputNodeIds（全部新结果，含宫格切分等多输出）。调用 AI 服务的工具会请用户确认。',
     fields: {
       nodeId: { type: 'string', description: '源节点 id（video-merge 可用 sourceNodeIds）' },
       tool: { type: 'string', description: '工具 id，例如 crop / upscale / remove-background / video-trim / video-extract-frame / audio-stem-split / reverse-prompt' },

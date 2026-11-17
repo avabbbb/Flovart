@@ -81,9 +81,9 @@ A group is a frame node (`type: "subgraph"`, `metadata.groupKind: "group"`) whos
 - `metadata.config.modelId` — required for image and video runs; a product model ID from `workflow.models.list`. A run without it fails with “请先在 PromptBar 明确选择…产品模型”.
 - Optional `metadata.config` fields: `aspectRatio`, `resolution`, `quality`, `count` (1–4), `durationSec` (video), `generateAudio` (video).
 
-When an `image` node runs it is converted in place into an `image.generate` Operation with the same node ID; read results from `workflow.inspect` afterwards.
+When an `image` node runs it stays an `image` node with the same ID; its generation record (capability, recipe, model, takes, selected take) is stored on the node as `metadata.operation`. There are no intermediate `operation` nodes: inputs connect directly to result nodes. `workflow.node.tool` writes its result as a new result node connected from the source and returns `resultNodeId` + `outputNodeIds`; running `workflow.node.run` on a result node re-runs that step in place and adds a take. Read results from `workflow.inspect` afterwards.
 
-Text nodes are not used as generation inputs. A connected `text` node is never merged into the prompt of a downstream image or video node, and text connections into an image node are dropped when it is converted to an Operation. Put the prompt on the generating node itself (`metadata.prompt`). Only media nodes (images, plus video/audio for video models) connected upstream become references.
+Text nodes are not used as generation inputs. A connected `text` node is never merged into the prompt of a downstream image or video node, and text connections into an image node are dropped when it runs. Put the prompt on the generating node itself (`metadata.prompt`). Only media nodes (images, plus video/audio for video models) connected upstream become references.
 
 ## Running nodes
 

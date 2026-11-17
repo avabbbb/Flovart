@@ -634,11 +634,13 @@ export function WorkflowNode({
           : <div className="workflow-node__empty"><Music2 size={26} /><span>{mediaError || (language === 'en' ? 'Audio node' : '音频节点')}</span>{regrantAction}{mediaActions}</div>)}
         {node.type === 'text' && <TextNodeBody value={node.metadata.content || ''} onChange={onChangeText} language={language} />}
         {node.type === 'script' && <ScriptNodeCard node={node} />}
+        {/* 旧版 operation 节点只在撤销历史 / 外部导入残留时出现，下次加载迁移为直连结果节点。 */}
         {node.type === 'operation' && <OperationNodeCard node={node} onRun={onRun} onStop={onStop} onSelectTake={onSelectTake} language={language} layerPreview={layerPreview} />}
         {node.type === 'design' && <DesignNodeSurface node={node} language={language} />}
         {node.type === 'subgraph' && <SubgraphFrameSurface node={node} childCount={subgraphChildCount ?? 0} onToggleCollapse={onToggleCollapse} language={language} />}
           </>}
         {mediaDetails && <span className="workflow-node__media-details">{mediaDetails}</span>}
+        {node.type !== 'operation' && node.metadata.operation && <div className="workflow-node__versions"><OperationVersionStrip node={node} onSelectTake={onSelectTake} language={language === 'en' ? 'en' : 'zho'} /></div>}
         <AnimatePresence initial={false}>
           {(status === 'loading' || (bootDoneHold && status === 'success')) && <WorkflowGenerationLoader key="generation-active" node={node} mode={status === 'loading' ? 'running' : 'done'} language={language} />}
           {status === 'error' && node.metadata.error && <WorkflowGenerationLoader key="generation-error" node={node} mode="error" language={language} onRetry={onRun} />}

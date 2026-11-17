@@ -102,7 +102,7 @@ export interface StoryboardTimelineClip { nodeId: string; index: number; title: 
 export interface StoryboardFinalCut {
   /** 视频镜头的拼接计划（video.merge@1 的 sourceNodeIds 即 plan.sourceNodeIds）。 */
   plan: ReturnType<typeof planAssembly>;
-  /** 画布上已有的成片（video.merge@1 Operation 节点），新的在前。 */
+  /** 画布上已有的成片（带 video.merge@1 生成记录的结果节点），新的在前。 */
   mergedNodeIds: string[];
 }
 export interface StoryboardView {

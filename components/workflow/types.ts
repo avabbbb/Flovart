@@ -1,6 +1,7 @@
 import type { ImageFilters, ProductModelMode } from '../../types';
 import type { DesignElement } from '../../services/design/designTypes';
 
+/** `operation` 只为兼容旧数据保留（v6 起加载时迁移为直连结果节点），新代码不再创建。 */
 export type BuiltinWorkflowNodeType = 'image' | 'text' | 'video' | 'audio' | 'config' | 'script' | 'operation' | 'design' | 'subgraph';
 /** 外部 Node Plugin 可以使用稳定的自定义 type；内置交互仍只对 Builtin 类型做专门处理。 */
 export type WorkflowNodeType = BuiltinWorkflowNodeType | (string & {});
@@ -377,7 +378,10 @@ export interface WorkflowNodeMetadata {
   /** 节点当前展示的那份媒体的稳定 ID（被换下时作为备选 ID 保留）；缺省即节点 ID。 */
   mediaVariantId?: string;
   /** 显式 Workflow Operation 的唯一可编辑配方与不可变执行记录。 */
+  /** 生成记录：能力、配方、takes 与选中。挂在结果节点（image / video / audio）上；旧版 operation 节点在 v6 迁移时挪过来。 */
   operation?: WorkflowOperationRecord;
+  /** v6 迁移时保存的原 operation 节点与连线，供 revertWorkflowDirectOutputMigration 还原。 */
+  legacyOperationNode?: import('./directOutputMigration').WorkflowLegacyOperationSnapshot;
   /** 媒体结果反向定位其来源 Operation 与 Take。 */
   sourceOperationNodeId?: string;
   operationTakeId?: string;

@@ -386,7 +386,8 @@ Canvas Assistant drawer ──交给──▶ Iris：轻量问答就地完成；
 
 - **就地优先**：能在节点上完成的编辑（标题、参数、裁剪框、蒙版笔刷）在节点上完成，不开 antd `Modal`。模态只用于跨对象或破坏性确认。
 - **一个节点一个主动作**：运行 / 停止 / 重试在同一位置切换。
-- **版本在节点上**：同一节点的多次结果（take）以版本条显示在节点底部，晚到结果标“有新版本”，不自动切换（已实现于 Operation 节点 `OperationVersionStrip`）。
+- **版本在节点上**：同一节点的多次结果（take）以版本条显示在节点底部，晚到结果标“有新版本”，不自动切换（已实现：`OperationVersionStrip` 挂在带生成记录的 image / video / audio 结果节点左上角）。
+- **输入直连结果**（2026-11-18）：不再有 operation 中间节点。生成与后处理（局部变换、剪辑、分离、放大等）直接建结果节点并从输入连线；能力、参数、模型、takes 与选中记在结果节点 `metadata.operation` 上，在结果节点上即可改参数重跑、停止、切换版本（同 LibTV“节点即结果”）。多输出能力（宫格切分、拆图层、音视频 / 人声分离）的其余结果是兄弟节点，同样从输入直连。旧画布在加载时迁移（持久化 v6，`components/workflow/directOutputMigration.ts`）。
 - **多结果挂在首图节点上**（已实现，2026-11-16）：一次生成多张图片 / 多条视频时，首图就是原节点（普通节点：PromptBar、工具条、连线、prompt / 模型 / Take 都在它身上，单击选中它本身，不是“打组”）；其余结果是它的备选（`metadata.alternates`），不是画布节点，图片与视频可混合。
   - 结果总数 ≤4（首图 + ≤3 个备选，阈值 `ALTERNATE_STACK_MAX_TOTAL`）：沿用原来的斜叠卡片——备选是首图节点**后面**的视觉卡片（节点 DOM 的子元素，不是画布节点、不是分组），左右斜出，悬停散开（`ImageFan` 同一套姿态和弹簧）；右上角“N 张”展开：以首图为左上角铺成 2 列网格，每格从叠放位置弹出，带 下载 / 设为首图，点格子进画廊，首图标“首图”，同一按钮变“收起”反向飞回。图片与视频一样（视频用封面）。拖首图或任一卡片 / 格子 = 拖这一个节点，整摞跟着走。
   - 总数 >4：节点下方停靠网格（宽度 = 节点宽度，最多露 2 行半，内部滚动，不铺到画布上），复选框多选；表头批量 对比预览 / 导出 / 拆成独立节点 / 删除，可收起。
@@ -596,7 +597,7 @@ Canvas Assistant drawer ──交给──▶ Iris：轻量问答就地完成；
 
 ### 19.3 素材管理：库、版本 v1→vN、对比、锁定、归档、拖到画布
 
-现状（已实现）：`components/studio/AssetLibraryBrowser.tsx`（文件夹 + 网格、标签筛选、`motion` 布局动画、批量管理 `BatchManageModal`、可拖拽）、`FolderTree.tsx`、`StudioMediaBrowser.tsx`；Operation 节点有 take 版本条（`OperationVersionStrip`，晚到显示“有新版本”）；批次有“设为主图”。“Agent 资产库尚未接入”为占位文案。
+现状（已实现）：`components/studio/AssetLibraryBrowser.tsx`（文件夹 + 网格、标签筛选、`motion` 布局动画、批量管理 `BatchManageModal`、可拖拽）、`FolderTree.tsx`、`StudioMediaBrowser.tsx`；结果节点有 take 版本条（`OperationVersionStrip`，晚到显示“有新版本”）；批次有“设为主图”。“Agent 资产库尚未接入”为占位文案。
 
 设计：
 
@@ -675,7 +676,7 @@ Canvas Assistant drawer ──交给──▶ Iris：轻量问答就地完成；
 | # | 过时交互（现状） | 位置 | 现代化交互 |
 | --- | --- | --- | --- |
 | N1 | 图片工具（裁剪、滤镜、扩图、蒙版、拆分、旋转、宫格、标注、重打光、风格化、矢量化、移动、分镜、图层…）全部走 antd `Modal` 对话框，遮住画布与上下文 | `WorkflowImageToolDialogs.tsx`（601 行）、`WorkflowVideoToolDialogs.tsx`、`WorkflowAudioToolDialogs.tsx` | **就地编辑**：参数在节点旁的锚定 popover（玻璃 thick），几何类（裁剪 / 扩图 / 蒙版 / 移动）直接在节点画面上操作，Enter 应用、Esc 取消；只有破坏性“替换原图”才确认 |
-| N2 | 4 个工具（反推提示词、滤镜、扩图、蒙版）尚未迁入 Operation Registry，标签硬编码中文 | `nodeToolCatalog.ts` | 迁入 registry 后统一产出 Operation 节点与 take 版本；标签来自 registry |
+| N2 | 4 个工具（反推提示词、滤镜、扩图、蒙版）尚未迁入 Operation Registry，标签硬编码中文 | `nodeToolCatalog.ts` | 迁入 registry 后统一产出带生成记录的结果节点与 take 版本；标签来自 registry |
 | N3 | 失败只显示一个 18px 红色“!”徽标，原因藏在 `title` 悬停提示里；另有一段覆盖在媒体上的错误条 | `WorkflowNode.tsx` `workflow-node__error-badge` / `generation-error` | 节点底部状态条：图标 + 一行原因 + “重试 / 改参数”；原因可聚焦、可读屏；颜色用 `--isl-coral` |
 | N4 | Operation 节点状态文案在组件里写死中文（“旧配方结果 / 已停止 / 执行失败 / 已完成 / 执行中 / 待执行”），`Operation 配方缺失` 未翻译 | `OperationNodeCard` | 来自 i18n；状态用 §14.3 图标 + 文本 |
 | N5 | 版本条是一排 `v1 v2` 文本按钮，不能预览、不能对比 | `OperationVersionStrip` | 悬停版本即在节点画面上临时预览（松开恢复），长按 / 右键“与当前对比”打开 §19.3 对比 |

@@ -15,6 +15,7 @@ Canvas 是空间化的 Workflow 创作面：节点、素材、连线、生成与
 | 画布与节点 UI | `components/workflow/`（`InfiniteWorkflow`、`WorkflowNode`、`WorkflowToolbar`、`WorkflowNodePromptBar`…） |
 | 状态与存储 | `components/workflow/store.ts`、`storage.ts`、`migrations.ts`（localforage） |
 | 结构化修改 | `operations.ts`、`operationRegistry.ts`、`agentOps.ts` |
+| 输入直连结果 | 无 operation 中间节点：生成记录（能力 / 配方 / takes / 选中）挂在结果节点 `metadata.operation`；`workflowOperationExecution.ts` 直接建结果节点；旧数据 v6 迁移与还原见 `directOutputMigration.ts` |
 | 输入整理 | `inputResolver.ts`、`references.ts` |
 | 节点插件 | `nodePluginSdk.tsx`（受信任的进程内代码，故障隔离 ≠ 安全沙箱） |
 | 本地文件夹素材 | `LocalFolderBrowser.tsx`、`services/localFolderSource.ts` |

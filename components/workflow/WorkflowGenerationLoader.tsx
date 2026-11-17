@@ -47,7 +47,8 @@ function formatBytes(bytes: number): string {
 
 function generatingLabel(node: WorkflowNodeData, language: Language): string {
   const mode = node.metadata.config?.mode || node.type;
-  if (node.type === 'operation') return language === 'en' ? node.title : `${node.title}中`;
+  // 本地处理 / 非生成类的结果节点：显示能力名（裁剪中、视频剪辑中…）。
+  if (node.type === 'operation' || (node.metadata.operation && node.metadata.operation.capabilityId !== 'image.generate@1')) return language === 'en' ? node.title : `${node.title}中`;
   if (language === 'en') return mode === 'video' ? 'Generating video' : mode === 'text' ? 'Generating text' : 'Generating image';
   return mode === 'video' ? '视频生成中' : mode === 'text' ? '文本生成中' : '图片生成中';
 }

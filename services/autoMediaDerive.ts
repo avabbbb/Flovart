@@ -1,6 +1,6 @@
 // 自动派生：视频节点「新进入成功状态」时（上传、生成完成、素材库插入），
 // 按用户开启的选项规划截帧 / 音视频分离任务。只做规划，执行复用现有 Operation。
-// 防环：Operation 产出的节点（sourceOperationNodeId）不再触发；项目首次加载不触发。
+// 防环：处理产出的结果节点（带生成记录 metadata.operation 或 sourceOperationNodeId）不再触发；项目首次加载不触发。
 
 import type { WorkflowNode } from '../components/workflow/types';
 
@@ -23,7 +23,8 @@ export function isAutoDeriveSourceVideo(node: WorkflowNode): boolean {
   return node.type === 'video'
     && node.metadata.status === 'success'
     && Boolean(node.metadata.storageKey || node.metadata.href)
-    && !node.metadata.sourceOperationNodeId;
+    && !node.metadata.sourceOperationNodeId
+    && !node.metadata.operation;
 }
 
 export function hasAutoMediaDerive(settings: AutoMediaDeriveSettings): boolean {

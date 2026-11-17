@@ -419,6 +419,11 @@ function WorkflowBatchHistory({ head, group, onClose, onSetPrimary }: {
   );
 }
 
+/** Prompt Bar 的目标：图片 / 视频节点，以及带生成记录的结果节点（含音频处理结果，可改参数重跑）。 */
+function workflowPromptBarTarget(node: WorkflowNodeData): boolean {
+  return node.type === 'image' || node.type === 'video' || node.type === 'operation' || Boolean(node.metadata.operation);
+}
+
 export function InfiniteWorkflow({
   project,
   updateProject,
@@ -3140,7 +3145,7 @@ export function InfiniteWorkflow({
   const { pendingInsert: wfPendingInsert, consumeInsert: wfConsumeInsert } = usePromptHistoryStore();
   useEffect(() => {
     if (!wfPendingInsert) return;
-    const target = selectedNodeData.length === 1 && ['image', 'video', 'operation'].includes(selectedNodeData[0].type) ? selectedNodeData[0] : null;
+    const target = selectedNodeData.length === 1 && workflowPromptBarTarget(selectedNodeData[0]) ? selectedNodeData[0] : null;
     if (target) {
       applyOps([{ type: 'update_node', id: target.id, metadata: { prompt: wfPendingInsert.text, richTextDocument: undefined } }]);
       setPromptFocusSignal(value => value + 1);
@@ -3690,7 +3695,7 @@ export function InfiniteWorkflow({
             }}
           />
         </div>
-        {selectedNodeData.length === 1 && ['image', 'video', 'operation'].includes(selectedNodeData[0].type) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: promptExpanded ? 90 : 69, left: promptLeft, ...(promptAbove ? { bottom: promptBottom } : { top: promptTop }) }}>
+        {selectedNodeData.length === 1 && workflowPromptBarTarget(selectedNodeData[0]) && <div data-workflow-overlay style={{ position: 'absolute', zIndex: promptExpanded ? 90 : 69, left: promptLeft, ...(promptAbove ? { bottom: promptBottom } : { top: promptTop }) }}>
       <WorkflowNodePromptBar width={promptWidth} expanded={promptExpanded} onToggleExpanded={() => { const id = selectedNodeData[0].id; setExpandedPromptNodeId(current => (current === id ? null : id)); }} node={selectedNodeData[0]} nodes={project.nodes} connections={project.connections} t={t} theme={theme} language={language} userApiKeys={userApiKeys} dynamicModelOptions={dynamicModelOptions} onOpenSettings={onOpenSettings} onEnhancePrompt={onEnhancePrompt} isEnhancingPrompt={isEnhancingPrompt} onChange={metadata => applyOps([{ type: 'update_node', id: selectedNodeData[0].id, metadata }])} onPromptIntent={intent => { promptIntentRef.current = intent; }} onRun={() => { const intent = promptIntentRef.current?.targetNodeId === selectedNodeData[0].id ? promptIntentRef.current : undefined; promptIntentRef.current = null; onRunNode(selectedNodeData[0].id, intent || undefined); }} onStop={onStopNode ? () => onStopNode(selectedNodeData[0].id) : undefined} focusSignal={promptFocusSignal} onDisconnectReference={fromNodeId => { const targetId = selectedNodeData[0].id; const conn = project.connections.find(c => c.toNodeId === targetId && c.fromNodeId === fromNodeId); if (!conn) return; applyOps([{ type: 'delete_connections', ids: [conn.id] }]); }} onReorderReference={nextIds => handleReorderReferences(selectedNodeData[0].id, nextIds)} assetFolders={assetFolders} assetItems={assetSuggestions} assetLibrary={assetLibrary} onSelectWorkflowReference={selectedNodeData[0] ? (nodeId => handleSelectWorkflowReference(nodeId, selectedNodeData[0].id)) : undefined} onAddReferenceFiles={selectedNodeData[0] ? (files => handleAddReferenceFiles(files, selectedNodeData[0].id)) : undefined} onSelectAsset={selectedNodeData[0] ? (assetId => handleSelectAsset(assetId, selectedNodeData[0].id)) : undefined} onResolvePastedMentions={mentions => handleResolvePastedMentions(mentions, selectedNodeData[0].id)} onPasteUnresolvedMentions={labels => setNotice('未能唯一匹配引用：' + labels.map(label => '@' + label).join('、') + '，已保留为普通文字。')} onSlashShortcut={(shortcut, remaining) => handleSlashCommand(shortcut, selectedNodeData[0].id, remaining)} />
         </div>}
       </>}
