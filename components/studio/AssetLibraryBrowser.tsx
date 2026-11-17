@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ChevronRight, Download, Folder, FolderInput, LayoutGrid, MoreHorizontal, Pencil, Plus, SlidersHorizontal, Sparkles, Tag, Trash2, X } from 'lucide-react';
 import type { DragEvent as ReactDragEvent } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchGridKeyboard } from '../../hooks/useListboxKeyboard';
 import { useWorkflowMediaUrl } from '../workflow/media';
 import { saveMediaUrl } from '../../services/desktopNetwork';
 import { DeleteFolderDialog, type DeleteFolderMode } from './DeleteFolderDialog';
@@ -103,7 +104,8 @@ function AssetCard({ item, isChinese, onInsert, onRename, onRemove, onTagsUpdate
         {onInsert && (
           <button
             type="button"
-            className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-lg border-[1.5px] opacity-0 transition group-hover:opacity-100"
+            data-grid-item
+            className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-lg border-[1.5px] opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100"
             style={{ background: 'var(--isl-card)', borderColor: 'var(--isl-border)' }}
             aria-label={`${isChinese ? '添加' : 'Add'} ${item.name || ''}`}
             title={isChinese ? '添加到当前 Workflow' : 'Add to Workflow'}
@@ -297,6 +299,8 @@ export function AssetLibraryBrowser({
   const isChinese = language === 'zho';
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  // 焦点在素材上时打字即搜索，↓ 从搜索框进入列表 / 网格，方向键移动，Esc 先清空搜索。
+  const gridKeys = useSearchGridKeyboard({ query, onQueryChange: setQuery, itemSelector: '[data-grid-item]' });
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
   const [batchOpen, setBatchOpen] = useState(false);
   const [folderDelete, setFolderDelete] = useState<AssetFolder | null>(null);
@@ -413,14 +417,14 @@ export function AssetLibraryBrowser({
   };
 
   if (compact) return (
-    <div className="relative flex h-full min-h-0 flex-col" data-testid="asset-library-browser" data-compact="true">
+    <div className="relative flex h-full min-h-0 flex-col" data-testid="asset-library-browser" data-compact="true" ref={gridKeys.paneRef} onKeyDown={gridKeys.onPaneKeyDown}>
       <div className="shrink-0 px-2 pb-2 pt-2">
         <div className="mb-3 grid grid-cols-2 rounded-xl border p-0.5" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-sunk)' }}>
           <button type="button" onClick={() => setScope('personal')} className={`h-9 rounded-[10px] text-sm font-bold transition ${scope === 'personal' ? 'bg-[var(--isl-surface-2)] text-[var(--isl-ink)]' : 'text-[var(--isl-ink-soft)] hover:text-[var(--isl-ink)]'}`}>{isChinese ? '个人' : 'Personal'}</button>
           <button type="button" onClick={() => setScope('agent')} className={`h-9 rounded-[10px] text-sm font-bold transition ${scope === 'agent' ? 'bg-[var(--isl-surface-2)] text-[var(--isl-ink)]' : 'text-[var(--isl-ink-soft)] hover:text-[var(--isl-ink)]'}`}>Agent</button>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="min-w-0 flex-1"><AssetSearchBar query={query} setQuery={setQuery} isChinese={isChinese} label={isChinese ? '请输入搜索内容' : 'Search'} /></div>
+          <div className="min-w-0 flex-1"><AssetSearchBar query={query} setQuery={setQuery} isChinese={isChinese} label={isChinese ? '请输入搜索内容' : 'Search'} inputRef={gridKeys.inputRef} onKeyDown={gridKeys.onInputKeyDown} /></div>
           <button type="button" onClick={() => { setDraftTags(selectedTags); setTagMenuOpen(open => !open); }} className={`isl-icon-btn h-9 w-9 shrink-0 ${selectedTags.length ? 'isl-chip--active' : ''}`} aria-label={isChinese ? '按标签筛选' : 'Filter by tags'} title={isChinese ? '标签筛选' : 'Tag filter'}><SlidersHorizontal size={15} /></button>
         </div>
       </div>
@@ -447,7 +451,7 @@ export function AssetLibraryBrowser({
           ))}
           {compactAssets.map(item => (
             <div key={item.id} className="group mb-1 flex items-center gap-2 rounded-xl px-1.5 py-1.5 transition hover:bg-[var(--isl-surface-2)]">
-              <button type="button" onClick={() => onInsert?.(item)} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-label={`${isChinese ? '添加' : 'Add'} ${item.name || ''}`}>
+              <button type="button" data-grid-item onClick={() => onInsert?.(item)} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-label={`${isChinese ? '添加' : 'Add'} ${item.name || ''}`}>
                 <span className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-[var(--isl-surface-sunk)]"><AssetCardPreview item={item} /></span>
                 <span className="min-w-0 flex-1 truncate text-sm font-bold" style={{ color: 'var(--isl-ink)' }}>{item.name || (isChinese ? '未命名素材' : 'Untitled')}</span>
               </button>
@@ -464,7 +468,7 @@ export function AssetLibraryBrowser({
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col" data-testid="asset-library-browser">
+    <div className="flex h-full min-h-0 flex-col" data-testid="asset-library-browser" ref={gridKeys.paneRef} onKeyDown={gridKeys.onPaneKeyDown}>
       {/* 顶部：面包屑 + 标题 + 计数 */}
       <div className="shrink-0 border-b px-3 pb-2.5 pt-2.5" style={{ borderColor: 'var(--isl-border)' }}>
         <div className="mb-2 flex items-center justify-between gap-2">
@@ -493,7 +497,7 @@ export function AssetLibraryBrowser({
           <span className="shrink-0 text-[11px] tabular-nums" style={{ color: 'var(--isl-ink-soft)' }}>{totalCount}/{library.items.length}</span>
         </div>
 
-        <AssetSearchBar query={query} setQuery={setQuery} isChinese={isChinese} />
+        <AssetSearchBar query={query} setQuery={setQuery} isChinese={isChinese} inputRef={gridKeys.inputRef} onKeyDown={gridKeys.onInputKeyDown} />
 
         {!isSearching && selectedFolderId === null && (
           <div className="mt-2 flex items-center justify-between">

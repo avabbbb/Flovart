@@ -1,5 +1,6 @@
 import { ArrowRight, BookOpen, Box, Check, ChevronDown, Clapperboard, Image as ImageIcon, LayoutGrid, ScanSearch, Sparkles, Upload, Video, WandSparkles } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { useMenuKeyboard } from '../../hooks/useListboxKeyboard';
 import { getProductModels, type ProductModelDefinition } from '../../services/productModelCatalog';
 import { AGENT_CREATION_MODES, type AgentCreationMode } from '../../services/canvasSkillRecipe';
 import '../../styles/agentPanelLibtv.css';
@@ -86,13 +87,14 @@ export function CreationModeControl({ value, onChange, open, onOpenChange, langu
   language: Lang;
 }) {
   const Icon = MODE_ICON[value];
+  const menuKeys = useMenuKeyboard({ open, onClose: () => onOpenChange(false) });
   return (
     <div className="agent-mode-control">
       <button type="button" className="agent-pill" aria-label={ui(language, '创作模式', 'Creation mode')} title={creationModeLabel(value, language)} aria-expanded={open} onClick={() => onOpenChange(!open)}>
         <Icon size={14} /><span>{creationModeLabel(value, language)}</span><ChevronDown size={12} />
       </button>
       {open && (
-        <div className="agent-mode-menu" role="menu" aria-label={ui(language, '创作模式', 'Creation mode')}>
+        <div className="agent-mode-menu" role="menu" aria-label={ui(language, '创作模式', 'Creation mode')} {...menuKeys}>
           {AGENT_CREATION_MODES.map(mode => {
             const ItemIcon = MODE_ICON[mode];
             return (

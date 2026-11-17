@@ -41,11 +41,14 @@ export function AssetCardPreview({ item }: { item: Pick<AssetItem, 'dataUrl' | '
     : <img src={media.url} alt={item.name || ''} loading="lazy" className="h-full w-full object-cover" />;
 }
 
-export function AssetSearchBar({ query, setQuery, isChinese, label }: {
+export function AssetSearchBar({ query, setQuery, isChinese, label, inputRef, onKeyDown }: {
   query: string;
   setQuery: (next: string) => void;
   isChinese: boolean;
   label?: string;
+  /** 列表键盘（hooks/useListboxKeyboard 的 useSearchGridKeyboard）接管时传入。 */
+  inputRef?: React.Ref<HTMLInputElement>;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
 }) {
   const placeholder = label || (isChinese ? '搜索素材库' : 'Search Assets');
   return (
@@ -60,7 +63,13 @@ export function AssetSearchBar({ query, setQuery, isChinese, label }: {
         aria-label={placeholder}
         placeholder={`${placeholder}…`}
         value={query}
+        ref={inputRef}
         onChange={event => setQuery(event.target.value)}
+        onKeyDown={event => {
+          onKeyDown?.(event);
+          // Esc 先清空搜索（输入法组字中不处理），空了再交给外层关闭。
+          if (!event.defaultPrevented && event.key === 'Escape' && query && !event.nativeEvent.isComposing) { event.preventDefault(); event.stopPropagation(); setQuery(''); }
+        }}
         className="min-w-0 flex-1 bg-transparent text-xs outline-none"
         style={{ color: 'var(--isl-ink)' }}
       />

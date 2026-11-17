@@ -1,6 +1,7 @@
 import { ChevronRight, FileText, Image, Music2, StickyNote, Video, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { handleMenuKeyDown } from '../../hooks/useListboxKeyboard';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { WorkflowNodeType, WorkflowPoint } from './types';
 
@@ -142,27 +143,16 @@ export function WorkflowCreateMenu({ state, onCreate, onClose, language = 'zho' 
     first?.focus();
   }, []);
 
+  // ↑/↓ / Home / End 回绕、首字母跳转、Esc 关闭（hooks/useListboxKeyboard 的菜单规则）；Enter / 空格建节点。
+  const typeahead = useRef({ text: '', at: 0 });
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (rootRef.current && handleMenuKeyDown(rootRef.current, event, { onClose, typeahead: typeahead.current })) return;
     const items = Array.from(listRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') || []);
     const focusedIndex = items.indexOf(document.activeElement as HTMLButtonElement);
-    let nextIndex: number | null = null;
-    if (event.key === 'ArrowDown') nextIndex = focusedIndex < 0 ? 0 : (focusedIndex + 1) % items.length;
-    if (event.key === 'ArrowUp') nextIndex = focusedIndex < 0 ? 0 : (focusedIndex - 1 + items.length) % items.length;
-    if (event.key === 'Home') nextIndex = 0;
-    if (event.key === 'End') nextIndex = items.length - 1;
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-    if ((event.key === 'Enter' || event.key === ' ') && focusedIndex >= 0) {
+    if ((event.key === 'Enter' || event.key === ' ') && focusedIndex >= 0 && !event.nativeEvent.isComposing) {
       event.preventDefault();
       items[focusedIndex].click();
-      return;
     }
-    if (nextIndex === null) return;
-    event.preventDefault();
-    items[nextIndex]?.focus();
   };
 
   const active = OPTIONS[activeIndex] ?? OPTIONS[0];

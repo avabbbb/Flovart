@@ -2,6 +2,7 @@ import { BookOpen } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type { AssetFolder, AssetLibrary, UserApiKey, GenerationMode, PromptEnhanceMode, PromptEnhanceResult } from '../../types';
 import { PromptBar } from '../PromptBar';
+import { useMenuKeyboard } from '../../hooks/useListboxKeyboard';
 import { editorJSONToText, extractMentions, type MentionData } from '../MediaMentionExtension';
 import type { AssetSuggestion } from '../MentionList';
 import type { ReferencePickerWorkflowItem } from '../studio/AssetReferencePicker';
@@ -113,6 +114,7 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
   width?: number;
 }) {
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const libraryKeys = useMenuKeyboard({ open: libraryOpen, onClose: () => setLibraryOpen(false) });
   const [slashOpen, setSlashOpen] = useState(false);
   const operationCapability = node.metadata.operation ? getWorkflowOperationCapability(node.metadata.operation.capabilityId) : undefined;
   const isLocalOperation = operationCapability?.executor === 'local-transform';
@@ -296,7 +298,7 @@ export function WorkflowNodePromptBar({ node, nodes, connections = [], t, theme,
           }}
         />
       </div>}
-      {libraryOpen && <div className="workflow-node-prompt__library" role="menu" aria-label={language === 'en' ? 'Prompt library' : '提示词库'}>{promptAssets.map(asset => <button type="button" role="menuitem" key={asset.id} onClick={() => { emitPromptIntent(asset.text, [], 'edit'); onChange({ prompt: asset.text, richTextDocument: undefined }); setLibraryOpen(false); }}><strong>{asset.title}</strong><span>{asset.text}</span></button>)}</div>}
+      {libraryOpen && <div className="workflow-node-prompt__library" role="menu" aria-label={language === 'en' ? 'Prompt library' : '提示词库'} {...libraryKeys}>{promptAssets.map(asset => <button type="button" role="menuitem" key={asset.id} onClick={() => { emitPromptIntent(asset.text, [], 'edit'); onChange({ prompt: asset.text, richTextDocument: undefined }); setLibraryOpen(false); }}><strong>{asset.title}</strong><span>{asset.text}</span></button>)}</div>}
       <PromptBar
         t={t}
         theme={theme}

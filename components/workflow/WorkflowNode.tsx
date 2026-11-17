@@ -4,6 +4,7 @@ import { ArrowLeftRight, AudioLines, Bot, Camera, Check, ChevronsDown, Clapperbo
 import { WorkflowNodeLasso } from './WorkflowNodeLasso';
 import type { LassoPoint } from './lasso';
 import { Component, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { useMenuKeyboard } from '../../hooks/useListboxKeyboard';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { WorkflowGenerationLoader } from './WorkflowGenerationLoader';
 import { getWorkflowOperationCapability } from './operationRegistry';
@@ -266,6 +267,7 @@ export function WorkflowNode({
   const [videoVolume, setVideoVolume] = useState(.5);
   const [volumeOpen, setVolumeOpen] = useState(false);
   const [frameMenuOpen, setFrameMenuOpen] = useState(false);
+  const frameMenuKeys = useMenuKeyboard({ open: frameMenuOpen, onClose: () => setFrameMenuOpen(false) });
   useEffect(() => () => window.clearTimeout(videoLeaveTimer.current), []);
   useEffect(() => {
     if (!videoActive) {
@@ -613,7 +615,7 @@ export function WorkflowNode({
                   </div>
                   {onExtractFrame && <div className="workflow-node__video-frame">
                     <button type="button" aria-label="视频截帧" aria-expanded={frameMenuOpen} onClick={() => setFrameMenuOpen(open => !open)}><Camera size={14} /></button>
-                    {frameMenuOpen && <div className="workflow-node__video-frame-menu" role="menu" aria-label="视频截帧">
+                    {frameMenuOpen && <div className="workflow-node__video-frame-menu" role="menu" aria-label="视频截帧" {...frameMenuKeys}>
                       {([['first', '截取首帧'], ['last', '截取尾帧'], ['current', '截取当前帧']] as const).map(([position, label]) => <button key={position} type="button" role="menuitem" onClick={() => { onExtractFrame(position, position === 'current' ? videoCurrentTime : undefined); setFrameMenuOpen(false); }}>{label}</button>)}
                     </div>}
                   </div>}

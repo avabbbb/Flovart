@@ -1,5 +1,6 @@
 import { Activity, ChevronDown, Gauge, Link2, MessageSquare, type LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useMenuKeyboard } from '../../hooks/useListboxKeyboard';
 import '../../styles/agentDrawerSections.css';
 import { AgentActivityPanel } from './AgentActivityPanel';
 import { AgentHostPicker } from './AgentHostPicker';
@@ -32,6 +33,7 @@ function AgentLogoMenu({ section, onSelect, zh }: { section: AgentDrawerSection;
     };
   }, [open]);
   const menuLabel = zh ? '切换 Agent 页面' : 'Switch Agent page';
+  const menuKeys = useMenuKeyboard({ open, onClose: () => setOpen(false) });
   return (
     <div ref={rootRef} className="agent-logo-menu">
       <button
@@ -47,7 +49,7 @@ function AgentLogoMenu({ section, onSelect, zh }: { section: AgentDrawerSection;
         <ChevronDown size={12} aria-hidden="true" />
       </button>
       {open && (
-        <div className="agent-logo-menu__list" role="menu" aria-label={menuLabel}>
+        <div className="agent-logo-menu__list" role="menu" aria-label={menuLabel} {...menuKeys}>
           {SECTIONS.map(item => {
             const Icon = item.icon;
             const active = item.id === section;

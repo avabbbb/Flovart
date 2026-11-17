@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { Folder, Image as ImageIcon, MonitorUp, Plus, Search, Video, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AssetLibrary } from '../../types';
 import { useWorkflowMediaUrl } from '../workflow/media';
@@ -83,7 +83,7 @@ export function AssetReferencePicker({ open, language, workflowItems, connectedI
     const created = kind === 'workflow' ? onSelectWorkflow?.(id) : onSelectAsset?.(id);
     if (created) onClose();
   };
-  const listItems = source === 'workflow' ? visibleWorkflow.map(item => ({ kind: 'workflow' as const, id: item.id })) : visibleAssets.map(item => ({ kind: 'asset' as const, id: item.id }));
+  const listItems: { kind: 'workflow' | 'asset'; id: string }[] = source === 'workflow' ? visibleWorkflow.map(item => ({ kind: 'workflow' as const, id: item.id })) : visibleAssets.map(item => ({ kind: 'asset' as const, id: item.id }));
   const listbox = useListboxKeyboard({
     items: listItems,
     open,
@@ -93,6 +93,11 @@ export function AssetReferencePicker({ open, language, workflowItems, connectedI
     resetKey: `${source}:${filter}:${folderId}:${selectedTags.join(',')}`,
     onSelect: item => pick(item.kind, item.id),
   });
+  // motion 组件只接收需要的几个属性（整包 HTMLAttributes 与 motion 的 onDrag 等类型冲突）。
+  const optionProps = (index: number) => {
+    const props = listbox.getOptionProps(index);
+    return { id: props.id, role: props.role, 'data-listbox-active': props['data-listbox-active'], onMouseMove: props.onMouseMove as React.MouseEventHandler<HTMLButtonElement> };
+  };
   const activeStyle = (index: number) => (listbox.activeIndex === index ? { borderColor: 'var(--isl-mint)', boxShadow: '0 0 0 2px var(--isl-mint-bg)' } : undefined);
 
   if (typeof document === 'undefined') return null;
@@ -118,7 +123,7 @@ export function AssetReferencePicker({ open, language, workflowItems, connectedI
             exit={{ opacity: 0, y: 16, scale: 0.97 }}
             transition={{ type: 'spring', stiffness: 360, damping: 30 }}
             onMouseDown={event => event.stopPropagation()}
-            {...listbox.getContainerProps()}
+            onKeyDown={listbox.getContainerProps().onKeyDown}
           >
             <aside className="flex w-48 shrink-0 flex-col border-r p-3" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-sunk)' }}>
               <div className="mb-3 px-2 text-sm font-extrabold" style={{ color: 'var(--isl-ink)' }}>{isChinese ? '添加参考' : 'Add reference'}</div>
@@ -187,12 +192,12 @@ export function AssetReferencePicker({ open, language, workflowItems, connectedI
                 <div {...listbox.getListboxProps({ className: 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4', 'aria-label': isChinese ? '可添加的参考' : 'References' })}>
                   {source === 'workflow' ? visibleWorkflow.map((item, index) => {
                     const selected = connected.has(item.id);
-                    return <motion.button key={item.id} type="button" tabIndex={-1} {...listbox.getOptionProps(index)} aria-selected={selected} whileTap={{ scale: 0.97 }} onClick={() => pick('workflow', item.id)} className="group overflow-hidden rounded-2xl border text-left transition hover:-translate-y-0.5 hover:border-[var(--isl-mint)]" style={{ borderColor: selected ? 'var(--isl-mint)' : 'var(--isl-border)', background: 'var(--isl-surface)', ...activeStyle(index) }}>
+                    return <motion.button key={item.id} type="button" tabIndex={-1} {...optionProps(index)} aria-selected={selected} whileTap={{ scale: 0.97 }} onClick={() => pick('workflow', item.id)} className="group overflow-hidden rounded-2xl border text-left transition hover:-translate-y-0.5 hover:border-[var(--isl-mint)]" style={{ borderColor: selected ? 'var(--isl-mint)' : 'var(--isl-border)', background: 'var(--isl-surface)', ...activeStyle(index) }}>
                       <div className="relative aspect-[4/3] overflow-hidden bg-[var(--isl-surface-sunk)]"><WorkflowPreview item={item} />{selected && <span className="absolute right-2 top-2 rounded-full px-2 py-1 text-[10px] font-bold backdrop-blur-md" style={{ color: 'var(--isl-mint-deep)', background: 'var(--isl-mint-bg)' }}>{isChinese ? '已连接' : 'Connected'}</span>}</div>
                       <div className="flex items-center gap-2 px-3 py-2"><span className="min-w-0 flex-1 truncate text-xs font-bold" style={{ color: 'var(--isl-ink)' }}>{item.label}</span><Plus size={13} style={{ color: 'var(--isl-mint-deep)' }} /></div>
                     </motion.button>;
                   }) : visibleAssets.map((item, index) => (
-                    <motion.button key={item.id} type="button" tabIndex={-1} {...listbox.getOptionProps(index)} whileTap={{ scale: 0.97 }} onClick={() => pick('asset', item.id)} className="group overflow-hidden rounded-2xl border text-left transition hover:-translate-y-0.5 hover:border-[var(--isl-mint)]" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)', ...activeStyle(index) }}>
+                    <motion.button key={item.id} type="button" tabIndex={-1} {...optionProps(index)} whileTap={{ scale: 0.97 }} onClick={() => pick('asset', item.id)} className="group overflow-hidden rounded-2xl border text-left transition hover:-translate-y-0.5 hover:border-[var(--isl-mint)]" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)', ...activeStyle(index) }}>
                       <div className="aspect-[4/3] overflow-hidden bg-[var(--isl-surface-sunk)]"><AssetCardPreview item={item} /></div>
                       <div className="flex items-center gap-2 px-3 py-2"><span className="min-w-0 flex-1 truncate text-xs font-bold" style={{ color: 'var(--isl-ink)' }}>{item.name || (isChinese ? '未命名素材' : 'Untitled')}</span><Plus size={13} style={{ color: 'var(--isl-mint-deep)' }} /></div>
                     </motion.button>

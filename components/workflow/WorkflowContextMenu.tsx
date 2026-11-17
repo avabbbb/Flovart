@@ -1,6 +1,7 @@
 import { CheckSquare, ClipboardPaste, Copy, CopyPlus, Download, Library, ListOrdered, Maximize2, Pencil, Play, Plus, Star, Trash2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { handleMenuKeyDown } from '../../hooks/useListboxKeyboard';
 
 export type WorkflowContextMenuState =
   | { type: 'node'; id: string; x: number; y: number }
@@ -80,22 +81,10 @@ export function WorkflowContextMenu({ state, language = 'zho', count = 1, onCopy
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [onClose]);
 
+  // ↑/↓ / Home / End 回绕移动、跳过禁用项、首字母跳转、Esc 关闭（hooks/useListboxKeyboard 的菜单规则）。
+  const typeahead = useRef({ text: '', at: 0 });
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') || []);
-    const activeIndex = items.indexOf(document.activeElement as HTMLButtonElement);
-    let nextIndex: number | null = null;
-    if (event.key === 'ArrowDown') nextIndex = activeIndex < 0 ? 0 : (activeIndex + 1) % items.length;
-    if (event.key === 'ArrowUp') nextIndex = activeIndex < 0 ? 0 : (activeIndex - 1 + items.length) % items.length;
-    if (event.key === 'Home') nextIndex = 0;
-    if (event.key === 'End') nextIndex = items.length - 1;
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-    if (nextIndex === null) return;
-    event.preventDefault();
-    items[nextIndex]?.focus();
+    if (menuRef.current) handleMenuKeyDown(menuRef.current, event, { onClose, typeahead: typeahead.current });
   };
 
   return createPortal(

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useMenuKeyboard } from '../../hooks/useListboxKeyboard';
 import { ChevronDown } from 'lucide-react';
 
 export function WorkflowToolbarShell({ children, className = '', testId }: { children: ReactNode; className?: string; testId?: string }) {
@@ -54,11 +55,13 @@ export function WorkflowToolbarMenu({ label, icon, actions, variant = 'icon', di
     window.addEventListener('keydown', onKey);
     return () => { window.removeEventListener('pointerdown', onDown); window.removeEventListener('keydown', onKey); };
   }, [open]);
+  // ↑/↓ 在动作间移动（跳过分组标题与禁用项），首字母跳转，Esc 关闭。
+  const menuKeys = useMenuKeyboard({ open, onClose: () => setOpen(false) });
   return (
     <div ref={rootRef} className="workflow-toolbar-menu">
       <button type="button" disabled={disabled} className={['isl-icon-btn h-9 disabled:opacity-40', variant === 'labelled' ? 'workflow-toolbar-labelled w-auto gap-1.5 px-2.5' : variant === 'icon-chevron' ? 'w-auto gap-0.5 px-2' : 'w-9', open ? 'isl-icon-btn--active' : ''].join(' ')} aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>{icon}{variant === 'labelled' && <span>{label}</span>}{variant !== 'icon' && <ChevronDown size={12} aria-hidden />}</button>
       {open && (
-        <div role="menu" className="workflow-toolbar-menu__list">
+        <div role="menu" className="workflow-toolbar-menu__list" {...menuKeys}>
           {(() => {
             const labels: Record<NonNullable<WorkflowToolbarAction['group']>, string> = { local: '编辑', ai: 'AI 工具', output: '输出' };
             let lastGroup: WorkflowToolbarAction['group'];

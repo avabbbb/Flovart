@@ -38,6 +38,7 @@ import { translations } from '../../utils/translations';
 import type { AssetLibrary, UserApiKey } from '../../types';
 import { AgentEmptyState, CreationModeControl, creationModeLabel, type AgentModelSelection, type AgentQuickAction } from './AgentComposerExtras';
 import { AgentModelPicker } from './AgentModelPicker';
+import { isComposingEvent, useMenuKeyboard } from '../../hooks/useListboxKeyboard';
 import { applyAgentTurnPreamble, recipeFromNodes, skillFromRecipe, type AgentCreationMode } from '../../services/canvasSkillRecipe';
 import { useAgentGroupInboxStore, type AgentGroupPayload } from '../../stores/useAgentGroupInboxStore';
 import { useUserSkillsStore } from '../../stores/useUserSkillsStore';
@@ -292,6 +293,8 @@ const userApiKeysRef = useRef(userApiKeys);
   const attachmentOpen = openLayer === 'attachment';
   const creationModeOpen = openLayer === 'creationMode';
   const modelPickerOpen = openLayer === 'modelPicker';
+  // 历史对话菜单：打开即聚焦，↑/↓ 在条目间移动，首字母跳转，Esc 关闭。
+  const sessionMenuKeys = useMenuKeyboard({ open: sessionsOpen, onClose: () => dispatchLayer({ type: 'close', layer: 'sessions' }) });
   const skillOpen = openLayer === 'skill';
   const [references, setReferences] = useState<AgentReference[]>([]);
   // 对话框本地附件（粘贴截图 / 拖入视频）：只在当轮对话里作为图片内容发送，不写画布。
@@ -1293,7 +1296,7 @@ const userApiKeysRef = useRef(userApiKeys);
           onClick={() => { dispatchLayer({ type: 'toggle', layer: 'sessions' }); setSessionMenuView('sessions'); if (!sessionsOpen) void refreshSessions(); }}
         ><span>{activeSessionTitle}</span><ChevronDown size={13} /></button>
         {sessionsOpen && (
-          <div className="agent-session-menu agent-header-menu is-left" role="menu" aria-label={t('agentPanel.history')}>
+          <div className="agent-session-menu agent-header-menu is-left" role="menu" aria-label={t('agentPanel.history')} {...sessionMenuKeys}>
             {sessionMenuView === 'memory' ? (
               <>
                 <button type="button" role="menuitem" onClick={() => setSessionMenuView('sessions')}><ChevronLeft size={14} /><span><strong>{t('agentPanel.backToHistory')}</strong><small>{t('agentPanel.projectMemoryHint', memoryEntries?.length || 0)}</small></span></button>
@@ -1521,6 +1524,8 @@ const userApiKeysRef = useRef(userApiKeys);
             aria-activedescendant={mentionOpen && highlightedReference ? mentionOptionId(highlightedReference) : undefined}
             onChange={event => updatePrompt(event.target.value)}
             onKeyDown={event => {
+              // 输入法组字中的 Enter / 方向键 / Esc 属于输入法：不发送、不移动列表高亮。
+              if (isComposingEvent(event)) return;
               if (event.key === 'Escape' && skillOpen) { event.preventDefault(); dispatchLayer({ type: 'close', layer: 'skill' }); return; }
               if (skillOpen && !event.nativeEvent.isComposing && skillNav.current?.(event.key)) { event.preventDefault(); return; }
               if (event.key === 'Escape' && mentionOpen) { event.preventDefault(); dispatchLayer({ type: 'close', layer: 'mention' }); setReplaceTarget(null); return; }
