@@ -509,7 +509,7 @@ const userApiKeysRef = useRef(userApiKeys);
         // Click inside the panel — only dismiss if it landed outside the
         // popover/menu itself so clicks on menu items still register.
         const el = target as Element;
-        if (el.closest?.('.agent-mode-menu, .agent-session-menu, .agent-mention-menu, .agent-reference-picker, .agent-attachment-menu, [aria-expanded="true"]')) return;
+        if (el.closest?.('.agent-mode-menu, .agent-session-menu, .agent-mention-menu, .agent-reference-picker, .agent-attachment-menu, .agent-skill-picker, .studio-hub-layer, [aria-expanded="true"]')) return;
       }
       closeAll();
     };

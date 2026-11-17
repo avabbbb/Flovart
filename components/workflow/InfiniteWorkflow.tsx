@@ -5,7 +5,8 @@ import { pickVideoFile, promptUndecodableVideo } from '../../services/undecodabl
 import { anchorApprovalPatch, deriveAnchorCodes } from '../../services/anchorApproval';
 import { deriveWorkflowLayerPreview } from './layerPreview';
 import { nanoid } from 'nanoid';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { TOOLBAR_OBSTACLE_SELECTOR, clampCenterIntoBand, visibleBand } from './toolbarVisibleBand';
 import type { RefObject } from 'react';
 import type { LassoPoint } from './lasso';
 import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from 'react';
@@ -2929,6 +2930,39 @@ export function InfiniteWorkflow({
   }, Infinity);
   const overlayTop = overlayBounds ? Math.min(overlayBounds.top, selectedGroupTop) : 0;
   const toolbarTop = overlayBounds ? Math.max(8, project.viewport.y + overlayTop * project.viewport.k - Math.max(72, 56 + 28 * project.viewport.k) + (overlayTop < overlayBounds.top ? 24 : 0)) : 0;
+  // 工具条避开悬浮的图层栏 / Agent 面板（见 toolbarVisibleBand.ts）：每次渲染后量一次，面板开合 / 拖宽时再量。
+  const toolbarOverlayRef = useRef<HTMLDivElement>(null);
+  const placeToolbar = useCallback(() => {
+    const el = toolbarOverlayRef.current;
+    const root = rootRef.current;
+    if (!el || !root) return;
+    const rootRect = root.getBoundingClientRect();
+    const width = el.offsetWidth;
+    const base = Number(el.dataset.baseLeft || 0);
+    const rowTop = rootRect.top + el.offsetTop;
+    const obstacles = Array.from(document.querySelectorAll(TOOLBAR_OBSTACLE_SELECTOR))
+      .map(node => node.getBoundingClientRect());
+    const band = visibleBand(rootRect, obstacles, rowTop, rowTop + el.offsetHeight);
+    const center = clampCenterIntoBand(rootRect.left + base, width, band) - rootRect.left;
+    el.style.left = `${center}px`;
+  }, []);
+  useLayoutEffect(() => {
+    const el = toolbarOverlayRef.current;
+    if (!el) return;
+    el.dataset.baseLeft = String(toolbarLeft);
+    placeToolbar();
+  });
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => placeToolbar());
+    const watch = () => document.querySelectorAll(TOOLBAR_OBSTACLE_SELECTOR).forEach(node => observer.observe(node));
+    watch();
+    if (rootRef.current) observer.observe(rootRef.current);
+    const mutation = new MutationObserver(() => { watch(); placeToolbar(); });
+    mutation.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-open', 'data-docked'] });
+    window.addEventListener('resize', placeToolbar);
+    return () => { observer.disconnect(); mutation.disconnect(); window.removeEventListener('resize', placeToolbar); };
+  }, [placeToolbar]);
   const promptWorkflowWidth = workflowWidth;
   // The prompt bar belongs to the node but reads as a wide, landscape composer:
   // about 2x the node's on-screen width, 680-960px, clamped to the workflow area.
@@ -3509,7 +3543,7 @@ export function InfiniteWorkflow({
         {selectionStyle && <div className="workflow-selection-box" style={selectionStyle} />}
       </div>
       {!overlayHidden && overlayBounds && selectedNodeData.length > 0 && selectedNodeData.every(node => !node.isLocked) && <>
-        <div data-workflow-overlay style={{ position: 'absolute', zIndex: 70, left: toolbarLeft, top: toolbarTop, transform: 'translateX(-50%)' }}>
+        <div ref={toolbarOverlayRef} data-workflow-overlay style={{ position: 'absolute', zIndex: 70, left: toolbarLeft, top: toolbarTop, transform: 'translateX(-50%)' }}>
           <WorkflowNodeToolbar
             nodes={selectedNodeData}
             language={language}
