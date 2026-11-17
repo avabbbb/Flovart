@@ -5,6 +5,7 @@ import { STUDIO_HUB_COPY } from './studioHubCopy';
 import { FolderTree, type FolderTreeProps } from './FolderTree';
 import type { AssetFolder } from '../../types';
 import { displayError } from '../../services/displayError';
+import { useSearchGridKeyboard } from '../../hooks/useListboxKeyboard';
 import { openRemoteMediaUrl, saveBlob } from '../../services/desktopNetwork';
 
 export const STUDIO_MEDIA_DRAG_TYPE = 'application/x-flovart-studio-media';
@@ -109,6 +110,8 @@ export function StudioMediaDownload({ item, isChinese }: { item: StudioMediaItem
 
 export function StudioMediaBrowser({ mode, items, language, onInsert, onRename, onRemove, onReversePrompt, folders, onAddFolder, onRenameFolder, onDeleteFolder, projects, activeProjectId, onExpand }: StudioMediaBrowserProps) {
   const [query, setQuery] = useState('');
+  // 面板内：焦点在素材上时打字即搜索，↓ 从搜索框进入网格，方向键移动，Esc 先清空搜索。
+  const gridKeys = useSearchGridKeyboard({ query, onQueryChange: setQuery, itemSelector: '[data-grid-item]' });
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
@@ -166,7 +169,7 @@ export function StudioMediaBrowser({ mode, items, language, onInsert, onRename, 
   };
 
   return (
-    <section className="flex h-full min-h-0 flex-col" aria-label={title}>
+    <section className="flex h-full min-h-0 flex-col" aria-label={title} ref={gridKeys.paneRef} onKeyDown={gridKeys.onPaneKeyDown}>
       <div className="shrink-0 border-b px-3 pb-3 pt-2.5" style={{ borderColor: 'var(--isl-border)' }}>
         <div className="mb-2 flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -189,7 +192,9 @@ export function StudioMediaBrowser({ mode, items, language, onInsert, onRename, 
             aria-label={searchLabel}
             placeholder={`${searchLabel}…`}
             value={query}
+            ref={gridKeys.inputRef}
             onChange={event => setQuery(event.target.value)}
+            onKeyDown={gridKeys.onInputKeyDown}
             className="min-w-0 flex-1 bg-transparent text-xs outline-none"
             style={{ color: 'var(--isl-ink)' }}
           />
@@ -254,7 +259,7 @@ export function StudioMediaBrowser({ mode, items, language, onInsert, onRename, 
               >
                 <div className="relative aspect-[4/3] overflow-hidden" style={{ background: 'var(--isl-surface-2)' }}>
                   <StudioMediaPreview item={item} />
-                  <button type="button" className="isl-icon-btn absolute bottom-2 right-2 h-8 w-8 bg-[var(--isl-card)]" aria-label={`${isChinese ? '添加' : 'Add'} ${item.name}`} title={isChinese ? '添加到当前 Workflow' : 'Add to Workflow'} onClick={() => onInsert(item)}>
+                  <button type="button" data-grid-item className="isl-icon-btn absolute bottom-2 right-2 h-8 w-8 bg-[var(--isl-card)]" aria-label={`${isChinese ? '添加' : 'Add'} ${item.name}`} title={isChinese ? '添加到当前 Workflow' : 'Add to Workflow'} onClick={() => onInsert(item)}>
                     <Plus size={15} aria-hidden="true" />
                   </button>
                 </div>

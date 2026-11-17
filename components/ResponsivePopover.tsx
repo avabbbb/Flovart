@@ -122,8 +122,13 @@ export function ResponsivePopover({
   useEffect(() => {
     const panel = panelRef.current;
     if (!panel || !position.ready) return;
+    // 内容自己已经放好焦点（如列表浮层的搜索框）时不抢。
+    if (panel.contains(document.activeElement) && document.activeElement !== panel) return;
     // 菜单：焦点给当前选中项（或第一项），↑/↓ 从那里开始。
     if (role === 'menu' && focusInitialMenuItem(panel)) return;
+    // 列表浮层：先给搜索框（打开即可输入筛选，见 hooks/useListboxKeyboard）。
+    const search = panel.querySelector<HTMLElement>('input[role="combobox"]:not(:disabled)');
+    if (search) { search.focus({ preventScroll: true }); return; }
     const firstControl = panel.querySelector<HTMLElement>(
       'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
     );

@@ -30,6 +30,7 @@ import { LocalFolderBrowser } from '../workflow/LocalFolderBrowser';
 import { StudioMediaDownload, StudioMediaPreview, type StudioMediaItem } from './StudioMediaBrowser';
 import { STUDIO_HUB_COPY, type StudioHubCopy } from './studioHubCopy';
 import { StudioTimeline } from './StudioTimeline';
+import { useMenuKeyboard, useSearchGridKeyboard } from '../../hooks/useListboxKeyboard';
 import { applySkillOrder, keyboardMoveDelta, loadSkillOrder, reorderVisible, saveSkillOrder } from './skillOrder';
 import { useSkillCardDrag } from './useSkillCardDrag';
 import { PlanSteps, type PlanStep } from '../agent/plan/PlanSteps';
@@ -72,7 +73,8 @@ export function StudioHub({ language, historyItems, onRemoveHistory }: StudioHub
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement as HTMLElement | null;
-    windowRef.current?.focus();
+    // 面板自己已聚焦搜索框（打开即可输入筛选）时不抢焦点。
+    if (!windowRef.current?.contains(document.activeElement)) windowRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); useStudioHubStore.getState().close(); }
     };
@@ -216,6 +218,10 @@ function SkillsPane({ copy, language, section }: { copy: StudioHubCopy; language
   const [installingId, setInstallingId] = useState<string | null>(null);
   const [undo, setUndo] = useState<RemovedUserSkill | null>(null);
   const [attachedId, setAttachedId] = useState<string | null>(null);
+  // 打开即可输入筛选；↓ 进入卡片网格，方向键在卡片间移动，Esc 先清空搜索。
+  const gridKeys = useSearchGridKeyboard({ query, onQueryChange: setQuery, itemSelector: '.studio-hub__card-open', autoFocus: true });
+  const sortMenuKeys = useMenuKeyboard({ open: menu === 'sort', onClose: () => setMenu(null) });
+  const createMenuKeys = useMenuKeyboard({ open: menu === 'create', onClose: () => setMenu(null) });
 
   useEffect(() => { void refreshLocal(); if (!useUserSkillsStore.getState().loaded) void useUserSkillsStore.getState().load(); }, [refreshLocal]);
   useEffect(() => { setView({ type: 'grid' }); }, [section]);
@@ -339,7 +345,7 @@ function SkillsPane({ copy, language, section }: { copy: StudioHubCopy; language
   ];
 
   return (
-    <div className="studio-hub__pane">
+    <div className="studio-hub__pane" ref={gridKeys.paneRef} onKeyDown={view.type === 'grid' ? gridKeys.onPaneKeyDown : undefined}>
       {view.type === 'grid' ? (
         <>
           <header className="studio-hub__head">
@@ -347,14 +353,14 @@ function SkillsPane({ copy, language, section }: { copy: StudioHubCopy; language
             <div className="studio-hub__tools">
               <label className="studio-hub__search">
                 <Search size={14} aria-hidden="true" />
-                <input type="search" value={query} placeholder={skillCopy.search} aria-label={skillCopy.search} onChange={event => setQuery(event.target.value)} />
+                <input ref={gridKeys.inputRef} type="search" value={query} placeholder={skillCopy.search} aria-label={skillCopy.search} onChange={event => setQuery(event.target.value)} onKeyDown={gridKeys.onInputKeyDown} />
               </label>
               <div className="studio-hub__menu-anchor">
                 <button type="button" className="studio-hub__btn" aria-haspopup="menu" aria-expanded={menu === 'sort'} onClick={() => setMenu(menu === 'sort' ? null : 'sort')}>
                   <ArrowDownWideNarrow size={14} aria-hidden="true" /><span>{sortLabel}</span>
                 </button>
                 {menu === 'sort' && (
-                  <div className="skill-hub__menu studio-hub__menu" role="menu">
+                  <div className="skill-hub__menu studio-hub__menu" role="menu" {...sortMenuKeys}>
                     {([['recent', copy.sortRecent], ['name', copy.sortName], ['source', copy.sortSource], ['manual', cardCopy.sortManual]] as const).map(([id, label]) => (
                       <button key={id} type="button" role="menuitemradio" aria-checked={sort === id} onClick={() => { setSort(id); setMenu(null); }}>
                         {sort === id ? <Check size={13} aria-hidden="true" /> : <span className="studio-hub__menu-gap" />}<span>{label}</span>
@@ -368,7 +374,7 @@ function SkillsPane({ copy, language, section }: { copy: StudioHubCopy; language
                   <Plus size={14} aria-hidden="true" /><span>{skillCopy.createMenu}</span>
                 </button>
                 {menu === 'create' && (
-                  <div className="skill-hub__menu studio-hub__menu" role="menu">
+                  <div className="skill-hub__menu studio-hub__menu" role="menu" {...createMenuKeys}>
                     <button type="button" role="menuitem" onClick={() => { setMenu(null); setView({ type: 'edit', id: null }); }}><Plus size={13} aria-hidden="true" /><span>{skillCopy.createBlank}</span></button>
                     {skillTemplates(language).map(template => (
                       <button key={template.id} type="button" role="menuitem" title={template.description} onClick={() => { setMenu(null); setView({ type: 'edit', id: null, initial: { name: template.name, slug: template.slug, description: template.description, prompt: template.prompt, enabled: true } }); }}>
@@ -557,6 +563,7 @@ function SkillCard({
 }) {
   const needsInstall = skill.source === 'hub' && (!skill.installed || skill.updateAvailable);
   const usable = !needsInstall && skill.enabled;
+  const cardMenuKeys = useMenuKeyboard({ open: menuOpen, onClose: () => onMenu(false) });
   const menuItem = (key: string, icon: ReactNode, label: string, action: () => void, disabled = false) => (
     <button key={key} type="button" role="menuitem" disabled={disabled} onClick={() => { onMenu(false); action(); }}>{icon}<span>{label}</span></button>
   );
@@ -597,7 +604,7 @@ function SkillCard({
           className="skill-hub__menu studio-hub__menu studio-hub__card-menu"
           role="menu"
           data-no-drag
-          onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); onMenu(false); } }}
+          {...cardMenuKeys}
         >
           {menuItem('open', <Eye size={13} aria-hidden="true" />, cardCopy.open, onOpen)}
           {usable && menuItem('use', <Sparkles size={13} aria-hidden="true" />, copy.use, onUse, !canAttach)}
@@ -690,6 +697,7 @@ function HistoryPane({ copy, language, items, projectFilter, onRemove }: {
   const [tab, setTab] = useState<HistoryTab>('all');
   const [query, setQuery] = useState('');
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const gridKeys = useSearchGridKeyboard({ query, onQueryChange: setQuery, itemSelector: '.studio-hub__media-thumb', autoFocus: true });
   const favorites = useStudioHubStore(state => state.historyFavorites);
   const canInsert = useStudioHubStore(state => Boolean(state.handlers.insertHistory));
   const visible = useMemo(() => {
@@ -711,13 +719,13 @@ function HistoryPane({ copy, language, items, projectFilter, onRemove }: {
   ];
 
   return (
-    <div className="studio-hub__pane">
+    <div className="studio-hub__pane" ref={gridKeys.paneRef} onKeyDown={gridKeys.onPaneKeyDown}>
       <header className="studio-hub__head">
         <h2>{copy.history}<span className="studio-hub__count">{copy.count(visible.length)}</span></h2>
         <div className="studio-hub__tools">
           <label className="studio-hub__search">
             <Search size={14} aria-hidden="true" />
-            <input type="search" value={query} placeholder={copy.search} aria-label={copy.search} onChange={event => setQuery(event.target.value)} />
+            <input ref={gridKeys.inputRef} type="search" value={query} placeholder={copy.search} aria-label={copy.search} onChange={event => setQuery(event.target.value)} onKeyDown={gridKeys.onInputKeyDown} />
           </label>
         </div>
       </header>

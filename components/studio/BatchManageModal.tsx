@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Modal } from 'antd';
 import { useWorkflowMediaUrl } from '../workflow/media';
 import { TagPicker } from '../ui/TagPicker';
+import { useSearchGridKeyboard } from '../../hooks/useListboxKeyboard';
 import type { AssetItem, AssetLibrary, AssetFolder } from '../../types';
 
 interface BatchManageModalProps {
@@ -36,6 +37,8 @@ export function BatchManageModal({ open, library, language, onClose, onRemoveAss
   const isChinese = language === 'zho';
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState('');
+  // 打开即可输入筛选；↓ 进入卡片网格，方向键移动，Enter / 空格勾选，Esc 先清空搜索。
+  const gridKeys = useSearchGridKeyboard({ query, onQueryChange: setQuery, itemSelector: '[data-grid-item]', autoFocus: true });
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [moveTarget, setMoveTarget] = useState<string | null>(null);
@@ -156,16 +159,18 @@ export function BatchManageModal({ open, library, language, onClose, onRemoveAss
         </aside>
 
         {/* right: cards + toolbar */}
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col" ref={gridKeys.paneRef} onKeyDown={gridKeys.onPaneKeyDown}>
           {/* toolbar */}
           <div className="shrink-0 border-b px-3 py-2.5" style={{ borderColor: 'var(--isl-border)' }}>
             <div className="flex flex-wrap items-center gap-2">
               <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg border-[1.5px] px-2.5" style={{ background: 'var(--isl-surface-sunk)', borderColor: 'var(--isl-border)' }}>
                 <Search size={13} style={{ color: 'var(--isl-ink-ghost)' }} />
                 <input
+                  ref={gridKeys.inputRef}
                   type="search"
                   value={query}
                   onChange={e => setQuery(e.target.value)}
+                  onKeyDown={gridKeys.onInputKeyDown}
                   placeholder={isChinese ? '搜索当前列表…' : 'Search current list…'}
                   className="min-w-0 flex-1 bg-transparent text-xs outline-none"
                   style={{ color: 'var(--isl-ink)' }}
@@ -294,7 +299,13 @@ function BatchCard({ item, selected, onToggle, isChinese }: { item: AssetItem; s
       transition={{ type: 'spring', stiffness: 320, damping: 28 }}
       whileHover={{ y: -2 }}
       onClick={onToggle}
-      className="group relative cursor-pointer overflow-hidden rounded-xl border-[1.5px]"
+      role="checkbox"
+      aria-checked={selected}
+      aria-label={item.name || (isChinese ? '未命名' : 'Untitled')}
+      tabIndex={0}
+      data-grid-item
+      onKeyDown={event => { if ((event.key === 'Enter' || event.key === ' ') && !event.nativeEvent.isComposing) { event.preventDefault(); onToggle(); } }}
+      className="group relative cursor-pointer overflow-hidden rounded-xl border-[1.5px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--isl-mint)]"
       style={{
         borderColor: selected ? 'var(--isl-mint)' : 'var(--isl-border)',
         background: 'var(--isl-card)',

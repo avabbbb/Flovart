@@ -23,6 +23,7 @@ import {
   type LocalFolderSource,
 } from '../../services/localFolderSource';
 import { displayError } from '../../services/displayError';
+import { useSearchGridKeyboard } from '../../hooks/useListboxKeyboard';
 
 const runThumbnailTask = createThumbnailLimiter(3);
 
@@ -172,6 +173,8 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
   const [notice, setNotice] = useState<string | null>(null);
   const [kindFilter, setKindFilter] = useState<KindFilter>('all');
   const [query, setQuery] = useState('');
+  // 焦点在文件卡上时打字即筛选，↓ 从筛选框进入网格，方向键移动，Esc 先清空筛选。
+  const gridKeys = useSearchGridKeyboard({ query, onQueryChange: setQuery, itemSelector: '.local-folder-card' });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const [sourceCollapsed, setSourceCollapsed] = useState(false);
@@ -526,6 +529,8 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
     <div
       className={`local-folder-browser${dropping ? ' is-dropping' : ''}`}
       data-testid="local-folder-browser"
+      ref={gridKeys.paneRef}
+      onKeyDown={gridKeys.onPaneKeyDown}
       onDragOver={event => { event.preventDefault(); setDropping(true); }}
       onDragLeave={() => setDropping(false)}
       onDrop={event => { void handleDrop(event); }}
@@ -608,8 +613,10 @@ export const LocalFolderBrowser: React.FC<LocalFolderBrowserProps> = ({ language
           <div className="local-folder-search">
             <Search size={12} />
             <input
+              ref={gridKeys.inputRef}
               value={query}
               onChange={event => setQuery(event.target.value)}
+              onKeyDown={gridKeys.onInputKeyDown}
               placeholder={zho ? '筛选文件名' : 'Filter file names'}
               aria-label={zho ? '筛选文件名' : 'Filter file names'}
             />

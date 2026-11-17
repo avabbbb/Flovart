@@ -26,6 +26,7 @@ import { readColdMedia } from '../utils/mediaIndexedDB';
 import { displayError } from '../services/displayError';
 import { AssetReferencePicker, type ReferencePickerWorkflowItem } from './studio/AssetReferencePicker';
 import { ResponsivePopover } from './ResponsivePopover';
+import { useListboxKeyboard } from '../hooks/useListboxKeyboard';
 
 export interface PromptBarProps {
     t: (key: string, ...args: any[]) => string;
@@ -497,6 +498,35 @@ export const PromptBar: React.FC<PromptBarProps> = ({
         if (selectedModelFamily) setActiveModelFamily(selectedModelFamily);
     }, [selectedModelFamily]);
     const changeActiveModel = (model: string) => generationMode === 'text' ? onTextModelChange?.(model) : videoLikeMode ? onVideoModelChange?.(model) : onImageModelChange?.(model);
+    // 模型浮层：打开即可输入筛选，↑/↓ 高亮，Enter 选中，Esc 先清空再关闭（hooks/useListboxKeyboard）。
+    const [modelQuery, setModelQuery] = useState('');
+    useEffect(() => { if (expandedPanel !== 'model') setModelQuery(''); }, [expandedPanel]);
+    const normalizedModelQuery = modelQuery.trim().toLowerCase();
+    const visibleProductModels = useMemo(() => filteredProductModelGroups.flatMap(group => group.models)
+        .filter(product => !normalizedModelQuery || [product.name, product.id, product.description, product.company].some(value => String(value || '').toLowerCase().includes(normalizedModelQuery))),
+    [filteredProductModelGroups, normalizedModelQuery]);
+    const visibleModelOptions = useMemo(() => currentModelOptions.filter(model => !normalizedModelQuery || model.toLowerCase().includes(normalizedModelQuery) || policy.modelLabel(model).toLowerCase().includes(normalizedModelQuery)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentModelOptions, normalizedModelQuery]);
+    const pickProductModel = (productId: string) => {
+        if (!policy.isProductModelConfigured(productId)) { onOpenSettings?.(); setExpandedPanel(null); return; }
+        changeActiveModel(productId);
+        setExpandedPanel(null);
+    };
+    const modelListItems: string[] = productModels.length > 0 ? visibleProductModels.map(product => product.id) : generationMode === 'text' ? [] : visibleModelOptions;
+    const modelListbox = useListboxKeyboard({
+        items: modelListItems,
+        open: expandedPanel === 'model' && modelListItems.length + (normalizedModelQuery ? 1 : 0) > 0,
+        query: modelQuery,
+        onQueryChange: setModelQuery,
+        onClose: () => setExpandedPanel(null),
+        initialIndex: modelListItems.findIndex(id => id === activeModel || id === activeProductModel?.id),
+        resetKey: modelCapabilityFilter,
+        onSelect: id => {
+            if (productModels.length > 0) pickProductModel(id);
+            else { changeActiveModel(id); setExpandedPanel(null); }
+        },
+    });
     const promptCharCount = prompt.trim().length;
     const promptReady = runWithoutPrompt || Boolean(prompt.trim());
     const localizedVideoInputRequirement = promptReasonCopy(videoInputRequirement, language);
@@ -1036,11 +1066,18 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                         <div
                             data-panel={expandedPanel}
                             className="isl-pop"
+                            onKeyDown={expandedPanel === 'model' ? modelListbox.getContainerProps().onKeyDown : undefined}
                         >
                             <div className='p-2.5' onWheel={event => event.stopPropagation()}>
                             {expandedPanel === 'model' && (
                                 <>
                                     <div className="mb-2 flex items-center justify-between gap-2 px-1"><span className="text-[12px] font-semibold" style={{ color: 'var(--isl-ink)' }}>{ui('选择模型', 'Choose model')}</span><span className="inline-flex max-w-[60%] items-center gap-1.5 truncate rounded-full bg-[var(--isl-surface-2)] px-2 py-0.5 text-[10px] font-medium" style={{ color: 'var(--isl-ink-soft)' }}><span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: activeRoute ? 'var(--isl-mint)' : 'var(--isl-ink-ghost)' }} /><span className="truncate">{ui('当前', 'Current')} · {policy.modelLabelForMode() || (videoLikeMode ? ui('选择视频模型', 'Choose video model') : ui('选择图片模型', 'Choose image model'))}</span></span></div>
+                                    {(productModels.length > 0 || (generationMode !== 'text' && currentModelOptions.length > 0)) && (
+                                        <label className="prompt-model-search">
+                                            <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+                                            <input {...modelListbox.getInputProps({ value: modelQuery, onChange: event => setModelQuery(event.target.value), placeholder: t('promptBarExtra.searchModels'), 'aria-label': t('promptBarExtra.searchModels') })} />
+                                        </label>
+                                    )}
                                     <div data-testid="prompt-model-progressive" data-density="compact" className="flex flex-col overflow-hidden" style={{ maxHeight: 'min(360px, 68vh, calc(var(--flv-popover-max-h, 400px) - 88px))' }}>
                         {productModels.length > 0 ? (
                             <>
@@ -1051,15 +1088,12 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                     </div>
                                 )}
                                 {/* LibTV 式：单列模型列表，图标 + 名称 + 标签；悬停或选中时展开一行描述 */}
-                                <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-0.5 isl-scrollbar">
-                                    {filteredProductModelGroups.flatMap(group => group.models).map(product => {
+                                <div {...modelListbox.getListboxProps({ className: 'min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-0.5 isl-scrollbar', 'aria-label': ui('选择模型', 'Choose model') })}>
+                                    {visibleProductModels.length === 0 && <div className="px-4 py-6 text-center text-xs" style={{ color: 'var(--isl-ink-soft)' }}>{t('promptBarExtra.noMatchingModels')}</div>}
+                                    {visibleProductModels.map((product, index) => {
                                         const configured = policy.isProductModelConfigured(product.id);
                                         const selected = activeModel === product.id || activeProductModel?.id === product.id;
-                                        return <button key={product.id} type="button" title={ui(product.description, '') || undefined} aria-pressed={selected} onClick={() => {
-                                            if (!configured) { onOpenSettings?.(); setExpandedPanel(null); return; }
-                                            changeActiveModel(product.id);
-                                            setExpandedPanel(null);
-                                        }} className={'prompt-model-row' + (selected ? ' is-active' : '') + (configured ? '' : ' opacity-55')}>
+                                        return <button key={product.id} type="button" tabIndex={-1} title={ui(product.description, '') || undefined} {...modelListbox.getOptionProps(index)} aria-selected={selected} onClick={() => pickProductModel(product.id)} className={'prompt-model-row' + (selected ? ' is-active' : '') + (configured ? '' : ' opacity-55')}>
                                             <span aria-hidden="true" className="prompt-model-icon">{product.name.slice(0, 1)}</span>
                                             <span className="min-w-0 flex-1">
                                                 <span className="block truncate text-[12px] font-semibold">{product.name}</span>
@@ -1078,8 +1112,11 @@ export const PromptBar: React.FC<PromptBarProps> = ({
                                     <button type="button" onClick={() => { onOpenSettings?.(); setExpandedPanel(null); }} className="mt-2 w-full rounded-[6px] border border-[var(--isl-border)] px-3 py-2 text-xs font-semibold">{t('promptBarExtra.openModelMapping')}</button>
                                 </> : <>
                                     <div className="px-2 pb-2 text-[11px] font-semibold" style={{ color: 'var(--isl-ink-soft)' }}>{t('promptBarExtra.pickModel')}</div>
-                                    {currentModelOptions.map(model => <button key={model} type="button" onClick={() => { changeActiveModel(model); setExpandedPanel(null); }} className={'prompt-model-row' + (activeModel === model ? ' is-active' : '')}><span aria-hidden="true" className="prompt-model-icon">{policy.modelLabel(model).slice(0, 1)}</span><span className="min-w-0 flex-1 truncate text-[12px] font-semibold">{policy.modelLabel(model)}</span></button>)}
+                                    <div {...modelListbox.getListboxProps({ 'aria-label': t('promptBarExtra.pickModel') })}>
+                                    {visibleModelOptions.map((model, index) => <button key={model} type="button" tabIndex={-1} {...modelListbox.getOptionProps(index)} aria-selected={activeModel === model} onClick={() => { changeActiveModel(model); setExpandedPanel(null); }} className={'prompt-model-row' + (activeModel === model ? ' is-active' : '')}><span aria-hidden="true" className="prompt-model-icon">{policy.modelLabel(model).slice(0, 1)}</span><span className="min-w-0 flex-1 truncate text-[12px] font-semibold">{policy.modelLabel(model)}</span></button>)}
+                                    </div>
                                     {currentModelOptions.length === 0 && <div className="px-4 py-12 text-center text-xs" style={{ color: 'var(--isl-ink-soft)' }}>{ui('没有可用模型', 'No models available')}</div>}
+                                    {currentModelOptions.length > 0 && visibleModelOptions.length === 0 && <div className="px-4 py-6 text-center text-xs" style={{ color: 'var(--isl-ink-soft)' }}>{t('promptBarExtra.noMatchingModels')}</div>}
                                 </>}
                             </div>
                         )}

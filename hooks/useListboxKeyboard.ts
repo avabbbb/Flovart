@@ -177,7 +177,8 @@ export function useListboxKeyboard<T>(options: ListboxKeyboardOptions<T>): Listb
     }
     if (key === 'Enter') {
       // 焦点在按钮上时让按钮自己响应。
-      if (!fromSearch && target && target !== listRef.current && (target.tagName === 'BUTTON' || target.tagName === 'A')) return false;
+      // 焦点在普通按钮上时让按钮自己响应；select-only combobox 的触发按钮（role=combobox）由列表处理。
+      if (!fromSearch && target && target !== listRef.current && (target.tagName === 'BUTTON' || target.tagName === 'A') && target.getAttribute('role') !== 'combobox') return false;
       const item = state.activeIndex >= 0 ? state.items[state.activeIndex] : undefined;
       if (item === undefined) return false;
       state.onSelect(item, state.activeIndex);
@@ -342,4 +343,65 @@ export function useMenuKeyboard({ open = true, onClose, autoFocus = true }: { op
     if (ref.current) handleMenuKeyDown(ref.current, event, { onClose, typeahead: typeahead.current });
   };
   return { ref, onKeyDown };
+}
+
+/**
+ * 卡片网格 + 搜索框（StudioHub 的 Skills / 历史、素材浏览、批量管理、本地文件夹）：
+ * 条目本身是可聚焦按钮，所以用「移动焦点」而不是 aria-activedescendant。
+ * - 搜索框：Esc 先清空（非空时），↓ 进入第一张卡片；输入法组字期间不处理。
+ * - 网格：←/→ 前后一张，↑/↓ 上下一行（按实际列数），第一行再按 ↑ 回到搜索框；Enter / 空格由按钮自己响应。
+ * - 焦点在网格内其他非输入元素上时，可打印字符与退格转给搜索框。
+ */
+export function useSearchGridKeyboard({ query, onQueryChange, itemSelector, autoFocus = false }: {
+  query: string;
+  onQueryChange: (query: string) => void;
+  /** 网格里每张卡片的主按钮选择器，例如 `.studio-hub__media-thumb`。 */
+  itemSelector: string;
+  autoFocus?: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const paneElement = useRef<HTMLElement | null>(null);
+  // 回调 ref：div / section / ul 都能挂。
+  const paneRef = useCallback((element: HTMLElement | null) => { paneElement.current = element; }, []);
+  useLayoutEffect(() => {
+    if (autoFocus) inputRef.current?.focus({ preventScroll: true });
+  }, [autoFocus]);
+  const items = () => Array.from(paneElement.current?.querySelectorAll<HTMLElement>(itemSelector) || []).filter(item => !item.hasAttribute('disabled'));
+  const focusItem = (item: HTMLElement | undefined) => {
+    if (!item) return false;
+    item.focus({ preventScroll: true });
+    item.scrollIntoView?.({ block: 'nearest' });
+    return true;
+  };
+  const columns = (list: HTMLElement[]) => {
+    if (list.length < 2) return 1;
+    const top = list[0].getBoundingClientRect().top;
+    const count = list.findIndex(item => Math.abs(item.getBoundingClientRect().top - top) > 2);
+    return count <= 0 ? list.length : count;
+  };
+  const onInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.defaultPrevented || isComposingEvent(event)) return;
+    if (event.key === 'Escape' && query) { event.preventDefault(); event.stopPropagation(); onQueryChange(''); return; }
+    if (event.key === 'ArrowDown' && focusItem(items()[0])) { event.preventDefault(); event.stopPropagation(); }
+  };
+  const onPaneKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.defaultPrevented || isComposingEvent(event) || event.target === inputRef.current || isEditableElement(event.target)) return;
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const target = event.target as HTMLElement;
+    const list = items();
+    const index = list.indexOf(target);
+    const consume = () => { event.preventDefault(); event.stopPropagation(); };
+    if (index >= 0 && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
+      const cols = columns(list);
+      if (event.key === 'ArrowUp' && index < cols) { inputRef.current?.focus({ preventScroll: true }); consume(); return; }
+      const next = event.key === 'ArrowLeft' ? index - 1 : event.key === 'ArrowRight' ? index + 1 : event.key === 'ArrowUp' ? index - cols : event.key === 'ArrowDown' ? index + cols : event.key === 'Home' ? 0 : list.length - 1;
+      focusItem(list[Math.max(0, Math.min(list.length - 1, next))]);
+      consume();
+      return;
+    }
+    if (!inputRef.current) return;
+    if (isPrintableKey(event) && event.key !== ' ') { onQueryChange(`${query}${event.key}`); inputRef.current.focus({ preventScroll: true }); consume(); return; }
+    if (event.key === 'Backspace' && query) { onQueryChange(query.slice(0, -1)); inputRef.current.focus({ preventScroll: true }); consume(); }
+  };
+  return { inputRef, paneRef, onInputKeyDown, onPaneKeyDown };
 }

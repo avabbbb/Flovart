@@ -2,6 +2,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Check, ChevronDown, Plus, Search, Tag } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { isComposingEvent, isEditableElement, isPrintableKey } from '../../hooks/useListboxKeyboard';
 import { BrailleLoader } from './BrailleLoader';
 import '../../styles/tags.css';
 
@@ -116,6 +117,8 @@ export function TagPicker({ language, options, value, onChange, onCreate, subjec
   };
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    // 输入法组字中的 Enter / 方向键属于输入法。
+    if (isComposingEvent(e)) return;
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       if (!rows.length) return;
@@ -129,8 +132,16 @@ export function TagPicker({ language, options, value, onChange, onCreate, subjec
     } else if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      setOpen(false);
+      // Esc 先清空搜索，再关闭。
+      if (query) { setQuery(''); setActive(-1); } else setOpen(false);
     }
+  };
+
+  // 焦点在浮层别处时，可打印字符转给搜索框，方向键 / Enter / Esc 照常。
+  const onPopKeyDown = (e: ReactKeyboardEvent<HTMLElement>) => {
+    if (e.target === inputRef.current || e.defaultPrevented || isComposingEvent(e) || isEditableElement(e.target)) return;
+    if (isPrintableKey(e)) { e.preventDefault(); setQuery(q => q + e.key); setActive(0); inputRef.current?.focus(); return; }
+    if (['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(e.key)) onKeyDown(e as unknown as ReactKeyboardEvent<HTMLInputElement>);
   };
 
   const activeRow = active >= 0 ? rows[active] : undefined;
@@ -170,6 +181,7 @@ export function TagPicker({ language, options, value, onChange, onCreate, subjec
             className="flv-tagpicker__pop"
             role="dialog"
             aria-label={zh ? '标签' : 'Tags'}
+            onKeyDown={onPopKeyDown}
             initial={reduce ? { opacity: 0 } : { opacity: 0, y: -4, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={reduce ? { opacity: 0 } : { opacity: 0, y: -4, scale: 0.98 }}

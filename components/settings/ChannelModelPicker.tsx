@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { AICapability, ModelItem } from '../../types';
 import type { FetchedModel } from '../../services/modelFetcher';
+import { useListboxKeyboard } from '../../hooks/useListboxKeyboard';
 
 // 选择渠道模型：搜索、手动增加、拉取 /models、新获取/已有两栏、全选/取消、按模型指定能力
 interface ChannelModelPickerProps {
@@ -45,13 +46,22 @@ export function ChannelModelPicker({ existing: currentModels, fetched, fetching,
     return list;
   }, [existingIds, fetched, manual]);
 
-  const visibleFresh = fresh.filter(item => matches(item, query));
-  const visibleExisting = existing.filter(item => matches(item, query));
+  const visibleFresh = useMemo(() => fresh.filter(item => matches(item, query)), [fresh, query]);
+  const visibleExisting = useMemo(() => existing.filter(item => matches(item, query)), [existing, query]);
 
   const toggle = (id: string) => setSelected(prev => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
+  });
+  // 打开即可输入筛选；↑/↓ 在两栏之间连续移动高亮，Enter 勾选 / 取消，Esc 先清空搜索再关闭。
+  const navItems = useMemo(() => [...visibleFresh, ...visibleExisting], [visibleFresh, visibleExisting]);
+  const listbox = useListboxKeyboard({
+    items: navItems,
+    query,
+    onQueryChange: setQuery,
+    onClose: () => onClose(existing),
+    onSelect: item => toggle(item.id),
   });
   const setMany = (items: ModelItem[], on: boolean) => setSelected(prev => {
     const next = new Set(prev);
@@ -81,7 +91,7 @@ export function ChannelModelPicker({ existing: currentModels, fetched, fetching,
     onConfirm(next);
   };
 
-  const renderColumn = (title: string, items: ModelItem[], testId: string) => {
+  const renderColumn = (title: string, items: ModelItem[], testId: string, offset: number) => {
     const allOn = items.length > 0 && items.every(item => selected.has(item.id));
     return (
       <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-[var(--isl-border)] settings-elevated" data-testid={testId}>
@@ -93,8 +103,8 @@ export function ChannelModelPicker({ existing: currentModels, fetched, fetching,
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {items.length === 0 && <div className="px-3 py-6 text-center text-xs text-[var(--isl-ink-soft)]">暂无</div>}
-          {items.map(item => (
-            <div key={item.id} className="flex items-center gap-2 border-b border-[var(--isl-border)] px-3 py-1.5 last:border-b-0">
+          {items.map((item, index) => (
+            <div key={item.id} {...listbox.getOptionProps(offset + index)} aria-selected={selected.has(item.id)} className={`flex items-center gap-2 border-b border-[var(--isl-border)] px-3 py-1.5 last:border-b-0${listbox.activeIndex === offset + index ? ' bg-[var(--isl-surface-2)]' : ''}`}>
               <input type="checkbox" aria-label={item.id} checked={selected.has(item.id)} onChange={() => toggle(item.id)} />
               <span className="min-w-0 flex-1 truncate text-xs text-[var(--isl-ink)]" title={item.id}>{item.name || item.id}</span>
               <select
@@ -127,6 +137,7 @@ export function ChannelModelPicker({ existing: currentModels, fetched, fetching,
         data-testid="channel-model-picker"
         className="isl-shell flex h-[min(640px,calc(100dvh-32px))] w-[min(760px,100%)] flex-col gap-3 p-4"
         onClick={event => event.stopPropagation()}
+        {...listbox.getContainerProps()}
       >
         <div className="flex items-center justify-between">
           <h5 className="text-sm font-extrabold text-[var(--isl-ink)]">选择渠道模型</h5>
@@ -134,10 +145,13 @@ export function ChannelModelPicker({ existing: currentModels, fetched, fetching,
         </div>
         <div className="flex flex-wrap gap-2">
           <input
-            value={query}
-            onChange={event => setQuery(event.target.value)}
-            placeholder="搜索模型"
-            className="min-w-0 flex-1 rounded-md border border-[var(--isl-border)] bg-[var(--isl-card)] px-2 py-1.5 text-xs text-[var(--isl-ink)]"
+            {...listbox.getInputProps({
+              value: query,
+              onChange: event => setQuery(event.target.value),
+              placeholder: '搜索模型',
+              'aria-label': '搜索模型',
+              className: 'min-w-0 flex-1 rounded-md border border-[var(--isl-border)] bg-[var(--isl-card)] px-2 py-1.5 text-xs text-[var(--isl-ink)]',
+            })}
           />
           <input
             value={manualId}
@@ -152,9 +166,9 @@ export function ChannelModelPicker({ existing: currentModels, fetched, fetching,
           </button>
         </div>
         {fetchError && <div className="rounded-md bg-red-500/10 px-2 py-1.5 text-xs text-red-500">{fetchError}</div>}
-        <div className="flex min-h-0 flex-1 gap-3">
-          {renderColumn('新获取', visibleFresh, 'channel-model-picker-fresh')}
-          {renderColumn('已有', visibleExisting, 'channel-model-picker-existing')}
+        <div {...listbox.getListboxProps({ className: 'flex min-h-0 flex-1 gap-3', 'aria-label': '选择渠道模型', 'aria-multiselectable': true })}>
+          {renderColumn('新获取', visibleFresh, 'channel-model-picker-fresh', 0)}
+          {renderColumn('已有', visibleExisting, 'channel-model-picker-existing', visibleFresh.length)}
         </div>
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs text-[var(--isl-ink-soft)]">已选 {selected.size} 个</span>

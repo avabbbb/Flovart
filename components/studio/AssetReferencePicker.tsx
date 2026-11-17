@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AssetLibrary } from '../../types';
 import { useWorkflowMediaUrl } from '../workflow/media';
+import { useListboxKeyboard } from '../../hooks/useListboxKeyboard';
 import { AssetCardPreview, FolderBreadcrumb, MediaTabs, mediaKindOf, type MediaFilter } from './assetLibraryShared';
 
 export interface ReferencePickerWorkflowItem {
@@ -54,7 +55,8 @@ export function AssetReferencePicker({ open, language, workflowItems, connectedI
     setFolderId(null);
     setSelectedTags([]);
     setUploadError(null);
-    const onKey = (event: KeyboardEvent) => event.key === 'Escape' && onClose();
+    // 列表键盘（useListboxKeyboard）处理过的 Esc（例如先清空搜索）会 preventDefault，这里不再关闭。
+    const onKey = (event: KeyboardEvent) => event.key === 'Escape' && !event.defaultPrevented && onClose();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
@@ -75,6 +77,23 @@ export function AssetReferencePicker({ open, language, workflowItems, connectedI
     if (selectedTags.length > 0 && !selectedTags.some(tag => tag === '其它' ? item.tags.length === 0 : item.tags.includes(tag))) return false;
     return !normalizedQuery || `${item.name || ''} ${item.tags.join(' ')} ${item.prompt || ''}`.toLocaleLowerCase().includes(normalizedQuery);
   }), [filter, folderId, library?.items, normalizedQuery, selectedTags]);
+
+  // 打开即可输入筛选，↑/↓ 在卡片间移动高亮，Enter 选中，Esc 先清空搜索再关闭。
+  const pick = (kind: 'workflow' | 'asset', id: string) => {
+    const created = kind === 'workflow' ? onSelectWorkflow?.(id) : onSelectAsset?.(id);
+    if (created) onClose();
+  };
+  const listItems = source === 'workflow' ? visibleWorkflow.map(item => ({ kind: 'workflow' as const, id: item.id })) : visibleAssets.map(item => ({ kind: 'asset' as const, id: item.id }));
+  const listbox = useListboxKeyboard({
+    items: listItems,
+    open,
+    query,
+    onQueryChange: setQuery,
+    onClose,
+    resetKey: `${source}:${filter}:${folderId}:${selectedTags.join(',')}`,
+    onSelect: item => pick(item.kind, item.id),
+  });
+  const activeStyle = (index: number) => (listbox.activeIndex === index ? { borderColor: 'var(--isl-mint)', boxShadow: '0 0 0 2px var(--isl-mint-bg)' } : undefined);
 
   if (typeof document === 'undefined') return null;
   return createPortal(
@@ -99,6 +118,7 @@ export function AssetReferencePicker({ open, language, workflowItems, connectedI
             exit={{ opacity: 0, y: 16, scale: 0.97 }}
             transition={{ type: 'spring', stiffness: 360, damping: 30 }}
             onMouseDown={event => event.stopPropagation()}
+            {...listbox.getContainerProps()}
           >
             <aside className="flex w-48 shrink-0 flex-col border-r p-3" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-sunk)' }}>
               <div className="mb-3 px-2 text-sm font-extrabold" style={{ color: 'var(--isl-ink)' }}>{isChinese ? '添加参考' : 'Add reference'}</div>
@@ -117,7 +137,7 @@ export function AssetReferencePicker({ open, language, workflowItems, connectedI
               <header className="flex items-center gap-2 border-b px-4 py-3" style={{ borderColor: 'var(--isl-border)' }}>
                 <label className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-xl border px-3" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface-sunk)' }}>
                   <Search size={14} style={{ color: 'var(--isl-ink-ghost)' }} />
-                  <input value={query} onChange={event => setQuery(event.target.value)} placeholder={isChinese ? '搜索工作流节点或资产…' : 'Search nodes or assets…'} className="min-w-0 flex-1 bg-transparent text-xs outline-none" style={{ color: 'var(--isl-ink)' }} />
+                  <input {...listbox.getInputProps({ value: query, onChange: event => setQuery(event.target.value), placeholder: isChinese ? '搜索工作流节点或资产…' : 'Search nodes or assets…', 'aria-label': isChinese ? '搜索工作流节点或资产' : 'Search nodes or assets', className: 'min-w-0 flex-1 bg-transparent text-xs outline-none', style: { color: 'var(--isl-ink)' } })} />
                 </label>
                 <MediaTabs value={filter} onChange={setFilter} isChinese={isChinese} />
                 {onUploadFiles && (
@@ -164,15 +184,15 @@ export function AssetReferencePicker({ open, language, workflowItems, connectedI
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                  {source === 'workflow' ? visibleWorkflow.map(item => {
+                <div {...listbox.getListboxProps({ className: 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4', 'aria-label': isChinese ? '可添加的参考' : 'References' })}>
+                  {source === 'workflow' ? visibleWorkflow.map((item, index) => {
                     const selected = connected.has(item.id);
-                    return <motion.button key={item.id} type="button" whileTap={{ scale: 0.97 }} onClick={() => { const id = onSelectWorkflow?.(item.id); if (id) onClose(); }} className="group overflow-hidden rounded-2xl border text-left transition hover:-translate-y-0.5 hover:border-[var(--isl-mint)]" style={{ borderColor: selected ? 'var(--isl-mint)' : 'var(--isl-border)', background: 'var(--isl-surface)' }}>
+                    return <motion.button key={item.id} type="button" tabIndex={-1} {...listbox.getOptionProps(index)} aria-selected={selected} whileTap={{ scale: 0.97 }} onClick={() => pick('workflow', item.id)} className="group overflow-hidden rounded-2xl border text-left transition hover:-translate-y-0.5 hover:border-[var(--isl-mint)]" style={{ borderColor: selected ? 'var(--isl-mint)' : 'var(--isl-border)', background: 'var(--isl-surface)', ...activeStyle(index) }}>
                       <div className="relative aspect-[4/3] overflow-hidden bg-[var(--isl-surface-sunk)]"><WorkflowPreview item={item} />{selected && <span className="absolute right-2 top-2 rounded-full px-2 py-1 text-[10px] font-bold backdrop-blur-md" style={{ color: 'var(--isl-mint-deep)', background: 'var(--isl-mint-bg)' }}>{isChinese ? '已连接' : 'Connected'}</span>}</div>
                       <div className="flex items-center gap-2 px-3 py-2"><span className="min-w-0 flex-1 truncate text-xs font-bold" style={{ color: 'var(--isl-ink)' }}>{item.label}</span><Plus size={13} style={{ color: 'var(--isl-mint-deep)' }} /></div>
                     </motion.button>;
-                  }) : visibleAssets.map(item => (
-                    <motion.button key={item.id} type="button" whileTap={{ scale: 0.97 }} onClick={() => { const id = onSelectAsset?.(item.id); if (id) onClose(); }} className="group overflow-hidden rounded-2xl border text-left transition hover:-translate-y-0.5 hover:border-[var(--isl-mint)]" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)' }}>
+                  }) : visibleAssets.map((item, index) => (
+                    <motion.button key={item.id} type="button" tabIndex={-1} {...listbox.getOptionProps(index)} whileTap={{ scale: 0.97 }} onClick={() => pick('asset', item.id)} className="group overflow-hidden rounded-2xl border text-left transition hover:-translate-y-0.5 hover:border-[var(--isl-mint)]" style={{ borderColor: 'var(--isl-border)', background: 'var(--isl-surface)', ...activeStyle(index) }}>
                       <div className="aspect-[4/3] overflow-hidden bg-[var(--isl-surface-sunk)]"><AssetCardPreview item={item} /></div>
                       <div className="flex items-center gap-2 px-3 py-2"><span className="min-w-0 flex-1 truncate text-xs font-bold" style={{ color: 'var(--isl-ink)' }}>{item.name || (isChinese ? '未命名素材' : 'Untitled')}</span><Plus size={13} style={{ color: 'var(--isl-mint-deep)' }} /></div>
                     </motion.button>
