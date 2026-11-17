@@ -26,7 +26,6 @@
 | 文档 | 内容 |
 | --- | --- |
 | [16 Agent 视频流水线](design/16-agent-video-pipeline.md) | 宣传片流水线能力矩阵、工具集、run / trace 模型、素材归档、放置（2026-11-13 改为逆向 = 全能助手主场，2026-11-17 改名 Iris）、P0–P2 计划与验收；P0 已在 main 实现（§12） |
-| [远景：三条产品线](plans/vision-three-tracks.md) | 截图 + 录制（A）、视频逆向 + Agent 辅助制作（B）、创作者 UXP 插件（C，AE / PS 内读取工程上下文、直接操作图层与时间线，首个场景静止系 MAD）；方向探索，不改现行优先级 |
 | [真实操作录制与剪辑 Hub 计划](plans/recordly-capture-hub.md) | Recordly 连接器 → Rust 录制 + Snipaste 式截图伴生工具 → 视频制作 Hub；录制截图为本体、反推 / 发送到画布 / Agent 为可插拔模块；许可证边界（Recordly AGPL）与分期 H0–H3（草案） |
 | [多模态 AIGC 评测平台计划](plans/aigc-eval-platform.md) | 在 `eval/` 内补 L4 题库：条目 / 生成 / 评分 Schema、场景 × 能力 × 难度 × dev/test/holdout、客观轨 grader 与稳定性撤回、可用 / 满意 / 惊喜率、结果库与静态看板、「设为首图」偏好事件（M0 已实现，口径以 eval.md §4.1 为准） |
 | [DSH 工作台计划](plans/dsh-workbench.md) | Flovart 作为 DeepSeek Harness 工作台、DSH Agent 通过工具操作画布（进行中：主仓库 dsh-plugin 已可用，独立仓库 / 市场未开始） |
@@ -59,6 +58,7 @@
 
 ## 4. 归档（只读）
 
+- [2026-11-17 Iris 定位](archive/2026-11-17-iris/)：README 草稿（2026-11-03）、远景三条产品线（线 B / C 并入 Iris，蒸馏进 00 / 11-iris / 14）。逐份原因见该目录 README。
 - [2026-11-16 评测文档蒸馏](archive/2026-11-16-eval-distill/)：2026-11-11、11-12 两份 Agent / 工具链迭代记录；评测方法并入 eval/eval.md，遗留项并入 todo。
 - [2026-11-13 设计语言与文档树清理](archive/2026-11-13-design-refresh/)：原 30 竞品机制复刻、31 Notion 式紧凑 UI、32 流式用量（蒸馏进 10 / DESIGN.md / 13）；LibTV 对标两份、计划卡设计稿（已实施）、0.3.0 内测清单、DSH 表单文案、沉浸式翻译调研、面试演示场景。逐份原因见该目录 README。
 - [2026-10-19](archive/2026-10-19/)：Beta 评估。

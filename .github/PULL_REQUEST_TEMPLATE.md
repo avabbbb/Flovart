@@ -46,4 +46,4 @@ Closes #
 - [ ] 只修改本 Issue 所需文件，没有顺手重构
 - [ ] 已检查 `todo.mdx` 与 `pending-test.mdx`
 - [ ] 没有把未完成能力写成已完成
-- [ ] 没有恢复旧 Canvas / Art，仍保持 Workflow / Table / Agent 边界
+- [ ] 没有恢复旧 Canvas / Art，仍保持 Workflow / Iris / Agent 边界

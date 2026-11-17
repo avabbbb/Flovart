@@ -1,7 +1,8 @@
 # Flovart × DaVinci Resolve Studio 21.1 — Product & UI Spec
 
 Status: **CURRENT IMPLEMENTATION REFERENCE**  
-Authority: subordinate to docs/design/00-overview.md  
+Authority: subordinate to docs/design/00-overview.md and docs/design/14-creative-hosts.md  
+Also serves: the Iris context connector for Resolve (Iris = Flovart's personal-agent surface; see docs/design/11-iris.md and 14 §7)  
 Target: **DaVinci Resolve Studio 21.1 first**  
 Updated: 2026-10-08
 

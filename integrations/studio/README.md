@@ -1,7 +1,7 @@
-# Iris Studio Host Packages
+# Flovart Studio Host Packages
 
 The current experimental panels provide a contextual inspector. A creative host supplies its current
-document and selection; Iris Link registers that selection as a
+document and selection; Flovart Link registers that selection as a
 provider-neutral `creative-host` resource, runs the existing Workflow command
 and execution path, then asks the host adapter to import the returned artifact.
 
@@ -26,9 +26,13 @@ uncompiled C++ Effect SDK source prototype and an explicit candidate-apply bridg
 neither is a built or host-certified effect.
 
 The current first-host direction is **DaVinci Resolve Studio 21.1 MCP-first**:
-use Blackmagic's native MCP for Agent-side Resolve control, Iris Skill/CLI for
+use Blackmagic's native MCP for Agent-side Resolve control, Flovart Skill/CLI for
 generation and durable artifacts, and keep the Resolve Workflow Integration as a
-thin human-review surface / measured fallback. See
+thin human-review surface / measured fallback. The same host packages are also
+the optional context connectors of **Iris**, Flovart's personal-agent surface
+(read-only first, Resolve first; see
+[Creative Hosts §7](../../docs/design/14-creative-hosts.md)). Older text that calls
+Flovart itself "Iris" (Iris Link, Iris CLI) uses a retired codename. See
 [Resolve Product & UI Spec](resolve/PRODUCT_UI_SPEC.md) and the
 [main design](../../docs/design/00-overview.md).
 

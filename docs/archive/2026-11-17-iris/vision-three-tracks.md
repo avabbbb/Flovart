@@ -1,3 +1,5 @@
+> 已归档 2026-11-17：线 B（逆向 + Agent 辅助）与线 C（宿主读工程上下文）已被 Iris 吸收，核心主张蒸馏进 00 §1、11-iris §0、14 §7；线 A 见 plans/recordly-capture-hub.md。
+
 # Flovart 远景：三条产品线（探索）
 
 状态：远景草案（2026-11-15）。这是方向探索，不是 current truth，不改变 [00 总体设计](../design/00-overview.md) 与 [14 Creative Hosts](../design/14-creative-hosts.md) 的现行优先级（Resolve 仍是第一宿主）。任何一条线进入实施前，先写独立计划并通过评审。

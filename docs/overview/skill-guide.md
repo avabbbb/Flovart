@@ -4,7 +4,7 @@
 
 ## Agent Integration Skill 是什么
 
-它是一份给 Codex、WorkBuddy、Claude Code 等 Coding Agent 的操作说明：告诉 Agent 如何准备 Iris、读取当前 Workflow、应用结构化修改、运行节点并核对结果。
+它是一份给 Codex、WorkBuddy、Claude Code 等 Coding Agent 的操作说明：告诉 Agent 如何准备 Flovart、读取当前 Workflow、应用结构化修改、运行节点并核对结果。
 
 它不是：
 - Agent 连接本身；
@@ -17,7 +17,7 @@
 
 ## 当前外部 Agent 流程
 
-1. 通过 `ensure` 准备 Iris 与对应 Skill。
+1. 通过 `ensure` 准备 Flovart 与对应 Skill。
 2. 打开并绑定真实可见 Workflow。
 3. Agent 先 `status` / `workflow.inspect`，需要时读取 selection。
 4. 使用 `workflow.apply` 做结构化编辑。

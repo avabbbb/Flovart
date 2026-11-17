@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- 顶栏第二个 tab「逆向 / Reverse」改名 **Iris**（全能后期助手 · Personal agent），仍是“优化中”占位；内部 `canvasView: 'reverse'` 与 `reverse` 目录不变。文档按新定位更新：Web 版对话优先、画布为产出面、可选连接本地剪辑软件（Resolve 先）。官方站点改为 https://flovart.avabbbb.com（Cloudflare Worker `flovart`）。
 - 界面：右侧 Agent 对话面板改为磨砂玻璃（半透明底 + 面板内柔和环境光：顶部薄荷、右侧淡紫、底部蜜桃 + 模糊 + 白色内高光），输入框、提示卡、生成计划卡改为磨砂卡；应用其余部分不变；系统开启“减弱透明度”/高对比或浏览器不支持 backdrop-filter 时回退实底（`styles/ambientGlass.css`）。
 
 - 生成计划卡随会话保存：用户做出选择的计划卡按「项目 + 会话」存本机（只存命令、节点 id、门禁明细、选择、时间与轮次，进度回来后按画布实时节点重新推导），切换会话、刷新页面后挂回原来那一轮；删除会话时一起清掉。
@@ -59,7 +60,7 @@
 - Automatically build Windows x64 EXE and macOS Apple Silicon / Intel DMGs on main; tagged builds are published only after release and security checks.
 - This is a prerelease. Creative hosts remain Experimental and paid-provider certification remains pending. macOS uses ad-hoc signing, without Apple notarization; Windows Authenticode is not configured. This version resets the public beta numbering and is not an automatic downgrade from 0.3.x previews.
 
-## Unreleased
+## Earlier unreleased notes (historical, not tied to a release)
 
 - DSH 桌面端连接：bootstrap 接受 `dsh-app://` 协议代理（转发时会去掉 Origin/Sec-Fetch-Site），Workspace Operator 允许 `dsh-app://app` 交换 session；新增 `npm run dsh:desktop` 启动器，先复用/拉起 Workspace Operator 再打开 DSH Desktop（`--ensure-only` 只拉起 Operator）。
 - 账号入口弹窗跟随应用深浅色主题（含 DSH 内嵌主题），文案改为账号生态探索中、多端同步后续更新，并加入 GitHub 点赞入口。

@@ -1,6 +1,6 @@
 # @flovart/dsh-plugin 发布状态
 
-状态日期：2026-11-07。每一档只写已有证据的结论。
+状态日期：2026-11-07（发布 / 市场状态未在 2026-11-17 重新核对）。兼容集于 2026-11-17 按 `package.json` 与 README 更新。每一档只写已有证据的结论。
 
 | 阶段 | 状态 | 证据 / 阻塞 |
 | --- | --- | --- |
@@ -11,7 +11,7 @@
 
 ## 兼容集
 
-- DeepSeek Harness：`@deepseek-ai/dsh@0.1.0-rc.8`（本机已安装版本）。
+- DeepSeek Harness：`>=0.2.2-rc.1 <0.3.0-0`（peer 范围，已验证 `0.2.2-rc.1`、`0.2.2-rc.2`，见 [README](README.md)）。2026-11-07 时本机为 `0.1.0-rc.8`，已不在当前兼容范围内。
 - 模型工具：`flovart_status`、`flovart_inspect`、`flovart_selection`、`flovart_apply`、`flovart_run`，对应 Flovart CLI 的五个稳定命令；付费、审批与媒体命令不在工具面。`flovart_run` 仍在 Flovart 画布里弹计划卡，由用户确认后才提交。
 - 不兼容的 Harness（缺 `@deepseek-ai/dsh-tools`）时跳过工具注册，退回 Operation Skill + CLI，不阻塞 profile 启动。
 

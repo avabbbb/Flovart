@@ -26,4 +26,4 @@ When an unfamiliar compatibility command or contract mismatch occurs, read its s
 npm run flovart:cli -- command.schema --command workflow.inspect --json
 ```
 
-Diagnostics must not expose credentials. The current registry has no Canvas, Element, or Table commands.
+Diagnostics must not expose credentials. The current registry has no Canvas or Element commands.

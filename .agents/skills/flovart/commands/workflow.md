@@ -1,6 +1,6 @@
 # Workflow commands
 
-Workflow is the current automated generation workspace. Table has no registered CLI commands yet.
+Workflow is the current automated generation workspace.
 
 Normal Agent flow starts from readiness and inspect:
 

@@ -37,7 +37,7 @@
 
 ### 审查边界
 
-- 产品顶栏是 **Canvas、Table、Agent** 三个正式 surface；不恢复旧的 Canvas / Art 双系统。
+- 产品顶栏是 **Canvas、Iris、Agent** 三个正式 surface（Iris 原名 逆向，是 surface 名而不是产品名）；不恢复旧的 Canvas / Art 双系统。
 - Provider 与 API 请求适配放在根目录 `services/`；共享状态优先使用现有 store/hook。
 - 当前项目、素材和生成记录主要保存在浏览器本地，不把未实现的云同步写成正式能力。
 - 新增遥测、外部请求、Secret 读取、持久化字段或费用路径时，PR 必须单独说明数据与安全影响。
@@ -70,6 +70,6 @@ Search existing Issues first, then use the [Issue chooser](https://github.com/av
 5. Run relevant tests, normally `npm run test` and `npm run build`; list exact commands and explain omitted checks.
 6. Check `todo.mdx` and `pending-test.mdx` whenever feature status changes.
 
-Flovart's top-level surfaces are **Canvas, Table, and Agent**. Do not restore the old Canvas/Art dual system. Any telemetry, external request, secret access, persistence change, or paid-provider path must disclose its data and security impact in the PR.
+Flovart's top-level surfaces are **Canvas, Iris, and Agent** (Iris, formerly Reverse, is a surface name, not the product name). Do not restore the old Canvas/Art dual system. Any telemetry, external request, secret access, persistence change, or paid-provider path must disclose its data and security impact in the PR.
 
 By contributing, you agree that your work is released under the <a href="../LICENSE">MIT License</a>. Please also follow the <a href="CODE_OF_CONDUCT.md">Code of Conduct</a>.

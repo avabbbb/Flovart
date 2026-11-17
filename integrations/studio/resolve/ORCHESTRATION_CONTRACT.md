@@ -1,8 +1,9 @@
-# Iris × DaVinci Resolve Studio 21.1 — Orchestration Contract
+# Flovart × DaVinci Resolve Studio 21.1 — Orchestration Contract
 
 Status: **CONTRACT DRAFT** — grounded in repo code + published 21.1 evidence; every real-host assumption is tagged `UNVERIFIED` until the R0–R3 tracer lands.
-Authority: subordinate to [PRODUCT_UI_SPEC.md](PRODUCT_UI_SPEC.md) → [docs/design/flovart-native-effects.md](../../../docs/archive/2026-10-07/design/flovart-native-effects.md) §4/§9.
-Hard rule: Iris does **not** ship a Resolve MCP server (`PRODUCT_UI_SPEC.md` §1, §15). Resolve's native MCP is the Agent control plane; Iris owns generation, identity and durable artifacts.
+Authority: subordinate to [PRODUCT_UI_SPEC.md](PRODUCT_UI_SPEC.md) → [14 Creative Hosts](../../../docs/design/14-creative-hosts.md) (historical source: [flovart-native-effects.md](../../../docs/archive/2026-10-07/design/flovart-native-effects.md) §4/§9, archived).
+Naming: this contract predates the 2026-11-17 Iris surface. Every "Iris" in the original draft meant Flovart itself (retired codename) and now reads Flovart. The Resolve path described here is also Iris's first optional context connector ([14](../../../docs/design/14-creative-hosts.md) §7).
+Hard rule: Flovart does **not** ship a Resolve MCP server (`PRODUCT_UI_SPEC.md` §1, §15). Resolve's native MCP is the Agent control plane; Flovart owns generation, identity and durable artifacts.
 Updated: 2026-09-27
 
 ---
@@ -25,7 +26,7 @@ Sources: official Blackmagic support page (official), community field guide [dmm
 | `ArchiveProject` called from a script **crashes Resolve 21.1**; bridge refuses it. | community-observed — hard deny-list entry |
 | Windows CJK/UTF-8 failures in generated Python on some Agent hosts (`PYTHONUTF8=1` mitigation reported). | community-observed; checklist §1 requires local reproduction before adopting |
 
-All product-level warnings in `PRODUCT_UI_SPEC.md` §1 apply: the exact tool list is an observed implementation detail, not an Iris compatibility contract.
+All product-level warnings in `PRODUCT_UI_SPEC.md` §1 apply: the exact tool list is an observed implementation detail, not an Flovart compatibility contract.
 
 ---
 
@@ -45,42 +46,42 @@ USER (Resolve Studio 21.1 open, clip selected)
    │      │         · import artifact         (MediaPool.ImportMedia / MediaStorage.AddItemListToMediaPool)
    │      │         · P1 add-track / P2 replace — only after gates §7
    │      │
-   │      └─ Iris Skill + legacy `flovart` CLI  (generation plane)
+   │      └─ Flovart Skill + legacy `flovart` CLI  (generation plane)
    │           ├─ ensure / status
    │           ├─ workflow.inspect / workflow.selection.get / workflow.apply / workflow.node.run
    │           ├─ generate.image / generate.video          → GenerationTask
    │           ├─ task.get / task.list / task.cancel       → provider task identity
    │           └─ durable artifact  (runtime-artifacts/<dir>/<file> + sha256)
    │
-   └─ Iris Resolve panel (human review plane — Electron Workflow Integration pkg)
+   └─ Flovart Resolve panel (human review plane — Electron Workflow Integration pkg)
         ├─ Current Clip · Prompt/Refs · Plan/Cost · Task · Candidates · Add to Media Pool
         └─ consumes the SAME task/artifact plane via host-contract bridge; owns no Resolve ops
 
                                  ↓
-              durable Iris artifact (local file + manifest)
+              durable Flovart artifact (local file + manifest)
                                  ↓
               Resolve Media Pool  (import = the only P0 host write)
                                  ↓
               original Timeline unchanged
 ```
 
-Ownership rule: **Resolve native MCP owns every project/timeline/selection/import verb.** The Iris plane never touches Resolve state; the panel bridge's `importArtifact` (`main.js:36-74`) is the Workflow Integration fallback used only when the user acts in the panel or the native MCP hits a measured gap (§5).
+Ownership rule: **Resolve native MCP owns every project/timeline/selection/import verb.** The Flovart plane never touches Resolve state; the panel bridge's `importArtifact` (`main.js:36-74`) is the Workflow Integration fallback used only when the user acts in the panel or the native MCP hits a measured gap (§5).
 
 ---
 
 ## 2. Operation ownership table
 
-Owner legend: **MCP** = Resolve native MCP `run_script` (bounded) · **CLI** = legacy `flovart` CLI / Skill · **PANEL** = Iris Resolve light panel (`dist-studio/resolve`, `integrations/studio/resolve`) · **BRIDGE** = Workflow Integration Electron bridge (measured fallback only).
+Owner legend: **MCP** = Resolve native MCP `run_script` (bounded) · **CLI** = legacy `flovart` CLI / Skill · **PANEL** = Flovart Resolve light panel (`dist-studio/resolve`, `integrations/studio/resolve`) · **BRIDGE** = Workflow Integration Electron bridge (measured fallback only).
 
-| # | Operation | Owner | Resolve scripting API / Iris command | Status / gap |
+| # | Operation | Owner | Resolve scripting API / Flovart command | Status / gap |
 |---|---|---|---|---|
 | 1 | Read project identity | MCP | `resolve.GetCurrentProject()` (21.1 shortcut) → `Project.GetName()` / `GetUniqueId()` | OK in doc; existing bridge already uses `ProjectManager.GetCurrentProject` (`main.js:91-95`) |
 | 2 | Read current timeline identity | MCP | `resolve.GetCurrentTimeline()` → `Timeline.GetName()`/`GetUniqueId()`/`GetStartFrame()`/`GetEndFrame()` | OK in doc; **gap in our adapter — not captured today** (§3) |
 | 3 | Read selection — Media Pool clip | MCP | `resolve.GetMediaPool().GetSelectedClips()` → `GetMediaId()`/`GetUniqueId()`, `GetClipProperty('File Path'|'Type'|'Duration'|…)` | OK in doc; bridge equivalent `main.js:119-127` |
 | 4 | Read selection — timeline item | MCP | `Timeline.GetSelectedClips()` (21.1 returns selected items) **or** `GetCurrentVideoItem()` → `GetUniqueId()`, `GetStart()/GetEnd()`, `GetSourceStart/EndFrame()`, `GetTrackTypeAndIndex()`, `GetMediaPoolItem().GetMediaId()` | `GetSelectedClips()` on Timeline is **21.1-new** — preferred over `GetCurrentVideoItem` (which misses selection ≠ playhead). Bridge today only uses `GetCurrentVideoItem` (`main.js:128-132`) |
-| 5 | Materialize reference — clip file path | MCP (read-only) | `MediaPoolItem.GetClipProperty('File Path')` + Iris reads the returned path itself | OK; bridge does this `main.js:142` |
+| 5 | Materialize reference — clip file path | MCP (read-only) | `MediaPoolItem.GetClipProperty('File Path')` + Flovart reads the returned path itself | OK; bridge does this `main.js:142` |
 | 6 | Materialize reference — current frame still | MCP | `TimelineItem.ExportCurrentFrameAsStill(filePath)`; `Timeline.GetCurrentTimecode()`/`SetCurrentTimecode()` for playhead control | OK in doc; bridge still does tmpdir + `unlinkSync` (`main.js:144-156`) — see §4: frame must land in artifact store, not tmp |
-| 7 | Prepare generation plan / cost | CLI / PANEL | Skill ops `workflow.inspect` + Iris task plan (prompt, model route, refs); cost confirmation is an Iris gate, not a Resolve one | OK — `FlovartStudioCore` / CLI `generate.*` (cli.js:592-621) |
+| 7 | Prepare generation plan / cost | CLI / PANEL | Skill ops `workflow.inspect` + Flovart task plan (prompt, model route, refs); cost confirmation is an Flovart gate, not a Resolve one | OK — `FlovartStudioCore` / CLI `generate.*` (cli.js:592-621) |
 | 8 | Run paid generation | CLI (PANEL via same task fn) | `generate.video`/`generate.image`/`workflow.node.run` → Runtime task; `task.get`/`task.cancel`/`task.resume` for lifecycle | OK — RuntimeTask + ProductionTask schemas exist (`tools/flovart/contracts/runtime/schemas/`) |
 | 9 | Durable artifact store | CLI / Runtime only | `runtime-artifacts/<dir>/<file>` + `{artifactId, sha256, byteSize, storeRelpath}` (`src-tauri/src/runtime/worker/local_media.rs:76-93`, persisted in task result `:319-324`) | OK for generation results; **gap** for host-imported/materialized refs — artifactRegistry.ts is session-scoped only (§4) |
 | 10 | Import artifact → Media Pool (P0) | MCP first, BRIDGE fallback | `MediaPool.ImportMedia([{FilePath}])` preferred — it takes a bare path and returns `MediaPoolItem`s; `MediaStorage.AddItemListToMediaPool([{media: path}])` is the measured-but-path-picky alternative (backslash required) | `UNVERIFIED` on native MCP — R1 must try `ImportMedia` first; bridge today uses `AddItemListToMediaPool` (`main.js:64-66`). See §5 |
@@ -171,7 +172,7 @@ Checklist §2 requires: capture identity → change selection in Resolve → pro
                   HostNativeCandidate already carries artifactId+sha256+providerTaskId:
                   studioContract.ts:111-125 — reuse, don't fork)
 3. IMPORT      → hand Resolve the STABLE artifact path (never a tmp file)
-4. KEEP SOURCE → Iris never deletes an artifact a project references
+4. KEEP SOURCE → Flovart never deletes an artifact a project references
                  (design §4.3: "素材持有工程引用时不得自动清理")
 5. MAP BACK    → write artifactId/sha256 onto the imported MediaPoolItem via
                  SetMetadata/SetClipProperty/AddFlag so reopening the project
@@ -200,7 +201,7 @@ Checklist §2 requires: capture identity → change selection in Resolve → pro
 | **B (fallback on same plane)** | `resolve.GetMediaStorage().AddItemListToMediaPool([{ media: path }])` | What the bridge uses today (`main.js:64-66`). Community-measured trap: **backslash paths required**; forward slash returns `[]` (`no mapped volume found`). On Windows, normalize `path → C:\…` before the call |
 | **C (last resort)** | Workflow Integration bridge `importArtifact` IPC (`main.js:36-74`) | Only when A+B measurably fail on the installed build. Requires the Electron panel running; gives up Agent-driven operation. Record a gap (§5.2) before using |
 
-Selection between A/B is a runtime decision inside the Agent's bounded script — try A, on falsy/`[]` result retry B with normalized backslashes, then record. Do NOT add an Iris-side `resolve.import` tool (spec §10 rule: no per-API wrappers).
+Selection between A/B is a runtime decision inside the Agent's bounded script — try A, on falsy/`[]` result retry B with normalized backslashes, then record. Do NOT add an Flovart-side `resolve.import` tool (spec §10 rule: no per-API wrappers).
 
 ### 5.2 Gap-record format
 
@@ -236,13 +237,13 @@ Each gate produces evidence files, not prose claims. `UNVERIFIED` tags in this d
 - [ ] UTF-8 tracer: ASCII + Chinese project/bin/marker names and Chinese text in generated script; record repro before any `PYTHONUTF8=1` workaround — evidence `utf8.json`
 - [ ] `page-null` check: confirm behavior when Resolve sits on Project Manager (community: reads work, writes return None) — evidence `page-null.json`
 
-### R1 — native MCP + Iris CLI, no panel dependency (checklist §2-3, spec §12)
+### R1 — native MCP + Flovart CLI, no panel dependency (checklist §2-3, spec §12)
 
 Golden path, deterministic/fake artifact only:
 
 - [ ] capture frozen target identity per §3 (project+timeline+item or clip, `mediaId`, track, timeRange) — evidence `target-identity.json`
 - [ ] change UI selection after capture → prove task target unchanged — evidence `retarget-proof.json`
-- [ ] one local deterministic Iris artifact in `runtime-artifacts` — evidence `artifact.json` `{artifactId, sha256, bytes, storeRelpath}`
+- [ ] one local deterministic Flovart artifact in `runtime-artifacts` — evidence `artifact.json` `{artifactId, sha256, bytes, storeRelpath}`
 - [ ] import via §5.1 A→B order — evidence `import.json` incl. which API succeeded
 - [ ] Media Pool before/after diff (clip list snapshot) — evidence `mediapool-diff.json`
 - [ ] timeline before/after diff (`GetItemListInTrack` per track + `GetStartFrame/GetEndFrame`) — evidence `timeline-unchanged.json`
@@ -254,7 +255,7 @@ Golden path, deterministic/fake artifact only:
 - [ ] all 8 required states exercised on real Resolve — screenshot set
 - [ ] Media Pool output-select defect fixed and re-verified (`main.js` bridge `{kind:'media-pool'}` vs generic select; spec §7.6, design §3.2, checklist §4)
 - [ ] narrow/wide resize, no horizontal scroll, Current-Clip-first ordering
-- [ ] candidate primary action = `Add to Media Pool`; `Open in Iris` preserves task context
+- [ ] candidate primary action = `Add to Media Pool`; `Open in Flovart` preserves task context (lands in the Flovart Workflow; the Iris tab once it ships)
 - [ ] no ports/tokens/MCP JSON/chat in panel
 
 ### R3 — one real Provider (checklist §6, spec §12)
@@ -276,8 +277,8 @@ Direct implementation of spec §9 + checklist §9; adds the measured 21.1 crash 
 | --- | --- | --- |
 | Read project/selection/metadata | auto | bounded `run_script` read payloads |
 | Search Resolve API/docs | auto | `get_scripting_api`/`search_scripting_api`/`get_scripting_docs` |
-| Prepare Iris generation plan | auto | CLI inspect; cost shown only when needed (spec §7.7) |
-| Paid generation | confirm if outside approved scope | Iris cost gate; agent never bypasses (design §5.4) |
+| Prepare Flovart generation plan | auto | CLI inspect; cost shown only when needed (spec §7.7) |
+| Paid generation | confirm if outside approved scope | Flovart cost gate; agent never bypasses (design §5.4) |
 | Import result to Media Pool | low-risk, allowed after generation intent | §5.1 path A→B; non-destructive by construction |
 | Add candidate to new track | explicit user/Agent instruction | op #12; re-verify track index + insertion range immediately before commit (checklist §7) |
 | Replace timeline item | confirm + fresh identity recheck | op #13; conflict if captured target changed/disappeared — never "whatever is selected" (checklist §8) |
@@ -286,7 +287,7 @@ Direct implementation of spec §9 + checklist §9; adds the measured 21.1 crash 
 | Overwrite existing deliverable | confirm | per spec §9 |
 | `run_script_unsafe` | **deny by default** | unbounded, runs in server process, timed-out scripts keep running (community-observed) — enabling it to make a demo pass is forbidden (spec §9) |
 | `ArchiveProject` from script | **deny always** | community-measured crash on 21.1 — add to deny-list even inside "unsafe" exceptions |
-| Payloads importing `os`/`sys`/`subprocess`/`socket`/`pathlib`, calling `open`/`exec`/`eval`/`compile` | deny | bounded `run_script` already blocks these (community-observed audit hook); Iris additionally denies at script-review gate |
+| Payloads importing `os`/`sys`/`subprocess`/`socket`/`pathlib`, calling `open`/`exec`/`eval`/`compile` | deny | bounded `run_script` already blocks these (community-observed audit hook); Flovart additionally denies at script-review gate |
 | Generated scripts/logs containing private paths or credentials | redact before storing | checklist §9 |
 | `Timeline.SetCurrentTimecode` during materialize | allowed but restore playhead | read `GetCurrentTimecode()`, restore after still export — playhead is user-visible state |
 
@@ -298,6 +299,6 @@ Repeated rule from spec §9: if the installed MCP exposes bounded + unsafe, boun
 
 Until R0+R1 pass on the recorded environment, Resolve stays **Experimental** (`SUPPORT_MATRIX.md:29` — "native MCP 真实连接、selection → durable artifact → Media Pool tracer 仍是 External Gate"). Approved wording after MCP+P0 only (checklist, evidence wording):
 
-> Resolve Studio 21.1 native MCP and Iris Media Pool generation/import flow were real-host validated on the recorded environment.
+> Resolve Studio 21.1 native MCP and Flovart Media Pool generation/import flow were real-host validated on the recorded environment.
 
 Never claim: Free Resolve support, full Resolve support, OFX support, or automatic safe timeline replacement — each needs its own gate.
