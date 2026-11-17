@@ -27,7 +27,7 @@ describe('workflow operation node surface', () => {
     expect(created.type).toBe('image');
     const take = (id: string, storageKey: string) => ({
       id, status: 'success' as const, recipeHash: 'h', createdAt: '2026-11-18T00:00:00.000Z', completedAt: '2026-11-18T00:00:01.000Z',
-      snapshot: { id: 's-' + id, createdAt: '2026-11-18T00:00:00.000Z', compilerVersion: 'workflow-operation@1', renderedPrompt: '', parameters: {}, inputBindings: [], recipeHash: 'h' },
+      snapshot: { id: 's-' + id, createdAt: '2026-11-18T00:00:00.000Z', compilerVersion: 'workflow-operation@1' as const, renderedPrompt: '', parameters: {}, inputBindings: [], recipeHash: 'h' },
       outputNodeIds: [created.id], outputMedia: { storageKey, mimeType: 'image/png' },
     });
     const result = {
