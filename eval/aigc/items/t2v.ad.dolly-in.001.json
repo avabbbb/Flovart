@@ -1,0 +1,79 @@
+{
+  "id": "t2v.ad.dolly-in.001",
+  "version": "1.0.0",
+  "domain": "t2v",
+  "scenario": "ad",
+  "taskGroup": "generate",
+  "capabilities": [
+    "camera.dolly-in",
+    "product.hero",
+    "audio.music"
+  ],
+  "difficulty": "easy",
+  "split": "dev",
+  "prompt": {
+    "zh": "一瓶透明玻璃香水放在白色大理石台面上，镜头缓慢推近，光线从左侧扫过瓶身，背景是轻柔的钢琴旋律。",
+    "en": "A clear glass perfume bottle on white marble; slow dolly-in, light sweeps across the bottle from the left, soft piano music.",
+    "negative": {
+      "zh": "画面静止、文字、水印",
+      "en": "static frame, text, watermark"
+    },
+    "translation": "manual-verified"
+  },
+  "constraints": {
+    "aspect": "16:9",
+    "durationSec": 3,
+    "resolution": "1080p",
+    "audio": {
+      "required": true,
+      "syncToleranceSec": 0.2
+    }
+  },
+  "checks": [
+    {
+      "id": "bottle",
+      "type": "vqa-yesno",
+      "question": "画面中是否有一个透明玻璃香水瓶？",
+      "difficulty": "easy"
+    },
+    {
+      "id": "marble",
+      "type": "vqa-yesno",
+      "question": "香水瓶是否放在白色大理石台面上？",
+      "parent": "bottle",
+      "difficulty": "easy"
+    },
+    {
+      "id": "dolly",
+      "type": "vqa-yesno",
+      "question": "镜头是否在推近（主体逐渐变大）？",
+      "difficulty": "medium"
+    },
+    {
+      "id": "music",
+      "type": "audio-qa",
+      "question": "音频是否是轻柔的钢琴旋律？",
+      "difficulty": "medium"
+    },
+    {
+      "id": "not-static",
+      "type": "rule",
+      "question": "视频不是近乎静止的画面",
+      "grader": "dynamic-degree"
+    },
+    {
+      "id": "has-audio",
+      "type": "rule",
+      "question": "视频带音轨",
+      "grader": "has-audio"
+    }
+  ],
+  "rubrics": [
+    "video-shot"
+  ],
+  "source": {
+    "kind": "handwritten",
+    "created": "2026-11-17",
+    "ref": "eval/eval.md §4.1 示例"
+  }
+}

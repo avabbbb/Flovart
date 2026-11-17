@@ -1,0 +1,67 @@
+{
+  "id": "tts.basic.clone.001",
+  "version": "1.0.0",
+  "domain": "tts",
+  "scenario": "basic",
+  "taskGroup": "reference",
+  "capabilities": [
+    "voice.clone",
+    "lang.zh"
+  ],
+  "difficulty": "easy",
+  "split": "test",
+  "prompt": {
+    "zh": "用参考音色朗读目标文本，语气平稳。"
+  },
+  "assets": {
+    "ref_audio": [
+      {
+        "uri": "fixture:tone-3s-ref.wav",
+        "mime": "audio/wav",
+        "consent": {
+          "kind": "synthetic",
+          "ref": "eval/aigc/lib/fixtures.mjs"
+        },
+        "transcript": "（合成音，无文本）",
+        "speakerId": "synthetic-001"
+      }
+    ],
+    "ground_truth": [
+      {
+        "uri": "fixture:tone-2s.wav",
+        "mime": "audio/wav",
+        "consent": {
+          "kind": "synthetic",
+          "ref": "eval/aigc/lib/fixtures.mjs"
+        },
+        "note": "目标句的参考录音；与 ref_audio 不是同一段"
+      }
+    ]
+  },
+  "constraints": {
+    "durationSec": 2,
+    "textToSpeak": "欢迎来到 Flovart。",
+    "durationToleranceSec": 0.5
+  },
+  "checks": [
+    {
+      "id": "wer",
+      "type": "audio-qa",
+      "question": "转写结果与目标文本的字错率（WER）不高于 5%？"
+    },
+    {
+      "id": "sim",
+      "type": "audio-qa",
+      "question": "说话人相似度（SIM）不低于参考基线？",
+      "difficulty": "medium"
+    }
+  ],
+  "rubrics": [
+    "digital-human"
+  ],
+  "source": {
+    "kind": "handwritten",
+    "created": "2026-11-17",
+    "ref": "eval/eval.md §4.1 示例"
+  }
+}

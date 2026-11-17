@@ -1,0 +1,59 @@
+{
+  "id": "t2i.consumer-effects.text-zh.001",
+  "version": "1.0.0",
+  "domain": "t2i",
+  "scenario": "consumer-effects",
+  "taskGroup": "generate",
+  "capabilities": [
+    "text.zh",
+    "layout.poster"
+  ],
+  "difficulty": "hard",
+  "split": "dev",
+  "prompt": {
+    "zh": "红色开业海报，正中写着“开业大吉”四个金色大字，周围有彩带。",
+    "en": "Red grand-opening poster with four large golden characters “开业大吉” in the center, ribbons around."
+  },
+  "constraints": {
+    "aspect": "1:1",
+    "textToRender": [
+      "开业大吉"
+    ]
+  },
+  "checks": [
+    {
+      "id": "text",
+      "type": "ocr-match",
+      "question": "画面中的文字是否为“开业大吉”？",
+      "target": "开业大吉",
+      "difficulty": "hard"
+    },
+    {
+      "id": "gold",
+      "type": "vqa-yesno",
+      "question": "文字是否为金色？",
+      "parent": "text",
+      "difficulty": "medium"
+    },
+    {
+      "id": "ribbons",
+      "type": "vqa-yesno",
+      "question": "周围是否有彩带？",
+      "difficulty": "easy"
+    },
+    {
+      "id": "square",
+      "type": "rule",
+      "question": "画面为 1:1",
+      "grader": "aspect"
+    }
+  ],
+  "rubrics": [
+    "image-output"
+  ],
+  "source": {
+    "kind": "handwritten",
+    "created": "2026-11-17",
+    "ref": "eval/eval.md §4.1 示例"
+  }
+}

@@ -16,6 +16,9 @@ loader is the executable validator.
 | `GraderResult` | `eval/graders/predicates.mjs` `evaluatePredicates()` | `{ passed: string[], failed: Array<{name, expected, reason}> }` |
 | `SuiteResult` | `eval/lib/engine.mjs` `aggregate()` | `perSuite[suite]`, `dataset[]` in the report |
 | `BenchmarkResult` | `eval/lib/report.mjs` `buildReport()` | `report.json` |
+| `AigcItem` | `eval/aigc/items/*.json`, schema `aigc-item.schema.json`, rules `eval/aigc/lib/dataset.mjs` | `id`, `version`, `domain`, `scenario`, `taskGroup?`, `capabilities`, `difficulty`, `split`, `prompt`, `assets` (by role), `constraints`, `checks`, `rubrics`, `source`, `status?` |
+| `AigcTake` | schema `aigc-take.schema.json` | `itemId`, `takeId`, `candidate` (model, route, params, skillVersion, rewrittenPrompt, seed), `outputs`, `costYuan`, `latencyMs`, `alternatesOf`, `pick` |
+| `AigcRating` | schema `aigc-rating.schema.json` | `takeId`, `itemId`, `rater`, `raterKind`, `dim`, `score` (1–5; `taskFollowing` 1–3), `audit?` |
 | `FailureClassification` | `eval/lib/engine.mjs` `FAILURE_CLASSES` | `failureClass` on each score |
 
 ## Invariants the schema encodes

@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://flovart.dev/schema/aigc-take.schema.json",
+  "title": "AigcTake",
+  "description": "One generation (take) for one AIGC item. Alternates of the same request sit side by side; the user's pick is recorded, never inferred. See eval/eval.md §4.1.",
+  "type": "object",
+  "required": ["itemId", "takeId", "candidate", "outputs"],
+  "additionalProperties": false,
+  "definitions": {
+    "output": {
+      "type": "object",
+      "required": ["uri", "mime"],
+      "additionalProperties": false,
+      "properties": {
+        "uri": { "type": "string", "minLength": 3 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "mime": { "type": "string", "pattern": "^(image|video|audio)/[a-z0-9.+-]+$" },
+        "bytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "outputList": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/output" } }
+  },
+  "properties": {
+    "itemId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,}$" },
+    "itemVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "takeId": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string" },
+    "createdAt": { "type": "string" },
+    "candidate": {
+      "type": "object",
+      "required": ["model"],
+      "additionalProperties": false,
+      "properties": {
+        "model": { "type": "string", "minLength": 1 },
+        "modelVersion": { "type": "string" },
+        "route": { "type": "string", "description": "Provider route, e.g. runninghub/seedance-2.0 or a user script id." },
+        "params": { "type": "object" },
+        "skillVersion": { "type": "string" },
+        "rewrittenPrompt": {
+          "type": ["string", "null"],
+          "description": "The prompt actually sent after any rewriter (Agent, Skill or a hosted rewriter such as MiniMax H3-Context-IR). null = no rewrite happened."
+        },
+        "seed": { "type": ["integer", "null"] }
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "video": { "$ref": "#/definitions/outputList" },
+        "image": { "$ref": "#/definitions/outputList" },
+        "audio": { "$ref": "#/definitions/outputList" }
+      }
+    },
+    "costYuan": { "type": "number", "minimum": 0 },
+    "latencyMs": { "type": "integer", "minimum": 0 },
+    "batchId": { "type": "string" },
+    "alternatesOf": { "type": ["string", "null"], "description": "takeId of the take this one was generated next to (same request, same batch)." },
+    "pick": {
+      "type": "object",
+      "required": ["picked"],
+      "additionalProperties": false,
+      "properties": {
+        "picked": { "type": "boolean" },
+        "actor": { "enum": ["user", "agent"] },
+        "at": { "type": "string" }
+      }
+    }
+  }
+}

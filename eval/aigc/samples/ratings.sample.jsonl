@@ -1,0 +1,18 @@
+{"takeId": "t2v-001-a", "itemId": "t2v.ad.dolly-in.001", "rater": "r01", "raterKind": "human", "dim": "overall", "score": 4}
+{"takeId": "t2v-001-a", "itemId": "t2v.ad.dolly-in.001", "rater": "r02", "raterKind": "human", "dim": "overall", "score": 5}
+{"takeId": "t2v-001-b", "itemId": "t2v.ad.dolly-in.001", "rater": "r01", "raterKind": "human", "dim": "overall", "score": 2}
+{"takeId": "t2v-001-b", "itemId": "t2v.ad.dolly-in.001", "rater": "r02", "raterKind": "human", "dim": "overall", "score": 2}
+{"takeId": "t2v-001-a", "itemId": "t2v.ad.dolly-in.001", "rater": "r01", "raterKind": "human", "dim": "avSync", "score": 4}
+{"takeId": "t2v-001-a", "itemId": "t2v.ad.dolly-in.001", "rater": "r01", "raterKind": "human", "dim": "audioQuality", "score": 3}
+{"takeId": "t2v-001-a", "itemId": "t2v.ad.dolly-in.001", "rater": "r01", "raterKind": "human", "dim": "audioPromptFollowing", "score": 3}
+{"takeId": "i2v-001-a", "itemId": "i2v.social.dance.001", "rater": "r01", "raterKind": "human", "dim": "overall", "score": 3}
+{"takeId": "i2v-001-a", "itemId": "i2v.social.dance.001", "rater": "r02", "raterKind": "human", "dim": "overall", "score": 4}
+{"takeId": "i2v-001-a", "itemId": "i2v.social.dance.001", "rater": "r01", "raterKind": "human", "dim": "preservation", "score": 4}
+{"takeId": "dh-001-a", "itemId": "dh.pgc.talking-head.001", "rater": "r01", "raterKind": "human", "dim": "overall", "score": 3}
+{"takeId": "dh-001-a", "itemId": "dh.pgc.talking-head.001", "rater": "r01", "raterKind": "human", "dim": "avSync", "score": 2}
+{"takeId": "dh-001-a", "itemId": "dh.pgc.talking-head.001", "rater": "r01", "raterKind": "human", "dim": "taskFollowing", "score": 2}
+{"takeId": "tts-001-a", "itemId": "tts.basic.clone.001", "rater": "r02", "raterKind": "human", "dim": "overall", "score": 5}
+{"takeId": "t2i-001-a", "itemId": "t2i.consumer-effects.text-zh.001", "rater": "r01", "raterKind": "human", "dim": "overall", "score": 4}
+{"takeId": "t2v-001-a", "itemId": "t2v.ad.dolly-in.001", "rater": "auditor-1", "raterKind": "human", "dim": "overall", "score": 4, "audit": {"of": "r01"}}
+{"takeId": "t2v-001-a", "itemId": "t2v.ad.dolly-in.001", "rater": "judge-replay", "raterKind": "judge", "dim": "overall", "score": 4, "rubric": "video-shot@1.1.0"}
+{"takeId": "t2v-001-b", "itemId": "t2v.ad.dolly-in.001", "rater": "judge-replay", "raterKind": "judge", "dim": "overall", "score": 3, "rubric": "video-shot@1.1.0"}

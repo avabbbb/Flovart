@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://flovart.dev/schema/aigc-rating.schema.json",
+  "title": "AigcRating",
+  "description": "One subjective-track score for one take on one dimension (blind human rating or a recorded / replayed Judge). Quality-type dimensions use 1–5, multimodal task following uses 1–3. See eval/eval.md §4.1 and the scales block of the video-shot / digital-human rubrics.",
+  "type": "object",
+  "required": ["takeId", "itemId", "rater", "raterKind", "dim", "score"],
+  "additionalProperties": false,
+  "properties": {
+    "takeId": { "type": "string", "minLength": 1 },
+    "itemId": { "type": "string", "minLength": 3 },
+    "rater": { "type": "string", "minLength": 1, "description": "Pseudonymous rater id, never a real name." },
+    "raterKind": { "enum": ["human", "judge"] },
+    "dim": {
+      "enum": ["overall", "motion", "promptFollowing", "aesthetics", "preservation", "audioQuality", "avSync", "audioPromptFollowing", "narrative", "taskFollowing"]
+    },
+    "score": { "type": "integer", "minimum": 1, "maximum": 5 },
+    "rubric": { "type": "string", "pattern": "^[a-z][a-z0-9-]*@\\d+\\.\\d+\\.\\d+$" },
+    "at": { "type": "string" },
+    "reason": { "type": "string" },
+    "audit": {
+      "type": "object",
+      "description": "Present on a re-audit label (20% random re-audit, 95% pass bar).",
+      "required": ["of"],
+      "additionalProperties": false,
+      "properties": { "of": { "type": "string", "description": "rater of the label being re-audited" } }
+    }
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "id": "flf2v.fiction.transition.001",
+  "version": "1.0.0",
+  "domain": "flf2v",
+  "scenario": "fiction",
+  "taskGroup": "reference",
+  "capabilities": [
+    "preservation.last-frame",
+    "narrative.continuity",
+    "camera.orbit"
+  ],
+  "difficulty": "hard",
+  "split": "holdout",
+  "prompt": {
+    "zh": "从首帧的站立姿态过渡到尾帧的转身回望，镜头环绕 90 度，保持人物一致。",
+    "en": "Transition from the standing pose in the first frame to the look-back in the last frame; 90-degree orbit; keep identity."
+  },
+  "assets": {
+    "first_frame": [
+      {
+        "uri": "fixture:square-64.png",
+        "mime": "image/png",
+        "consent": {
+          "kind": "synthetic",
+          "ref": "eval/aigc/lib/fixtures.mjs"
+        }
+      }
+    ],
+    "last_frame": [
+      {
+        "uri": "fixture:square-64.png",
+        "mime": "image/png",
+        "consent": {
+          "kind": "synthetic",
+          "ref": "eval/aigc/lib/fixtures.mjs"
+        }
+      }
+    ]
+  },
+  "constraints": {
+    "aspect": "16:9",
+    "durationSec": 5
+  },
+  "checks": [
+    {
+      "id": "first",
+      "type": "vqa-yesno",
+      "question": "第一帧是否与首帧参考一致？"
+    },
+    {
+      "id": "last",
+      "type": "vqa-yesno",
+      "question": "最后一帧是否与尾帧参考在姿态与构图上接近？",
+      "difficulty": "hard"
+    },
+    {
+      "id": "orbit",
+      "type": "vqa-yesno",
+      "question": "镜头是否围绕人物环绕运动？",
+      "difficulty": "hard"
+    }
+  ],
+  "rubrics": [
+    "video-shot",
+    "sop-recall"
+  ],
+  "source": {
+    "kind": "handwritten",
+    "created": "2026-11-17",
+    "ref": "eval/eval.md §4.1 示例"
+  }
+}

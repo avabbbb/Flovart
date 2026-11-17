@@ -1,0 +1,73 @@
+{
+  "id": "r2v.ad.product-combine.001",
+  "version": "1.0.0",
+  "domain": "r2v",
+  "scenario": "ad",
+  "taskGroup": "combine",
+  "capabilities": [
+    "reference.multi-image",
+    "reference.audio",
+    "audio.prompt-following"
+  ],
+  "difficulty": "hard",
+  "split": "test",
+  "status": "withdrawn",
+  "statusReason": "示例：参考素材授权待确认前撤回，不计入比率",
+  "prompt": {
+    "zh": "把参考图里的产品放进参考视频的场景中，配上参考音频的节奏。"
+  },
+  "assets": {
+    "ref_image": [
+      {
+        "uri": "fixture:square-64.png",
+        "mime": "image/png",
+        "consent": {
+          "kind": "synthetic",
+          "ref": "eval/aigc/lib/fixtures.mjs"
+        }
+      }
+    ],
+    "ref_video": [
+      {
+        "uri": "fixture:moving-16x9-3s-audio.mp4",
+        "mime": "video/mp4",
+        "consent": {
+          "kind": "synthetic",
+          "ref": "eval/aigc/lib/fixtures.mjs"
+        }
+      }
+    ],
+    "ref_audio": [
+      {
+        "uri": "fixture:tone-2s.wav",
+        "mime": "audio/wav",
+        "consent": {
+          "kind": "synthetic",
+          "ref": "eval/aigc/lib/fixtures.mjs"
+        }
+      }
+    ]
+  },
+  "constraints": {
+    "aspect": "16:9",
+    "durationSec": 3,
+    "audio": {
+      "required": true
+    }
+  },
+  "checks": [
+    {
+      "id": "product",
+      "type": "vqa-yesno",
+      "question": "参考图中的产品是否出现在画面中？"
+    }
+  ],
+  "rubrics": [
+    "video-shot"
+  ],
+  "source": {
+    "kind": "handwritten",
+    "created": "2026-11-17",
+    "ref": "eval/eval.md §4.1 示例"
+  }
+}

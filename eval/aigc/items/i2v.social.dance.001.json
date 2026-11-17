@@ -1,0 +1,62 @@
+{
+  "id": "i2v.social.dance.001",
+  "version": "1.0.0",
+  "domain": "i2v",
+  "scenario": "social",
+  "taskGroup": "reference",
+  "capabilities": [
+    "subject.motion.dance",
+    "preservation.first-frame",
+    "aspect.vertical"
+  ],
+  "difficulty": "medium",
+  "split": "test",
+  "prompt": {
+    "zh": "以首帧为起点，画面中的卡通人物原地跳一段轻快的舞，镜头固定。",
+    "en": "Starting from the first frame, the cartoon character does a short upbeat dance in place; locked-off camera."
+  },
+  "assets": {
+    "first_frame": [
+      {
+        "uri": "fixture:square-64.png",
+        "mime": "image/png",
+        "consent": {
+          "kind": "synthetic",
+          "ref": "eval/aigc/lib/fixtures.mjs"
+        },
+        "note": "合成测试图，代替首帧"
+      }
+    ]
+  },
+  "constraints": {
+    "aspect": "9:16",
+    "durationSec": 5
+  },
+  "checks": [
+    {
+      "id": "same-subject",
+      "type": "vqa-yesno",
+      "question": "视频第一帧与首帧参考是否为同一主体与构图？"
+    },
+    {
+      "id": "dancing",
+      "type": "vqa-yesno",
+      "question": "人物是否在跳舞？",
+      "difficulty": "medium"
+    },
+    {
+      "id": "locked",
+      "type": "vqa-yesno",
+      "question": "镜头是否保持固定？",
+      "difficulty": "hard"
+    }
+  ],
+  "rubrics": [
+    "video-shot"
+  ],
+  "source": {
+    "kind": "handwritten",
+    "created": "2026-11-17",
+    "ref": "eval/eval.md §4.1 示例"
+  }
+}

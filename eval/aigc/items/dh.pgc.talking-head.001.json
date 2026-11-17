@@ -1,0 +1,78 @@
+{
+  "id": "dh.pgc.talking-head.001",
+  "version": "1.0.0",
+  "domain": "digital-human",
+  "scenario": "pgc",
+  "taskGroup": "combine",
+  "capabilities": [
+    "audio.lip-sync",
+    "gesture.open-palm",
+    "face.stability"
+  ],
+  "difficulty": "medium",
+  "split": "dev",
+  "prompt": {
+    "zh": "数字人面对镜头介绍新品，说到“欢迎大家”时摊手并保持 1–2 秒。"
+  },
+  "assets": {
+    "face_ref": [
+      {
+        "uri": "fixture:square-64.png",
+        "mime": "image/png",
+        "consent": {
+          "kind": "synthetic",
+          "ref": "eval/aigc/lib/fixtures.mjs"
+        },
+        "note": "合成占位，真人素材必须 person-consent"
+      }
+    ],
+    "ref_audio": [
+      {
+        "uri": "fixture:tone-3s-ref.wav",
+        "mime": "audio/wav",
+        "consent": {
+          "kind": "synthetic",
+          "ref": "eval/aigc/lib/fixtures.mjs"
+        },
+        "durationSec": 3
+      }
+    ]
+  },
+  "constraints": {
+    "aspect": "16:9",
+    "durationSec": 4,
+    "audio": {
+      "required": true,
+      "syncToleranceSec": 0.2
+    },
+    "minDynamicDegree": 0.001
+  },
+  "checks": [
+    {
+      "id": "av-length",
+      "type": "rule",
+      "question": "音频与视频等长（0.2 秒内）",
+      "grader": "av-duration-match"
+    },
+    {
+      "id": "mouth",
+      "type": "vqa-yesno",
+      "question": "特写帧中嘴部是否随语音变化？",
+      "difficulty": "medium"
+    },
+    {
+      "id": "palm",
+      "type": "vqa-yesno",
+      "question": "是否有摊手并保持约 1–2 秒？",
+      "difficulty": "medium"
+    }
+  ],
+  "rubrics": [
+    "digital-human"
+  ],
+  "source": {
+    "kind": "handwritten",
+    "created": "2026-11-17",
+    "ref": "eval/eval.md §4.1 示例"
+  }
+}
