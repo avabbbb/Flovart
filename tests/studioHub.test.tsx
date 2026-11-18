@@ -142,6 +142,18 @@ describe('StudioHub window', () => {
     expect(within(card).queryByRole('button', { name: '确认' })).toBeNull();
   });
 
+  it('todo card stops saying 执行中 once the agent is no longer running (plan left mid-way)', () => {
+    render(<AgentTodoCard language="zho" running={false} items={[
+      { id: '1', content: '确认对应关系', status: 'active' },
+      { id: '2', content: '取底图', status: 'pending' },
+    ]} />);
+    const card = screen.getByRole('region', { name: '执行计划' });
+    expect(card).not.toHaveTextContent('执行中');
+    expect(card).toHaveTextContent('已停下');
+    expect(within(card).getByRole('heading', { name: '停在第 1 步，共 2 步' })).toBeTruthy();
+    expect(card).toHaveAttribute('data-phase', 'paused');
+  });
+
   it('todo card: a blocked step is expanded and offers 拒绝 / 确认 that report the step once', () => {
     const onDecide = vi.fn();
     const items = Array.from({ length: 8 }, (_, index) => ({

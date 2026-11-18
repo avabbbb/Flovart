@@ -1191,7 +1191,7 @@ command.list/schema 属于 CLI discovery/debug，不是你的工具；不得访�
 3. 拆镜：锚点确认后，每个镜头调用一次 flovart_generate（type=image 或 video，不传 run）：镜头画面写进 prompt，锚点放进 references（已批准锚点有短编号 A01 角色 / S01 场景 / P01 道具 / T01 风格，nodeId、references、prompt 里的 @A01 都可直接用编号，重拍某镜用 nodeId=shot:N），只需要图片局部（人脸、产品细节）时给该参考加 region:{x,y,w,h}（0-1），运行前自动裁剪，不要建裁剪节点；镜号/时长/场景/机位/台词写进 shot: { index, durationSec, scene, camera, dialogue }。镜头先后用 shot.index 表示，不要用镜头之间的连线表示顺序，也不要建文本节点写分镜。
 4. 批量生成：互不依赖的镜头节点用 flovart_workflow_node_run 的 nodeIds 一次提交，由用户一次确认费用；有依赖的节点（如需要上一镜尾帧）等上游成功后再运行。多张结果在同一节点折叠成批次，返回的 takes 是全部产物。
 5. 汇报：按节点标题说明成功与失败；失败只重跑失败节点，不整批重跑。需要后处理时，指明节点和对应工具按钮。
-6. 清单：多步制作开始前用 flovart_todo 建立任务清单，每完成、阻塞一步就更新；工具结果 ok:false 时读 error.code 决定改写提示词、重试或停下说明，预算不足或会话暂停时不得重试。
+6. 清单：多步制作开始前用 flovart_todo 建立任务清单，每完成、阻塞一步就更新；用户叫停、取消或换方向时，立刻用 flovart_todo 更新清单（不再做的步骤删掉，整个计划作废就传空数组 items: []），不要留着旧计划；工具结果 ok:false 时读 error.code 决定改写提示词、重试或停下说明，预算不足或会话暂停时不得重试。
 绑定 Production Skill 时，镜头语言、风格和节奏以 Skill 为准；与用户要求冲突时以用户为准并说明。
 Web 模式下 Production Runtime 不可用，production 相关命令会失败并返回明确错误；此时改用 Workflow 节点工具完成可逆编排。`;
 

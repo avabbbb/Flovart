@@ -18,8 +18,10 @@ export interface BlockedTodoStep {
  * 面板据此批准 / 拒绝正在等待的确认请求，没有等待中的请求时发一句「确认，继续执行第 N 步」给 Agent。
  * ⏎ 只在「确认」按钮自身有焦点时生效（原生按钮行为），输入框里的回车不会触发。
  */
-export function AgentTodoCard({ items, language = 'zho', onDecideBlocked }: {
+export function AgentTodoCard({ items, language = 'zho', onDecideBlocked, running = true }: {
   items: readonly AgentTodoItem[];
+  /** Agent 这一轮是否还在跑。没在跑时清单里的「进行中」只是停在那里（比如用户叫停后模型没更新清单），不能再转圈说执行中。 */
+  running?: boolean;
   language?: 'en' | 'zho';
   onDecideBlocked?: (approved: boolean, step: BlockedTodoStep) => void;
 }) {
@@ -36,17 +38,19 @@ export function AgentTodoCard({ items, language = 'zho', onDecideBlocked }: {
   const { done, total } = todoProgress(items);
   const activeIndex = items.findIndex(item => item.status === 'active');
   const blockedIndex = blocked ? items.indexOf(blocked) : -1;
-  const phase: 'complete' | 'blocked' | 'running' | 'idle' = done === total ? 'complete' : blockedIndex >= 0 ? 'blocked' : activeIndex >= 0 ? 'running' : 'idle';
+  const phase: 'complete' | 'blocked' | 'running' | 'paused' | 'idle' = done === total ? 'complete' : blockedIndex >= 0 ? 'blocked' : activeIndex >= 0 ? (running ? 'running' : 'paused') : 'idle';
   const tone: PlanTone = phase === 'complete' ? 'done' : phase === 'blocked' ? 'blocked' : phase === 'running' ? 'running' : 'idle';
-  const headStatus = phase === 'complete' ? copy.todoComplete : phase === 'blocked' ? copy.todoBlocked : phase === 'running' ? copy.todoRunning : copy.todoDone(done, total);
+  const headStatus = phase === 'complete' ? copy.todoComplete : phase === 'blocked' ? copy.todoBlocked : phase === 'running' ? copy.todoRunning : phase === 'paused' ? copy.todoPaused : copy.todoDone(done, total);
   const heading = phase === 'complete' ? copy.todoFootComplete(total)
     : phase === 'blocked' ? copy.todoBlockedHeading(blockedIndex + 1)
     : phase === 'running' ? copy.todoFootRunning(activeIndex + 1, total)
+    : phase === 'paused' ? copy.todoFootPaused(activeIndex + 1, total)
     : copy.todoFootWaiting(total - done);
   const steps: PlanStep[] = items.map(item => ({
     id: item.id,
     title: item.content,
-    status: STEP_STATUS[item.status],
+    // 停下时「进行中」那一步不再转圈。
+    status: phase === 'paused' && item.status === 'active' ? 'pending' : STEP_STATUS[item.status],
     description: item.note || (item.status === 'blocked' ? copy.todoBlockedFallback : undefined),
   }));
   const decided = Boolean(blocked && decidedFor === blocked.id);

@@ -1658,7 +1658,7 @@ const userApiKeysRef = useRef(userApiKeys);
         <AgentTurnTimeline rootRef={messagesRef} turns={conversationTurns} language={uiLanguage} onJump={() => { stickToBottom.current = false; }} />
         <AgentScrollToLatest visible={awayFromBottom && hasMessages} language={uiLanguage} onClick={scrollToLatest} />
         </div>
-        {todoItems.length > 0 && !setupGate && <div className='agent-todo-slot'><AgentTodoCard items={todoItems} language={uiLanguage} onDecideBlocked={decideBlockedTodo} /></div>}
+        {todoItems.length > 0 && !setupGate && <div className='agent-todo-slot'><AgentTodoCard items={todoItems} language={uiLanguage} onDecideBlocked={decideBlockedTodo} running={sending} /></div>}
         {setupBlocker && (
           <div role="alert" data-testid="agent-setup-card" className="agent-card-on-shell mx-3 mb-2 rounded-2xl px-3.5 py-3">
             <p style={{ margin: 0, fontSize: 12, lineHeight: 1.7, color: 'var(--isl-ink-soft)' }}>{localizedAgentSetupMessage(setupBlocker, undefined, language)}</p>
