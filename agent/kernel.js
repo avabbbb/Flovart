@@ -102,11 +102,11 @@ export class FlovartAgentKernel {
     // 任务清单是内核自带的只读工具，不走 callCommand、不计费；调用方已提供同名工具时不重复注册。
     this.tools = tools.some(tool => tool.name === TODO_TOOL_NAME) ? tools : [...tools, createTodoTool()];
     // 有 pipeline 工具时追加评审循环规则；非入口 pipeline 工具只在本会话有活动 run 时放行。
-    if (this.tools.some(tool => tool.pipeline) && !this.systemPrompt.includes('pipeline 工具')) {
-      this.systemPrompt = `${this.systemPrompt}\n\n${PIPELINE_SYSTEM_RULES}`;
-    }
+    const basePrompt = systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+    this.systemPrompt = this.tools.some(tool => tool.pipeline) && !basePrompt.includes('pipeline 工具')
+      ? `${basePrompt}\n\n${PIPELINE_SYSTEM_RULES}`
+      : basePrompt;
     this.activePipelineRunId = null;
-    this.systemPrompt = systemPrompt;
     this.resolveProductionSkill = resolveProductionSkill;
     this.listeners = new Set();
     this.persistedProductionSkillBinding = null;

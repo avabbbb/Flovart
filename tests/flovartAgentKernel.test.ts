@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { fauxAssistantMessage, fauxProvider, fauxToolCall } from '@earendil-works/pi-ai';
 import { FlovartAgentKernel } from '../agent/kernel.js';
+import { PIPELINE_SYSTEM_RULES } from '../agent/pipeline-rules.js';
 import { createFlovartAgentTools } from '../agent/tools.js';
 import { createProductionSkillAttachment, getBundledProductionSkill } from '../services/productionSkillCatalog';
 import { createWorkflowNode } from '../components/workflow/constants';
@@ -23,6 +24,16 @@ afterEach(async () => {
 });
 
 describe('Flovart Agent Kernel', () => {
+  it('constructs with pipeline tools and keeps the pipeline rules in the system prompt', () => {
+    const faux = fauxProvider({ tokensPerSecond: 0 });
+    const pipelineTool = { name: 'pipeline_probe', pipeline: true, label: 'probe', description: 'probe', parameters: { type: 'object', properties: {} }, execute: async () => ({ content: [], details: {} }) };
+    const kernel = new FlovartAgentKernel({ databasePath: ':memory:', model: faux.getModel(), streamFn: faux.provider.streamSimple, tools: [pipelineTool as never], systemPrompt: 'BASE' });
+    expect(kernel.systemPrompt.startsWith('BASE')).toBe(true);
+    expect(kernel.systemPrompt).toContain(PIPELINE_SYSTEM_RULES);
+    const plain = new FlovartAgentKernel({ databasePath: ':memory:', model: faux.getModel(), streamFn: faux.provider.streamSimple, systemPrompt: 'BASE' });
+    expect(plain.systemPrompt).toBe('BASE');
+  });
+
   it('pins the inspect-first Canvas contract in the Agent instructions', async () => {
     const directory = await temporaryDirectory();
     let systemPrompt = '';

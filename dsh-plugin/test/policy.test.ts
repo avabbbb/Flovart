@@ -18,6 +18,12 @@ test('read-only sandbox denies writes and runs but keeps reads', () => {
   assert.equal(decideFlovartToolCall({ name: 'flovart_inspect', args: {}, policy: readOnly }).kind, 'allow')
   assert.equal(decideFlovartToolCall({ name: 'flovart_apply', args: {}, policy: readOnly }).kind, 'deny')
   assert.equal(decideFlovartToolCall({ name: 'flovart_run', args: {}, policy: readOnly }).kind, 'deny')
+  // stop / cancel change run state: never read-only.
+  assert.equal(flovartToolRisk('flovart_workflow_node_stop', {}), 'write')
+  assert.equal(flovartToolRisk('flovart_task_cancel', {}), 'write')
+  assert.equal(decideFlovartToolCall({ name: 'flovart_workflow_node_stop', args: {}, policy: readOnly }).kind, 'deny')
+  assert.equal(decideFlovartToolCall({ name: 'flovart_task_cancel', args: {}, policy: readOnly }).kind, 'deny')
+  assert.equal(decideFlovartToolCall({ name: 'flovart_task_get', args: {}, policy: readOnly }).kind, 'allow')
 })
 
 test('approval decides writes, paid runs, and deletes', () => {
