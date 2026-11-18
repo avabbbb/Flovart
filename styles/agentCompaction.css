@@ -6,22 +6,12 @@
 .agent-compaction__text strong { font-size: 12px; font-weight: 600; color: var(--wf-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agent-compaction__text small { font-size: 11px; color: var(--wf-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* 折叠图形：4 行 + 1 条摘要。 */
-.agent-compaction__glyph { position: relative; flex: none; width: 26px; height: 26px; border-radius: 8px; background: color-mix(in srgb, var(--wf-accent) 12%, transparent); overflow: hidden; }
-.agent-compaction__glyph i { position: absolute; left: 5px; height: 2px; width: calc(var(--w) * .7); border-radius: 2px; background: color-mix(in srgb, var(--wf-text) 42%, transparent); top: calc(5px + var(--i) * 3px); transform-origin: left center; }
-.agent-compaction__glyph b { position: absolute; left: 5px; right: 5px; bottom: 5px; height: 3px; border-radius: 2px; background: var(--wf-accent); transform: scaleX(.35); transform-origin: left center; opacity: .9; }
-/* 静止（历史分隔条）：上面几行淡、摘要条满。 */
-.agent-compaction__glyph[data-phase="static"] i { opacity: .45; }
-.agent-compaction__glyph[data-phase="static"] i:nth-child(n+3) { display: none; }
-.agent-compaction__glyph[data-phase="static"] b { transform: none; }
+/* 分隔条里的奶蛙：静止不动，只做标记。 */
+.agent-compaction__naiwa, .agent-compaction__naiwa * { animation-play-state: paused !important; animation-delay: 0s !important; }
 
 /* 历史分隔条：实时胶囊收起后落位一次。 */
 .agent-compaction--divider[data-fresh="true"] { animation: agent-compaction-settle 360ms var(--ease-standard, cubic-bezier(.2,0,0,1)) both; }
 @keyframes agent-compaction-settle { from { opacity: .4; transform: scale(.98); } to { opacity: 1; transform: none; } }
-
-/* 压缩进行中：上方的旧消息稍微压暗，示意正在被折叠。 */
-.workflow-agent__messages:has(.agent-compaction--live[data-phase="running"]) > .workflow-agent__message:not(:last-of-type),
-.workflow-agent__messages:has(.agent-compaction--live[data-phase="running"]) > .agent-steps { opacity: .55; filter: saturate(.7); transition: opacity 400ms, filter 400ms; }
 
 @media (prefers-reduced-motion: reduce) {
   .agent-compaction, .agent-compaction * { animation: none !important; transition: none !important; }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import '../../styles/agentCompaction.css';
 import { AgentWorkingOrb } from './AgentWorkingOrb';
+import { NaiwaThinking } from '../brand/NaiwaThinking';
 
 /** 正在进行 / 刚结束的一次上下文压缩（面板按内核 compaction_start / compaction_end 事件维护）。 */
 export interface AgentCompactionLive {
@@ -25,19 +26,6 @@ function liveTitle(live: AgentCompactionLive, language: Lang) {
   if (live.phase === 'error') return en ? 'Compaction failed' : '压缩失败';
   if (live.reason === 'overflow') return en ? 'Over the limit, compacting context' : '超出上限，正在压缩上下文';
   return en ? 'Compacting context' : '正在压缩上下文';
-}
-
-/** 折叠图形：几行「消息」依次压扁、叠进一条摘要。running 循环，done 定格成一条，error 散开。 */
-function FoldGlyph({ phase }: { phase: AgentCompactionLive['phase'] | 'static' }) {
-  return (
-    <span className="agent-compaction__glyph" data-phase={phase} aria-hidden="true">
-      <i style={{ ['--i' as string]: 0, ['--w' as string]: '78%' }} />
-      <i style={{ ['--i' as string]: 1, ['--w' as string]: '56%' }} />
-      <i style={{ ['--i' as string]: 2, ['--w' as string]: '92%' }} />
-      <i style={{ ['--i' as string]: 3, ['--w' as string]: '64%' }} />
-      <b />
-    </span>
-  );
 }
 
 function Elapsed({ startedAt }: { startedAt: number }) {
@@ -76,7 +64,7 @@ export function AgentCompactionDivider({ id, tokensBefore, language, fresh }: { 
     <div className="agent-compaction agent-compaction--divider" data-fresh={fresh ? 'true' : undefined} data-message-id={id} data-testid="agent-compaction-divider">
       <span className="agent-compaction__rule" />
       <span className="agent-compaction__chip">
-        <FoldGlyph phase="static" />
+        <NaiwaThinking size={20} bubble={false} className="agent-compaction__naiwa" />
         <span className="agent-compaction__text">
           <strong>{en ? 'Context compacted' : '上下文已压缩'}</strong>
           <small>{en ? `${tokens ? tokens + ' of early turns' : 'Early turns'} → summary · skills & memory kept` : `${tokens ? tokens + ' 早期对话' : '早期对话'} → 摘要 · 技能与记忆保留`}</small>
