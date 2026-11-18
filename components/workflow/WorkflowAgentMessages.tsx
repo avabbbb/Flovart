@@ -10,7 +10,7 @@ import { AgentReasoningBlock } from '../agent/AgentReasoningBlock';
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { splitQuote } from '../agent/agentQuote';
 import { translations } from '../../utils/translations';
-import { AgentCompactionDivider, AgentCompactionLiveCard, type AgentCompactionLive } from '../agent/AgentCompaction';
+import { AgentCompactionLiveCard, type AgentCompactionLive } from '../agent/AgentCompaction';
 import { agentWorkingMeta, agentWorkingPhase, type AgentOrbState } from '../agent/agentWorkingPhase';
 
 export interface WorkflowAgentDisplayAttachment {
@@ -127,18 +127,13 @@ export function WorkflowAgentMessages({ messages, running, working, turnStartedA
   const copy = translations[language].agentPanel;
   const segments = segmentAgentMessages(messages);
   const turns = segmentTurnIndexes(segments);
-  // 实时卡停在「已压缩」那一下时，刚写进快照的同一条分隔条先不画，避免两张同时出现。
-  const isNewDivider = (message: WorkflowAgentDisplayMessage) => Boolean(compaction && compaction.phase !== 'running' && message.createdAt && Date.parse(message.createdAt) >= compaction.startedAt - 2000);
   return (
     <div className="workflow-agent__messages">
       {segments.flatMap((segment, index) => {
         const turn = turns[index];
         const footer = renderTurnFooter && turn >= 0 && turns[index + 1] !== turn ? renderTurnFooter(turn) : null;
-        if (segment.kind === 'message' && segment.message.compaction) {
-          if (isNewDivider(segment.message)) return footer ? [<Fragment key={'turn-footer-' + turn}>{footer}</Fragment>] : [];
-          const divider = <AgentCompactionDivider key={segment.message.id} id={segment.message.id} tokensBefore={segment.message.compaction.tokensBefore} language={language} fresh={isFreshDivider(segment.message)} />;
-          return footer ? [divider, <Fragment key={'turn-footer-' + turn}>{footer}</Fragment>] : [divider];
-        }
+        // 压缩记录不在历史里画任何东西：压缩过程只用末尾的奶蛙胶囊表示。
+        if (segment.kind === 'message' && segment.message.compaction) return footer ? [<Fragment key={'turn-footer-' + turn}>{footer}</Fragment>] : [];
         const body = segment.kind === 'tools'
         ? <AgentToolSteps key={segment.key} tools={segment.tools} language={language} running={running} />
         : ((message: WorkflowAgentDisplayMessage) => (
@@ -182,11 +177,6 @@ export function WorkflowAgentMessages({ messages, running, working, turnStartedA
       {pill && <div className="workflow-agent__working"><AgentWorkingOrb state={pill.state} label={pill.label} meta={<WorkingMeta steps={pill.steps ?? 0} startedAt={turnStartedAt} language={language} />} /></div>}
     </div>
   );
-}
-
-/** 实时卡刚收起后紧接着出现的分隔条：带一次落位动画（历史里的分隔条静止）。 */
-function isFreshDivider(message: WorkflowAgentDisplayMessage) {
-  return Boolean(message.createdAt && Date.now() - Date.parse(message.createdAt) < 8000);
 }
 
 /** 用户正文：开头的引用块单独显示；去掉「引用：…」行（改由素材卡展示），@名称 换成缩略图胶囊。 */

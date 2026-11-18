@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
-import '../../styles/agentCompaction.css';
 import { AgentWorkingOrb } from './AgentWorkingOrb';
-import { NaiwaThinking } from '../brand/NaiwaThinking';
 
 /** 正在进行 / 刚结束的一次上下文压缩（面板按内核 compaction_start / compaction_end 事件维护）。 */
 export interface AgentCompactionLive {
@@ -40,7 +38,7 @@ function Elapsed({ startedAt }: { startedAt: number }) {
 
 /**
  * 对话末尾的实时压缩状态：和模型运行时同一个奶蛙工作胶囊（AgentWorkingOrb），只换文案与尾部用时；
- * 完成 / 失败时换一次文案（胶囊自带换场动画），随后收起，换成历史里的分隔条。
+ * 完成 / 失败时换一次文案（胶囊自带换场动画），随后收起；历史里不留分隔条。
  */
 export function AgentCompactionLiveCard({ live, language }: { live: AgentCompactionLive; language: Lang }) {
   const tokens = live.phase === 'done' ? compactionTokensLabel(live.tokensBefore, language) : '';
@@ -52,25 +50,6 @@ export function AgentCompactionLiveCard({ live, language }: { live: AgentCompact
         label={label}
         meta={live.phase === 'running' ? <Elapsed startedAt={live.startedAt} /> : tokens || undefined}
       />
-    </div>
-  );
-}
-
-/** 历史里的压缩分隔条（快照里的 compaction 条目）。 */
-export function AgentCompactionDivider({ id, tokensBefore, language, fresh }: { id: string; tokensBefore?: number; language: Lang; fresh?: boolean }) {
-  const en = language === 'en';
-  const tokens = compactionTokensLabel(tokensBefore, language);
-  return (
-    <div className="agent-compaction agent-compaction--divider" data-fresh={fresh ? 'true' : undefined} data-message-id={id} data-testid="agent-compaction-divider">
-      <span className="agent-compaction__rule" />
-      <span className="agent-compaction__chip">
-        <NaiwaThinking size={20} bubble={false} className="agent-compaction__naiwa" />
-        <span className="agent-compaction__text">
-          <strong>{en ? 'Context compacted' : '上下文已压缩'}</strong>
-          <small>{en ? `${tokens ? tokens + ' of early turns' : 'Early turns'} → summary · skills & memory kept` : `${tokens ? tokens + ' 早期对话' : '早期对话'} → 摘要 · 技能与记忆保留`}</small>
-        </span>
-      </span>
-      <span className="agent-compaction__rule" />
     </div>
   );
 }

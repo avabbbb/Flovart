@@ -27,7 +27,8 @@
 .agent-orb-stack { display: grid; flex: 0 1 auto; min-width: 0; grid-template-columns: minmax(0, auto); }
 .agent-orb-phase { grid-area: 1 / 1; display: inline-flex; min-width: 0; align-items: center; gap: var(--space-2); animation: agent-orb-in var(--motion-medium) var(--ease-standard) both; }
 .agent-orb-phase[data-leaving] { pointer-events: none; animation: agent-orb-out var(--motion-medium) var(--ease-standard) both; }
-.agent-orb { flex: none; display: block; }
+/* flex 而不是 block：奶蛙是 inline-block，放在 block 里会多出行高下沿，图偏上。 */
+.agent-orb { flex: none; display: flex; align-items: center; justify-content: center; line-height: 0; }
 /* 胶囊里的 32px 奶蛙：原作「…」气泡是固定 px（按 44–72px 设计），原位会盖住右眼；这里缩到 0.6 挪到头顶右上，奶蛙右侧多留一点给它。 */
 .agent-orb[data-size='32'] { margin-right: 4px; }
 .agent-orb[data-size='32'] .naiwa-think__bubble { top: auto; right: auto; bottom: calc(100% - 7px); left: 70%; transform: scale(.6); transform-origin: 0 100%; }
