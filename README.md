@@ -36,6 +36,10 @@
 </p>
 
 
+<p align="center">
+  <img src="pic/readme/screenshots/hero.png" alt="Flovart canvas: references, a doodle layer and a video node connected in one Workflow" width="100%" />
+</p>
+
 ## Watch the 60-second concept film
 
 [![Watch Flovart: Your footage. Plus one layer.](pic/readme/vision/Flovart_Promo_60s_v4-poster.jpg)](https://github.com/avabbbb/Flovart/raw/refs/heads/main/pic/readme/vision/Flovart_Promo_60s_v4.mp4)
@@ -60,7 +64,7 @@ This is the **north star for Flovart product interaction and UI**. The product w
 
 For implementation status and real-host gates, see the [Support Matrix](SUPPORT_MATRIX.md). Product/system details live in the [main design](docs/design/00-overview.md), [Agent Integration](docs/design/12-agent.md), [Interaction Design](docs/design/01-interaction.md), [Iris](docs/design/11-iris.md), and the [Resolve 21.1 Product & UI Spec](integrations/studio/resolve/PRODUCT_UI_SPEC.md).
 
-**Jump to:** [Quick start](#quick-start) · [Why Flovart?](#why-flovart) · [Core capabilities](#core-capabilities) · [Bring your own models](#bring-your-own-models) · [Compatibility](#integrations-and-compatibility) · [Architecture](#architecture) · [Local-first and security](#local-first-and-security) · [Roadmap](#creative-app-roadmap) · [Contributing](#contributing)
+**Jump to:** [Quick start](#quick-start) · [Why Flovart?](#why-flovart) · [Core capabilities](#core-capabilities) · [Feature tour](#feature-tour) · [Bring your own models](#bring-your-own-models) · [Compatibility](#integrations-and-compatibility) · [Architecture](#architecture) · [Local-first and security](#local-first-and-security) · [Roadmap](#creative-app-roadmap) · [Contributing](#contributing)
 
 ## Quick start
 
@@ -124,6 +128,37 @@ The canvas is still a power surface for multi-shot work, complex references and 
 | Data | Local-first storage with documented browser and runtime boundaries |
 
 Compose image, text, video, audio and configuration nodes, keep projects and references close to your workspace, and extend providers, hosts and node operations through explicit contracts. The top-level product surfaces are **Canvas** (the spatial Workflow), **Iris** (the personal post-production agent: conversation first, canvas as output, optional editor connectors; coming soon — the tab is a placeholder today), and **Agent** (the local/external coding-agent connection hub). Canvas + Agent are the Workflow production tools. The built-in **Assistant / Context / History** stays in a contextual drawer beside Canvas and is not duplicated inside Agent — see [Features](docs/content/docs/overview/features.en.mdx).
+
+## Feature tour
+
+<table width="100%">
+  <tr>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/canvas-drag-zoom.webp" alt="Drag and zoom on the canvas" /><br /><sub><b>Infinite canvas</b> — pan, zoom and drag nodes; connections follow.</sub></td>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/new-node.png" alt="New node menu" /><br /><sub><b>Add any node</b> — double-click the canvas to create an image, video, note, script or audio-reference node.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/composer.png" alt="Node prompt composer" /><br /><sub><b>Prompt on the node</b> — the composer @-mentions connected references; the node toolbar adds upscale, remove background and more.</sub></td>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/models.png" alt="Model picker" /><br /><sub><b>Pick a model per node</b> — text-to-image and image-to-image models, configured with your own service.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/prompt-library.png" alt="Prompt library" /><br /><sub><b>Prompt library</b> — built-in edit recipes one click away from the composer.</sub></td>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/video.png" alt="Video node" /><br /><sub><b>Video nodes</b> — import clips, trim, split audio, and prompt a video model from the same canvas.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/layers.png" alt="Layers panel" /><br /><sub><b>Layers, assets, local folders</b> — every node listed and reorderable beside the canvas.</sub></td>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/dark.png" alt="Dark theme" /><br /><sub><b>Light and dark</b> — the same Workflow in the dark theme.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/agent-context.png" alt="Agent drawer with node context" /><br /><sub><b>Agent beside the canvas</b> — add selected nodes to context and brief the assistant.</sub></td>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/agent-skill.png" alt="Production Skill picker" /><br /><sub><b>Production Skills</b> — pick a Skill from the hub before you ask.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/agent-hub.png" alt="Agent connection page" /><br /><sub><b>Bring your coding agent</b> — connect DSH, Codex, Claude Code or your own agent through the Flovart CLI.</sub></td>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/byok.png" alt="Add an AI service" /><br /><sub><b>Bring your own keys</b> — OpenAI-compatible, Gemini, Volcengine Seedance, RunningHub or a custom config.</sub></td>
+  </tr>
+</table>
+
+<sub>Screenshots: the web build with a demo Workflow assembled from images already in this repository. No AI service is configured and nothing on the canvas was generated for these shots.</sub>
 
 ## One workflow, human + agent
 

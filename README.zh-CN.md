@@ -36,6 +36,10 @@
 </p>
 
 
+<p align="center">
+  <img src="pic/readme/screenshots/hero-zh.png" alt="Flovart 画布：参考图、涂鸦图层与视频节点连接在同一份 Workflow 中" width="100%" />
+</p>
+
 ## 先看 60 秒概念片
 
 [![观看 Flovart：保留原片，多一层创意](pic/readme/vision/Flovart_Promo_60s_v4-poster.jpg)](https://github.com/avabbbb/Flovart/raw/refs/heads/main/pic/readme/vision/Flovart_Promo_60s_v4.mp4)
@@ -60,7 +64,7 @@
 
 真实宿主与兼容状态以 [Support Matrix](SUPPORT_MATRIX.md) 为准。产品与系统边界见[主设计](docs/design/00-overview.md)、[Agent Integration](docs/design/12-agent.md)、[交互设计](docs/design/01-interaction.md)、[Iris](docs/design/11-iris.md) 和 [Resolve 21.1 Product & UI Spec](integrations/studio/resolve/PRODUCT_UI_SPEC.md)。
 
-**快速跳转：** [快速开始](#快速开始) · [为什么是 Flovart](#为什么是-flovart) · [核心能力](#核心能力) · [使用你自己的模型](#使用你自己的模型) · [集成与兼容性](#集成与兼容性) · [架构](#架构) · [本地优先与安全](#本地优先与安全) · [路线图](#创作软件路线图) · [参与贡献](#参与贡献)
+**快速跳转：** [快速开始](#快速开始) · [为什么是 Flovart](#为什么是-flovart) · [核心能力](#核心能力) · [功能一览](#功能一览) · [使用你自己的模型](#使用你自己的模型) · [集成与兼容性](#集成与兼容性) · [架构](#架构) · [本地优先与安全](#本地优先与安全) · [路线图](#创作软件路线图) · [参与贡献](#参与贡献)
 
 ## 快速开始
 
@@ -122,6 +126,37 @@ Canvas 仍然是多镜头、复杂依赖和 Workflow 编排的 power surface，*
 | 数据 | 本地优先，并明确浏览器与 Runtime 的边界 |
 
 你可以把图片、文本、视频、音频和配置节点组合起来，让项目和参考素材留在自己的工作区，并通过明确契约扩展 Provider、宿主和节点操作。当前顶栏三个产品 surface 是：**Canvas** 负责空间化 Workflow，**Iris** 是全能后期助手（对话优先、画布为产出面、可选连接剪辑软件；即将推出，目前 tab 是占位），**Agent** 只负责本地/外部 Coding Agent 的连接、准备、状态与切换；内置 **Assistant / Context / History** 留在 Canvas 右侧 drawer，不在 Agent 页复制——详见[功能说明](docs/content/docs/overview/features.mdx)。
+
+## 功能一览
+
+<table width="100%">
+  <tr>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/canvas-drag-zoom.webp" alt="画布拖拽与缩放" /><br /><sub><b>无限画布</b>：平移、缩放、拖动节点，连线随之跟随。</sub></td>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/new-node.png" alt="新建节点菜单" /><br /><sub><b>添加任意节点</b>：双击画布即可新建图片、视频、备注、分镜脚本或音频参考节点。</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/composer.png" alt="节点提示词输入框" /><br /><sub><b>在节点上写提示词</b>：输入框可 @ 引用已连接的参考图；节点工具栏提供放大、去背景等操作。</sub></td>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/models.png" alt="模型选择" /><br /><sub><b>按节点选模型</b>：文生图、图生图模型，接入你自己的服务即可使用。</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/prompt-library.png" alt="提示词库" /><br /><sub><b>提示词库</b>：内置常用改图配方，在输入框一键调用。</sub></td>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/video.png" alt="视频节点" /><br /><sub><b>视频节点</b>：导入片段、裁剪、分离音频，并在同一张画布上调用视频模型。</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/layers.png" alt="图层面板" /><br /><sub><b>图层、资产与本地文件夹</b>：所有节点在画布旁列出，可拖动排序。</sub></td>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/dark.png" alt="深色主题" /><br /><sub><b>浅色与深色</b>：同一份 Workflow 的深色主题。</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/agent-context.png" alt="Agent 侧栏与节点上下文" /><br /><sub><b>画布旁的 Agent</b>：把选中节点加入上下文，再向助手下达需求。</sub></td>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/agent-skill.png" alt="生产 Skill 选择" /><br /><sub><b>生产 Skill</b>：提问前先从 Skill Hub 选择 Skill。</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/agent-hub.png" alt="Agent 连接页" /><br /><sub><b>接入你的 Coding Agent</b>：通过 Flovart CLI 连接 DSH、Codex、Claude Code 或自建 Agent。</sub></td>
+    <td width="50%" valign="top"><img src="pic/readme/screenshots/byok.png" alt="添加 AI 服务" /><br /><sub><b>自带密钥（BYOK）</b>：OpenAI 兼容、Gemini、火山 Seedance、RunningHub 或自定义配置。</sub></td>
+  </tr>
+</table>
+
+<sub>截图说明：Web 版界面，演示 Workflow 由本仓库已有图片搭建；截图时未配置任何 AI 服务，画布上的内容均非本次生成。</sub>
 
 ## 同一份 Workflow，人和 Agent 共用
 
