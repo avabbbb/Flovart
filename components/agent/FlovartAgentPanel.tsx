@@ -1846,7 +1846,7 @@ const userApiKeysRef = useRef(userApiKeys);
                     : null}
                   <span className="agent-composer__stop">
                     <span className="agent-composer__send-ring" aria-hidden="true" />
-                    <button type="button" className="agent-composer__send" aria-label="停止" onClick={stop}><Square size={13} /></button>
+                    <button type="button" className="agent-composer__send agent-composer__send--stop" aria-label="停止" onClick={stop}><Square size={13} /></button>
                   </span>
                 </span>
               : <button type="button" className="agent-composer__send" aria-label="发送" onClick={() => void send()} disabled={status !== 'ready' || (!prompt.trim() && references.length === 0 && attachments.length === 0)}><Send size={16} /></button>}
