@@ -1136,21 +1136,65 @@ const userApiKeysRef = useRef(userApiKeys);
     };
   };
 
+  /** 一轮要带给模型的画面：本地附件优先，@引用的图片 / 视频节点随后补位（最多 6 张）。发送与插话共用。 */
+  const loadTurnMedia = async (references: QueueDraft['references'], attachments: QueueDraft['attachments']) => {
+    const referencedNodes = references.flatMap(reference => {
+      if (reference.type !== 'node') return [];
+      const node = projectRef.current.nodes.find(item => item.id === reference.id);
+      return node ? [node] : [];
+    });
+    const nodeMedia = referencedNodes.length > 0 ? await loadAgentNodeMedia(referencedNodes) : { images: [], notes: [] };
+    const attachmentMedia = attachments.length ? await composerAttachmentsToImages(attachments) : { images: [], notes: [] };
+    return {
+      images: [...attachmentMedia.images, ...nodeMedia.images].slice(0, 6),
+      notes: [...attachmentMedia.notes, ...nodeMedia.notes],
+    };
+  };
+
+  // 正在准备画面、还没交给内核的插话；期间被删掉的不再送出。
+  const steerPreparing = useRef(new Set<string>());
+
+  /**
+   * 把一条草稿作为插话交给内核（在下一个步骤边界送达）。带 @节点 / 附件时先读出画面再插话，
+   * 和正常发送一样把画面随消息带上。内核不接受（这一轮已结束 / 托管 Agent）返回 null。
+   */
+  const steerDraft = async (draft: QueueDraft, outgoing: OutgoingTurn, key: string): Promise<boolean> => {
+    const id = outgoing.id;
+    if (!kernelRef.current) return false;
+    if (!draftHasMedia(draft)) return kernelRef.current.steer(outgoing.requestText, [], id);
+    steerPreparing.current.add(id);
+    try {
+      const media = await loadTurnMedia(draft.references, draft.attachments);
+      // 读画面期间被删掉，或这一轮已结束、它被退回排队（甚至已作为下一轮发出）：不再插话，免得发两次。
+      if (!steerPreparing.current.has(id)) return false;
+      const current = (inputQueuesRef.current[key] || []).find(entry => entry.id === id);
+      if (!current || current.kind !== 'steer') return false;
+      const text = media.notes.length > 0 ? outgoing.requestText + '\n\n已附带画面：\n' + media.notes.join('\n') : outgoing.requestText;
+      return Boolean(kernelRef.current?.steer(text, media.images, id));
+    } catch {
+      return false;
+    } finally {
+      steerPreparing.current.delete(id);
+    }
+  };
+
+  /** 插话没被接受：退回排队（排在排队消息最前），这一轮结束后第一个发出。 */
+  const demoteSteer = (key: string, id: string) => {
+    updateInputQueue(key, list => requeueSteers(list, [id]));
+  };
+
   /** 运行中提交：按 Enter / Tab 与当前状态决定插话还是排队，放进托盘。 */
   const enqueueWhileRunning = (draft: QueueDraft, key: RunningSubmitKey) => {
     const id = crypto.randomUUID();
-    const steerable = Boolean(kernelRef.current) && !draftHasMedia(draft);
-    let kind = routeRunningSubmit({ key, answerStreaming: answerStreamingRef.current, steerable });
-    let outgoing: OutgoingTurn | undefined;
-    if (kind === 'steer') {
-      outgoing = buildOutgoing(draft, id);
-      if (!kernelRef.current?.steer(outgoing.requestText, [], id)) {
-        kind = 'queued';
-        outgoing = undefined;
-      }
-    }
-    updateInputQueue(conversationKeyRef.current, items => [...items, { id, kind, draft, ...(outgoing ? { outgoing } : {}) }]);
+    const queueKey = conversationKeyRef.current;
+    const kind = routeRunningSubmit({ key, answerStreaming: answerStreamingRef.current, steerable: Boolean(kernelRef.current) });
+    // 插话的气泡内容先备好：送达事件（steer_delivered）可能紧跟着就到。
+    const outgoing = kind === 'steer' ? buildOutgoing(draft, id) : undefined;
+    updateInputQueue(queueKey, items => [...items, { id, kind, draft, ...(outgoing ? { outgoing } : {}) }]);
     setInputQueueCollapsed(false);
+    if (!outgoing) return;
+    const accepted = steerDraft(draft, outgoing, queueKey);
+    void accepted.then(ok => { if (!ok) demoteSteer(queueKey, id); });
   };
 
   const send = async (key: RunningSubmitKey = 'enter') => {
@@ -1203,6 +1247,7 @@ const userApiKeysRef = useRef(userApiKeys);
       const item = items.find(entry => entry.id === id);
       if (!item) continue;
       updateInputQueue(key, list => removeInput(list, id));
+      item.draft.attachments.forEach(releaseComposerAttachment);
       const outgoing = item.outgoing;
       if (outgoing) {
         stickToBottom.current = true;
@@ -1234,14 +1279,21 @@ const userApiKeysRef = useRef(userApiKeys);
       void dispatchOutgoing(buildOutgoing(item.draft, item.id));
       return;
     }
-    if (kernelRef.current && !draftHasMedia(item.draft)) {
+    if (kernelRef.current) {
+      // 先在托盘里变成插话（行上显示「下一步工具结束后送达」），带画面的读完画面再交给内核。
       const outgoing = buildOutgoing(item.draft, item.id);
-      if (kernelRef.current.steer(outgoing.requestText, [], item.id)) {
-        updateInputQueue(key, list => promoteToSteer(list, id).map(entry => (entry.id === id ? { ...entry, outgoing } : entry)));
-        return;
-      }
+      updateInputQueue(key, list => promoteToSteer(list, id).map(entry => (entry.id === id ? { ...entry, outgoing } : entry)));
+      void steerDraft(item.draft, outgoing, key).then(ok => {
+        if (ok) return;
+        // 这一轮刚好结束了：已经空闲就直接发，否则排到队首。
+        demoteSteer(key, id);
+        if (turnRef.current.phase === 'idle') drainInputQueue(key);
+        else flashCopied(t('agentPanel.inputQueueSendNext'));
+      });
+      return;
     }
     updateInputQueue(key, list => moveToFront(list, id));
+    flashCopied(t('agentPanel.inputQueueSendNext'));
   };
 
   /** 托盘 🗑：删除一条。插话只能在到达步骤边界前撤回；已被取走的撤不回（马上会出现在对话里）。 */
@@ -1249,7 +1301,7 @@ const userApiKeysRef = useRef(userApiKeys);
     const key = conversationKeyRef.current;
     const item = (inputQueuesRef.current[key] || []).find(entry => entry.id === id);
     if (!item) return;
-    if (item.kind === 'steer' && !kernelRef.current?.withdrawSteer(id)) return;
+    if (item.kind === 'steer' && !steerPreparing.current.delete(id) && !kernelRef.current?.withdrawSteer(id)) return;
     item.draft.attachments.forEach(releaseComposerAttachment);
     updateInputQueue(key, list => removeInput(list, id));
     focusComposer();
@@ -1306,19 +1358,8 @@ const userApiKeysRef = useRef(userApiKeys);
       if (kernelRef.current) {
         // 浏览器内置 PI 内核：事件已通过 subscribe 实时推送，这里只需等待完成并同步 snapshot
         // @引用的图片/视频节点自动附带画面（图片 ≤1024px，视频首/中/尾帧，最多 6 张）。
-        const referencedNodes = turnReferences.flatMap(reference => {
-          if (reference.type !== 'node') return [];
-          const node = project.nodes.find(item => item.id === reference.id);
-          return node ? [node] : [];
-        });
-        const nodeMedia = referencedNodes.length > 0 ? await loadAgentNodeMedia(referencedNodes) : { images: [], notes: [] };
-        const attachmentMedia = turnAttachments.length ? await composerAttachmentsToImages(turnAttachments) : { images: [], notes: [] };
+        const media = await loadTurnMedia(turnReferences, turnAttachments);
         turnAttachments.forEach(releaseComposerAttachment);
-        // 本地附件优先占位，避免被 6 张上限挤掉；节点画面随后补位。
-        const media = {
-          images: [...attachmentMedia.images, ...nodeMedia.images].slice(0, 6),
-          notes: [...attachmentMedia.notes, ...nodeMedia.notes],
-        };
         const kernelText = media.notes.length > 0 ? requestText + '\n\n已附带画面：\n' + media.notes.join('\n') : requestText;
         await kernelRef.current.send(kernelText, media.images, skillAttachment);
         const snapshot = await kernelRef.current.snapshot() as FlovartAgentSnapshot;

@@ -1339,6 +1339,8 @@ export class BrowserAgentKernel {
    */
   private steerBuffer: Array<{ id: string; message: AgentMessage }> = [];
   private steerInFlight = new Map<AgentMessage, string>();
+  /** send() 进行中（含压缩、组装提示词、两次模型调用之间这些 isStreaming 为 false 的空档）：插话照收。 */
+  private turnActive = false;
 
   constructor(options: BrowserAgentKernelOptions) {
     this.projectId = options.projectId;
@@ -1670,7 +1672,7 @@ export class BrowserAgentKernel {
    * 注入对话；送达时发 `steer_delivered { steerId }`。没有在跑时返回 false，调用方改走 send。
    */
   steer(text: string, images: ImageContent[] = [], id: string = crypto.randomUUID()): boolean {
-    if (!this.agent || !this.session || !this.agent.state.isStreaming) return false;
+    if (!this.agent || !this.session || !(this.agent.state.isStreaming || this.turnActive)) return false;
     const prompt = String(text || '').trim();
     if (!prompt && images.length === 0) return false;
     this.steerBuffer.push({
@@ -1882,6 +1884,16 @@ export class BrowserAgentKernel {
       });
     }
 
+    this.turnActive = true;
+    try {
+      return await this.runTurn(prompt, images);
+    } finally {
+      this.turnActive = false;
+    }
+  }
+
+  private async runTurn(prompt: string, images: ImageContent[]): Promise<unknown> {
+    if (!this.agent) throw new Error('Flovart Agent session is not open');
     this.syncThinkingLevel();
     const agent = this.agent;
     agent.state.systemPrompt = await this.composeSystemPrompt();
@@ -1901,12 +1913,14 @@ export class BrowserAgentKernel {
       // 强制技能的完整读取紧跟在用户消息之后：模型这一轮就能看到原文，面板显示一条「已读取 xxx 技能」。
       await agent.prompt(forced.length ? [userMessage, ...forced] : userMessage);
       await this.recoverFromOverflow(agent);
-      // 最后一次轮询之后才到的插话还留在队列里：接着处理，不能丢。停止（abort）会清空队列。
+      // 最后一次轮询之后才到的插话（包括还在缓冲里、没赶上步骤边界的）：接着处理，不能丢。停止（abort）会清空队列。
+      this.flushSteers();
       while (this.agent === agent && agent.hasQueuedMessages() && !agent.state.isStreaming) {
         const last = agent.state.messages[agent.state.messages.length - 1] as { stopReason?: string } | undefined;
         if (last?.stopReason === 'aborted') { agent.clearAllQueues(); break; }
         await agent.continue();
         await this.recoverFromOverflow(agent);
+        this.flushSteers();
       }
     } finally {
       this.overflowGuard = null;

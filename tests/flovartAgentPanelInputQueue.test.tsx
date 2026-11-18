@@ -224,6 +224,18 @@ describe('Flovart Agent panel pending input tray', () => {
     expect(rowTexts()).toEqual(['来不及撤']);
   });
 
+  it('send-now that the kernel refuses falls back to the front of the queue and says so', async () => {
+    const { composer } = await mountRunning('send-now-refused');
+    type(composer, '稍后', 'Tab');
+    type(composer, '马上', 'Tab');
+    spies.steer.mockReturnValue(false);
+    fireEvent.click(within(rows()[1]).getByRole('button', { name: /立即发送/ }));
+    expect(spies.steer).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(rowTexts()).toEqual(['马上', '稍后']));
+    expect(within(rows()[0]).getByRole('button', { name: /立即发送/ })).toBeInTheDocument();
+    expect(await screen.findByText('现在插不进去，这一轮结束后第一个发它')).toBeInTheDocument();
+  });
+
   it('folds the tray with its chevron header (keyboard-operable button with aria-expanded)', async () => {
     const { composer } = await mountRunning('fold');
     type(composer, '留着', 'Tab');
