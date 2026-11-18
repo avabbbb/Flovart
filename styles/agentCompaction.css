@@ -1,11 +1,10 @@
-/* 上下文压缩：对话里的分隔条 + 实时压缩卡。几行「消息」依次压扁叠进一条摘要。 */
+/* 上下文压缩：历史里的分隔条（实时状态用 Agent 工作胶囊，见 AgentCompaction.tsx）。 */
 .agent-compaction { display: flex; align-items: center; gap: var(--space-2); min-width: 0; margin: var(--space-2) 0; color: var(--wf-muted); }
 .agent-compaction__rule { flex: 1 1 0; min-width: var(--space-3); height: 1px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--wf-border) 90%, transparent), transparent); }
 .agent-compaction__chip { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; max-width: 86%; padding: 6px 12px 6px 8px; border: 1px solid color-mix(in srgb, var(--wf-border) 80%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--wf-panel, var(--panel-bg)) 72%, transparent); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); }
 .agent-compaction__text { display: grid; min-width: 0; line-height: 1.25; }
 .agent-compaction__text strong { font-size: 12px; font-weight: 600; color: var(--wf-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agent-compaction__text small { font-size: 11px; color: var(--wf-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.agent-compaction__time { flex: none; margin-left: var(--space-1); font-size: 11px; font-variant-numeric: tabular-nums; color: var(--wf-muted); }
 
 /* 折叠图形：4 行 + 1 条摘要。 */
 .agent-compaction__glyph { position: relative; flex: none; width: 26px; height: 26px; border-radius: 8px; background: color-mix(in srgb, var(--wf-accent) 12%, transparent); overflow: hidden; }
@@ -15,36 +14,9 @@
 .agent-compaction__glyph[data-phase="static"] i { opacity: .45; }
 .agent-compaction__glyph[data-phase="static"] i:nth-child(n+3) { display: none; }
 .agent-compaction__glyph[data-phase="static"] b { transform: none; }
-/* 进行中：每行依次下落、压扁进摘要条，摘要条随之变长，循环。 */
-.agent-compaction__glyph[data-phase="running"] i { animation: agent-compaction-fold 1.8s var(--ease-standard, cubic-bezier(.2,0,0,1)) infinite; animation-delay: calc(var(--i) * 140ms); }
-.agent-compaction__glyph[data-phase="running"] b { animation: agent-compaction-grow 1.8s var(--ease-standard, cubic-bezier(.2,0,0,1)) infinite; }
-/* 完成：几行一次性叠进去，摘要条拉满，外圈亮一下。 */
-.agent-compaction__glyph[data-phase="done"] i { animation: agent-compaction-fold-once 480ms var(--ease-standard, cubic-bezier(.2,0,0,1)) both; animation-delay: calc(var(--i) * 50ms); }
-.agent-compaction__glyph[data-phase="done"] b { animation: agent-compaction-fill 520ms var(--ease-standard, cubic-bezier(.2,0,0,1)) both 160ms; }
-.agent-compaction__glyph[data-phase="error"] { background: color-mix(in srgb, var(--danger, #e5484d) 14%, transparent); }
-.agent-compaction__glyph[data-phase="error"] b { background: var(--danger, #e5484d); transform: scaleX(.2); }
 
-@keyframes agent-compaction-fold {
-  0%, 10% { transform: none; opacity: 1; }
-  45% { transform: translateY(calc((3 - var(--i)) * 3px + 3px)) scaleY(.4); opacity: .9; }
-  60%, 100% { transform: translateY(calc((3 - var(--i)) * 3px + 4px)) scaleY(.2); opacity: 0; }
-}
-@keyframes agent-compaction-grow { 0%, 20% { transform: scaleX(.35); } 65%, 85% { transform: scaleX(1); } 100% { transform: scaleX(.35); } }
-@keyframes agent-compaction-fold-once { to { transform: translateY(calc((3 - var(--i)) * 3px + 4px)) scaleY(.2); opacity: 0; } }
-@keyframes agent-compaction-fill { from { transform: scaleX(.35); } to { transform: none; } }
-
-/* 标题扫光。 */
-.agent-compaction__shimmer { background: linear-gradient(90deg, var(--wf-muted) 0%, var(--wf-text) 45%, var(--wf-muted) 90%) 0 0 / 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent !important; animation: agent-compaction-shimmer 1.6s linear infinite; }
-@keyframes agent-compaction-shimmer { from { background-position: 120% 0; } to { background-position: -100% 0; } }
-
-/* 实时卡：入场从上方折进来；完成时胶囊描一圈强调色。 */
-.agent-compaction--live { animation: agent-compaction-in var(--motion-medium, 320ms) var(--ease-standard, cubic-bezier(.2,0,0,1)) both; }
-.agent-compaction--live[data-phase="done"] .agent-compaction__chip { border-color: color-mix(in srgb, var(--wf-accent) 55%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--wf-accent) 12%, transparent); transition: border-color 240ms, box-shadow 240ms; }
-.agent-compaction--live[data-phase="error"] .agent-compaction__chip { border-color: color-mix(in srgb, var(--danger, #e5484d) 55%, transparent); }
-.agent-compaction--live .agent-compaction__rule { animation: agent-compaction-rule var(--motion-medium, 320ms) var(--ease-standard, cubic-bezier(.2,0,0,1)) both 80ms; }
+/* 历史分隔条：实时胶囊收起后落位一次。 */
 .agent-compaction--divider[data-fresh="true"] { animation: agent-compaction-settle 360ms var(--ease-standard, cubic-bezier(.2,0,0,1)) both; }
-@keyframes agent-compaction-in { from { opacity: 0; transform: translateY(-6px) scaleY(.9); } to { opacity: 1; transform: none; } }
-@keyframes agent-compaction-rule { from { transform: scaleX(0); } to { transform: none; } }
 @keyframes agent-compaction-settle { from { opacity: .4; transform: scale(.98); } to { opacity: 1; transform: none; } }
 
 /* 压缩进行中：上方的旧消息稍微压暗，示意正在被折叠。 */
@@ -52,6 +24,5 @@
 .workflow-agent__messages:has(.agent-compaction--live[data-phase="running"]) > .agent-steps { opacity: .55; filter: saturate(.7); transition: opacity 400ms, filter 400ms; }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-compaction, .agent-compaction *, .agent-compaction__shimmer { animation: none !important; transition: none !important; }
-  .agent-compaction__shimmer { color: var(--wf-text) !important; background: none; }
+  .agent-compaction, .agent-compaction * { animation: none !important; transition: none !important; }
 }

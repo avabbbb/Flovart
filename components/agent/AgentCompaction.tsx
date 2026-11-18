@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import '../../styles/agentCompaction.css';
+import { AgentWorkingOrb } from './AgentWorkingOrb';
 
 /** 正在进行 / 刚结束的一次上下文压缩（面板按内核 compaction_start / compaction_end 事件维护）。 */
 export interface AgentCompactionLive {
@@ -26,16 +27,6 @@ function liveTitle(live: AgentCompactionLive, language: Lang) {
   return en ? 'Compacting context' : '正在压缩上下文';
 }
 
-function liveSub(live: AgentCompactionLive, language: Lang) {
-  const en = language === 'en';
-  if (live.phase === 'error') return live.error || '';
-  if (live.phase === 'done') {
-    const tokens = compactionTokensLabel(live.tokensBefore, language);
-    return en ? `${tokens ? tokens + ' of early turns' : 'Early turns'} folded into a summary` : `${tokens ? tokens + ' 的早期对话' : '早期对话'}已折成摘要`;
-  }
-  return en ? 'Folding early turns into a summary; skills and memory stay' : '把早期对话折成摘要，技能与项目记忆保留';
-}
-
 /** 折叠图形：几行「消息」依次压扁、叠进一条摘要。running 循环，done 定格成一条，error 散开。 */
 function FoldGlyph({ phase }: { phase: AgentCompactionLive['phase'] | 'static' }) {
   return (
@@ -56,23 +47,23 @@ function Elapsed({ startedAt }: { startedAt: number }) {
     return () => window.clearInterval(timer);
   }, []);
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1000));
-  return <span className="agent-compaction__time">{seconds}s</span>;
+  return <>{seconds}s</>;
 }
 
-/** 对话末尾的实时压缩卡。 */
+/**
+ * 对话末尾的实时压缩状态：和模型运行时同一个奶蛙工作胶囊（AgentWorkingOrb），只换文案与尾部用时；
+ * 完成 / 失败时换一次文案（胶囊自带换场动画），随后收起，换成历史里的分隔条。
+ */
 export function AgentCompactionLiveCard({ live, language }: { live: AgentCompactionLive; language: Lang }) {
+  const tokens = live.phase === 'done' ? compactionTokensLabel(live.tokensBefore, language) : '';
+  const label = live.phase === 'error' && live.error ? `${liveTitle(live, language)}：${live.error}` : liveTitle(live, language);
   return (
-    <div className="agent-compaction agent-compaction--live" data-phase={live.phase} role="status" aria-live="polite" data-testid="agent-compaction-live">
-      <span className="agent-compaction__rule" />
-      <span className="agent-compaction__chip">
-        <FoldGlyph phase={live.phase} />
-        <span className="agent-compaction__text">
-          <strong className={live.phase === 'running' ? 'agent-compaction__shimmer' : undefined}>{liveTitle(live, language)}</strong>
-          <small>{liveSub(live, language)}</small>
-        </span>
-        {live.phase === 'running' ? <Elapsed startedAt={live.startedAt} /> : null}
-      </span>
-      <span className="agent-compaction__rule" />
+    <div className="workflow-agent__working agent-compaction--live" data-phase={live.phase} data-testid="agent-compaction-live">
+      <AgentWorkingOrb
+        state={live.phase === 'running' ? 'shaping' : 'breathing'}
+        label={label}
+        meta={live.phase === 'running' ? <Elapsed startedAt={live.startedAt} /> : tokens || undefined}
+      />
     </div>
   );
 }
