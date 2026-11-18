@@ -12,6 +12,14 @@ const historyList = document.getElementById('historyList');
 const clearHistoryButton = document.getElementById('clearHistory');
 
 const HISTORY_KEY = 'flovartImportHistory';
+// 在线版 Flovart 网页画布；按钮直接新开标签页（chrome.tabs.create 不需要 tabs 权限）。
+export const FLOVART_WEB_URL = 'https://flovart.avabbbb.com/';
+
+document.getElementById('extensionVersion').textContent = 'Browser Import ' + chrome.runtime.getManifest().version;
+document.getElementById('openFlovart').addEventListener('click', () => {
+  void chrome.tabs.create({ url: FLOVART_WEB_URL });
+  window.close();
+});
 
 function render(status) {
   const state = status?.state || 'idle';

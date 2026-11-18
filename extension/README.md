@@ -16,6 +16,8 @@
 3. Key 同步：配对批准后，画布 Vault 中的 Key 同步到扩展（首次全量，之后增量，revision 不一致时回退全量）。扩展用不可导出的 AES-GCM 密钥加密后写入 chrome.storage.local，按网页 origin 分区；撤销或拒绝配对即清空该 origin 的 Key。画布开启「退出时清除」时不会同步 Key。
 4. 插件内反推：右键「反推图片提示词」。按 Google、OpenAI、Anthropic、OpenRouter 的顺序选用已同步的 Key，都没有时退到带 Base URL 与默认模型的 OpenAI 兼容 Key。请求从扩展直接发往模型服务商（不申请额外 host 权限，依赖服务商 CORS），图片上限 20 MB。结果只保存在 chrome.storage.session（浏览器关闭即清空），可在 popup 复制，或「发送到网页画布」写进生成节点的 Prompt Bar：消息带 targetNodeId 时写入该图片/视频生成节点（保留原有 @引用），否则在当前 Workflow 新建一个 image 生成节点（只建不跑）。反推指令、请求体与响应解析和网页端共用 background/reverse-prompt-core.js。
 
+5. 网关直连（1.4 起，能力 llm.fetch）：OpenCode（opencode.ai /zen/、/inference/）与 RunningHub 文档等浏览器无法跨域访问的请求，在画布已配对时经插件直接发往上游，不再经过 Cloudflare Worker /api/llm-proxy（不占 Workers 配额）。每个请求一条 Port（flovart-fetch），流式回传、可取消；上游 host/path 白名单在 background/upstream-allowlist.js，与 server/llmProxy.ts 逐项一致（测试对拍），manifest 的 host_permissions 只含这几个主机。插件不可用、未配对或在首字节前失败时，网页自动回退到 /api/llm-proxy。设置页「浏览器插件」区显示当前是「直连（扩展）」还是「代理」。
+
 ## Desktop 通道本地安装
 
 1. 构建 Desktop Native Host 与扩展：

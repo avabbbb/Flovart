@@ -17,7 +17,12 @@ describe('browser extension security boundary', () => {
   it('keeps page access opt-in and lets only the Flovart web canvas connect', () => {
     expect(manifest.permissions).toContain('nativeMessaging');
     expect(manifest).not.toHaveProperty('content_scripts');
-    expect(manifest).not.toHaveProperty('host_permissions');
+    // 常驻 host 权限只给直连白名单里的几个模型网关/文档主机（见 upstream-allowlist.js），不含通配主机。
+    expect(manifest.host_permissions).toEqual([
+      scheme('https') + 'opencode.ai/' + STAR,
+      scheme('https') + 'www.runninghub.cn/' + STAR,
+      scheme('https') + 'www.runninghub.ai/' + STAR,
+    ]);
     expect(manifest).not.toHaveProperty('web_accessible_resources');
     expect(manifest.optional_host_permissions).toEqual([
       scheme('http') + STAR + '/' + STAR,

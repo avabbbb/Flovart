@@ -1,5 +1,6 @@
 import React from 'react';
 import { getExtensionBridge, type ExtensionBridgeStatus } from '../../services/extensionBridge';
+import { getLlmTransportMode } from '../../services/llmCorsProxy';
 
 interface ExtensionPairingSectionProps {
     isDark: boolean;
@@ -42,6 +43,8 @@ export function ExtensionPairingSection({ isDark, t }: ExtensionPairingSectionPr
     const bridge = getExtensionBridge();
     const state = React.useSyncExternalStore(bridge.subscribe, bridge.getState);
     const { status } = state;
+    // 网关请求（OpenCode / RunningHub 文档）走插件直连还是同源代理；state 变化时随之重算。
+    const transport = getLlmTransportMode(bridge);
 
     // 打开设置时静默探测一次（不发起配对），已批准的画布会直接恢复连接。
     React.useEffect(() => {
@@ -89,6 +92,9 @@ export function ExtensionPairingSection({ isDark, t }: ExtensionPairingSectionPr
                 {state.extensionVersion && (
                     <span className={softClass}>· {copy('version', state.extensionVersion)}</span>
                 )}
+            </div>
+            <div className={cx('mt-1.5 text-xs', softClass)} data-testid="llm-transport-mode" data-mode={transport}>
+                {copy('transport.label')}：{copy('transport.' + transport)}
             </div>
         </div>
     );

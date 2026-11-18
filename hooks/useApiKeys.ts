@@ -26,6 +26,7 @@ import { syncRuntimeAgentTextRoutes } from '../services/runtimeAgentTextRoutes';
 import { mergeSuggestedProductRouteMappings } from '../services/aiServiceSetup';
 import { loadStoredUserScriptProviders } from '../services/userScriptAuthoring';
 import { getExtensionBridge } from '../services/extensionBridge';
+import { getExtensionPromptStore, hasProxiedProvider } from '../services/extensionInstallPrompt';
 import { createExtensionKeySync, type ExtensionKeySync } from '../services/extensionKeySync';
 
 const generateId = () => `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -240,6 +241,12 @@ export function useApiKeys(isSettingsPanelOpen: boolean) {
         if (!apiKeysLoaded) return;
         void extensionKeySyncRef.current?.update(clearKeysOnExit ? [] : userApiKeys);
     }, [userApiKeys, apiKeysLoaded, clearKeysOnExit]);
+
+    // 配置了只能经代理访问的网关（OpenCode 等）：记下原因，未装/未配对插件时提示安装（不阻塞）。
+    useEffect(() => {
+        if (!apiKeysLoaded || typeof window === 'undefined') return;
+        if (hasProxiedProvider(userApiKeys, window.location.origin)) getExtensionPromptStore().note('configured');
+    }, [userApiKeys, apiKeysLoaded]);
 
     // 启动时、以及 RunningHub 官方文档解析出新线路后，补齐自动映射（每个家族 + 模式 → 对应 endpoint），不覆盖用户已选的映射。
     useEffect(() => {

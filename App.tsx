@@ -53,6 +53,7 @@ const WorkflowWorkspace = React.lazy(() => import('./components/workflow/Workflo
 const IrisStoryboardPage = React.lazy(() => import('./components/reverse/IrisStoryboardPage').then(m => ({ default: m.IrisStoryboardPage })));
 const AssetAddModal = React.lazy(() => import('./components/AssetAddModal').then(m => ({ default: m.AssetAddModal })));
 const BrowserImportBridge = React.lazy(() => import('./components/extension/BrowserImportBridge').then(m => ({ default: m.BrowserImportBridge })));
+const ExtensionInstallPrompt = React.lazy(() => import('./components/extension/ExtensionInstallPrompt').then(m => ({ default: m.ExtensionInstallPrompt })));
 import { WorkflowSessionGuard } from './components/workflow/WorkflowSessionGuard';
 import { useWorkflowWriterState } from './components/workflow/writerLock';
 
@@ -872,6 +873,7 @@ const App: React.FC = () => {
                     }}
                 />}
                 <BrowserImportBridge />
+                <ExtensionInstallPrompt isDark={resolvedTheme === 'dark'} t={t} />
             </Suspense>
             <ToastStack toasts={toast.toasts} onDismiss={toast.dismiss} />
             <StudioHub language={language} historyItems={workflowSharedMedia} onRemoveHistory={id => setGenerationHistory(prev => prev.filter(item => item.id !== id))} />

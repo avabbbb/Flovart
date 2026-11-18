@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "default_locale": "en",
   "name": "__MSG_extension_name__",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "__MSG_extension_description__",
   "icons": {
     "16": "icons/icon16.png",
@@ -36,6 +36,11 @@
       "http://localhost:37522/*"
     ]
   },
+  "host_permissions": [
+    "https://opencode.ai/*",
+    "https://www.runninghub.cn/*",
+    "https://www.runninghub.ai/*"
+  ],
   "optional_host_permissions": [
     "http://*/*",
     "https://*/*"

@@ -35,3 +35,5 @@ button:disabled { cursor: wait; opacity: .65; }
 .reverse-text { margin: 0; max-height: 132px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-size: 12px; line-height: 1.5; }
 .reverse-actions { display: flex; gap: 8px; margin-top: 6px; }
 .reverse-actions button { flex: 1; padding: 7px 10px; font-size: 12px; }
+button.secondary { background: transparent; color: CanvasText; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); }
+button.secondary:hover { background: color-mix(in srgb, CanvasText 6%, transparent); filter: none; }

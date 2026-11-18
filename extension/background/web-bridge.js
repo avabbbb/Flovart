@@ -2,10 +2,11 @@
 // 只接受 web-origins.js 白名单里的精确 origin；未经 popup 批准的连接只能发起配对，不能收发业务消息。
 import { isAllowedWebOrigin } from './web-origins.js';
 import { PAIRINGS_KEY, pairingTransition, readPairings, setPairingStatus } from './web-pairings.js';
+import { DIRECT_FETCH_CAPABILITY, DIRECT_FETCH_PORT_NAME, createDirectFetchHandler } from './direct-fetch.js';
 
 export const WEB_PORT_NAME = 'flovart-web';
 export const WEB_PROTOCOL_VERSION = '1';
-const WEB_CAPABILITIES = ['browser.import.image', 'browser.import.video', 'keys.sync'];
+const WEB_CAPABILITIES = ['browser.import.image', 'browser.import.video', 'keys.sync', DIRECT_FETCH_CAPABILITY];
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 
 // origin → 该 origin 下所有打开的 Port
@@ -58,9 +59,25 @@ function closeOrigin(origin, status) {
   }
 }
 
+// 直连上游：每个请求一个 Port；配对状态每次从存储读取（service worker 重启后内存为空）。
+export async function isApprovedWebOrigin(origin, storage) {
+  if (!isAllowedWebOrigin(origin)) return false;
+  return (await readPairings(storage))[origin]?.status === 'approved';
+}
+
+const handleDirectFetchPort = createDirectFetchHandler({ isApprovedOrigin: origin => isApprovedWebOrigin(origin) });
+
 export function startWebBridge() {
   chrome.runtime.onConnectExternal.addListener(port => {
     const origin = port.sender?.origin;
+    if (port.name === DIRECT_FETCH_PORT_NAME) {
+      if (!isAllowedWebOrigin(origin)) {
+        port.disconnect();
+        return;
+      }
+      handleDirectFetchPort(port);
+      return;
+    }
     if (port.name !== WEB_PORT_NAME || !isAllowedWebOrigin(origin)) {
       port.disconnect();
       return;

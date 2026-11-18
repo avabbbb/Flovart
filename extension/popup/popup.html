@@ -11,7 +11,7 @@
   <main>
     <header>
       <img src="../icons/icon48.png" alt="" width="32" height="32" />
-      <div><strong>Flovart</strong><span>Browser Import 1.3</span></div>
+      <div><strong>Flovart</strong><span id="extensionVersion">Browser Import</span></div>
     </header>
     <section class="status" aria-live="polite">
       <i id="statusDot"></i>
@@ -21,7 +21,8 @@
       <span>网页画布</span>
       <ul id="webPairingList"></ul>
     </section>
-    <button id="connectDesktop" type="button">连接 / 打开 Flovart Desktop</button>
+    <button id="openFlovart" type="button" class="primary-link">打开 Flovart</button>
+    <button id="connectDesktop" type="button" class="secondary">连接 / 打开 Flovart Desktop</button>
     <p class="hint">在网页图片或视频上点击右键，可发送到 Flovart Desktop 或已配对的网页画布。插件只传输你明确选择的媒体，不扫描整页；网页画布同步来的 API Key 在本机加密保存，撤销配对即清空。</p>
     <section id="receipt" class="receipt" hidden>
       <span>最近一次导入</span>

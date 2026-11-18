@@ -6,6 +6,7 @@ import { bootstrapRuntimeCredentials } from './services/bootstrapRuntimeCredenti
 import { installCrashLog } from './utils/crashLog';
 import { installDshEmbedBridge } from './services/dshEmbedBridge';
 import { installLlmCorsProxy } from './services/llmCorsProxy';
+import { getExtensionPromptStore } from './services/extensionInstallPrompt';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import './styles/index.css';
 import './styles/adaptive.css';
@@ -14,8 +15,9 @@ import './styles/ambientGlass.css';
 
 installCrashLog();
 installDshEmbedBridge();
-// Web 端：OpenCode Go 等不支持浏览器 CORS 的网关走同源代理 /api/llm-proxy。
-installLlmCorsProxy();
+// Web 端：OpenCode Go 等不支持浏览器 CORS 的网关优先经已配对插件直连，否则走同源代理 /api/llm-proxy；
+// 走代理（或代理被限流）时记下原因，用于提示安装 / 配对插件（不阻塞请求）。
+installLlmCorsProxy({ onProxy: reason => getExtensionPromptStore().note(reason) });
 
 void bootstrapRuntimeCredentials().catch(() => {
   // Browser builds and unavailable Desktop IPC keep using the encrypted Web Vault.

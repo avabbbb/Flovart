@@ -54,6 +54,10 @@ export interface ExtensionBridge {
   disconnect(): void;
   request<T = unknown>(type: string, payload?: Record<string, unknown>, timeoutMs?: number): Promise<T>;
   onRequest(type: string, handler: ExtensionRequestHandler): () => void;
+  /** 已批准且插件声明了该能力时为 true。 */
+  supports(capability: string): boolean;
+  /** 向已批准的插件开一条独立的长连接 Port（例如每个直连请求一条）；未批准时返回 null。 */
+  openChannel(name: string): ChromePortLike | null;
 }
 
 interface PendingRequest {
@@ -266,6 +270,18 @@ export function createExtensionBridge(options: {
         reject(error instanceof Error ? error : new Error(String(error)));
       }
       return promise;
+    },
+    supports(capability) {
+      return state.status === 'approved' && Boolean(state.extensionId) && state.capabilities.includes(capability);
+    },
+    openChannel(name) {
+      const runtime = options.runtime;
+      if (!runtime || state.status !== 'approved' || !state.extensionId) return null;
+      try {
+        return runtime.connect(state.extensionId, { name });
+      } catch {
+        return null;
+      }
     },
     onRequest(type, handler) {
       handlers.set(type, handler);
