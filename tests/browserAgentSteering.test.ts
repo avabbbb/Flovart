@@ -68,6 +68,61 @@ describe('browser agent steering', () => {
   });
 });
 
+describe('browser agent steering boundary (codex-style pending steer)', () => {
+  let kernel: BrowserAgentKernel;
+  beforeEach(async () => { await localforage.removeItem('flovart.agent.sessions.project-steer'); });
+  afterEach(async () => { await kernel?.close(); await localforage.removeItem('flovart.agent.sessions.project-steer'); });
+
+  it('holds a steer until the next boundary, reports pickup with its id, and allows withdrawing before that', async () => {
+    const bodies: Array<{ messages: Array<{ role: string; content: unknown }> }> = [];
+    let releaseFirst: () => void = () => undefined;
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)));
+      if (bodies.length === 1) await new Promise<void>(resolve => { releaseFirst = resolve; });
+      return reply(bodies.length === 1 ? '第一段' : '收到');
+    }));
+    kernel = new BrowserAgentKernel({ projectId: 'project-steer', route, tools: [], confirm: async () => true, getThinkingLevel: () => 'off' });
+    await kernel.openSession();
+    const events: Array<{ type: string; [key: string]: unknown }> = [];
+    kernel.subscribe(event => events.push(event));
+    const turn = kernel.send('先做 A');
+    await vi.waitFor(() => expect(bodies).toHaveLength(1));
+    expect(kernel.steer('顺便做 B', [], 'steer-b')).toBe(true);
+    expect(kernel.steer('撤回我', [], 'steer-c')).toBe(true);
+    expect(kernel.withdrawSteer('steer-c')).toBe(true);
+    // 还没到边界：不算送达。
+    expect(events.some(event => event.type === 'steer_delivered')).toBe(false);
+    releaseFirst();
+    await turn;
+    expect(events.filter(event => event.type === 'steer_delivered').map(event => event.steerId)).toEqual(['steer-b']);
+    // 送达后的 user 消息出现在第二次模型调用里，撤回的那条没有。
+    expect(JSON.stringify(bodies[1].messages)).toContain('顺便做 B');
+    expect(JSON.stringify(bodies[1].messages)).not.toContain('撤回我');
+    expect(kernel.withdrawSteer('steer-b')).toBe(false);
+    expect(kernel.takePendingSteers()).toEqual([]);
+  });
+
+  it('hands back a steer that never reached a boundary because the turn failed first', async () => {
+    let calls = 0;
+    let releaseFirst: () => void = () => undefined;
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      calls += 1;
+      await new Promise<void>(resolve => { releaseFirst = resolve; });
+      return new Response('boom', { status: 400 });
+    }));
+    kernel = new BrowserAgentKernel({ projectId: 'project-steer', route, tools: [], confirm: async () => true, getThinkingLevel: () => 'off' });
+    await kernel.openSession();
+    const turn = kernel.send('会失败');
+    await vi.waitFor(() => expect(calls).toBe(1));
+    expect(kernel.steer('补充', [], 'steer-late')).toBe(true);
+    releaseFirst();
+    await turn.catch(() => undefined);
+    expect(calls).toBe(1);
+    expect(kernel.takePendingSteers()).toEqual(['steer-late']);
+    expect(kernel.takePendingSteers()).toEqual([]);
+  });
+});
+
 describe('abort wording', () => {
   it('recognises raw abort texts from every layer', () => {
     for (const text of ['signal is aborted without reason', 'This operation was aborted', 'The user aborted a request.', '已中止', 'AbortError']) expect(isAbortMessage(text)).toBe(true);

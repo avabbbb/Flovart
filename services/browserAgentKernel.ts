@@ -1235,6 +1235,12 @@ export class BrowserAgentKernel {
   private compacting = false;
   /** 每次停止 +1：压缩（模型调用）期间用户点了停止，就不再接着发这一轮。 */
   private cancelEpoch = 0;
+  /**
+   * 插话缓冲：steer() 先放在这里，只在步骤边界（prepareNextTurn：工具结束 / 一次模型回复结束、下一次调用模型前）
+   * 才交给 pi 的 steering 队列，所以送达前都能撤回。交出去之后按消息对象等 message_start，届时发 steer_delivered。
+   */
+  private steerBuffer: Array<{ id: string; message: AgentMessage }> = [];
+  private steerInFlight = new Map<AgentMessage, string>();
 
   constructor(options: BrowserAgentKernelOptions) {
     this.projectId = options.projectId;
@@ -1380,6 +1386,9 @@ export class BrowserAgentKernel {
           ? undefined
           : { block: true, reason: `未注册的 Flovart 工具：${toolCall.name}` }
       ),
+      // 边界处一次送达全部插话（Codex 同样一次注入），不是一轮只取一条。
+      steeringMode: 'all',
+      prepareNextTurn: () => { this.flushSteers(); return undefined; },
       // 预期内失败由工具以 details.isError 标记，这里统一翻成 isError。
       afterToolCall: async ({ result }) => ((result as { details?: { isError?: boolean } } | undefined)?.details?.isError ? { isError: true } : undefined),
     });
@@ -1397,7 +1406,25 @@ export class BrowserAgentKernel {
         if (this.session) await this.repo?.persist(this.session);
       }
       this.emit(event as { type: string; [key: string]: unknown });
+      if (event.type === 'message_start') {
+        const steerId = this.steerInFlight.get((event as { message: AgentMessage }).message);
+        if (steerId) {
+          this.steerInFlight.delete((event as { message: AgentMessage }).message);
+          this.emit({ type: 'steer_delivered', steerId });
+        }
+      }
     });
+  }
+
+  /** 步骤边界：把缓冲里的插话交给 pi，紧接着的 steering 轮询会把它们作为 user 消息注入。 */
+  private flushSteers(): void {
+    const agent = this.agent;
+    if (!agent || this.steerBuffer.length === 0) return;
+    for (const { id, message } of this.steerBuffer) {
+      this.steerInFlight.set(message, id);
+      agent.steer(message);
+    }
+    this.steerBuffer = [];
   }
 
   private currentThinkingLevel(): AgentThinkingLevel {
@@ -1528,6 +1555,8 @@ export class BrowserAgentKernel {
   cancel(): void {
     // 停止也丢掉排队中的插话：用户点停止就是要这一轮完全结束。
     this.agent?.clearAllQueues();
+    this.steerBuffer = [];
+    this.steerInFlight.clear();
     this.agent?.abort();
     this.compactionController?.abort();
     this.cancelEpoch += 1;
@@ -1540,18 +1569,42 @@ export class BrowserAgentKernel {
 
   /**
    * 运行中插话（steering）：不打断当前这一轮，消息在下一个步骤边界（工具执行完、下一次调用模型前）
-   * 注入对话；如果模型正在写最后一段回复，写完后立即接着处理。没有在跑时返回 false，调用方改走 send。
+   * 注入对话；送达时发 `steer_delivered { steerId }`。没有在跑时返回 false，调用方改走 send。
    */
-  steer(text: string, images: ImageContent[] = []): boolean {
+  steer(text: string, images: ImageContent[] = [], id: string = crypto.randomUUID()): boolean {
     if (!this.agent || !this.session || !this.agent.state.isStreaming) return false;
     const prompt = String(text || '').trim();
     if (!prompt && images.length === 0) return false;
-    this.agent.steer({
-      role: 'user',
-      content: [{ type: 'text', text: prompt }, ...images],
-      timestamp: Date.now(),
-    } as AgentMessage);
+    this.steerBuffer.push({
+      id,
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: prompt }, ...images],
+        timestamp: Date.now(),
+      } as AgentMessage,
+    });
     return true;
+  }
+
+  /** 撤回一条还没到步骤边界的插话；已经交给模型循环的撤不回，返回 false。 */
+  withdrawSteer(id: string): boolean {
+    const before = this.steerBuffer.length;
+    this.steerBuffer = this.steerBuffer.filter(item => item.id !== id);
+    return this.steerBuffer.length !== before;
+  }
+
+  /**
+   * 这一轮结束后仍未送达的插话（这一轮在边界之前就结束 / 出错了）：从内核取走并返回 id，
+   * 由面板作为下一轮重新提交，内核不再自行处理它们。
+   */
+  takePendingSteers(): string[] {
+    const ids = [...this.steerBuffer.map(item => item.id), ...this.steerInFlight.values()];
+    this.steerBuffer = [];
+    if (this.steerInFlight.size) {
+      this.steerInFlight.clear();
+      this.agent?.clearSteeringQueue();
+    }
+    return ids;
   }
 
   // -------------------------------------------------------------------------

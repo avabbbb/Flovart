@@ -330,3 +330,72 @@
 }
 /* 轮次刻度在右缘：给消息区留出一条刻度槽，刻度不压到「你」的气泡上。 */
 .agent-conversation__viewport:has(> .agent-turn-rail) > .agent-conversation__messages { padding-right: 16px; }
+
+/* ── 待发送托盘（运行中 Enter 插话 / Tab 排队）──
+   参照 openai/codex TUI 的 pending input preview（Apache-2.0）与用户截图 image-dcfe9904cfc4.webp：
+   贴在输入卡正上方的磨砂条（--flv-frost-*，浮动 chrome，不嵌在输入卡里，避免玻璃套玻璃）；
+   标题「N 条待发送」+ 折叠箭头；每行 ↳ + 单行省略（全文在 title）+ ↑ / 删除；280px 起不裁切。 */
+.agent-input-queue {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0 0 6px;
+  border-radius: 14px;
+  padding: 2px 4px 4px;
+  color: var(--isl-ink);
+  font-size: 12px;
+}
+.agent-input-queue[data-collapsed] { padding-bottom: 2px; }
+.agent-input-queue__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  padding: 6px 8px;
+  color: var(--isl-ink);
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.agent-input-queue__title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-input-queue__chevron { flex: none; color: var(--isl-ink-soft); transform: rotate(180deg); transition: transform .18s cubic-bezier(.2, .8, .2, 1); }
+.agent-input-queue[data-collapsed] .agent-input-queue__chevron { transform: none; }
+.agent-input-queue__head:hover { background: color-mix(in srgb, var(--isl-ink) 5%, transparent); }
+.agent-input-queue__list { display: flex; flex-direction: column; gap: 1px; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.agent-input-queue__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  border-radius: 10px;
+  padding: 4px 4px 4px 8px;
+}
+.agent-input-queue__row:hover,
+.agent-input-queue__row:focus-within { background: color-mix(in srgb, var(--isl-ink) 5%, transparent); }
+.agent-input-queue__glyph { flex: none; align-self: flex-start; margin-top: 3px; color: var(--isl-ink-ghost); }
+.agent-input-queue__body { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.agent-input-queue__text { min-width: 0; overflow: hidden; color: var(--isl-ink-soft); line-height: 20px; text-overflow: ellipsis; white-space: nowrap; }
+.agent-input-queue__meta { min-width: 0; overflow: hidden; color: var(--state-think, var(--isl-mint)); font-size: 11px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.agent-input-queue__actions { display: flex; flex: none; align-items: center; gap: 2px; }
+.agent-input-queue__action {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  padding: 0;
+  color: var(--isl-ink-ghost);
+  background: transparent;
+  cursor: pointer;
+}
+.agent-input-queue__action:hover { color: var(--isl-ink); background: color-mix(in srgb, var(--isl-ink) 8%, transparent); }
+.agent-input-queue__head:focus-visible,
+.agent-input-queue__action:focus-visible { outline: 2px solid color-mix(in srgb, var(--isl-mint) 70%, transparent); outline-offset: 1px; }
+.agent-input-queue__hint { margin: 2px 8px 2px 27px; overflow: hidden; color: var(--isl-ink-ghost); font-size: 11px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .agent-input-queue__chevron { transition: none; } }

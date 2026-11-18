@@ -64,7 +64,9 @@ import { agentWorkingMeta, agentWorkingPhase } from './agentWorkingPhase';
 import { AgentOrbIcon } from './AgentWorkingOrb';
 import { AgentMediaTiles } from './AgentMediaTiles';
 import { referenceLineLabels, userTurnReferences } from './agentMessageRefs';
-import { abortedNoticeText, isAbortMessage, queuedNoticeText } from './agentAbort';
+import { abortedNoticeText, isAbortMessage } from './agentAbort';
+import { AgentInputQueueTray } from './AgentInputQueueTray';
+import { draftHasContent, draftIsEmpty, draftPreview, mergeDrafts, moveToFront, popLastQueued, promoteToSteer, queuedCount, removeInput, requeueSteers, routeRunningSubmit, shiftQueued, trayOrder, type ComposerDraft, type PendingInput, type RunningSubmitKey } from './agentInputQueue';
 import { AgentRunPlanCard } from './AgentRunPlanCard';
 import { isRunPlanRequest, runPlanApproved, runPlanNodeIds, type RunPlanDecision } from './agentRunPlan';
 import { clearRunPlans, readRunPlans, saveRunPlan } from './agentRunPlanStore';
@@ -720,10 +722,19 @@ const userApiKeysRef = useRef(userApiKeys);
   const handleEventRef = useRef<(event: FlovartAgentTurnEvent, assistantId: string) => void>(() => undefined);
   // 一条助手消息对应一个流式气泡：message_start 时换新 id，同一消息的 text_delta 共用。
   const streamIdRef = useRef('stream-' + crypto.randomUUID());
+  // 回复正文正在流式输出（可能就是最终回复）：此时 Enter 排队而不插话（codex #12569 的竞态）。
+  const answerStreamingRef = useRef(false);
+  // 插话被模型循环取走（内核 steer_delivered）时由面板处理：移出托盘、在对话里补上这条用户消息。
+  const steerDeliveredRef = useRef<(id: string) => void>(() => undefined);
   // 内置 PI 内核事件（pi-agent-core）→ 面板事件流（与 Managed Agent 的 SSE 事件同构）
   const mapKernelEvent = useCallback((event: { type: string; [key: string]: unknown }) => {
     if (event.type === 'message_start') {
       streamIdRef.current = 'stream-' + crypto.randomUUID();
+      answerStreamingRef.current = false;
+      return;
+    }
+    if (event.type === 'steer_delivered') {
+      steerDeliveredRef.current(String(event.steerId || ''));
       return;
     }
     if (event.type === 'message_update') {
@@ -886,6 +897,7 @@ const userApiKeysRef = useRef(userApiKeys);
 
   const handleEvent = (event: FlovartAgentTurnEvent, assistantId: string) => {
     if (event.type === 'text-delta') {
+      answerStreamingRef.current = true;
       setSetupBlocker(current => blockerAfterCredentialSignal(current, false));
       const now = Date.now();
       setMessages(items => applyTextDelta(items, assistantId, event.delta, now));
@@ -900,6 +912,7 @@ const userApiKeysRef = useRef(userApiKeys);
       skillAttachmentDirty.current = false;
       setSkillAttachment(event.snapshot.boundProductionSkill);
     } else if (event.type === 'tool-start') {
+      answerStreamingRef.current = false;
       const needsApproval = /production_(?:approve|run)|task_cancel/.test(event.name);
       const productionTool = /production_|workflow_projection|provider_status|task_get/.test(event.name);
       const now = Date.now();
@@ -980,7 +993,8 @@ const userApiKeysRef = useRef(userApiKeys);
     attachmentsRef.current = [];
   }, []);
 
-  // 运行中发出的消息：内置内核走插话（steer，下一步骤边界注入）；托管 Agent 或带媒体的消息排队，这一轮结束后自动发送。
+  // 运行中发出的消息（照 openai/codex）：Enter 插话（steer，下一个工具 / 结果边界注入当前这一轮），
+  // Tab 排队（这一轮空闲后按先后自动发送）；两者在送达前都显示在输入框上方的「待发送」托盘里。
   type OutgoingTurn = {
     id: string;
     requestText: string;
@@ -989,29 +1003,66 @@ const userApiKeysRef = useRef(userApiKeys);
     attachments: AgentComposerAttachment[];
     messageReferences: Array<{ id: string; kind: AgentReference['type']; label: string }>;
   };
-  const queuedTurns = useRef<OutgoingTurn[]>([]);
+  type QueueDraft = ComposerDraft<AgentReference, AgentComposerAttachment>;
+  /** 待发送的一条：原始草稿（取回编辑 / 停止退回用）；插话还带着已解析好的请求（送达时显示）。 */
+  type QueuedInput = PendingInput<AgentReference, AgentComposerAttachment> & { outgoing?: OutgoingTurn };
 
-  const send = async () => {
-    const typed = prompt.trim();
-    if (!typed && !quote && references.length === 0 && attachments.length === 0) return;
+  // 每个会话一份待发送队列，只在内存里（刷新即丢）。
+  const [inputQueues, setInputQueues] = useState<Record<string, QueuedInput[]>>({});
+  const inputQueuesRef = useRef<Record<string, QueuedInput[]>>({});
+  const [inputQueueCollapsed, setInputQueueCollapsed] = useState(false);
+  const conversationKey = activeSessionId || project.id;
+  const conversationKeyRef = useRef(conversationKey);
+  conversationKeyRef.current = conversationKey;
+  const turnConversationKey = useRef(conversationKey);
+  const pendingInputs = inputQueues[conversationKey] || [];
+  const updateInputQueue = (key: string, update: (items: QueuedInput[]) => QueuedInput[]) => {
+    const next = { ...inputQueuesRef.current, [key]: update(inputQueuesRef.current[key] || []) };
+    inputQueuesRef.current = next;
+    setInputQueues(next);
+  };
+
+  const composerDraft = (): QueueDraft => ({ text: prompt.trim(), quote: quote?.text ?? null, references: [...references], attachments: attachmentsRef.current });
+  const clearComposer = () => {
+    setPrompt('');
+    setQuote(null);
+    setReferences([]);
+    attachmentsRef.current = [];
+    setAttachments([]);
+    dispatchLayer({ type: 'close', layer: 'mention' });
+  };
+  /** 把草稿放回输入框（停止退回 / 取回编辑）。 */
+  const fillComposer = (draft: QueueDraft) => {
+    setPrompt(draft.text);
+    setQuote(draft.quote ? { messageId: '', text: draft.quote } : null);
+    setReferences(draft.references);
+    attachmentsRef.current = draft.attachments;
+    setAttachments(draft.attachments);
+    focusComposer();
+  };
+  // 带媒体（附件、@图片节点）需要异步取画面，不能插话，只能排队。
+  const draftHasMedia = (draft: QueueDraft) => draft.attachments.length > 0 || draft.references.some(reference => reference.type === 'node');
+
+  /** 连接未就绪 / 缺凭证：给出引导并返回 true（不发送）。 */
+  const connectionBlocked = () => {
+    if (client.current || kernelRef.current) return false;
+    // Agents-offline / credential wall: never dump '仅桌面端可用'. When the
+    // missing piece is an agent-text route the blocker is credential (a key
+    // fixes it); otherwise the managed host is simply not running (offline).
+    const missingTextRoute = !isTauri() && !browserRouteSignature;
+    const blocker: AgentSetupBlocker = needsConfiguration || missingTextRoute ? 'credential' : 'offline';
+    setSetupBlocker(blocker);
+    setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: missingTextRoute ? translations[language].agentPanel.textRouteRequired : localizedAgentSetupMessage(blocker, undefined, language) }]);
+    return true;
+  };
+
+  /** 草稿 → 一轮请求。排队的消息到出队时才解析（创作模式、偏好模型取那一刻的值）。 */
+  const buildOutgoing = (draft: QueueDraft, id: string = crypto.randomUUID()): OutgoingTurn => {
     // 引用回复：引文以 Markdown 引用块放在正文前，进入模型上下文，气泡里显示为引用块。
-    const text = withQuote(typed, quote?.text);
-    // 连接中不发送（按钮本就禁用）；不再在发送时强行把连接状态改成 ready。
-    if (status === 'connecting') return;
-    const phase = turnRef.current.phase;
-    if (phase === 'stopping') return;
-    if (!client.current && !kernelRef.current) {
-      // Agents-offline / credential wall: never dump '仅桌面端可用'. When the
-      // missing piece is an agent-text route the blocker is credential (a key
-      // fixes it); otherwise the managed host is simply not running (offline).
-      const missingTextRoute = !isTauri() && !browserRouteSignature;
-      const blocker: AgentSetupBlocker = needsConfiguration || missingTextRoute ? 'credential' : 'offline';
-      setSetupBlocker(blocker);
-      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: missingTextRoute ? translations[language].agentPanel.textRouteRequired : localizedAgentSetupMessage(blocker, undefined, language) }]);
-      return;
-    }
-    const referenceContext = references.length ? `引用上下文：\n${references.map(reference => `- @${reference.label}（${reference.type === 'node' ? `工作流节点 nodeId=${reference.id}` : `我的素材 assetId=${reference.id}`}）`).join('\n')}` : '';
-    const turnAttachments = attachmentsRef.current;
+    const text = withQuote(draft.text, draft.quote ?? undefined);
+    const draftReferences = draft.references;
+    const referenceContext = draftReferences.length ? `引用上下文：\n${draftReferences.map(reference => `- @${reference.label}（${reference.type === 'node' ? `工作流节点 nodeId=${reference.id}` : `我的素材 assetId=${reference.id}`}）`).join('\n')}` : '';
+    const turnAttachments = draft.attachments;
     const attachmentContext = turnAttachments.length
       ? `本轮附带的本地媒体（画面已作为图片内容一并发给你）：\n${turnAttachments.map(item => `- ${item.kind === 'image' ? '图片' : '视频'}「${item.name}」`).join('\n')}`
       : '';
@@ -1021,65 +1072,152 @@ const userApiKeysRef = useRef(userApiKeys);
     });
     const displayText = [
       text,
-      references.length ? `引用：${references.map(reference => `@${reference.label}`).join('、')}` : '',
+      draftReferences.length ? `引用：${draftReferences.map(reference => `@${reference.label}`).join('、')}` : '',
       turnAttachments.length ? `附件：${turnAttachments.map(item => item.name).join('、')}` : '',
     ].filter(Boolean).join('\n\n');
-    const outgoing: OutgoingTurn = {
-      id: crypto.randomUUID(),
+    return {
+      id,
       requestText,
       displayText,
-      references: [...references],
+      references: [...draftReferences],
       attachments: turnAttachments,
-      messageReferences: references.map(reference => ({ id: reference.id, kind: reference.type, label: reference.label })),
+      messageReferences: draftReferences.map(reference => ({ id: reference.id, kind: reference.type, label: reference.label })),
     };
-    // 单个节点的「已加入上下文」提示随这一轮发出而结束；分组提示保留（还能保存为 Skill）。
-    setGroupBanner(current => (current && current.nodeIds.length <= 1 ? null : current));
-    setPrompt('');
-    setQuote(null);
-    setReferences([]);
-    attachmentsRef.current = [];
-    setAttachments([]);
-    dispatchLayer({ type: 'close', layer: 'mention' });
-    await dispatchOutgoing(outgoing, phase);
   };
 
-  /** 发出一轮：显示用户消息；本轮进行中时插话或排队，空闲时直接跑。不碰输入框。 */
-  const dispatchOutgoing = async (outgoing: OutgoingTurn, phase: typeof turnRef.current.phase) => {
-    stickToBottom.current = true;
-    setMessages(items => [...items, { id: outgoing.id, role: 'user', text: outgoing.displayText, ...(outgoing.messageReferences.length ? { references: outgoing.messageReferences } : {}) }]);
+  /** 运行中提交：按 Enter / Tab 与当前状态决定插话还是排队，放进托盘。 */
+  const enqueueWhileRunning = (draft: QueueDraft, key: RunningSubmitKey) => {
+    const id = crypto.randomUUID();
+    const steerable = Boolean(kernelRef.current) && !draftHasMedia(draft);
+    let kind = routeRunningSubmit({ key, answerStreaming: answerStreamingRef.current, steerable });
+    let outgoing: OutgoingTurn | undefined;
+    if (kind === 'steer') {
+      outgoing = buildOutgoing(draft, id);
+      if (!kernelRef.current?.steer(outgoing.requestText, [], id)) {
+        kind = 'queued';
+        outgoing = undefined;
+      }
+    }
+    updateInputQueue(conversationKeyRef.current, items => [...items, { id, kind, draft, ...(outgoing ? { outgoing } : {}) }]);
+    setInputQueueCollapsed(false);
+  };
+
+  const send = async (key: RunningSubmitKey = 'enter') => {
+    const draft = composerDraft();
+    if (draftIsEmpty(draft)) return;
+    // 连接中不发送（按钮本就禁用）；不再在发送时强行把连接状态改成 ready。
+    if (status === 'connecting') return;
+    const phase = turnRef.current.phase;
+    if (phase === 'stopping') return;
+    if (connectionBlocked()) return;
+    // 单个节点的「已加入上下文」提示随这一轮发出而结束；分组提示保留（还能保存为 Skill）。
+    setGroupBanner(current => (current && current.nodeIds.length <= 1 ? null : current));
+    clearComposer();
     if (phase !== 'idle') {
-      // 不打断当前这一轮。纯文本直接插话；带媒体（附件、@图片节点）需要异步取画面，排到这一轮之后。
-      const hasMedia = outgoing.attachments.length > 0 || outgoing.references.some(reference => reference.type === 'node');
-      const steered = !hasMedia && Boolean(kernelRef.current?.steer(outgoing.requestText));
-      if (!steered) queuedTurns.current.push(outgoing);
-      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'system', text: queuedNoticeText(steered ? 'steer' : 'queue', language) }]);
+      enqueueWhileRunning(draft, key);
       return;
     }
+    await dispatchOutgoing(buildOutgoing(draft));
+  };
+
+  /** 空闲时发出一轮：显示用户消息并开跑。不碰输入框。 */
+  const dispatchOutgoing = async (outgoing: OutgoingTurn) => {
+    stickToBottom.current = true;
+    setMessages(items => [...items, { id: outgoing.id, role: 'user', text: outgoing.displayText, ...(outgoing.messageReferences.length ? { references: outgoing.messageReferences } : {}) }]);
     await runTurn(outgoing);
   };
 
   /**
    * 以用户身份发一句固定的话（执行计划卡里的「确认 / 拒绝」）：不读、不清空输入框里正在写的内容，
-   * 不带引用与附件；连接未就绪时同 send 一样提示。
+   * 不带引用与附件；连接未就绪时同 send 一样提示；运行中同 Enter 一样插话或排队。
    */
   const sendText = async (text: string) => {
     const body = text.trim();
     if (!body || status === 'connecting') return;
     const phase = turnRef.current.phase;
     if (phase === 'stopping') return;
-    if (!client.current && !kernelRef.current) {
-      const missingTextRoute = !isTauri() && !browserRouteSignature;
-      const blocker: AgentSetupBlocker = needsConfiguration || missingTextRoute ? 'credential' : 'offline';
-      setSetupBlocker(blocker);
-      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: missingTextRoute ? translations[language].agentPanel.textRouteRequired : localizedAgentSetupMessage(blocker, undefined, language) }]);
+    if (connectionBlocked()) return;
+    const draft: QueueDraft = { text: body, quote: null, references: [], attachments: [] };
+    if (phase !== 'idle') {
+      enqueueWhileRunning(draft, 'enter');
       return;
     }
-    const requestText = applyAgentTurnPreamble(body, {
-      creationMode,
-      preferredModel: preferredModel ? { capability: preferredModel.capability, name: preferredModel.name } : null,
-    });
-    await dispatchOutgoing({ id: crypto.randomUUID(), requestText, displayText: body, references: [], attachments: [], messageReferences: [] }, phase);
+    await dispatchOutgoing(buildOutgoing(draft));
   };
+
+  // 插话被模型循环取走：移出托盘，在对话里补上这条用户消息（落在它真正进入上下文的位置）。
+  steerDeliveredRef.current = (id: string) => {
+    answerStreamingRef.current = false;
+    for (const [key, items] of Object.entries(inputQueuesRef.current)) {
+      const item = items.find(entry => entry.id === id);
+      if (!item) continue;
+      updateInputQueue(key, list => removeInput(list, id));
+      const outgoing = item.outgoing;
+      if (outgoing) {
+        stickToBottom.current = true;
+        setMessages(list => list.some(entry => entry.id === outgoing.id) ? list : [...list, { id: outgoing.id, role: 'user', text: outgoing.displayText, ...(outgoing.messageReferences.length ? { references: outgoing.messageReferences } : {}) }]);
+      }
+      return;
+    }
+  };
+
+  /** 这一轮空闲后：取排队的第一条发出（一次一条，下一条等它结束）。只发当前打开的会话的队列。 */
+  const drainInputQueue = (key: string) => {
+    if (key !== conversationKeyRef.current) return;
+    const { next, rest } = shiftQueued(inputQueuesRef.current[key] || []);
+    if (!next) return;
+    updateInputQueue(key, () => rest);
+    void dispatchOutgoing(buildOutgoing(next.draft, next.id));
+  };
+
+  /** 托盘 ↑：排队的一条立即发送。运行中能插话就转成插话；不能（托管 Agent / 带媒体）就挪到队首；空闲时直接发。 */
+  const sendPendingNow = (id: string) => {
+    const key = conversationKeyRef.current;
+    const item = (inputQueuesRef.current[key] || []).find(entry => entry.id === id);
+    if (!item || item.kind !== 'queued') return;
+    const phase = turnRef.current.phase;
+    if (phase === 'stopping' || status === 'connecting') return;
+    if (phase === 'idle') {
+      if (connectionBlocked()) return;
+      updateInputQueue(key, list => removeInput(list, id));
+      void dispatchOutgoing(buildOutgoing(item.draft, item.id));
+      return;
+    }
+    if (kernelRef.current && !draftHasMedia(item.draft)) {
+      const outgoing = buildOutgoing(item.draft, item.id);
+      if (kernelRef.current.steer(outgoing.requestText, [], item.id)) {
+        updateInputQueue(key, list => promoteToSteer(list, id).map(entry => (entry.id === id ? { ...entry, outgoing } : entry)));
+        return;
+      }
+    }
+    updateInputQueue(key, list => moveToFront(list, id));
+  };
+
+  /** 托盘 🗑：删除一条。插话只能在到达步骤边界前撤回；已被取走的撤不回（马上会出现在对话里）。 */
+  const deletePendingInput = (id: string) => {
+    const key = conversationKeyRef.current;
+    const item = (inputQueuesRef.current[key] || []).find(entry => entry.id === id);
+    if (!item) return;
+    if (item.kind === 'steer' && !kernelRef.current?.withdrawSteer(id)) return;
+    item.draft.attachments.forEach(releaseComposerAttachment);
+    updateInputQueue(key, list => removeInput(list, id));
+    focusComposer();
+  };
+
+  /** Alt+↑ / Shift+←：把最后一条排队消息取回输入框编辑（接在正在写的内容前面）。 */
+  const popQueuedToComposer = () => {
+    const key = conversationKeyRef.current;
+    const { item, rest } = popLastQueued(inputQueuesRef.current[key] || []);
+    if (!item) return false;
+    updateInputQueue(key, () => rest);
+    fillComposer(mergeDrafts([item.draft], composerDraft()));
+    return true;
+  };
+
+  // 卸载时释放队列里附件的 object URL。
+  useEffect(() => () => {
+    Object.values(inputQueuesRef.current).flat().forEach(item => item.draft.attachments.forEach(releaseComposerAttachment));
+  }, []);
 
   /**
    * 执行计划卡里受阻步的「确认 / 拒绝」。有等待中的工具确认（含生成计划）就直接批准 / 拒绝它；
@@ -1100,6 +1238,9 @@ const userApiKeysRef = useRef(userApiKeys);
   const runTurn = async (outgoing: OutgoingTurn) => {
     const { requestText, attachments: turnAttachments, references: turnReferences } = outgoing;
     const assistantId = `stream-${crypto.randomUUID()}`;
+    const turnKey = conversationKeyRef.current;
+    turnConversationKey.current = turnKey;
+    answerStreamingRef.current = false;
     // 排队的消息可能被上一轮结束时的快照刷掉：重新补上这条用户消息。
     setMessages(items => items.some(item => item.id === outgoing.id) ? items : [...items, { id: outgoing.id, role: 'user', text: outgoing.displayText, ...(outgoing.messageReferences.length ? { references: outgoing.messageReferences } : {}) }]);
     const { turnId } = dispatchTurn({ type: 'send' });
@@ -1163,9 +1304,12 @@ const userApiKeysRef = useRef(userApiKeys);
       // 会话标题由内核在 persist 时从首条用户消息派生；回合结束后主动刷新，
       // 否则标题要等用户点开会话菜单才更新。
       void refreshSessions();
-      // 运行中排队的消息：这一轮结束（正常、失败都算；停止会清空队列）后接着发送。
-      const next = queuedTurns.current.shift();
-      if (next) void runTurn(next);
+      answerStreamingRef.current = false;
+      // 这一轮结束时还没被取走的插话（这一轮在步骤边界之前就结束 / 出错了）：从内核取回，
+      // 转成排在最前的排队消息，作为下一轮重新提交。停止时托盘已经清空、内容退回了输入框。
+      kernelRef.current?.takePendingSteers?.();
+      updateInputQueue(turnKey, items => requeueSteers(items));
+      drainInputQueue(turnKey);
     }
   };
 
@@ -1174,9 +1318,13 @@ const userApiKeysRef = useRef(userApiKeys);
     const { phase, turnId } = turnRef.current;
     if (phase !== 'sending' && phase !== 'awaitingConfirmation') return;
     dispatchTurn({ type: 'stop' });
-    // 停止就是结束这一轮：排队中的消息一起丢弃（内核的插话队列在 cancel 里清空）。
-    queuedTurns.current.forEach(item => item.attachments.forEach(releaseComposerAttachment));
-    queuedTurns.current = [];
+    // 停止就是结束这一轮：插话与排队都退回输入框（排在正在写的内容前面），一条也不发；内核的插话缓冲在 cancel 里清空。
+    const stopKey = turnConversationKey.current;
+    const pending = trayOrder(inputQueuesRef.current[stopKey] || []);
+    if (pending.length) {
+      updateInputQueue(stopKey, () => []);
+      fillComposer(mergeDrafts(pending.map(item => item.draft), composerDraft()));
+    }
     rejectConfirmations();
     askRef.current?.resolve({ ok: false, cancelled: true });
     askRef.current = undefined;
@@ -1484,6 +1632,22 @@ const userApiKeysRef = useRef(userApiKeys);
           queued={queuedConfirmations}
           onDecide={(approved, scope) => decideConfirmation(confirmation, approved, scope)}
         />}
+        <AgentInputQueueTray
+          items={trayOrder(pendingInputs).map(item => ({ id: item.id, kind: item.kind, text: draftPreview(item.draft) }))}
+          collapsed={inputQueueCollapsed}
+          onToggle={() => setInputQueueCollapsed(value => !value)}
+          onSendNow={sendPendingNow}
+          onRemove={deletePendingInput}
+          copy={{
+            title: t('agentPanel.inputQueueTitle', pendingInputs.length),
+            collapse: t('agentPanel.inputQueueCollapse'),
+            expand: t('agentPanel.inputQueueExpand'),
+            steerMeta: t('agentPanel.inputQueueSteerMeta'),
+            sendNow: t('agentPanel.inputQueueSendNow'),
+            remove: t('agentPanel.inputQueueRemove'),
+            editHint: t('agentPanel.inputQueueEditHint'),
+          }}
+        />
         <div
           ref={composer}
           className="workflow-agent__composer agent-composer"
@@ -1586,12 +1750,25 @@ const userApiKeysRef = useRef(userApiKeys);
                 }
               }
               if (event.key === 'Backspace' && !prompt && references.length) { event.preventDefault(); setReferences(current => current.slice(0, -1)); return; }
+              // Alt+↑ / Shift+←（光标在开头时）：取回最后一条排队消息编辑。
+              if (queuedCount(pendingInputs) > 0 && ((event.altKey && event.key === 'ArrowUp')
+                || (event.shiftKey && !event.altKey && event.key === 'ArrowLeft' && event.currentTarget.selectionStart === 0 && event.currentTarget.selectionEnd === 0))) {
+                event.preventDefault();
+                popQueuedToComposer();
+                return;
+              }
+              // 运行中 Tab = 排队（输入框为空时不拦，保留 Tab 移动焦点）。
+              if (event.key === 'Tab' && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey && sending && turn.phase !== 'stopping' && draftHasContent(composerDraft())) {
+                event.preventDefault();
+                void send('tab');
+                return;
+              }
               if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
-                void send();
+                void send('enter');
               }
             }}
-            placeholder={needsConfiguration ? t('agentPanel.composerNeedConfig') : status === 'ready' ? t('agentPanel.composerPlaceholder') : t('agentPanel.composerOffline')}
+            placeholder={needsConfiguration ? t('agentPanel.composerNeedConfig') : status === 'ready' ? (sending ? t('agentPanel.inputQueueRunningHint') : t('agentPanel.composerPlaceholder')) : t('agentPanel.composerOffline')}
             aria-label={t('agentPanel.composerAria')}
             onPaste={event => {
               const files = Array.from(event.clipboardData?.files || []);
@@ -1664,7 +1841,7 @@ const userApiKeysRef = useRef(userApiKeys);
                   <span className="agent-composer__running-label" role="status" title={language === 'zho' ? '运行中' : 'Working'}><AgentOrbIcon state="working" size={20} /><span>{language === 'zho' ? '运行中' : 'Working'}</span></span>
                   {/* 运行中也能发：插话进当前这一轮或排在它之后；停止是独立按钮。 */}
                   {(prompt.trim() || references.length > 0 || attachments.length > 0) && turn.phase !== 'stopping'
-                    ? <button type="button" className="agent-composer__send agent-composer__send--queue" aria-label={language === 'zho' ? '发送（不打断当前任务）' : 'Send without interrupting'} title={language === 'zho' ? '发送：插入当前任务，下一步生效' : 'Send: joins the running turn at the next step'} onClick={() => void send()}><Send size={15} /></button>
+                    ? <button type="button" className="agent-composer__send agent-composer__send--queue" aria-label={t('agentPanel.inputQueueSendRunning')} title={t('agentPanel.inputQueueSendRunningTitle')} onClick={() => void send('enter')}><Send size={15} /></button>
                     : null}
                   <span className="agent-composer__stop">
                     <span className="agent-composer__send-ring" aria-hidden="true" />

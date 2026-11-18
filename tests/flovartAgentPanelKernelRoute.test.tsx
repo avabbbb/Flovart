@@ -146,11 +146,16 @@ describe('Flovart Agent panel browser kernel route', () => {
     expect(spies.steer.mock.calls[0][0]).toContain('顺便做 B');
     expect(spies.cancel).not.toHaveBeenCalled();
     expect(spies.send).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('已加入当前任务，下一步生效')).toBeInTheDocument();
+    // 插话在被模型循环取走前显示在输入框上方的「待发送」托盘里。
+    expect(screen.getByTestId('agent-input-queue')).toHaveTextContent('1 条待发送');
+    expect(screen.getByText('下一步工具结束后送达')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '停止' })).toBeInTheDocument();
 
-    // 这一轮结束后才换到新模型。
+    // 这一轮结束后才换到新模型。替身内核不会报告插话送达：这条插话作为下一轮重新提交（立即结束）。
+    spies.send.mockImplementation(async () => undefined);
     finish();
+    await waitFor(() => expect(spies.send).toHaveBeenCalledTimes(2));
+    expect(spies.send.mock.calls[1][0]).toContain('顺便做 B');
     await waitFor(() => expect(spies.construct).toHaveBeenCalledTimes(2));
     expect(spies.construct.mock.calls[1][0].route).toMatchObject({ model: 'hark-2' });
   });

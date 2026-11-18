@@ -43,7 +43,11 @@ export interface RuntimeKernel {
   send(text: string, images?: ImageContent[], skillAttachment?: ProductionSkillAttachment | null): Promise<unknown>;
   cancel(): void;
   /** 运行中插话；没在跑时返回 false。旧替身可不实现。 */
-  steer?(text: string, images?: ImageContent[]): boolean;
+  steer?(text: string, images?: ImageContent[], id?: string): boolean;
+  /** 撤回尚未到步骤边界的插话。旧替身可不实现。 */
+  withdrawSteer?(id: string): boolean;
+  /** 取走这一轮结束时仍未送达的插话 id。旧替身可不实现。 */
+  takePendingSteers?(): string[];
   listSessions(): Promise<Array<{ id: string; title: string; updatedAt: string }>>;
   newSession(): Promise<unknown>;
   openSessionById(sessionId: string): Promise<unknown>;
@@ -203,8 +207,16 @@ export class BrowserAgentRuntime {
   }
 
   /** 运行中把新消息作为插话注入当前这一轮（下一个步骤边界生效）；没在跑或不支持时返回 false。 */
-  steer(text: string, images?: ImageContent[]): boolean {
-    return this.kernel.steer?.(text, images) ?? false;
+  steer(text: string, images?: ImageContent[], id?: string): boolean {
+    return this.kernel.steer?.(text, images, id) ?? false;
+  }
+
+  withdrawSteer(id: string): boolean {
+    return this.kernel.withdrawSteer?.(id) ?? false;
+  }
+
+  takePendingSteers(): string[] {
+    return this.kernel.takePendingSteers?.() ?? [];
   }
 
   listSessions(): Promise<Array<{ id: string; title: string; updatedAt: string }>> {
