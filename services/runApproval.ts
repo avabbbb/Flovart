@@ -47,6 +47,78 @@ export function planRunApproval(nodes: readonly WorkflowNode[], requestedIds: re
   };
 }
 
+export interface RunCostEstimateItem {
+  nodeId: string;
+  title: string;
+  mode: 'image' | 'video';
+  model: string;
+  service: string;
+  route?: string;
+  taskCount: number;
+  /** null：没有匹配的计价规则，以 AI 服务账单为准。 */
+  estimatedCost: { amount: number; currency: 'USD' | 'CNY' } | null;
+  costBasis: 'pricing-rule' | 'unknown';
+  resolution?: string;
+  durationSec?: number;
+  blockers?: string[];
+  warnings?: string[];
+}
+
+export interface RunCostEstimate {
+  nodeIds: string[];
+  items: RunCostEstimateItem[];
+  /** 合计：cost 为 null 表示至少一个节点没有估算，或币种不一致。 */
+  total: { tasks: number; cost: { amount: number; currency: 'USD' | 'CNY' } | null };
+  unknownCostNodeIds: string[];
+  /** 有 blocker 的节点：确认卡上的「运行」按钮会被禁用，先修好再请求运行。 */
+  blockedNodeIds: string[];
+  /** 与确认卡第一行同一句（describeRunApproval）。 */
+  summary: string;
+}
+
+/**
+ * 运行前预估（workflow.cost.estimate）：与审批卡同一份计划（gateFor = planGenerationGate），
+ * 只读、不弹卡、不扣费；让 Agent 在请求运行之前就能把清单与合计费用告诉用户。
+ */
+export function estimateRunCost(
+  nodes: readonly WorkflowNode[],
+  requestedIds: readonly string[],
+  gateFor: (node: WorkflowNode) => GenerationGateDetails,
+): RunCostEstimate | Extract<RunApprovalPlan, { ok: false }> {
+  const plan = planRunApproval(nodes, requestedIds);
+  if (plan.ok === false) return plan;
+  const byId = new Map(nodes.map(node => [node.id, node]));
+  const gates = plan.nodeIds.map(id => gateFor(byId.get(id)!));
+  const items = plan.items.map((item, index): RunCostEstimateItem => {
+    const gate = gates[index];
+    return {
+      nodeId: item.nodeId,
+      title: item.title,
+      mode: gate.mediaType,
+      model: gate.modelLabel,
+      service: gate.serviceLabel,
+      ...(gate.routeLabel ? { route: gate.routeLabel } : {}),
+      taskCount: gate.taskCount,
+      estimatedCost: gate.estimatedCost ?? null,
+      costBasis: gate.estimatedCost ? 'pricing-rule' : 'unknown',
+      ...(gate.resolution ? { resolution: gate.resolution } : {}),
+      ...(gate.durationSec ? { durationSec: gate.durationSec } : {}),
+      ...(gate.blockers?.length ? { blockers: gate.blockers.map(notice => notice.message) } : {}),
+      ...(gate.warnings?.length ? { warnings: gate.warnings.map(notice => notice.message) } : {}),
+    };
+  });
+  const demand = spendDemand(gates);
+  const copy = describeRunApproval(plan.nodeIds.length, gates, 'zho');
+  return {
+    nodeIds: plan.nodeIds,
+    items,
+    total: { tasks: demand.tasks, cost: demand.cost },
+    unknownCostNodeIds: items.filter(item => !item.estimatedCost).map(item => item.nodeId),
+    blockedNodeIds: items.filter(item => item.blockers?.length).map(item => item.nodeId),
+    summary: copy.title + ' · ' + copy.detail,
+  };
+}
+
 const money = (currency: 'USD' | 'CNY', amount: number) => (currency === 'USD' ? '$' : '¥') + amount.toFixed(2);
 
 /** 审批卡的一句话：N 个节点各运行一次 + 合计任务与费用（只确认一次）。 */

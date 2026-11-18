@@ -1043,6 +1043,7 @@ const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，Flovart 生成式 
 - flovart_group_create / flovart_group_run：分组框（与生成批次、备选无关）与整组执行（按依赖顺序、只确认一次费用）。
 - flovart_workflow_search_nodes：按关键字 / 类型 / 锚点编号（A 角色、S 场景、P 道具、T 风格，如 A02）/ 状态（empty/running/done/error）/ 镜号查节点，只返回精简结果并分页。画布大时先用它定位，再对少数节点 inspect；用户说“A02”“第 3 镜”“失败的视频”时用它解析成节点 id。
 - flovart_models_list：列出模型的真实能力（各生成方式是否已配置、参考上限、张数、比例、分辨率、时长，含 RunningHub 动态模型）。选/换模型前先调，不要猜 modelId 或逐个试。
+- flovart_cost_estimate：运行前预估（只读、不扣费）：nodeIds 或 groupId → 每个节点的模型、任务数、预估费用与合计，以及被提交前检查拦下的节点。多个节点或整组运行前先调用，把清单与合计告诉用户再请求运行；cost 为 null 就说费用未知，不要自己估。
 - flovart_workflow_node_run：重跑已写好提示词的生成节点（nodeId 或 nodeIds 批量，一次确认费用），返回 batch 与 takes。
 - flovart_workflow_node_stop：停止某个节点正在进行的生成。
 - flovart_media_import：把 http(s) 地址或素材库素材导入画布成为媒体节点，可直接接到生成节点作参考（加 @chip）。

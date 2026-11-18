@@ -1,4 +1,4 @@
-import { planRunApproval } from './runApproval';
+import { estimateRunCost, planRunApproval } from './runApproval';
 import { terminalFromFailure, terminalFromRunResult, type WorkflowRunTerminal } from './workflowRunTerminal';
 import { planMentionPrunes, type MentionPrune } from '../components/workflow/promptReferenceAlignment';
 import { WORKFLOW_NODE_PATCH_FIELDS, WORKFLOW_OPERATION_FIELDS } from '../tools/flovart/workflow-operation-schema.js';
@@ -25,7 +25,7 @@ import { generateModeOf, listWorkflowModels, planWorkflowGenerate, WorkflowGener
 import { WorkflowGroupError, buildGroupCreateOps, groupRunOrder, isGroupFrame } from '../components/workflow/canvasGroups';
 import { SLASH_SHORTCUTS, SlashShortcutError, buildShortcutApplyOps, describeSlashShortcuts, getSlashShortcut } from '../components/workflow/slashShortcuts';
 import type { UserApiKey } from '../types';
-import { seedancePreflightForNodes } from './generationPlan';
+import { planGenerationGate, seedancePreflightForNodes } from './generationPlan';
 import { describeSeedanceFailures } from './seedancePreflight';
 import { executeWorkflowExport, planWorkflowExport, WorkflowExportError, type WorkflowExportRuntime } from '../components/workflow/nodeExport';
 import { agentModelCatalogSummary, normalizeOperationModelIds } from './agentModelCatalog';
@@ -162,7 +162,7 @@ const DOCUMENT_MUTATION_COMMANDS = new Set([
   'workflow.apply', 'workflow.node.create', 'workflow.node.create-connected', 'workflow.node.update',
   'workflow.node.delete', 'workflow.node.move', 'workflow.node.resize', 'workflow.connect', 'workflow.disconnect',
 ]);
-const WORKFLOW_READ_COMMANDS = new Set(['workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.models.list', 'workflow.shortcut.list', 'workflow.nodes.search']);
+const WORKFLOW_READ_COMMANDS = new Set(['workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.models.list', 'workflow.shortcut.list', 'workflow.nodes.search', 'workflow.cost.estimate']);
 const SENSITIVE_KEY = /(?:api.?key|authorization|token|secret|password|storage.?key|file.?path|local.?path|data.?url)/i;
 const MEDIA_KEY = /^(?:href|poster|src|url)$/i;
 const LOCAL_PATH = /^(?:[a-z]:\\|\\\\|\/home\/|\/Users\/|\/tmp\/)/i;
@@ -801,6 +801,24 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         result = { ok: true, commandId: envelope.id, result: { shortcuts: describeSlashShortcuts() } };
       } else if (!project) {
         return error(envelope.id, 'NOT_FOUND', '当前没有可用的 Workflow 项目。');
+      } else if (command === 'workflow.cost.estimate') {
+        // 运行前预估：与审批卡同一份计划，只读、不弹卡、不扣费。nodeIds 与 groupId 二选一。
+        const hasGroup = typeof args.groupId === 'string' && args.groupId.trim() !== '';
+        if (hasGroup === (args.nodeIds !== undefined)) return error(envelope.id, 'BAD_REQUEST', 'nodeIds 与 groupId 必须且只能给一个。');
+        let nodeIds: string[];
+        let groupId: string | undefined;
+        if (hasGroup) {
+          groupId = String(args.groupId).trim();
+          if (!isGroupFrame(project.nodes.find(node => node.id === groupId))) return error(envelope.id, 'NOT_FOUND', '分组不存在：' + groupId);
+          nodeIds = groupRunOrder(project.nodes, project.connections, groupId);
+          if (!nodeIds.length) return error(envelope.id, 'NOTHING_TO_RUN', '分组 ' + groupId + ' 里没有可执行的生成节点（需要写了提示词、未锁定的图片 / 视频节点）。');
+        } else {
+          nodeIds = parseWorkflowNodeIdList(args.nodeIds);
+        }
+        const keys = dependencies.getUserApiKeys?.() || [];
+        const estimate = estimateRunCost(project.nodes, nodeIds, node => planGenerationGate(node, project, keys));
+        if ('ok' in estimate) return { ok: false, commandId: envelope.id, error: { code: estimate.code, message: estimate.message, details: { nodeIds: estimate.nodeIds } } };
+        result = { ok: true, commandId: envelope.id, result: { projectId: project.id, ...(groupId ? { groupId } : {}), ...estimate } };
       } else if (command === 'workflow.node.run' || command === 'workflow.node.stop') {
         const nodeIds = command === 'workflow.node.run' ? workflowRunNodeIds(args) : [requiredString(args.nodeId || args.id, 'nodeId')];
         const missingNodeId = nodeIds.find(nodeId => !project.nodes.some(node => node.id === nodeId));

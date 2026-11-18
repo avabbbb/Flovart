@@ -38,6 +38,8 @@ export const COMMAND_ALIASES = {
   flovart_group_create: 'workflow.group.create',
   flovart_group_run: 'workflow.group.run',
   flovart_workflow_search_nodes: 'workflow.nodes.search',
+  flovart_cost_estimate: 'workflow.cost.estimate',
+  flovart_estimate_cost: 'workflow.cost.estimate',
   flovart_note_write: 'workflow.note.write',
   flovart_media_import: 'workflow.media.import',
   flovart_script_materialize: 'workflow.script.materialize',
@@ -253,7 +255,7 @@ function normalizeWorkflowNodeToolArgs(args = {}) {
 }
 
 // Agent 工具 v2 的命令按注册表类型标记解析 CLI 参数（--kebab-case → camelCase，数字/布尔/JSON）。
-const REGISTRY_TYPED_WORKFLOW_COMMANDS = new Set(['workflow.generate', 'workflow.models.list', 'workflow.nodes.search', 'workflow.shortcut.list', 'workflow.shortcut.apply', 'workflow.group.create', 'workflow.group.run', 'workflow.note.write', 'workflow.media.import', 'workflow.script.materialize', 'workflow.export',
+const REGISTRY_TYPED_WORKFLOW_COMMANDS = new Set(['workflow.generate', 'workflow.models.list', 'workflow.nodes.search', 'workflow.cost.estimate', 'workflow.shortcut.list', 'workflow.shortcut.apply', 'workflow.group.create', 'workflow.group.run', 'workflow.note.write', 'workflow.media.import', 'workflow.script.materialize', 'workflow.export',
   'agent.task.start', 'agent.task.get', 'agent.task.cancel']);
 
 function registryTypedArgs(command, args = {}) {

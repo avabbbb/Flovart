@@ -36,7 +36,7 @@ describe('Production Runtime canonical registry', () => {
     const commandNames = Object.keys(registry.commands);
 
     expect(registry.protocolVersion).toBe('1');
-    expect(registry.registryHash).toBe('769ea876fb8b92535430889e6edf114a6e29209911d4265a01e666b198e7475f');
+    expect(registry.registryHash).toBe('16b631ecfead8dfb1c2d169c4d8dbdbafc954aff5632f53bf3117ee4f595b3d8');
     expect(hashCanonicalRegistryDocument(registryDocument)).toBe(registry.registryHash);
     expect(Object.isFrozen(registry.commands)).toBe(true);
     expect(Object.isFrozen(registry.commands['runtime.status'].args)).toBe(true);

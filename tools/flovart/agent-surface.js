@@ -18,6 +18,7 @@ export const AGENT_PUBLIC_COMMANDS = Object.freeze([
   'workflow.group.create',
   'workflow.group.run',
   'workflow.nodes.search',
+  'workflow.cost.estimate',
   'workflow.note.write',
   'workflow.media.import',
   'workflow.script.materialize',
@@ -61,6 +62,8 @@ export const AGENT_OPERATION_DEFINITIONS = Object.freeze({
   'workflow.shortcut.list': Object.freeze({ sideEffects: 'read', risk: 'none', permissions: Object.freeze(['workflow.read']), idempotent: true, mutation: false, requiredCapabilities: Object.freeze(['browser-workflow']) }),
   'workflow.shortcut.apply': Object.freeze({ sideEffects: 'generation.maybe', risk: 'cost-and-generation', permissions: Object.freeze(['workflow.write', 'workflow.run']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow', 'provider-gate']) }),
   'workflow.nodes.search': Object.freeze({ sideEffects: 'read', risk: 'none', permissions: Object.freeze(['workflow.read']), idempotent: true, mutation: false, requiredCapabilities: Object.freeze(['browser-workflow']) }),
+  // 运行前预估：与审批卡同一份计划，只读、不弹卡、不扣费。
+  'workflow.cost.estimate': Object.freeze({ sideEffects: 'read', risk: 'none', permissions: Object.freeze(['workflow.read']), idempotent: true, mutation: false, requiredCapabilities: Object.freeze(['browser-workflow']) }),
   'workflow.note.write': Object.freeze({ sideEffects: 'workflow.write', risk: 'reversible', permissions: Object.freeze(['workflow.write']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow']) }),
   'workflow.media.import': Object.freeze({ sideEffects: 'workflow.write', risk: 'reversible', permissions: Object.freeze(['workflow.write']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow']) }),
   // 分镜行 → 生成节点：只建不跑，可撤销写入。

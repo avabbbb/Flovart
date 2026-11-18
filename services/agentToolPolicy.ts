@@ -176,6 +176,7 @@ const READ_COMMANDS = new Set([
   'workflow.export',
   'workflow.shortcut.list',
   'workflow.nodes.search',
+  'workflow.cost.estimate',
   'flovart_workflow_media_view',
   'flovart_web_search',
   'flovart_grep',

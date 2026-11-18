@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "769ea876fb8b92535430889e6edf114a6e29209911d4265a01e666b198e7475f",
+  "registryHash": "16b631ecfead8dfb1c2d169c4d8dbdbafc954aff5632f53bf3117ee4f595b3d8",
   "commands": [
     {
       "name": "runtime.status",
@@ -678,6 +678,16 @@
         "parentId": "string?",
         "limit": "number?",
         "offset": "number?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.cost.estimate",
+      "summary": "Estimate a run before asking for it: for nodeIds (the same list workflow.node.run takes) or a groupId (the members workflow.group.run would run), return each node's model, route, task count and estimated cost, the total, nodes with unknown cost and nodes blocked by pre-submit checks. Same plan as the approval card; read-only, never confirms or bills.",
+      "args": {
+        "projectId": "string?",
+        "nodeIds": "string[]?",
+        "groupId": "string?"
       },
       "availability": "available"
     },
