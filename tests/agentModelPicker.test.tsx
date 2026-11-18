@@ -1,13 +1,13 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { UserApiKey } from '../types';
 
 const { fetchModelsForProvider } = vi.hoisted(() => ({ fetchModelsForProvider: vi.fn() }));
 vi.mock('../services/modelFetcher', () => ({ fetchModelsForProvider }));
 
-import { AgentModelPicker, AgentThinkingSelect } from '../components/agent/AgentModelPicker';
+import { AgentModelPicker, supportedThinkingLevels } from '../components/agent/AgentModelPicker';
 import { act } from 'react';
-import { markReasoningUnsupported, readAgentThinkingLevel } from '../services/agentThinking';
+import { markReasoningUnsupported, readAgentThinkingLevel, writeAgentThinkingLevel } from '../services/agentThinking';
 
 const agentText = (routeId: string) => ({ target: { kind: 'runtime-capability' as const, capability: 'agent-text' as const }, routeId, order: 0 });
 
@@ -61,7 +61,10 @@ describe('AgentModelPicker', () => {
     expect(screen.getByRole('option', { name: /m1/ })).toHaveAttribute('aria-selected', 'true');
     fireEvent.change(screen.getByLabelText('搜索模型'), { target: { value: 'm2' } });
     expect(screen.queryByRole('option', { name: /m1/ })).not.toBeInTheDocument();
+    // 点模型 = 展开它的思考强度子菜单；选一档才同时选中模型与强度。
     fireEvent.click(screen.getByRole('option', { name: /m2/ }));
+    expect(onUpdateApiKey).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole('menu', { name: /思考强度 · m2/ })).getByRole('menuitemradio', { name: '不思考' }));
 
     expect(onUpdateApiKey).toHaveBeenCalledWith('k1', { routeMappings: [] });
     expect(onUpdateApiKey).toHaveBeenCalledWith('k2', { routeMappings: [agentText('m2')] });
@@ -110,6 +113,15 @@ describe('AgentModelPicker', () => {
 
     fireEvent.change(search, { target: { value: 'reasoner' } });
     fireEvent.keyDown(search, { key: 'Enter' });
+    // Enter 展开子菜单并把焦点送进去；Esc 只收起子菜单，不关浮层。
+    const submenu = screen.getByRole('menu', { name: /思考强度 · deepseek\/deepseek-reasoner/ });
+    expect(submenu.contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(screen.queryByRole('menu', { name: /思考强度/ })).not.toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(search);
+    fireEvent.keyDown(search, { key: 'Enter' });
+    fireEvent.click(document.activeElement!);
     expect(onUpdateApiKey).toHaveBeenCalledWith('ds', { routeMappings: [agentText('deepseek/deepseek-reasoner')] });
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
@@ -132,19 +144,60 @@ describe('AgentModelPicker', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it('picks a thinking level per model and shows 不支持 once the model rejected it', () => {
+  it('cascades a thinking submenu per model: hover / → opens it, ← closes it, picking a level sets model and level', () => {
     localStorage.removeItem('flovart.agent.thinking');
-    render(<AgentThinkingSelect model="chat-think" language="zho" />);
-    const select = screen.getByRole('combobox', { name: '思考强度' });
-    expect(select).toHaveValue('off');
-    fireEvent.change(select, { target: { value: 'high' } });
+    const keys: UserApiKey[] = [
+      { id: 'k1', provider: 'openai_compatible', capabilities: ['text'], key: 'a', baseUrl: 'https://one.example.com/v1', models: [
+        { id: 'chat-think', name: 'chat-think', capability: 'text' },
+        { id: 'chat-plain', name: 'chat-plain', capability: 'text' },
+      ], routeMappings: [agentText('chat-think')], createdAt: 0, updatedAt: 0 },
+    ];
+    const onUpdateApiKey = vi.fn();
+    const onOpenChange = vi.fn();
+    act(() => markReasoningUnsupported('chat-plain'));
+    const { rerender } = render(<AgentModelPicker userApiKeys={keys} onUpdateApiKey={onUpdateApiKey} open onOpenChange={onOpenChange} language="zho" />);
+    const search = screen.getByRole('combobox', { name: '搜索模型' });
+
+    // 悬停展开；只列该模型支持的档（非 OpenAI / OpenRouter 不单列「极简」）。
+    fireEvent.mouseEnter(screen.getByRole('option', { name: /chat-think/ }));
+    const submenu = screen.getByRole('menu', { name: '思考强度 · chat-think' });
+    expect(within(submenu).getAllByRole('menuitemradio').map(item => item.textContent)).toEqual(['不思考', '低', '中', '高']);
+    expect(within(submenu).getByRole('menuitemradio', { name: '不思考' })).toHaveAttribute('aria-checked', 'true');
+    // 不支持思考参数的模型没有子菜单，点它直接选中。
+    fireEvent.mouseEnter(screen.getByRole('option', { name: /chat-plain/ }));
+    expect(screen.queryByRole('menu', { name: /思考强度/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /chat-plain/ })).not.toHaveAttribute('aria-haspopup');
+
+    // 键盘：→ 展开高亮模型的子菜单，← 收起回到搜索框。
+    search.focus();
+    fireEvent.keyDown(search, { key: 'ArrowRight' });
+    expect(screen.getByRole('menu', { name: '思考强度 · chat-think' }).contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
+    expect(document.activeElement).toHaveTextContent('低');
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowLeft' });
+    expect(screen.queryByRole('menu', { name: /思考强度/ })).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(search);
+
+    fireEvent.keyDown(search, { key: 'ArrowRight' });
+    fireEvent.click(within(screen.getByRole('menu', { name: '思考强度 · chat-think' })).getByRole('menuitemradio', { name: '高' }));
     expect(readAgentThinkingLevel('chat-think')).toBe('high');
-    expect(screen.getByRole('combobox', { name: '思考强度' })).toHaveValue('high');
-    act(() => markReasoningUnsupported('chat-think'));
-    expect(screen.queryByRole('combobox', { name: '思考强度' })).not.toBeInTheDocument();
-    const retry = screen.getByRole('button', { name: '思考强度' });
-    expect(retry).toHaveTextContent('不支持');
-    fireEvent.click(retry);
-    expect(screen.getByRole('combobox', { name: '思考强度' })).toHaveValue('high');
+    expect(onUpdateApiKey).toHaveBeenCalledWith('k1', { routeMappings: [agentText('chat-think')] });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+
+    // 胶囊带非默认强度后缀；回到默认就不显示。
+    rerender(<AgentModelPicker userApiKeys={keys} onUpdateApiKey={onUpdateApiKey} open={false} onOpenChange={onOpenChange} language="zho" />);
+    expect(screen.getByTestId('agent-model-effort')).toHaveTextContent('· 高');
+    expect(screen.getByRole('button', { name: '选择模型' })).toHaveAttribute('title', 'chat-think · 思考强度 高');
+    act(() => writeAgentThinkingLevel('chat-think', 'off'));
+    expect(screen.queryByTestId('agent-model-effort')).not.toBeInTheDocument();
+  });
+
+  it('lists 极简 only for providers that accept it and nothing for models that rejected the parameter', () => {
+    localStorage.removeItem('flovart.agent.thinking');
+    expect(supportedThinkingLevels('gpt', { provider: 'openai', baseUrl: '' })).toEqual(['off', 'minimal', 'low', 'medium', 'high']);
+    expect(supportedThinkingLevels('x', { provider: 'openai_compatible', baseUrl: 'https://openrouter.ai/api/v1' })).toContain('minimal');
+    expect(supportedThinkingLevels('ds', { provider: 'openai_compatible', baseUrl: 'https://api.deepseek.com/v1' })).not.toContain('minimal');
+    act(() => markReasoningUnsupported('ds'));
+    expect(supportedThinkingLevels('ds', { provider: 'openai_compatible', baseUrl: 'https://api.deepseek.com/v1' })).toEqual([]);
   });
 });

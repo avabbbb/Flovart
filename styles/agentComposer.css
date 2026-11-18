@@ -176,20 +176,6 @@
 
 /* ── 运行中：紧凑加载态（文字胶囊 + 跳动点 + 停止键外的旋转弧） ── */
 .agent-composer__running { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 8px; margin-left: auto; }
-.agent-composer__running-label {
-  display: inline-flex;
-  min-width: 0;
-  height: 26px;
-  align-items: center;
-  gap: 4px;
-  padding: 0 10px 0 3px;
-  border-radius: 999px;
-  color: var(--isl-ink-soft);
-  background: var(--isl-surface-2);
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-}
 .agent-composer__stop { position: relative; display: inline-grid; flex: 0 0 auto; }
 .agent-composer__stop .agent-composer__send { margin-left: 0 !important; }
 .agent-composer__send-ring {
@@ -206,8 +192,6 @@
 }
 @keyframes agent-composer-spin { to { transform: rotate(360deg); } }
 @keyframes agent-composer-dot { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-2px); } }
-/* 窄：只留 20px 奶蛙（.agent-orb），文字在 title / 读屏里 */
-@container agentcomposer (max-width: 420px) { .agent-composer__running-label { padding: 0 3px; } .agent-composer__running-label > span:not(.agent-orb) { display: none; } }
 
 /* 窄抽屉：工具都成 28px 圆形图标钮 */
 @container agentcomposer (max-width: 340px) {
@@ -227,35 +211,6 @@
 }
 @container agentcomposer (max-width: 340px) {
   .agent-conversation .agent-composer .agent-composer__tools .agent-mode-control > button > span + svg { display: none; }
-}
-
-/* 思考强度：与模型胶囊同高同色的小胶囊，原生 select 保证键盘可用 */
-.agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  height: 28px;
-  flex: none;
-  padding: 0 4px 0 9px;
-  border-radius: 999px;
-  color: var(--isl-ink-soft);
-  background: var(--isl-surface-2);
-  font-size: 11px;
-}
-.agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select.is-active { color: var(--isl-ink); }
-.agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select.is-unsupported { opacity: .6; }
-.agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select select,
-.agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select button {
-  height: 26px;
-  border: 0;
-  padding: 0 4px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-:root[data-theme='dark'] .agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select {
-  background: color-mix(in srgb, var(--isl-ink) 8%, transparent);
 }
 
 .agent-mode-menu .agent-mode-menu__policies select { max-width: 96px; font: inherit; font-size: 11px; }
@@ -314,22 +269,13 @@
 .agent-conversation__body > .agent-plan-wrap, .workflow-agent__body > .agent-plan-wrap { margin: 0 0 8px; max-height: 60%; overflow: auto; }
 @media (prefers-reduced-motion: reduce) { .agent-turn-rail__tick { transition: none; } }
 
-/* 2026-11-16 窄宽度控件行不再互相压叠：图标按钮保持 28px 不被挤扁；
-   ≤360px 思考强度胶囊去掉图标、文字收窄；≤250px 工具换到两行，发送按钮始终贴右下。 */
+/* 2026-11-16 窄宽度控件行不再互相压叠：图标按钮保持 28px 不被挤扁；≤250px 工具换到两行，发送按钮始终贴右下。 */
 .agent-conversation .agent-composer .agent-composer__tools > * { flex-shrink: 0; }
-.agent-conversation .agent-composer .agent-composer__tools > .agent-thinking-select { min-width: 0; flex-shrink: 1; }
-.agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select select { min-width: 0; text-overflow: ellipsis; }
-@container agentcomposer (max-width: 360px) {
-  .agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select { gap: 0; padding: 0 2px 0 6px; }
-  .agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select > svg { display: none; }
-  .agent-conversation .agent-composer .agent-composer__tools .agent-thinking-select select { max-width: 64px; padding: 0 2px; }
-}
 @container agentcomposer (max-width: 250px) {
   .agent-conversation .agent-composer .agent-composer__controls { align-items: flex-end; }
   .agent-conversation .agent-composer .agent-composer__tools { flex-wrap: wrap; row-gap: 4px; }
 }
-/* 轮次刻度在右缘：给消息区留出一条刻度槽，刻度不压到「你」的气泡上。 */
-.agent-conversation__viewport:has(> .agent-turn-rail) > .agent-conversation__messages { padding-right: 16px; }
+/* 轮次刻度与滚动条的右侧槽位见文件末尾「消息区右侧槽位」。 */
 
 /* ── 待发送托盘（运行中 Enter 插话 / Tab 排队）──
    参照 openai/codex TUI 的 pending input preview（Apache-2.0）与用户截图 image-dcfe9904cfc4.webp：
@@ -399,3 +345,129 @@
 .agent-input-queue__action:focus-visible { outline: 2px solid color-mix(in srgb, var(--isl-mint) 70%, transparent); outline-offset: 1px; }
 .agent-input-queue__hint { margin: 2px 8px 2px 27px; overflow: hidden; color: var(--isl-ink-ghost); font-size: 11px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .agent-input-queue__chevron { transition: none; } }
+
+/* ── 底栏 2026-11-18 重排（用户截图 image-e3a43952c631.webp / image-b5bd550a6e07.webp）──
+   只留 [+] [模型胶囊（含思考强度后缀）] [审批图标] [非默认创作模式小标签] … [发送 / 插话 + 停止]。
+   创作模式进了「+」菜单；「运行中」胶囊去掉（消息流里已有思考指示）；独立的思考强度 ▾ 并进模型浮层的级联子菜单。
+   真 flex：工具组 flex:1 1 auto + min-width:0，模型胶囊可收缩省略；右侧发送区 flex:none；280–600px 不重叠、不换行溢出。 */
+:root .agent-conversation .agent-composer .agent-composer__controls { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; min-width: 0; }
+:root .agent-conversation .agent-composer .agent-composer__tools { display: flex; flex: 1 1 auto; flex-wrap: nowrap; align-items: center; gap: 6px; min-width: 0; }
+:root .agent-conversation .agent-composer .agent-composer__tools > * { flex: none; }
+:root .agent-conversation .agent-composer .agent-composer__running,
+:root .agent-conversation .agent-composer .agent-composer__controls > .agent-composer__send { flex: none; margin-left: auto; }
+:root .agent-conversation .agent-composer .agent-composer__running { gap: 6px; }
+/* 模型胶囊：唯一会收缩的控件，名字省略，思考强度后缀不缩 */
+:root .agent-conversation .agent-composer .agent-composer__tools > .agent-model-control { flex: 0 1 auto; min-width: 0; }
+:root .agent-conversation .agent-composer .agent-composer__tools .agent-model-trigger { width: auto; max-width: 100%; min-width: 0; gap: 5px; }
+:root .agent-conversation .agent-composer .agent-composer__tools .agent-model-trigger > svg { flex: none; }
+:root .agent-conversation .agent-composer .agent-composer__tools .agent-model-trigger > .agent-model-trigger__name { display: block; min-width: 0; max-width: none; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:root .agent-conversation .agent-composer .agent-composer__tools .agent-model-trigger > .agent-model-trigger__effort { display: block; flex: none; overflow: visible; color: var(--state-think, var(--isl-ink-soft)); font-weight: 600; }
+/* 审批模式：28px 圆形图标钮，模式名在 tooltip / 读屏名 */
+:root .agent-conversation .agent-composer .agent-composer__tools .agent-approval-trigger { flex: 0 0 28px; width: 28px; height: 28px; padding: 0 !important; justify-content: center; border-radius: 50%; }
+/* 非默认创作模式：小标签，可移除；不收缩（收缩的只有模型名），窄面板只留图标 + ✕ */
+.agent-mode-tag {
+  display: inline-flex;
+  flex: none !important;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 24px;
+  border-radius: 999px;
+  padding: 0 3px 0 8px;
+  color: var(--isl-ink);
+  background: color-mix(in srgb, var(--isl-mint) 14%, transparent);
+  font-size: 11px;
+  font-weight: 500;
+}
+.agent-mode-tag > svg { flex: none; color: var(--isl-mint-deep, var(--isl-mint)); }
+.agent-mode-tag > span { white-space: nowrap; }
+.agent-mode-tag > button { display: grid; flex: none; width: 18px; height: 18px; place-items: center; border: 0; border-radius: 50%; padding: 0; color: var(--isl-ink-soft); background: transparent; cursor: pointer; }
+.agent-mode-tag > button:hover { color: var(--isl-ink); background: color-mix(in srgb, var(--isl-ink) 10%, transparent); }
+.agent-mode-tag > button:focus-visible { outline: 2px solid color-mix(in srgb, var(--isl-mint) 70%, transparent); outline-offset: 1px; }
+/* 窄（<340px）：模型胶囊只剩图标（名字与强度在 title），创作模式标签只剩图标 + ✕ */
+@container agentcomposer (max-width: 340px) {
+  :root .agent-conversation .agent-composer .agent-composer__tools { gap: 4px; }
+  :root .agent-conversation .agent-composer .agent-composer__tools > .agent-model-control { flex: none; }
+  :root .agent-conversation .agent-composer .agent-composer__tools .agent-model-trigger { width: 28px; padding: 0 !important; justify-content: center; border-radius: 50%; }
+  :root .agent-conversation .agent-composer .agent-composer__tools .agent-model-trigger > .agent-model-trigger__name,
+  :root .agent-conversation .agent-composer .agent-composer__tools .agent-model-trigger > .agent-model-trigger__effort { display: none; }
+  .agent-mode-tag { padding-left: 6px; }
+  .agent-mode-tag > span { display: none; }
+}
+
+/* 「+」菜单：引用 + 创作模式分区 */
+.agent-attachment-menu__sep { height: 1px; margin: 4px 6px; background: color-mix(in srgb, var(--isl-ink) 8%, transparent); }
+.agent-attachment-menu__label { margin: 4px 8px 2px; color: var(--isl-ink-ghost); font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+.agent-attachment-menu__section > button { display: flex; width: 100%; align-items: center; gap: 9px; border: 0; border-radius: 9px; padding: 7px 8px; color: inherit; background: transparent; font-size: 11px; text-align: left; cursor: pointer; }
+.agent-attachment-menu__section > button > span { min-width: 0; flex: 1; }
+.agent-attachment-menu__section > button:hover,
+.agent-attachment-menu__section > button:focus-visible,
+.agent-attachment-menu > button:focus-visible { outline: none; background: var(--agent-subtle, color-mix(in srgb, var(--isl-ink) 6%, transparent)); }
+.agent-attachment-menu__section > button[aria-checked='true'] { color: var(--isl-mint-deep, var(--isl-ink)); }
+.agent-attachment-menu__section strong { font-size: 11px; font-weight: 600; }
+
+/* ── 模型浮层：模型列表 + 级联的思考强度子菜单 ──
+   宽面板：浮层给子菜单留出右侧空间，子菜单（磨砂）贴在该行右侧（absolute + 静态位置，滚动里也对齐）；
+   ≤340px：子菜单在该行下方内联展开，不会被侧栏裁掉。 */
+:root .agent-conversation .agent-composer__tools .agent-model-picker { overflow: visible; }
+.agent-model-picker .agent-model-menu__list { position: static; }
+.agent-model-picker__row { display: flex; flex-direction: column; min-width: 0; }
+.agent-model-picker__row > button { display: flex; width: 100%; align-items: center; gap: 6px; border: 0; border-radius: 7px; padding: 6px; color: var(--isl-ink); background: transparent; text-align: left; cursor: pointer; }
+.agent-model-picker__row > button[data-listbox-active='true'],
+.agent-model-picker__row[data-expanded] > button { background: color-mix(in srgb, var(--isl-ink) 9%, transparent); }
+.agent-model-picker__row > button[aria-selected='true'] > svg:not(.agent-model-picker__caret),
+.agent-model-picker__row > button[aria-selected='true'] strong { color: var(--isl-mint-deep); }
+.agent-model-picker__row > button > span { min-width: 0; flex: 1; }
+.agent-model-picker__caret { flex: none; color: var(--isl-ink-ghost); }
+.agent-model-picker__effort { flex: none; border-radius: 999px; padding: 1px 6px; color: var(--state-think, var(--isl-ink-soft)); background: color-mix(in srgb, var(--state-think, var(--isl-ink)) 12%, transparent); font-size: 10px; font-style: normal; font-weight: 600; }
+.agent-model-picker__note { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 10px 4px; color: var(--isl-ink-soft); font-size: 10px; }
+.agent-model-picker__note > button { border: 0; border-radius: 6px; padding: 1px 6px; color: var(--isl-ink); background: color-mix(in srgb, var(--isl-ink) 8%, transparent); font: inherit; cursor: pointer; }
+.agent-model-submenu {
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  box-sizing: border-box;
+  width: 132px;
+  border-radius: 12px;
+  padding: 4px;
+  color: var(--isl-ink);
+}
+.agent-model-submenu__title { display: flex; align-items: center; gap: 4px; margin: 2px 6px 3px; color: var(--isl-ink-ghost); font-size: 10px; font-weight: 700; }
+.agent-model-submenu > button { display: flex; align-items: center; justify-content: space-between; gap: 6px; border: 0; border-radius: 8px; padding: 6px 8px; color: inherit; background: transparent; font-size: 11px; text-align: left; cursor: pointer; }
+.agent-model-submenu > button:hover,
+.agent-model-submenu > button:focus-visible { outline: none; background: color-mix(in srgb, var(--isl-ink) 9%, transparent); }
+.agent-model-submenu > button[aria-checked='true'] { color: var(--state-think, var(--isl-mint-deep)); font-weight: 600; }
+@container agentcomposer (min-width: 341px) {
+  :root .agent-conversation .agent-composer__tools .agent-model-picker { width: min(300px, calc(100% - 140px)); }
+  /* 顶部默认是该行（行是纵向 flex，静态位置即行顶）；JS 再把它夹在浮层上下边之内。 */
+  .agent-model-submenu { position: absolute; left: calc(100% + 6px); }
+}
+@container agentcomposer (max-width: 340px) {
+  /* 内联：同一张实底浮层里，不用玻璃（不在玻璃上叠玻璃）。 */
+  .agent-model-submenu { width: auto; margin: 2px 0 4px 18px; border: 0; background: color-mix(in srgb, var(--isl-ink) 5%, transparent); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
+}
+
+/* ── 消息区右侧槽位（2026-11-18，用户截图 image-2136a11640a0.webp）──
+   轮次刻度（c3cc793）和滚动条以前压在正文 / 宽表格上。现在消息滚动层自己留出 20px 右槽：
+   最右 6px 是本面板的细滚动条，向左 6–18px 是刻度（当前轮 12px 宽）；正文、表格、卡片都停在槽位左边。只作用于 Agent 面板，不动全局滚动条。
+   宽表格在自己的 .agent-md__table 里横向滚动，不撑宽消息列。 */
+.agent-conversation .agent-conversation__messages { min-width: 0; padding-right: 0 !important; }
+.agent-conversation .agent-conversation__messages > .workflow-agent__messages {
+  box-sizing: border-box;
+  min-width: 0;
+  padding-right: 20px !important;
+}
+/* 只有不支持 ::-webkit-scrollbar 的浏览器（Firefox）才用标准属性；Chrome 设了 scrollbar-width 会忽略 6px 的自定义宽度。 */
+@supports not selector(::-webkit-scrollbar) {
+  .agent-conversation .agent-conversation__messages > .workflow-agent__messages { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--isl-ink-ghost) 55%, transparent) transparent; }
+}
+.agent-conversation .agent-conversation__messages > .workflow-agent__messages::-webkit-scrollbar { width: 6px; height: 6px; }
+.agent-conversation .agent-conversation__messages > .workflow-agent__messages::-webkit-scrollbar-track { background: transparent; }
+.agent-conversation .agent-conversation__messages > .workflow-agent__messages::-webkit-scrollbar-thumb { border-radius: 3px; background: color-mix(in srgb, var(--isl-ink-ghost) 55%, transparent); }
+.agent-conversation .agent-turn-rail { right: 6px; }
+.agent-conversation .workflow-agent__messages .workflow-agent__message { min-width: 0; max-width: 100%; }
+.agent-conversation .workflow-agent__messages .agent-md__table > table { min-width: 100%; }
+.agent-conversation .agent-md { max-width: 100%; }
+.agent-conversation .agent-md__table { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+.agent-conversation .agent-md pre { max-width: 100%; overflow-x: auto; }

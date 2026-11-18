@@ -108,24 +108,31 @@ describe('Flovart Agent panel', () => {
     }
     fireEvent.click(screen.getByRole('button', { name: '感知画布开始创作' }));
     expect((screen.getByLabelText('开始你的创作，或者 @ 引用工作流/节点/资源') as HTMLTextAreaElement).value).toContain('读取当前画布');
-    fireEvent.click(screen.getByRole('button', { name: '创作模式' }));
-    fireEvent.click(screen.getByRole('menuitemradio', { name: /视频创作/ }));
-    expect(screen.getByRole('button', { name: '创作模式' })).toHaveTextContent('视频创作');
+    // 创作模式在「+」菜单里；非默认时底栏只出现一个可移除的小标签。
+    expect(screen.queryByTestId('agent-creation-mode-tag')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '添加附件' }));
+    fireEvent.click(within(screen.getByRole('group', { name: '创作模式' })).getByRole('menuitemradio', { name: /视频创作/ }));
+    expect(screen.queryByRole('menu', { name: '添加附件' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('agent-creation-mode-tag')).toHaveTextContent('视频创作');
+    fireEvent.click(screen.getByRole('button', { name: '恢复全能创作' }));
+    expect(screen.queryByTestId('agent-creation-mode-tag')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '选择制作 Skill' }));
     expect(screen.getByRole('dialog', { name: 'Skill' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '搜索' }));
     expect(screen.getByRole('combobox', { name: '搜索技能' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '关闭 Skill' }));
 
-    fireEvent.click(screen.getByRole('button', { name: '审批模式' }));
+    // 审批模式只剩图标按钮：当前模式在读屏名与 tooltip 里。
+    fireEvent.click(screen.getByRole('button', { name: /^审批模式：/ }));
     expect(screen.getByText('读取直接执行；每次修改或执行前询问')).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /全自动/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('menuitem', { name: /全自动/ }));
-    expect(screen.getByRole('button', { name: '审批模式' })).toHaveTextContent('全自动');
+    expect(screen.getByRole('button', { name: '审批模式：全自动' })).toHaveAttribute('title', expect.stringContaining('全自动'));
     expect(localStorage.getItem('flovart.agent.approvalMode')).toBe('yolo');
-    fireEvent.click(screen.getByRole('button', { name: '审批模式' }));
+    // 审批模式只剩图标按钮：当前模式在读屏名与 tooltip 里。
+    fireEvent.click(screen.getByRole('button', { name: /^审批模式：/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: /自动（推荐）/ }));
-    expect(screen.getByRole('button', { name: '审批模式' })).toHaveTextContent('自动（推荐）');
+    expect(screen.getByRole('button', { name: '审批模式：自动（推荐）' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '选择制作 Skill' }));
     fireEvent.click(screen.getByRole('button', { name: '添加 VOX Skill' }));
@@ -212,7 +219,8 @@ describe('Flovart Agent panel', () => {
 
     render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} />);
     await waitFor(() => expect(StubEventSource.current).toBeDefined());
-    fireEvent.click(screen.getByRole('button', { name: '审批模式' }));
+    // 审批模式只剩图标按钮：当前模式在读屏名与 tooltip 里。
+    fireEvent.click(screen.getByRole('button', { name: /^审批模式：/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: /手动确认/ }));
     StubEventSource.current!.emit('tool_call', {
       requestId: 'request-manual-create',

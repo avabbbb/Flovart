@@ -74,7 +74,7 @@ describe('Flovart Agent panel explicit state', () => {
     render(<FlovartAgentPanel project={project} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} />);
 
     const input = await screen.findByPlaceholderText('告诉 Flovart Agent 你想制作什么');
-    fireEvent.click(screen.getByRole('button', { name: '审批模式' }));
+    fireEvent.click(screen.getByRole('button', { name: /^审批模式/ }));
     expect(screen.getByRole('menu', { name: '审批模式' })).toBeInTheDocument();
 
     fireEvent.change(input, { target: { value: '参考 @' } });

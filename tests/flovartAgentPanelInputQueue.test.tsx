@@ -113,6 +113,12 @@ describe('Flovart Agent panel pending input tray', () => {
     expect(within(rows()[2]).getByRole('button', { name: /立即发送/ })).toBeInTheDocument();
     // 只有一轮在跑：插话不开新一轮。
     expect(spies.send).toHaveBeenCalledTimes(1);
+    // 底栏不再有「运行中」胶囊：只留插话发送与停止。
+    const controls = document.querySelector('.agent-composer__controls') as HTMLElement;
+    expect(within(controls).queryByText('运行中')).toBeNull();
+    fireEvent.change(composer, { target: { value: '再补一句' } });
+    expect(within(controls).getByRole('button', { name: '发送（不打断当前任务）' })).toBeInTheDocument();
+    expect(within(controls).getByRole('button', { name: '停止' })).toBeInTheDocument();
   });
 
   it('queues Enter instead of steering while the answer is streaming', async () => {

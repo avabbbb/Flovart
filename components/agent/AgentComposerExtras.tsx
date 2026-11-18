@@ -1,6 +1,5 @@
-import { ArrowRight, BookOpen, Box, Check, ChevronDown, Clapperboard, Image as ImageIcon, LayoutGrid, ScanSearch, Sparkles, Upload, Video, WandSparkles } from 'lucide-react';
+import { ArrowRight, BookOpen, Box, Check, Clapperboard, Image as ImageIcon, LayoutGrid, ScanSearch, Sparkles, Upload, Video, WandSparkles, X } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { useMenuKeyboard } from '../../hooks/useListboxKeyboard';
 import { getProductModels, type ProductModelDefinition } from '../../services/productModelCatalog';
 import { AGENT_CREATION_MODES, type AgentCreationMode } from '../../services/canvasSkillRecipe';
 import '../../styles/agentPanelLibtv.css';
@@ -79,33 +78,41 @@ export function AgentEmptyState({ language, onAction, onStoryText }: {
   );
 }
 
-export function CreationModeControl({ value, onChange, open, onOpenChange, language }: {
+/**
+ * 「+」菜单里的创作模式分区（不再占输入框底栏）：menuitemradio，选中打勾；选完关闭菜单。
+ * 非默认（全能创作以外）时底栏只显示一个可移除的小标签，见 CreationModeTag。
+ */
+export function CreationModeMenuSection({ value, onChange, language }: {
   value: AgentCreationMode;
   onChange: (mode: AgentCreationMode) => void;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   language: Lang;
 }) {
-  const Icon = MODE_ICON[value];
-  const menuKeys = useMenuKeyboard({ open, onClose: () => onOpenChange(false) });
+  const title = ui(language, '创作模式', 'Creation mode');
   return (
-    <div className="agent-mode-control">
-      <button type="button" className="agent-pill" aria-label={ui(language, '创作模式', 'Creation mode')} title={creationModeLabel(value, language)} aria-expanded={open} onClick={() => onOpenChange(!open)}>
-        <Icon size={14} /><span>{creationModeLabel(value, language)}</span><ChevronDown size={12} />
-      </button>
-      {open && (
-        <div className="agent-mode-menu" role="menu" aria-label={ui(language, '创作模式', 'Creation mode')} {...menuKeys}>
-          {AGENT_CREATION_MODES.map(mode => {
-            const ItemIcon = MODE_ICON[mode];
-            return (
-              <button key={mode} type="button" role="menuitemradio" aria-checked={mode === value} onClick={() => { onChange(mode); onOpenChange(false); }}>
-                <ItemIcon size={15} /><span><strong>{creationModeLabel(mode, language)}</strong></span>{mode === value && <Check size={14} />}
-              </button>
-            );
-          })}
-        </div>
-      )}
+    <div className="agent-attachment-menu__section" role="group" aria-label={title}>
+      <p className="agent-attachment-menu__label" aria-hidden="true">{title}</p>
+      {AGENT_CREATION_MODES.map(mode => {
+        const ItemIcon = MODE_ICON[mode];
+        return (
+          <button key={mode} type="button" role="menuitemradio" aria-checked={mode === value} onClick={() => onChange(mode)}>
+            <ItemIcon size={15} aria-hidden="true" /><span><strong>{creationModeLabel(mode, language)}</strong></span>{mode === value && <Check size={14} aria-hidden="true" />}
+          </button>
+        );
+      })}
     </div>
+  );
+}
+
+/** 底栏里的创作模式小标签：只在非默认模式时出现，✕ 恢复全能创作。 */
+export function CreationModeTag({ value, onReset, language }: { value: AgentCreationMode; onReset: () => void; language: Lang }) {
+  if (value === 'all') return null;
+  const Icon = MODE_ICON[value];
+  const label = creationModeLabel(value, language);
+  return (
+    <span className="agent-mode-tag" data-testid="agent-creation-mode-tag" title={`${ui(language, '创作模式', 'Creation mode')}：${label}`}>
+      <Icon size={12} aria-hidden="true" /><span>{label}</span>
+      <button type="button" aria-label={ui(language, '恢复全能创作', 'Reset mode')} onClick={onReset}><X size={11} aria-hidden="true" /></button>
+    </span>
   );
 }
 

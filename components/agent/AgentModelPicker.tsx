@@ -1,13 +1,16 @@
-import { Box, Brain, Check, KeyRound, Loader2, Plus, Search } from 'lucide-react';
-import { useMemo, useState, useSyncExternalStore } from 'react';
+import { Box, Brain, Check, ChevronRight, KeyRound, Loader2, Plus, Search } from 'lucide-react';
+import type { KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useListboxKeyboard } from '../../hooks/useListboxKeyboard';
 import type { AICapability, ModelItem, RouteMappingBinding, UserApiKey } from '../../types';
 import { isAgentTextKey, isAgentTextMapping, resolveAgentTextRoutes } from '../../services/agentTextRoutes';
 import { fetchModelsForProvider } from '../../services/modelFetcher';
 import {
   AGENT_THINKING_LEVELS,
+  DEFAULT_AGENT_THINKING_LEVEL,
   agentThinkingVersion,
   clearReasoningUnsupported,
+  reasoningFormatFor,
   isReasoningUnsupported,
   readAgentThinkingLevel,
   subscribeAgentThinking,
@@ -36,24 +39,85 @@ const THINKING_LABEL: Record<AgentThinkingLevel, [string, string]> = {
   high: ['高', 'High'],
 };
 
-/** 思考强度选择器：选择按模型记住，并成为新的全局默认；已知不支持的模型显示「不支持」并禁用。 */
-export function AgentThinkingSelect({ model, language }: { model: string; language: Lang }) {
-  useSyncExternalStore(subscribeAgentThinking, agentThinkingVersion, agentThinkingVersion);
-  const unsupported = isReasoningUnsupported(model);
+export function thinkingLevelLabel(level: AgentThinkingLevel, language: Lang): string {
+  return ui(language, THINKING_LABEL[level][0], THINKING_LABEL[level][1]);
+}
+
+/**
+ * 模型胶囊上的思考强度后缀（「· 高」）：只在强度不是默认值、且模型支持时显示。
+ * 逻辑与存储仍走 services/agentThinking（按模型记住、成为新的全局默认、不支持名单）。
+ */
+export function thinkingChipSuffix(model: string, language: Lang): string | null {
+  if (!model || isReasoningUnsupported(model)) return null;
   const level = readAgentThinkingLevel(model);
+  return level === DEFAULT_AGENT_THINKING_LEVEL ? null : `· ${thinkingLevelLabel(level, language)}`;
+}
+
+/**
+ * 该模型可选的思考强度（只改 UI，判定沿用 services/agentThinking 的规则）：
+ * - 已被服务拒绝过思考参数（不支持名单）→ 没有可选强度，点模型直接选中；
+ * - 「极简」只有 OpenAI / OpenRouter 真正接受，其余服务会被降成「低」，所以不单列。
+ */
+export function supportedThinkingLevels(model: string, key: Pick<UserApiKey, 'provider' | 'baseUrl'>): AgentThinkingLevel[] {
+  if (!model || isReasoningUnsupported(model)) return [];
+  const acceptsMinimal = key.provider === 'openai' || reasoningFormatFor(String(key.provider || ''), key.baseUrl || '') === 'openrouter';
+  return AGENT_THINKING_LEVELS.filter(level => level !== 'minimal' || acceptsMinimal);
+}
+
+/**
+ * 模型行的级联子菜单：该模型支持的思考强度。选一档 = 同时选中模型与强度。
+ * ↑/↓ 移动，Enter / 空格选择，← / Esc 收起回到模型列表。宽面板浮在列表右侧（磨砂），≤340px 在该行下方内联展开。
+ */
+function ThinkingSubmenu({ model, levels, language, onPick, onClose }: {
+  model: string;
+  levels: AgentThinkingLevel[];
+  language: Lang;
+  onPick: (level: AgentThinkingLevel) => void;
+  onClose: () => void;
+}) {
+  const current = readAgentThinkingLevel(model);
   const label = ui(language, '思考强度', 'Thinking effort');
-  const title = unsupported
-    ? ui(language, '该模型不支持思考强度参数（已自动关闭）；点击可重新尝试', 'This model rejected the thinking parameter; click to retry')
-    : label;
+  const ref = useRef<HTMLDivElement | null>(null);
+  // 侧边模式（absolute）：顶部对齐所在行，但不超出模型浮层的上下边（浮层贴着输入框，向下会压到底栏）。内联模式不处理。
+  useLayoutEffect(() => {
+    const menu = ref.current;
+    const picker = menu?.closest<HTMLElement>('.agent-model-picker');
+    const row = menu?.parentElement;
+    if (!menu || !picker || !row) return;
+    menu.style.top = '';
+    if (getComputedStyle(menu).position !== 'absolute') return;
+    const pickerRect = picker.getBoundingClientRect();
+    const rowTop = row.getBoundingClientRect().top - pickerRect.top;
+    const max = picker.clientHeight - menu.offsetHeight - 4;
+    menu.style.top = `${Math.max(4, Math.min(rowTop, max))}px`;
+  });
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]'));
+    const index = items.indexOf(document.activeElement as HTMLButtonElement);
+    const handled = () => { event.preventDefault(); event.stopPropagation(); };
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      handled();
+      const next = index < 0 ? 0 : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+      items[next]?.focus();
+    } else if (event.key === 'Home' || event.key === 'End') {
+      handled();
+      items[event.key === 'Home' ? 0 : items.length - 1]?.focus();
+    } else if (event.key === 'ArrowLeft' || event.key === 'Escape') {
+      handled();
+      onClose();
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.stopPropagation();
+    }
+  };
   return (
-    <label className={`agent-thinking-select${unsupported ? ' is-unsupported' : ''}${level !== 'off' && !unsupported ? ' is-active' : ''}`} title={title}>
-      <Brain size={13} aria-hidden="true" />
-      {unsupported
-        ? <button type="button" aria-label={label} onClick={() => clearReasoningUnsupported(model)}>{ui(language, '不支持', 'Unsupported')}</button>
-        : <select aria-label={label} value={level} onChange={event => writeAgentThinkingLevel(model, event.target.value as AgentThinkingLevel)}>
-            {AGENT_THINKING_LEVELS.map(item => <option key={item} value={item}>{ui(language, THINKING_LABEL[item][0], THINKING_LABEL[item][1])}</option>)}
-          </select>}
-    </label>
+    <div ref={ref} className="agent-model-submenu flv-frost" role="menu" aria-label={`${label} · ${model}`} data-testid="agent-thinking-submenu" onKeyDown={onKeyDown}>
+      <p className="agent-model-submenu__title" aria-hidden="true"><Brain size={12} />{label}</p>
+      {levels.map(level => (
+        <button key={level} type="button" role="menuitemradio" aria-checked={level === current} tabIndex={-1} onClick={() => onPick(level)}>
+          <span>{thinkingLevelLabel(level, language)}</span>{level === current && <Check size={13} aria-hidden="true" />}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -90,6 +154,9 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
   const flat = useMemo(() => groups.flatMap(group => group.models.map(model => ({ keyId: group.key.id, model }))), [groups]);
   const showForm = adding || keys.length === 0;
   const label = ui(language, '选择模型', 'Choose model');
+  // 思考强度变化时刷新胶囊后缀。
+  useSyncExternalStore(subscribeAgentThinking, agentThinkingVersion, agentThinkingVersion);
+  const effortSuffix = current ? thinkingChipSuffix(current.model, language) : null;
 
   // 只保留一条 agent-text 映射，选哪个就是哪个，避免排序规则让别的 Key 抢先。
   const select = (keyId: string, modelId: string) => {
@@ -101,13 +168,39 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
     onOpenChange(false);
   };
 
+  // 级联子菜单：哪一行（keyId + modelId）展开了思考强度。
+  const [submenu, setSubmenu] = useState<{ keyId: string; modelId: string } | null>(null);
+  const focusSubmenu = useRef(false);
+  const pickerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => { if (!open) setSubmenu(null); }, [open]);
+  useEffect(() => {
+    if (!submenu || !focusSubmenu.current) return;
+    focusSubmenu.current = false;
+    const menu = pickerRef.current?.querySelector<HTMLElement>('.agent-model-submenu');
+    (menu?.querySelector<HTMLElement>('[aria-checked="true"]') || menu?.querySelector<HTMLElement>('[role="menuitemradio"]'))?.focus();
+  }, [submenu]);
+  const keyById = (keyId: string) => keys.find(key => key.id === keyId);
+  const levelsFor = (keyId: string, modelId: string) => {
+    const key = keyById(keyId);
+    return key ? supportedThinkingLevels(modelId, key) : [];
+  };
+  /** 点模型 / Enter / →：有可选强度就展开子菜单（键盘时把焦点送进去），没有就直接选中。 */
+  const activate = (keyId: string, modelId: string, viaKeyboard: boolean) => {
+    if (!levelsFor(keyId, modelId).length) { select(keyId, modelId); return; }
+    focusSubmenu.current = viaKeyboard;
+    setSubmenu({ keyId, modelId });
+  };
+  const closeSubmenu = () => {
+    setSubmenu(null);
+    pickerRef.current?.querySelector<HTMLInputElement>('.agent-model-picker__search input')?.focus();
+  };
   const listbox = useListboxKeyboard({
     items: flat,
     open: open && keys.length > 0,
     query,
     onQueryChange: setQuery,
     onClose: () => onOpenChange(false),
-    onSelect: item => select(item.keyId, item.model.id),
+    onSelect: item => activate(item.keyId, item.model.id, true),
     initialIndex: flat.findIndex(item => item.keyId === currentKeyId && item.model.id === current?.model),
     // 「添加 Key」表单展开时让表单先拿焦点。
     autoFocus: !showForm,
@@ -158,13 +251,28 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
   };
 
   return (
-    <>
-    <div className="agent-mode-control">
-      <button type="button" className={`agent-model-trigger${current ? ' is-active' : ''}`} aria-label={label} title={current ? current.model : label} aria-expanded={open} onClick={() => onOpenChange(!open)}>
-        <Box size={14} /><span>{current ? current.model : label}</span>
+    <div className="agent-mode-control agent-model-control">
+      <button type="button" className={`agent-model-trigger${current ? ' is-active' : ''}`} aria-label={label} title={current ? [current.model, effortSuffix ? `${ui(language, '思考强度', 'Thinking')} ${effortSuffix.slice(2)}` : ''].filter(Boolean).join(' · ') : label} aria-expanded={open} onClick={() => onOpenChange(!open)}>
+        <Box size={14} aria-hidden="true" /><span className="agent-model-trigger__name">{current ? current.model : label}</span>
+        {effortSuffix && <span className="agent-model-trigger__effort" data-testid="agent-model-effort">{effortSuffix}</span>}
       </button>
       {open && (
-        <div {...listbox.getContainerProps({ className: 'agent-mode-menu agent-model-menu agent-model-picker', role: 'dialog', 'aria-label': label })}>
+        <div ref={pickerRef} {...listbox.getContainerProps({
+          className: 'agent-mode-menu agent-model-menu agent-model-picker',
+          role: 'dialog',
+          'aria-label': label,
+          onKeyDown: event => {
+            // →：展开高亮模型的思考强度（在搜索框里只在光标位于末尾时接管）。
+            if (event.key !== 'ArrowRight' || event.altKey || event.metaKey || event.ctrlKey) return;
+            const target = event.target as HTMLElement;
+            if (target.closest('.agent-model-submenu')) return;
+            if (target instanceof HTMLInputElement && target.selectionStart !== target.value.length) return;
+            const item = listbox.activeIndex >= 0 ? flat[listbox.activeIndex] : undefined;
+            if (!item || !levelsFor(item.keyId, item.model.id).length) return;
+            event.preventDefault();
+            activate(item.keyId, item.model.id, true);
+          },
+        })}>
           <div className="agent-model-picker__head">
             <strong>{label}</strong>
             {keys.length > 0 && <button type="button" aria-label={ui(language, '添加 Key', 'Add key')} aria-pressed={adding} onClick={() => { setAdding(value => !value); setError(null); }}><Plus size={14} /></button>}
@@ -180,6 +288,10 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
               {error && <p className="agent-model-picker__error" role="alert">{error}</p>}
             </form>
           )}
+          {current && isReasoningUnsupported(current.model) && <p className="agent-model-picker__note">
+            {ui(language, '当前模型不支持思考强度（已自动关闭）', 'This model rejected the thinking parameter (turned off)')}
+            <button type="button" onClick={() => clearReasoningUnsupported(current.model)}>{ui(language, '重试', 'Retry')}</button>
+          </p>}
           {keys.length > 0 && <label className="agent-model-picker__search"><Search size={13} /><input {...listbox.getInputProps({ 'aria-label': ui(language, '搜索模型', 'Search models'), placeholder: ui(language, '搜索模型', 'Search models'), value: query, onChange: event => setQuery(event.target.value) })} /></label>}
           {keys.length > 0 && (
             <div {...listbox.getListboxProps({ className: 'agent-model-menu__list', 'aria-label': label })}>
@@ -190,11 +302,35 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
                   {group.models.map(model => {
                     const selected = group.key.id === currentKeyId && model.id === current?.model;
                     const index = flat.findIndex(item => item.keyId === group.key.id && item.model === model);
+                    const levels = supportedThinkingLevels(model.id, group.key);
+                    const expanded = submenu?.keyId === group.key.id && submenu.modelId === model.id;
+                    const level = levels.length ? readAgentThinkingLevel(model.id) : null;
                     return (
-                      <button key={model.id} type="button" tabIndex={-1} {...listbox.getOptionProps(index)} aria-selected={selected} onClick={() => select(group.key.id, model.id)}>
-                        <span><strong>{model.name || model.id}</strong>{model.name && model.name !== model.id && <small>{model.id}</small>}</span>
-                        {selected && <Check size={14} />}
-                      </button>
+                      <div key={model.id} className="agent-model-picker__row" data-expanded={expanded || undefined}>
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          {...listbox.getOptionProps(index, {
+                            onMouseEnter: () => setSubmenu(levels.length ? { keyId: group.key.id, modelId: model.id } : null),
+                          })}
+                          aria-selected={selected}
+                          aria-haspopup={levels.length ? 'menu' : undefined}
+                          aria-expanded={levels.length ? expanded : undefined}
+                          onClick={() => activate(group.key.id, model.id, false)}
+                        >
+                          <span><strong>{model.name || model.id}</strong>{model.name && model.name !== model.id && <small>{model.id}</small>}</span>
+                          {selected && level && level !== DEFAULT_AGENT_THINKING_LEVEL && <em className="agent-model-picker__effort">{thinkingLevelLabel(level, language)}</em>}
+                          {selected && <Check size={14} />}
+                          {levels.length > 0 && <ChevronRight size={13} className="agent-model-picker__caret" aria-hidden="true" />}
+                        </button>
+                        {expanded && <ThinkingSubmenu
+                          model={model.id}
+                          levels={levels}
+                          language={language}
+                          onPick={picked => { writeAgentThinkingLevel(model.id, picked); select(group.key.id, model.id); }}
+                          onClose={closeSubmenu}
+                        />}
+                      </div>
                     );
                   })}
                 </section>
@@ -204,7 +340,5 @@ export function AgentModelPicker({ userApiKeys, onAddApiKey, onUpdateApiKey, ope
         </div>
       )}
     </div>
-    {current && <AgentThinkingSelect model={current.model} language={language} />}
-    </>
   );
 }

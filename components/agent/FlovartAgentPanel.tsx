@@ -36,7 +36,7 @@ import { agentSetupMessage, classifyAgentSetupError, type AgentSetupBlocker } fr
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
 import { translations } from '../../utils/translations';
 import type { AssetLibrary, UserApiKey } from '../../types';
-import { AgentEmptyState, CreationModeControl, creationModeLabel, type AgentModelSelection, type AgentQuickAction } from './AgentComposerExtras';
+import { AgentEmptyState, CreationModeMenuSection, CreationModeTag, type AgentModelSelection, type AgentQuickAction } from './AgentComposerExtras';
 import { AgentModelPicker } from './AgentModelPicker';
 import { isComposingEvent, useMenuKeyboard } from '../../hooks/useListboxKeyboard';
 import { applyAgentTurnPreamble, recipeFromNodes, skillFromRecipe, type AgentCreationMode } from '../../services/canvasSkillRecipe';
@@ -61,7 +61,6 @@ import { confirmGrantKey, confirmScopesFor, type AgentConfirmScope } from './age
 import { displayUserTurnText, agentToolLabel } from './agentTurnText';
 import { applyThinkingDelta, applyTextDelta, carryLiveState, finishThinking } from './agentStreamMessages';
 import { agentWorkingMeta, agentWorkingPhase } from './agentWorkingPhase';
-import { AgentOrbIcon } from './AgentWorkingOrb';
 import { AgentMediaTiles } from './AgentMediaTiles';
 import { referenceLineLabels, userTurnReferences } from './agentMessageRefs';
 import { abortedNoticeText, isAbortMessage } from './agentAbort';
@@ -293,10 +292,11 @@ const userApiKeysRef = useRef(userApiKeys);
   const sessionsOpen = openLayer === 'sessions';
   const mentionOpen = openLayer === 'mention';
   const attachmentOpen = openLayer === 'attachment';
-  const creationModeOpen = openLayer === 'creationMode';
   const modelPickerOpen = openLayer === 'modelPicker';
   // 历史对话菜单：打开即聚焦，↑/↓ 在条目间移动，首字母跳转，Esc 关闭。
   const sessionMenuKeys = useMenuKeyboard({ open: sessionsOpen, onClose: () => dispatchLayer({ type: 'close', layer: 'sessions' }) });
+  // 「+」菜单（引用 / 创作模式）：↑/↓ 在条目间移动，Esc 关闭。
+  const attachmentMenuKeys = useMenuKeyboard({ open: attachmentOpen, onClose: () => dispatchLayer({ type: 'close', layer: 'attachment' }) });
   const skillOpen = openLayer === 'skill';
   const [references, setReferences] = useState<AgentReference[]>([]);
   // 对话框本地附件（粘贴截图 / 拖入视频）：只在当轮对话里作为图片内容发送，不写画布。
@@ -1711,8 +1711,7 @@ const userApiKeysRef = useRef(userApiKeys);
             </div>
             {highlightedReference && <ReferencePreview language={language} reference={highlightedReference} nodes={project.nodes} assets={assetLibrary?.items || []} />}
           </div>}
-          {(creationMode !== 'all' || preferredModel) && <div className="agent-reference-chips" aria-label={language === 'zho' ? '创作设置' : 'Creation settings'}>
-            {creationMode !== 'all' && <span className="agent-setting-chip">{creationModeLabel(creationMode, language)}<button type="button" aria-label={language === 'zho' ? '恢复全能创作' : 'Reset mode'} onClick={() => setCreationMode('all')}><X size={11} /></button></span>}
+          {preferredModel && <div className="agent-reference-chips" aria-label={language === 'zho' ? '创作设置' : 'Creation settings'}>
             {preferredModel && <span className="agent-setting-chip">{preferredModel.capability === 'video' ? <Video size={11} /> : <ImageIcon size={11} />}{preferredModel.name}<button type="button" aria-label={language === 'zho' ? `移除模型 ${preferredModel.name}` : `Remove model ${preferredModel.name}`} onClick={() => setPreferredModel(null)}><X size={11} /></button></span>}
           </div>}
           {references.length > 0 && <div className="agent-reference-chips" aria-label="已引用内容">{references.map(reference => <AgentReferenceChip
@@ -1790,15 +1789,17 @@ const userApiKeysRef = useRef(userApiKeys);
             <div className="agent-composer__tools">
               <div className="agent-attachment-control">
                 <button type="button" aria-label={t('agentPanel.addAttachment')} aria-expanded={attachmentOpen} onClick={() => dispatchLayer({ type: 'toggle', layer: 'attachment' })}><Plus size={17} /></button>
-                {attachmentOpen && <div className="agent-attachment-menu" role="menu" aria-label={t('agentPanel.addAttachment')}>
+                {attachmentOpen && <div className="agent-attachment-menu" role="menu" aria-label={t('agentPanel.addAttachment')} {...attachmentMenuKeys}>
                   <button type="button" role="menuitem" onClick={() => openReferencePicker('node')}><Box size={15} /><span><strong>{t('agentPanel.referenceNodes')}</strong><small>{t('agentPanel.referenceNodesHint')}</small></span></button>
                   <button type="button" role="menuitem" onClick={() => openReferencePicker('asset')}><ImageIcon size={15} /><span><strong>{t('agentPanel.referenceAssets')}</strong><small>{t('agentPanel.referenceAssetCount', assetLibrary?.items.length || 0)}</small></span></button>
+                  <div role="separator" className="agent-attachment-menu__sep" />
+                  <CreationModeMenuSection value={creationMode} onChange={mode => { setCreationMode(mode); dispatchLayer({ type: 'close', layer: 'attachment' }); focusComposer(); }} language={language} />
                 </div>}
               </div>
-              <CreationModeControl value={creationMode} onChange={setCreationMode} open={creationModeOpen} onOpenChange={open => dispatchLayer(open ? { type: 'open', layer: 'creationMode' } : { type: 'close', layer: 'creationMode' })} language={language} />
               <AgentModelPicker userApiKeys={userApiKeys} onAddApiKey={onAddApiKey} onUpdateApiKey={onUpdateApiKey} open={modelPickerOpen} onOpenChange={open => dispatchLayer(open ? { type: 'open', layer: 'modelPicker' } : { type: 'close', layer: 'modelPicker' })} language={language} />
-              <div className="agent-mode-control">
-                <button type="button" className="agent-approval-trigger" aria-label={t('agentPanel.approvalMode')} title={t(APPROVAL_MODE_COPY[mode].hint)} aria-expanded={modeOpen} onClick={() => dispatchLayer({ type: 'toggle', layer: 'mode' })}>{(() => { const Icon = APPROVAL_MODE_COPY[mode].icon; return <Icon size={15} />; })()}<span>{t(APPROVAL_MODE_COPY[mode].label)}</span></button>
+              <div className="agent-mode-control agent-approval-control">
+                {/* 只留图标：当前模式与说明在 tooltip 和读屏名里。 */}
+                <button type="button" className="agent-approval-trigger" aria-label={`${t('agentPanel.approvalMode')}：${t(APPROVAL_MODE_COPY[mode].label)}`} title={`${t(APPROVAL_MODE_COPY[mode].label)} · ${t(APPROVAL_MODE_COPY[mode].hint)}`} aria-expanded={modeOpen} onClick={() => dispatchLayer({ type: 'toggle', layer: 'mode' })}>{(() => { const Icon = APPROVAL_MODE_COPY[mode].icon; return <Icon size={15} aria-hidden="true" />; })()}</button>
                 {modeOpen && <div className="agent-mode-menu" role="menu" aria-label={t('agentPanel.approvalMode')}>
                   {APPROVAL_MODE_ORDER.map(item => {
                     const copy = APPROVAL_MODE_COPY[item];
@@ -1835,11 +1836,11 @@ const userApiKeysRef = useRef(userApiKeys);
                   <p style={{ margin: 0, padding: '6px 12px 8px', fontSize: 10, lineHeight: 1.6, color: 'var(--isl-ink-ghost)' }}>{t('agentPanel.approvalHardGates')}</p>
                 </div>}
               </div>
+              <CreationModeTag value={creationMode} onReset={() => setCreationMode('all')} language={language} />
             </div>
             {sending
               ? <span className="agent-composer__running">
-                  <span className="agent-composer__running-label" role="status" title={language === 'zho' ? '运行中' : 'Working'}><AgentOrbIcon state="working" size={20} /><span>{language === 'zho' ? '运行中' : 'Working'}</span></span>
-                  {/* 运行中也能发：插话进当前这一轮或排在它之后；停止是独立按钮。 */}
+                  {/* 运行中也能发：插话进当前这一轮或排在它之后；停止是独立按钮。「运行中」状态只在消息流的思考指示里显示。 */}
                   {(prompt.trim() || references.length > 0 || attachments.length > 0) && turn.phase !== 'stopping'
                     ? <button type="button" className="agent-composer__send agent-composer__send--queue" aria-label={t('agentPanel.inputQueueSendRunning')} title={t('agentPanel.inputQueueSendRunningTitle')} onClick={() => void send('enter')}><Send size={15} /></button>
                     : null}
