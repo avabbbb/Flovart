@@ -882,6 +882,14 @@
       "watchers": 0,
       "releases": 101,
       "downloads": 123
+    },
+    {
+      "date": "2026-11-18",
+      "stars": 145,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 102,
+      "downloads": 123
     }
   ],
   "releaseAssets": [
@@ -1028,6 +1036,18 @@
       "name": "SHA256SUMS-x86_64-unknown-linux-gnu.txt",
       "downloads": 2,
       "updatedAt": "2026-10-16T06:47:58Z"
+    },
+    {
+      "release": "nightly-300-e1b0e94",
+      "name": "Flovart_0.3.0_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-11-18T02:47:59Z"
+    },
+    {
+      "release": "nightly-300-e1b0e94",
+      "name": "Flovart_0.3.0_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-11-18T02:47:54Z"
     },
     {
       "release": "nightly-298-ce51a96",
@@ -4438,5 +4458,5 @@
       "updatedAt": "2026-10-16T03:30:20Z"
     }
   ],
-  "updatedAt": "2026-11-17T08:03:43.183Z"
+  "updatedAt": "2026-11-18T07:40:00.653Z"
 }
