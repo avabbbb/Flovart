@@ -11,6 +11,7 @@ import {
 } from '../../services/managedFlovartAgent';
 import { setAgentGateKeysProvider, WorkflowAgentBridge } from '../../services/workflowAgentBridge';
 import { WorkflowAgentMessages, type WorkflowAgentDisplayMessage } from '../workflow/WorkflowAgentMessages';
+import type { AgentCompactionLive } from './AgentCompaction';
 import type { WorkflowProject } from '../workflow/types';
 import { useWorkflowStore } from '../workflow/store';
 import { insertLocalImagesIntoProject } from '../workflow/WorkflowWorkspace';
@@ -140,8 +141,19 @@ function latestTurnFailed(snapshot: { messages: Array<{ role: string; error?: st
   return Boolean(latest?.error && !isAbortMessage(latest.error));
 }
 
+/** 自动压缩发生在一轮开头：只把快照里新出现的分隔条插到现有消息里（不打断本轮的流式消息）。 */
+function mergeCompactionDivider(items: WorkflowAgentDisplayMessage[], fromSnapshot: WorkflowAgentDisplayMessage[]) {
+  const known = new Set(items.map(item => item.id));
+  const fresh = fromSnapshot.filter(item => item.compaction && !known.has(item.id));
+  if (!fresh.length) return items;
+  // 放在最后一条用户消息之前（压缩发生在发送这一条之前），没有就放末尾。
+  let at = items.length;
+  for (let index = items.length - 1; index >= 0; index -= 1) if (items[index].role === 'user') { at = index; break; }
+  return [...items.slice(0, at), ...fresh, ...items.slice(at)];
+}
+
 function displayMessages(snapshot: {
-  messages: Array<{ id: string; role: string; text: string; thinking?: string; toolName?: string; toolCallId?: string; isError?: boolean; timestamp?: number; error?: string; images?: Array<{ mimeType: string; data: string }> }>;
+  messages: Array<{ id: string; role: string; text: string; thinking?: string; toolName?: string; toolCallId?: string; isError?: boolean; timestamp?: number; error?: string; images?: Array<{ mimeType: string; data: string }>; compaction?: { tokensBefore: number } }>;
   boundProductionSkill?: ProductionSkillAttachment | null;
 }, language: 'en' | 'zho'): WorkflowAgentDisplayMessage[] {
   return snapshot.messages.map(message => {
@@ -159,6 +171,7 @@ function displayMessages(snapshot: {
     ...(message.role === 'tool' ? { toolName: message.toolName, toolCallId: message.toolCallId } : {}),
     ...(message.role === 'user' ? userReferences(message.text) : {}),
     ...(thumbs.length ? { attachments: thumbs } : {}),
+    ...(message.compaction ? { compaction: message.compaction } : {}),
   };
   });
 }
@@ -732,6 +745,10 @@ const userApiKeysRef = useRef(userApiKeys);
   const answerStreamingRef = useRef(false);
   // 插话被模型循环取走（内核 steer_delivered）时由面板处理：移出托盘、在对话里补上这条用户消息。
   const steerDeliveredRef = useRef<(id: string) => void>(() => undefined);
+  // 上下文压缩：实时卡状态（running → done/error 停一下再收起，换成快照里的分隔条）。
+  const [compaction, setCompaction] = useState<AgentCompactionLive | null>(null);
+  const compactionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (compactionTimer.current) clearTimeout(compactionTimer.current); }, []);
   // 内置 PI 内核事件（pi-agent-core）→ 面板事件流（与 Managed Agent 的 SSE 事件同构）
   const mapKernelEvent = useCallback((event: { type: string; [key: string]: unknown }) => {
     if (event.type === 'message_start') {
@@ -741,6 +758,29 @@ const userApiKeysRef = useRef(userApiKeys);
     }
     if (event.type === 'steer_delivered') {
       steerDeliveredRef.current(String(event.steerId || ''));
+      return;
+    }
+    if (event.type === 'compaction_start') {
+      if (compactionTimer.current) clearTimeout(compactionTimer.current);
+      const reason = (event.reason === 'overflow' || event.reason === 'manual' ? event.reason : 'threshold') as AgentCompactionLive['reason'];
+      setCompaction({ phase: 'running', reason, startedAt: Date.now() });
+      return;
+    }
+    if (event.type === 'compaction_end') {
+      const failed = Boolean(event.error);
+      setCompaction(live => live ? {
+        ...live,
+        phase: failed ? 'error' : 'done',
+        tokensBefore: Number(event.tokensBefore || 0) || undefined,
+        error: failed ? String(event.error) : undefined,
+      } : live);
+      // 成功：刷新快照让分隔条就位；实时卡停留一拍（看清「已折成摘要」）后收起。
+      const kernel = kernelRef.current;
+      if (!failed && event.compacted && kernel) void kernel.snapshot().then(snapshot => {
+        setMessages(items => mergeCompactionDivider(items, displayMessages(snapshot as FlovartAgentSnapshot, languageRef.current)));
+      });
+      if (compactionTimer.current) clearTimeout(compactionTimer.current);
+      compactionTimer.current = setTimeout(() => setCompaction(null), failed ? 3200 : 1500);
       return;
     }
     if (event.type === 'message_update') {
@@ -838,7 +878,7 @@ const userApiKeysRef = useRef(userApiKeys);
       const result = await kernel.compactContext();
       const snapshot = await kernel.snapshot();
       setMessages(displayMessages(snapshot as FlovartAgentSnapshot, languageRef.current));
-      flashCopied(result.compacted ? t('agentPanel.compactDone') : t('agentPanel.compactNotNeeded'));
+      if (!result.compacted) flashCopied(t('agentPanel.compactNotNeeded'));
     } catch (error) {
       setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: errorMessage(error) }]);
     }
@@ -1572,6 +1612,7 @@ const userApiKeysRef = useRef(userApiKeys);
           branchDisabled={sending}
           onQuoteMessage={message => { setQuote({ messageId: message.id, text: message.text }); focusComposer(); }}
           renderTurnFooter={renderTurnPlans}
+          compaction={compaction}
         /></div>
         <AgentTurnTimeline rootRef={messagesRef} turns={conversationTurns} language={uiLanguage} onJump={() => { stickToBottom.current = false; }} />
         <AgentScrollToLatest visible={awayFromBottom && hasMessages} language={uiLanguage} onClick={scrollToLatest} />

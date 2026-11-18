@@ -13,6 +13,8 @@ export interface FlovartAgentMessage {
   isError?: boolean;
   timestamp?: number;
   error?: string;
+  /** 浏览器内核的上下文压缩分隔条（role 为 system）。 */
+  compaction?: { tokensBefore: number };
 }
 
 export interface FlovartAgentSnapshot {

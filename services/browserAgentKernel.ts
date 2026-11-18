@@ -1228,6 +1228,8 @@ function snapshotMessage(entry: { type: string; id: string; message?: AgentMessa
   timestamp?: number;
   error?: string;
   aborted?: boolean;
+  /** 上下文压缩分隔条：压缩前的 token 估算（0 表示未知）。 */
+  compaction?: { tokensBefore: number };
   /** 用户消息附带的图片块（本地附件在前、节点画面在后），面板据「已附带画面」备注挑出本地附件做缩略图。 */
   images?: Array<{ mimeType: string; data: string }>;
 } {
@@ -1293,6 +1295,7 @@ function compactionNotice(entry: { id: string; tokensBefore?: number; timestamp?
     role: 'system',
     text: tokens > 0 ? `已压缩上下文：约 ${Math.round(tokens / 1000)}K tokens 的早期对话整理成了摘要，技能已读记录与项目记忆保留。` : '已压缩上下文：早期对话整理成了摘要。',
     timestamp: entry.timestamp ? Date.parse(entry.timestamp) : undefined,
+    compaction: { tokensBefore: tokens > 0 ? tokens : 0 },
   };
 }
 

@@ -10,6 +10,7 @@ import { AgentReasoningBlock } from '../agent/AgentReasoningBlock';
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { splitQuote } from '../agent/agentQuote';
 import { translations } from '../../utils/translations';
+import { AgentCompactionDivider, AgentCompactionLiveCard, type AgentCompactionLive } from '../agent/AgentCompaction';
 import { agentWorkingMeta, agentWorkingPhase, type AgentOrbState } from '../agent/agentWorkingPhase';
 
 export interface WorkflowAgentDisplayAttachment {
@@ -44,6 +45,8 @@ export interface WorkflowAgentDisplayMessage {
   /** 工具调用的真实起止时间（毫秒时间戳），用于步骤行的用时；快照恢复的卡片没有。 */
   startedAt?: number;
   endedAt?: number;
+  /** 上下文压缩分隔条（system 消息）：压缩前的 token 估算。 */
+  compaction?: { tokensBefore: number };
 }
 
 type MessageSegment =
@@ -93,7 +96,7 @@ export function segmentTurnIndexes(segments: readonly MessageSegment[]): number[
   });
 }
 
-export function WorkflowAgentMessages({ messages, running, working, turnStartedAt, nodes, onOpenReference, language = 'zho', onCopyMessage, onBranchMessage, branchDisabled, onQuoteMessage, renderTurnFooter }: {
+export function WorkflowAgentMessages({ messages, running, working, turnStartedAt, nodes, onOpenReference, language = 'zho', onCopyMessage, onBranchMessage, branchDisabled, onQuoteMessage, renderTurnFooter, compaction }: {
   messages: WorkflowAgentDisplayMessage[];
   running?: boolean;
   /** 运行中胶囊的状态；不给就按消息推一个（只看本轮工具 / 正文）。 */
@@ -114,18 +117,28 @@ export function WorkflowAgentMessages({ messages, running, working, turnStartedA
   onQuoteMessage?: (message: WorkflowAgentDisplayMessage) => void;
   /** 每轮对话末尾附加的内容（例如这一轮的生成计划卡）；参数是 0 起的轮次序号。 */
   renderTurnFooter?: (turnIndex: number) => ReactNode;
+  /** 正在进行 / 刚结束的上下文压缩：末尾显示实时压缩卡。 */
+  compaction?: AgentCompactionLive | null;
 }) {
   const en = language === 'en';
-  const pill = running ? working ?? agentWorkingPhase({ turnPhase: 'sending', messages, language }) : undefined;
-  if (messages.length === 0 && !running) return <div className="workflow-agent__empty">{en ? 'Describe what you want the Agent to do with this Workflow.' : '描述你希望 Agent 对当前 Workflow 做什么。'}</div>;
+  const compactingNow = compaction?.phase === 'running';
+  const pill = running && !compactingNow ? working ?? agentWorkingPhase({ turnPhase: 'sending', messages, language }) : undefined;
+  if (messages.length === 0 && !running && !compaction) return <div className="workflow-agent__empty">{en ? 'Describe what you want the Agent to do with this Workflow.' : '描述你希望 Agent 对当前 Workflow 做什么。'}</div>;
   const copy = translations[language].agentPanel;
   const segments = segmentAgentMessages(messages);
   const turns = segmentTurnIndexes(segments);
+  // 实时卡停在「已压缩」那一下时，刚写进快照的同一条分隔条先不画，避免两张同时出现。
+  const isNewDivider = (message: WorkflowAgentDisplayMessage) => Boolean(compaction && compaction.phase !== 'running' && message.createdAt && Date.parse(message.createdAt) >= compaction.startedAt - 2000);
   return (
     <div className="workflow-agent__messages">
       {segments.flatMap((segment, index) => {
         const turn = turns[index];
         const footer = renderTurnFooter && turn >= 0 && turns[index + 1] !== turn ? renderTurnFooter(turn) : null;
+        if (segment.kind === 'message' && segment.message.compaction) {
+          if (isNewDivider(segment.message)) return footer ? [<Fragment key={'turn-footer-' + turn}>{footer}</Fragment>] : [];
+          const divider = <AgentCompactionDivider key={segment.message.id} id={segment.message.id} tokensBefore={segment.message.compaction.tokensBefore} language={language} fresh={isFreshDivider(segment.message)} />;
+          return footer ? [divider, <Fragment key={'turn-footer-' + turn}>{footer}</Fragment>] : [divider];
+        }
         const body = segment.kind === 'tools'
         ? <AgentToolSteps key={segment.key} tools={segment.tools} language={language} running={running} />
         : ((message: WorkflowAgentDisplayMessage) => (
@@ -165,9 +178,15 @@ export function WorkflowAgentMessages({ messages, running, working, turnStartedA
         // 附加内容用按轮次的稳定 key 平铺在消息之后：本轮新增片段时它只是挪位，不会让消息或卡片重新挂载。
         return footer ? [body, <Fragment key={'turn-footer-' + turn}>{footer}</Fragment>] : [body];
       })}
+      {compaction ? <AgentCompactionLiveCard live={compaction} language={language} /> : null}
       {pill && <div className="workflow-agent__working"><AgentWorkingOrb state={pill.state} label={pill.label} meta={<WorkingMeta steps={pill.steps ?? 0} startedAt={turnStartedAt} language={language} />} /></div>}
     </div>
   );
+}
+
+/** 实时卡刚收起后紧接着出现的分隔条：带一次落位动画（历史里的分隔条静止）。 */
+function isFreshDivider(message: WorkflowAgentDisplayMessage) {
+  return Boolean(message.createdAt && Date.now() - Date.parse(message.createdAt) < 8000);
 }
 
 /** 用户正文：开头的引用块单独显示；去掉「引用：…」行（改由素材卡展示），@名称 换成缩略图胶囊。 */
