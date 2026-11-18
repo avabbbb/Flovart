@@ -90,7 +90,11 @@ const sessionsKey = (projectId: string) => `flovart.agent.sessions.${projectId}`
 function deriveTitle(entries: unknown[]): string {
   for (const entry of entries as Array<{ type?: string; message?: { role?: string; content?: Array<{ type?: string; text?: string }> } }>) {
     if (entry?.type === 'message' && entry.message?.role === 'user') {
-      const text = (entry.message.content || []).filter(block => block.type === 'text').map(block => block.text || '').join(' ').trim();
+      const raw = (entry.message.content || []).filter(block => block.type === 'text').map(block => block.text || '').join('\n\n');
+      // 只取用户自己写的段落：引用 / 附件 / 画面这类系统附注不进标题。
+      const text = raw.split(/\n{2,}/).map(part => part.trim())
+        .filter(part => part && !/^(引用上下文：|本轮附带的本地媒体|已附带画面：|注意：本轮附带的本地媒体)/.test(part))
+        .join(' ').trim();
       if (text) return text.slice(0, 24) || '新对话';
     }
   }
@@ -225,6 +229,14 @@ const EMPTY_USAGE = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTok
 
 function hasContent(message: AgentMessage): message is Extract<AgentMessage, { content: unknown }> {
   return 'content' in message;
+}
+
+function userImageBlocks(message: AgentMessage): { images?: Array<{ mimeType: string; data: string }> } {
+  if (!hasContent(message) || typeof message.content === 'string') return {};
+  const images = message.content
+    .filter((block): block is ImageContent => block.type === 'image')
+    .map(block => ({ mimeType: block.mimeType, data: block.data }));
+  return images.length ? { images } : {};
 }
 
 function textBlocks(message: AgentMessage): string {
@@ -1196,6 +1208,8 @@ function snapshotMessage(entry: { type: string; id: string; message?: AgentMessa
   timestamp?: number;
   error?: string;
   aborted?: boolean;
+  /** 用户消息附带的图片块（本地附件在前、节点画面在后），面板据「已附带画面」备注挑出本地附件做缩略图。 */
+  images?: Array<{ mimeType: string; data: string }>;
 } {
   const message = entry.message;
   if (message && message.role === 'toolResult') {
@@ -1216,6 +1230,7 @@ function snapshotMessage(entry: { type: string; id: string; message?: AgentMessa
     text: message ? textBlocks(message) : '',
     ...(thinking ? { thinking } : {}),
     timestamp: message ? (message as { timestamp?: number }).timestamp : undefined,
+    ...(message?.role === 'user' ? userImageBlocks(message) : {}),
     ...((message as { stopReason?: string } | undefined)?.stopReason === 'aborted'
       // 用户停止：统一显示「已中止」（旧会话里存的可能是 "signal is aborted without reason"）。
       ? { aborted: true, error: AGENT_ABORTED_MESSAGE }

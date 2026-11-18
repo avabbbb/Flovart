@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { AgentAskCard } from '../components/agent/AgentAskCard';
 import { AgentConfirmCard } from '../components/agent/AgentConfirmCard';
-import { buildAgentAskForm, type AgentAskForm } from '../components/agent/agentAskForm';
+import { AGENT_ASK_SKIPPED, buildAgentAskForm, type AgentAskForm } from '../components/agent/agentAskForm';
 import { blockedTodoAction } from '../components/agent/agentTodo';
 import { planWindow } from '../components/agent/plan/PlanSteps';
 import { clampDrawerWidth } from '../components/studio/StudioRightDrawer';
@@ -66,7 +66,7 @@ describe('Questions card (flovart_ask)', () => {
     fireEvent.keyDown(card, { key: 'a' });
     expect(within(card).getByRole('checkbox', { name: /字幕/ })).toHaveAttribute('aria-checked', 'false');
     fireEvent.click(within(card).getByRole('button', { name: '跳过' }));
-    expect(onSubmit).toHaveBeenCalledWith({ auth: 'JWT bearer', flag: '只给内部用户' });
+    expect(onSubmit).toHaveBeenCalledWith({ auth: 'JWT bearer', extras: AGENT_ASK_SKIPPED, flag: '只给内部用户' });
   });
 
   it('arrow keys move the highlight (wrapping) and Esc cancels', () => {
@@ -89,14 +89,13 @@ describe('Questions card (flovart_ask)', () => {
     expect(onCancel).toHaveBeenCalled();
   });
 
-  it('skipping a required question on the last page reports it and jumps back', () => {
+  it('skipping a required question answers it as skipped and submits', () => {
     const onSubmit = vi.fn();
     const result = buildAgentAskForm({ questions: [{ id: 'a', question: '第一题', options: [{ label: '甲' }, { label: '乙' }] }] });
     if (!result.ok) throw new Error('bad form');
     render(<AgentAskCard form={result.form} language="zho" onSubmit={onSubmit} onCancel={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: '跳过' }));
-    expect(onSubmit).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert')).toHaveTextContent('第一题');
+    expect(onSubmit).toHaveBeenCalledWith({ a: AGENT_ASK_SKIPPED });
   });
 });
 

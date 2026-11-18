@@ -53,3 +53,34 @@ export function agentToolLabel(toolName: string | undefined, language: 'en' | 'z
   if (!toolName) return toolName;
   return TOOL_LABELS[toolName]?.[language] || toolName;
 }
+
+/**
+ * 用户消息里的本地附件缩略图：内核存的图片块里本地附件排在最前，
+ * 顺序与「已附带画面：」备注一致——本地图片占 1 张，本地视频占「首/中/尾帧」的帧数（取首帧做封面）。
+ */
+export function userAttachmentThumbs(
+  storedText: string,
+  images: ReadonlyArray<{ mimeType: string; data: string }> | undefined,
+): Array<{ id: string; name: string; previewUrl: string }> {
+  if (!images?.length) return [];
+  const notes = storedText.split(/\n{2,}/).map(block => block.trim()).find(block => block.startsWith('已附带画面：'));
+  if (!notes) return [];
+  const out: Array<{ id: string; name: string; previewUrl: string }> = [];
+  let cursor = 0;
+  for (const line of notes.split('\n').slice(1)) {
+    const image = /^本地图片「(.+)」$/.exec(line.trim());
+    const video = /^本地视频「(.+)」(.*)帧$/.exec(line.trim());
+    const take = image ? 1 : video ? Math.max(1, video[2].split('/').filter(Boolean).length) : 0;
+    if (!take) continue;
+    const first = images[cursor];
+    if (!first) break;
+    out.push({ id: `attachment-${cursor}`, name: (image || video)![1], previewUrl: `data:${first.mimeType};base64,${first.data}` });
+    cursor += take;
+  }
+  return out;
+}
+
+/** 已用缩略图展示附件时，正文里去掉「附件：…」那一行。 */
+export function withoutAttachmentLine(displayText: string): string {
+  return displayText.split(/\n{2,}/).filter(block => !block.trim().startsWith('附件：')).join('\n\n').trim();
+}

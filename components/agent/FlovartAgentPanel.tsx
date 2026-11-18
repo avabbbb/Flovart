@@ -58,7 +58,7 @@ import { AgentAskCard } from './AgentAskCard';
 import '../../styles/agentComposer.css';
 import { parseAgentAskHtml, type AgentAskForm } from './agentAskForm';
 import { confirmGrantKey, confirmScopesFor, type AgentConfirmScope } from './agentConfirmCopy';
-import { displayUserTurnText, agentToolLabel } from './agentTurnText';
+import { displayUserTurnText, agentToolLabel, userAttachmentThumbs, withoutAttachmentLine } from './agentTurnText';
 import { applyThinkingDelta, applyTextDelta, carryLiveState, finishThinking } from './agentStreamMessages';
 import { agentWorkingMeta, agentWorkingPhase } from './agentWorkingPhase';
 import { AgentMediaTiles } from './AgentMediaTiles';
@@ -139,14 +139,16 @@ function latestTurnFailed(snapshot: { messages: Array<{ role: string; error?: st
 }
 
 function displayMessages(snapshot: {
-  messages: Array<{ id: string; role: string; text: string; thinking?: string; toolName?: string; toolCallId?: string; isError?: boolean; timestamp?: number; error?: string }>;
+  messages: Array<{ id: string; role: string; text: string; thinking?: string; toolName?: string; toolCallId?: string; isError?: boolean; timestamp?: number; error?: string; images?: Array<{ mimeType: string; data: string }> }>;
   boundProductionSkill?: ProductionSkillAttachment | null;
 }, language: 'en' | 'zho'): WorkflowAgentDisplayMessage[] {
-  return snapshot.messages.map(message => ({
+  return snapshot.messages.map(message => {
+    const thumbs = message.role === 'user' && !message.error ? userAttachmentThumbs(message.text, message.images) : [];
+    return {
     id: message.id,
     // 用户停止显示为中性的「已中止」，不进红色错误卡。
     role: (message.error ? (isAbortMessage(message.error) ? 'system' : 'error') : message.role) as WorkflowAgentDisplayMessage['role'],
-    text: message.error ? (isAbortMessage(message.error) ? abortedNoticeText(language) : agentMessageText(message.error, language)) : message.role === 'user' ? displayUserTurnText(message.text) : message.text,
+    text: message.error ? (isAbortMessage(message.error) ? abortedNoticeText(language) : agentMessageText(message.error, language)) : message.role === 'user' ? (thumbs.length ? withoutAttachmentLine(displayUserTurnText(message.text)) : displayUserTurnText(message.text)) : message.text,
     // 快照里的思考都已结束：收起显示（thinkingDone）。
     ...(message.role === 'assistant' && !message.error && message.thinking ? { thinking: message.thinking, thinkingDone: true } : {}),
     title: message.role === 'tool' ? agentToolLabel(message.toolName, language) : undefined,
@@ -154,7 +156,9 @@ function displayMessages(snapshot: {
     createdAt: message.timestamp ? new Date(message.timestamp).toISOString() : undefined,
     ...(message.role === 'tool' ? { toolName: message.toolName, toolCallId: message.toolCallId } : {}),
     ...(message.role === 'user' ? userReferences(message.text) : {}),
-  }));
+    ...(thumbs.length ? { attachments: thumbs } : {}),
+  };
+  });
 }
 
 /** 用户消息里的画布引用：优先读带 nodeId 的「引用上下文」，旧消息只剩「引用：@…」时按名字。 */
@@ -1002,6 +1006,7 @@ const userApiKeysRef = useRef(userApiKeys);
     references: AgentReference[];
     attachments: AgentComposerAttachment[];
     messageReferences: Array<{ id: string; kind: AgentReference['type']; label: string }>;
+    displayAttachments: Array<{ id: string; name: string; previewUrl: string }>;
   };
   type QueueDraft = ComposerDraft<AgentReference, AgentComposerAttachment>;
   /** 待发送的一条：原始草稿（取回编辑 / 停止退回用）；插话还带着已解析好的请求（送达时显示）。 */
@@ -1073,8 +1078,11 @@ const userApiKeysRef = useRef(userApiKeys);
     const displayText = [
       text,
       draftReferences.length ? `引用：${draftReferences.map(reference => `@${reference.label}`).join('、')}` : '',
-      turnAttachments.length ? `附件：${turnAttachments.map(item => item.name).join('、')}` : '',
+      // 图片附件直接显示缩略图；视频暂无封面，仍列名字（快照回来后换成首帧封面）。
+      turnAttachments.some(item => item.kind === 'video') ? `附件：${turnAttachments.filter(item => item.kind === 'video').map(item => item.name).join('、')}` : '',
     ].filter(Boolean).join('\n\n');
+    // 气泡用独立的 object URL：附件本身的 URL 发送后就会被释放。
+    const displayAttachments = turnAttachments.filter(item => item.kind === 'image').map(item => ({ id: item.id, name: item.name, previewUrl: URL.createObjectURL(item.file) }));
     return {
       id,
       requestText,
@@ -1082,6 +1090,7 @@ const userApiKeysRef = useRef(userApiKeys);
       references: [...draftReferences],
       attachments: turnAttachments,
       messageReferences: draftReferences.map(reference => ({ id: reference.id, kind: reference.type, label: reference.label })),
+      displayAttachments,
     };
   };
 
@@ -1123,7 +1132,7 @@ const userApiKeysRef = useRef(userApiKeys);
   /** 空闲时发出一轮：显示用户消息并开跑。不碰输入框。 */
   const dispatchOutgoing = async (outgoing: OutgoingTurn) => {
     stickToBottom.current = true;
-    setMessages(items => [...items, { id: outgoing.id, role: 'user', text: outgoing.displayText, ...(outgoing.messageReferences.length ? { references: outgoing.messageReferences } : {}) }]);
+    setMessages(items => [...items, { id: outgoing.id, role: 'user', text: outgoing.displayText, ...(outgoing.messageReferences.length ? { references: outgoing.messageReferences } : {}), ...(outgoing.displayAttachments.length ? { attachments: outgoing.displayAttachments } : {}) }]);
     await runTurn(outgoing);
   };
 
@@ -1155,7 +1164,7 @@ const userApiKeysRef = useRef(userApiKeys);
       const outgoing = item.outgoing;
       if (outgoing) {
         stickToBottom.current = true;
-        setMessages(list => list.some(entry => entry.id === outgoing.id) ? list : [...list, { id: outgoing.id, role: 'user', text: outgoing.displayText, ...(outgoing.messageReferences.length ? { references: outgoing.messageReferences } : {}) }]);
+        setMessages(list => list.some(entry => entry.id === outgoing.id) ? list : [...list, { id: outgoing.id, role: 'user', text: outgoing.displayText, ...(outgoing.messageReferences.length ? { references: outgoing.messageReferences } : {}), ...(outgoing.displayAttachments.length ? { attachments: outgoing.displayAttachments } : {}) }]);
       }
       return;
     }
@@ -1242,7 +1251,7 @@ const userApiKeysRef = useRef(userApiKeys);
     turnConversationKey.current = turnKey;
     answerStreamingRef.current = false;
     // 排队的消息可能被上一轮结束时的快照刷掉：重新补上这条用户消息。
-    setMessages(items => items.some(item => item.id === outgoing.id) ? items : [...items, { id: outgoing.id, role: 'user', text: outgoing.displayText, ...(outgoing.messageReferences.length ? { references: outgoing.messageReferences } : {}) }]);
+    setMessages(items => items.some(item => item.id === outgoing.id) ? items : [...items, { id: outgoing.id, role: 'user', text: outgoing.displayText, ...(outgoing.messageReferences.length ? { references: outgoing.messageReferences } : {}), ...(outgoing.displayAttachments.length ? { attachments: outgoing.displayAttachments } : {}) }]);
     const { turnId } = dispatchTurn({ type: 'send' });
     setTurnStartedAt(Date.now());
     setSetupBlocker(null);

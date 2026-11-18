@@ -1070,3 +1070,7 @@
 .workflow-storyboard__btn { display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:7px;border:1px solid var(--wf-border,rgba(127,127,127,.3));background:transparent;color:inherit;font-size:12px;cursor:pointer;flex:none; }
 .workflow-storyboard__btn.is-primary { background:var(--wf-accent,#19c8b9);border-color:var(--wf-accent,#19c8b9);color:#fff; }
 .workflow-storyboard__btn:disabled { opacity:.45;cursor:default; }
+
+/* 用户消息里的单张本地附件：靠右贴着气泡，不占三列网格的左格。 */
+.workflow-agent__messages .workflow-agent__message--user .workflow-agent__message-attachments{display:flex;justify-content:flex-end;margin-left:auto}
+.workflow-agent__messages .workflow-agent__message--user .workflow-agent__message-attachments img{width:min(100%,132px);border-radius:12px}

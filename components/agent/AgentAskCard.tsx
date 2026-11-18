@@ -52,6 +52,7 @@ export function AgentAskCard({ form, language, onSubmit, onCancel }: AgentAskCar
   const [page, setPage] = useState(0);
   const [direction, setDirection] = useState<1 | -1>(1);
   const [active, setActive] = useState(-1);
+  const [skipped, setSkipped] = useState<ReadonlySet<string>>(() => new Set());
   const root = useRef<HTMLElement>(null);
   const rowRefs = useRef<Array<HTMLElement | null>>([]);
   const baseId = useId();
@@ -76,6 +77,8 @@ export function AgentAskCard({ form, language, onSubmit, onCancel }: AgentAskCar
 
   const setValue = (name: string, value: string | string[]) => {
     setValues(current => ({ ...current, [name]: value }));
+    // 回头作答：取消这一题的「跳过」。
+    setSkipped(current => { if (!current.has(name)) return current; const next = new Set(current); next.delete(name); return next; });
     setError('');
   };
   const goTo = (next: number) => {
@@ -86,11 +89,11 @@ export function AgentAskCard({ form, language, onSubmit, onCancel }: AgentAskCar
     setError('');
     root.current?.focus({ preventScroll: true });
   };
-  const finish = (nextValues: Values, nextOther: Record<string, string>) => {
-    const result = collectAgentAskAnswers(form, nextValues, nextOther);
+  const finish = (nextValues: Values, nextOther: Record<string, string>, nextSkipped: ReadonlySet<string> = skipped) => {
+    const result = collectAgentAskAnswers(form, nextValues, nextOther, nextSkipped);
     if ('error' in result) {
       setError(result.error);
-      const missing = form.fields.findIndex(item => item.required && !askFieldAnswered(item, nextValues, nextOther));
+      const missing = form.fields.findIndex(item => item.required && !nextSkipped.has(item.name) && !askFieldAnswered(item, nextValues, nextOther));
       if (missing >= 0 && missing !== page) goTo(missing);
       return;
     }
@@ -102,13 +105,15 @@ export function AgentAskCard({ form, language, onSubmit, onCancel }: AgentAskCar
     else finish(values, other);
   };
   const skip = () => {
-    // 跳过 = 这一题不作答。
+    // 跳过 = 这一题的回答就是「用户跳过了」，不会再被拉回来补答。
     const cleared: Values = { ...values, [field.name]: Array.isArray(values[field.name]) ? [] : '' };
     const clearedOther = { ...other, [field.name]: '' };
+    const nextSkipped = new Set(skipped).add(field.name);
     setValues(cleared);
     setOther(clearedOther);
+    setSkipped(nextSkipped);
     if (!last) goTo(page + 1);
-    else finish(cleared, clearedOther);
+    else finish(cleared, clearedOther, nextSkipped);
   };
 
   const pick = (index: number) => {
@@ -219,7 +224,7 @@ export function AgentAskCard({ form, language, onSubmit, onCancel }: AgentAskCar
             aria-label={copy.otherAria}
             tabIndex={active === item.options.length ? 0 : -1}
             onFocus={() => setActive(item.options.length)}
-            onChange={event => { const text = event.target.value; setOther(current => ({ ...current, [item.name]: text })); setError(''); }}
+            onChange={event => { const text = event.target.value; setOther(current => ({ ...current, [item.name]: text })); setSkipped(current => { if (!current.has(item.name)) return current; const next = new Set(current); next.delete(item.name); return next; }); setError(''); }}
           />
         </label>
       </div>

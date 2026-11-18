@@ -158,13 +158,19 @@ export function parseAgentAskHtml(html: string): AgentAskParseResult {
   return { ok: true, form: { context, fields } };
 }
 
+/** 用户跳过某题时回传给模型的答案。 */
+export const AGENT_ASK_SKIPPED = '（用户跳过了这个问题）';
+
 export function collectAgentAskAnswers(
   form: AgentAskForm,
   values: Readonly<Record<string, string | string[]>>,
   other: Readonly<Record<string, string>> = {},
+  skipped: ReadonlySet<string> = new Set(),
 ): AgentAskAnswers {
   const data: Record<string, unknown> = {};
   for (const field of form.fields) {
+    // 用户点了「跳过」：这一题的回答就是「跳过」，必填也不再拦。
+    if (skipped.has(field.name)) { data[field.name] = AGENT_ASK_SKIPPED; continue; }
     const value = values[field.name];
     const extra = (other[field.name] || '').trim();
     if (field.kind === 'checkbox') {
