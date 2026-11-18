@@ -14,6 +14,9 @@ export const TASKABLE_COMMANDS = Object.freeze([
   'workflow.group.run',
   'workflow.generate',
   'workflow.node.tool',
+  'workflow.image.tool',
+  'workflow.video.tool',
+  'workflow.audio.tool',
   'workflow.media.import',
   'workflow.export',
 ]);

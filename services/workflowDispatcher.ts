@@ -9,7 +9,7 @@ import { alternateAsNode, findAlternateOwner, missingNodeMessage } from '../comp
 import { applyWorkflowMutation, applyWorkflowViewOperations } from '../components/workflow/draftAuthority';
 import { applyWorkflowOps } from '../components/workflow/ops';
 import { appendWorkflowDraftLog, createWorkflowDraftLogEntry } from '../components/workflow/draftLog';
-import { isWorkflowNodeTool, workflowNodeToolIsPaid, workflowNodeToolSpec, workflowNodeToolSpecs, workflowNodeToolsFor } from '../components/workflow/nodeToolCatalog';
+import { isWorkflowNodeTool, resolveWorkflowNodeToolCommand, workflowNodeToolIsPaid, workflowNodeToolSpec, workflowNodeToolSpecs, workflowNodeToolsFor } from '../components/workflow/nodeToolCatalog';
 import { getWorkflowOperationCapabilityByNodeTool, parseWorkflowOperationNodeToolArguments } from '../components/workflow/operationRegistry';
 import { getWorkflowPersistenceError, useWorkflowStore } from '../components/workflow/store';
 import { reorderReferenceOperations } from '../components/workflow/references';
@@ -162,7 +162,7 @@ const DOCUMENT_MUTATION_COMMANDS = new Set([
   'workflow.apply', 'workflow.node.create', 'workflow.node.create-connected', 'workflow.node.update',
   'workflow.node.delete', 'workflow.node.move', 'workflow.node.resize', 'workflow.connect', 'workflow.disconnect',
 ]);
-const WORKFLOW_READ_COMMANDS = new Set(['workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.models.list', 'workflow.shortcut.list', 'workflow.nodes.search', 'workflow.cost.estimate', 'workflow.node.tool.list']);
+export const WORKFLOW_READ_COMMANDS: ReadonlySet<string> = new Set(['workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.models.list', 'workflow.shortcut.list', 'workflow.nodes.search', 'workflow.cost.estimate', 'workflow.node.tool.list']);
 const SENSITIVE_KEY = /(?:api.?key|authorization|token|secret|password|storage.?key|file.?path|local.?path|data.?url)/i;
 const MEDIA_KEY = /^(?:href|poster|src|url)$/i;
 const LOCAL_PATH = /^(?:[a-z]:\\|\\\\|\/home\/|\/Users\/|\/tmp\/)/i;
@@ -416,7 +416,7 @@ export function documentOperationsArg(value: unknown): WorkflowDocumentOperation
         throw new Error('operations[' + index + '] ' + operation.type + '.node 必须是带 type 的对象');
       }
       if (node.type === 'operation') {
-        throw new Error('operations[' + index + '] 不再支持 operation 节点：生成与后处理的结果直接写成 image / video / audio 结果节点（flovart_generate 或 flovart_workflow_node_tool）。');
+        throw new Error('operations[' + index + '] 不再支持 operation 节点：生成与后处理的结果直接写成 image / video / audio 结果节点（flovart_generate 或 flovart_image_tool / flovart_video_tool / flovart_audio_tool）。');
       }
       // 新节点没给 id 时由系统生成（结果的 affectedNodeIds 会带回）；绝不落一个 id 为空的节点。
       if (typeof node.id === 'string' && node.id.trim()) return operation as unknown as WorkflowDocumentOperation;
@@ -600,7 +600,8 @@ export function checkWorkflowNodeToolCall(nodes: readonly WorkflowNode[], args: 
 }
 
 export function workflowCommandNeedsConfirmation(command: string, args: Record<string, unknown>): boolean {
-  return requiresWorkflowConfirmation({ id: 'policy-probe', command, args, source: 'agent' } as WorkflowCommandEnvelope);
+  const resolved = resolveWorkflowNodeToolCommand(command, args.tool);
+  return requiresWorkflowConfirmation({ id: 'policy-probe', command: resolved.ok ? resolved.command : command, args, source: 'agent' } as WorkflowCommandEnvelope);
 }
 
 /**
@@ -730,7 +731,11 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
     } };
   };
 
-  const execute = async (envelope: WorkflowCommandEnvelope): Promise<WorkflowCommandResult> => {
+  const execute = async (incoming: WorkflowCommandEnvelope): Promise<WorkflowCommandResult> => {
+    // 媒体工具命令（workflow.image/video/audio.tool）落到同一个 workflow.node.tool 实现。
+    const toolCommand = incoming && typeof incoming === 'object' ? resolveWorkflowNodeToolCommand(String(incoming.command || ''), isRecord(incoming.args) ? incoming.args.tool : undefined) : { ok: true as const, command: '' };
+    if (toolCommand.ok === false) return error(incoming.id, 'BAD_REQUEST', toolCommand.message);
+    const envelope: WorkflowCommandEnvelope = !incoming || toolCommand.command === incoming.command ? incoming : { ...incoming, command: toolCommand.command };
     const envelopeError = validateEnvelope(envelope);
     if (envelopeError) return envelopeError;
     const documentMutation = DOCUMENT_MUTATION_COMMANDS.has(envelope.command);

@@ -6,11 +6,11 @@ import type { WorkflowNode, WorkflowProject } from '../components/workflow/types
 import { getFlovartRuntimeApi, type RuntimeCommandEnvelope } from './flovartRuntime';
 import { createBrowserWorkflowContract, type BrowserWorkflowContract } from './browserWorkflowContract';
 import { AgentRuntimeError, getBrowserAgentRuntime } from './browserAgentRuntime';
-import { redactWorkflowAgentValue, withWorkflowHumanApproval, type WorkflowCommandEnvelope, type WorkflowCommandResult } from './workflowDispatcher';
+import { redactWorkflowAgentValue, withWorkflowHumanApproval, WORKFLOW_READ_COMMANDS as WORKFLOW_DISPATCHER_READ_COMMANDS, type WorkflowCommandEnvelope, type WorkflowCommandResult } from './workflowDispatcher';
 import { workflowCommandSummary } from '../components/workflow/agentOps';
 import { checkRevision, revisionConflictMessage } from '../components/workflow/revisionRebase';
 import { groupRunOrder } from '../components/workflow/canvasGroups';
-import { getWorkflowOperationCapabilityByNodeTool } from '../components/workflow/operationRegistry';
+import { isWorkflowNodeToolCommand, workflowNodeToolIsPaid } from '../components/workflow/nodeToolCatalog';
 import { displayError } from './displayError';
 import { buildGenerationGateSummary, type GenerationGateDetails } from './generationGate';
 import { planBlocked, type AgentConfirmRequest } from './agentSpendMandate';
@@ -37,7 +37,8 @@ const RUNTIME_COMMANDS = new Set([
 ]);
 const RUNTIME_CONFIRM_COMMANDS = new Set(['production.approve', 'production.run', 'task.cancel']);
 const READ_COMMANDS = new Set(['runtime.status', 'status', 'provider.status', 'asset.list', 'workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.focus.nodes', 'command.list', 'command.schema']);
-const WORKFLOW_READ_COMMANDS = new Set(['workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.focus.nodes']);
+// 只读命令不弹写入确认：与调度器的只读清单一致，另加只改视图的 focus.nodes。
+const WORKFLOW_READ_COMMANDS = new Set([...WORKFLOW_DISPATCHER_READ_COMMANDS, 'workflow.focus.nodes']);
 const REQUEST_TIMEOUT_MS = 45_000;
 /** An EventSource that opens but never says hello (proxy buffering, half-dead Agent) must not stay "connecting" forever. */
 const HELLO_TIMEOUT_MS = 10_000;
@@ -515,9 +516,9 @@ export class WorkflowAgentBridge {
 
 function requiresHighRiskWorkflowConfirmation(envelope: WorkflowCommandEnvelope) {
   if (envelope.command === 'workflow.project.delete' || envelope.command === 'workflow.node.delete' || envelope.command === 'workflow.node.run') return true;
-  if (envelope.command !== 'workflow.node.tool') return false;
-  const tool = String(envelope.args.tool || '');
-  return getWorkflowOperationCapabilityByNodeTool(tool)?.confirmation !== 'none';
+  if (!isWorkflowNodeToolCommand(envelope.command)) return false;
+  // 与工具说明书同一份计费判定（outpaint / mask 也是付费工具）。
+  return workflowNodeToolIsPaid(String(envelope.args.tool || ''));
 }
 
 /**

@@ -62,7 +62,7 @@ function normalizeConfig(config) {
 
 // 与 agent/session.js 的 LONG_RUNNING_COMMANDS 保持一致：这些命令要等生成或人工确认结束才回包。
 // 客户端上限略长于 sidecar（15 分钟），让 sidecar 的明确错误先到达。
-const LONG_RUNNING_COMMANDS = new Set(['workflow.node.run', 'workflow.node.tool', 'production.run', 'production.approve']);
+const LONG_RUNNING_COMMANDS = new Set(['workflow.node.run', 'workflow.node.tool', 'workflow.image.tool', 'workflow.video.tool', 'workflow.audio.tool', 'production.run', 'production.approve']);
 const LONG_RUNNING_TIMEOUT_MS = 16 * 60_000;
 
 export class FlovartWorkspaceClient {

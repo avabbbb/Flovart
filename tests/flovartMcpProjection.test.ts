@@ -63,7 +63,9 @@ describe('Flovart MCP projection', () => {
       'flovart_export',
       'flovart_workflow_node_run',
       'flovart_workflow_node_stop',
-      'flovart_workflow_node_tool',
+      'flovart_image_tool',
+      'flovart_video_tool',
+      'flovart_audio_tool',
       // 上一版 MCP 专用名：弃用别名，保留一个版本
       'flovart_workflow_selection',
       'flovart_workflow_focus',

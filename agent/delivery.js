@@ -2,7 +2,7 @@
 // 每次成功回包附带 { sessionId, projectId, canvasUrl, nodeIds }，人打开 canvasUrl 即聚焦到相关节点继续编辑。
 export const DELIVERY_COMMANDS = new Set([
   'workflow.apply', 'workflow.node.create', 'workflow.node.create-connected', 'workflow.node.update',
-  'workflow.node.run', 'workflow.node.tool', 'production.run', 'production.approve',
+  'workflow.node.run', 'workflow.node.tool', 'workflow.image.tool', 'workflow.video.tool', 'workflow.audio.tool', 'production.run', 'production.approve',
 ]);
 
 const MAX_NODE_IDS = 50;

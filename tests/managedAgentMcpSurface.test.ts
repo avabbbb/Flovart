@@ -32,7 +32,9 @@ describe('Flovart Agent tool surface', () => {
       'workflow.export',
       'workflow.node.run',
       'workflow.node.stop',
-      'workflow.node.tool',
+      'workflow.image.tool',
+      'workflow.video.tool',
+      'workflow.audio.tool',
     ]);
     expect(commands).not.toContain('command.list');
     expect(commands).not.toContain('command.schema');

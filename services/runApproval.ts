@@ -35,7 +35,7 @@ export function planRunApproval(nodes: readonly WorkflowNode[], requestedIds: re
   if (notes.length) return { ok: false, code: 'NOTE_IS_ANNOTATION', message: `${notes.join('、')} 是文本备注，不能运行；只把生成节点放进审批清单。`, nodeIds: notes };
   const notRunnable = nodeIds.filter(id => !runnableModeOf(byId.get(id)!));
   if (notRunnable.length) {
-    return { ok: false, code: 'NOT_RUNNABLE', message: `${notRunnable.join('、')} 不是图片/视频生成节点；画布工具请用 flovart_workflow_node_tool。`, nodeIds: notRunnable };
+    return { ok: false, code: 'NOT_RUNNABLE', message: `${notRunnable.join('、')} 不是图片/视频生成节点；画布工具请用 flovart_image_tool / flovart_video_tool / flovart_audio_tool。`, nodeIds: notRunnable };
   }
   return {
     ok: true,

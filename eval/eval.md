@@ -42,7 +42,7 @@ Flovart 的 Agent 不是答题型 Agent。它驱动画布去生成图和视频�
 
 | 段 | 判什么 | 对应子项（`agent-run`） |
 | --- | --- | --- |
-| 路由 | 走没走对能力面：改画布用 `workflow.apply`，生成用 `workflow.node.run`，成片、剪辑、配音走 pipeline，反推、抠图等画布工具走 `workflow.node.tool`，制作模板走 `skill.*`，越界请求拒绝或交回用户 | `AGENT-SCOPE-01`、`AGENT-TOOL-04` |
+| 路由 | 走没走对能力面：改画布用 `workflow.apply`，生成用 `workflow.node.run`，成片、剪辑、配音走 pipeline，反推、抠图等画布工具走 `workflow.image.tool` / `workflow.video.tool` / `workflow.audio.tool`，制作模板走 `skill.*`，越界请求拒绝或交回用户 | `AGENT-SCOPE-01`、`AGENT-TOOL-04` |
 | 调用 | 先看后改、幂等键、参数（节点类型、比例、模型、数量）是否匹配意图 | `AGENT-TOOL-01/02/03` |
 | 产出 | 画布终态满足请求；本轮生成的每张分镜、每个镜头在对应的 L4 Rubric（`image-output` / `video-shot` / `digital-human`）上判为通过 | `AGENT-CONTENT-01/03` |
 | 回复 | 如实说明结果、报错和费用，声称的内容与终态一致，给出下一步 | `AGENT-HONEST-01/02`、`AGENT-CONTENT-02` |

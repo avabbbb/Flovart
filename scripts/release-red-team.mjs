@@ -45,7 +45,7 @@ requireCondition(
     'workflow.inspect', 'workflow.selection.get', 'workflow.focus.nodes', 'workflow.apply', 'workflow.generate', 'workflow.models.list',
     'workflow.shortcut.list', 'workflow.shortcut.apply', 'workflow.group.create', 'workflow.group.run', 'workflow.nodes.search', 'workflow.cost.estimate', 'workflow.node.tool.list',
     'workflow.note.write', 'workflow.media.import', 'workflow.script.materialize', 'workflow.export',
-    'workflow.node.run', 'workflow.node.stop', 'workflow.node.tool',
+    'workflow.node.run', 'workflow.node.stop', 'workflow.image.tool', 'workflow.video.tool', 'workflow.audio.tool',
   ]),
   `Agent public surface changed unexpectedly: ${publicCommands.join(', ')}`,
 );

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "7ee9a935541a0ba77ed21bebb31f95a00a5d038ef2fce7babfe2adf8bdf49136",
+  "registryHash": "a02cd1605dda40ba1e3fdb09916cdc139d2fe5bd34d97b9a8a2d0ce9943763df",
   "commands": [
     {
       "name": "runtime.status",
@@ -760,7 +760,7 @@
     },
     {
       "name": "workflow.node.tool",
-      "summary": "Run one canvas secondary-processing tool on a visible Workflow node (crop, upscale, remove-background, edit, video-trim, video-extract-frame, audio tools, reverse-prompt, filter, outpaint, mask; reverse-prompt writes the vision model's prompt back to the image/video node). Results are written as result nodes wired directly from the source (no intermediate operation node); returns resultNodeId and outputNodeIds.",
+      "summary": "Compatibility adapter (agents use workflow.image.tool / workflow.video.tool / workflow.audio.tool). Run one canvas secondary-processing tool on a visible Workflow node (crop, upscale, remove-background, edit, video-trim, video-extract-frame, audio tools, reverse-prompt, filter, outpaint, mask; reverse-prompt writes the vision model's prompt back to the image/video node). Results are written as result nodes wired directly from the source (no intermediate operation node); returns resultNodeId and outputNodeIds.",
       "args": {
         "projectId": "string?",
         "nodeId": "string",
@@ -793,6 +793,65 @@
         "count": "number?",
         "semitones": "number?",
         "preset": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.image.tool",
+      "summary": "Run one image tool on an image node: crop, upscale, remove-background, split-layers, edit, rotate, vectorize, split-grid, layer, reverse-prompt, filter, outpaint, mask. Paid tools (upscale, remove-background, split-layers, edit, layer, outpaint, mask) ask the user first. Results are written as image result nodes wired from the source; returns resultNodeId and outputNodeIds. workflow.node.tool.list gives each tool's parameter schema.",
+      "args": {
+        "projectId": "string?",
+        "nodeId": "string",
+        "tool": "crop|upscale|remove-background|split-layers|edit|rotate|vectorize|split-grid|layer|reverse-prompt|filter|outpaint|mask",
+        "prompt": "string?",
+        "x": "number?",
+        "y": "number?",
+        "width": "number?",
+        "height": "number?",
+        "targetLongEdge": "number?",
+        "algorithm": "string?",
+        "action": "string?",
+        "preset": "string?",
+        "rows": "number?",
+        "cols": "number?",
+        "maskNodeId": "string?",
+        "maskHref": "string?",
+        "maskMimeType": "string?",
+        "style": "string?",
+        "count": "number?",
+        "filters": "object?",
+        "direction": "string?",
+        "amount": "number?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.video.tool",
+      "summary": "Run one video tool on a video node: video-trim, video-av-split, video-merge (sourceNodeIds in order), video-extract-frame, reverse-prompt. Local processing, no AI billing except reverse-prompt (user's vision model). Results are written as result nodes wired from the source; returns resultNodeId and outputNodeIds.",
+      "args": {
+        "projectId": "string?",
+        "nodeId": "string?",
+        "tool": "video-trim|video-av-split|video-merge|video-extract-frame|reverse-prompt",
+        "startSec": "number?",
+        "endSec": "number?",
+        "audio": "full|vocals|background?",
+        "sourceNodeIds": "string[]?",
+        "position": "string?",
+        "currentTimeSec": "number?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.audio.tool",
+      "summary": "Run one audio tool on an audio node: audio-trim, audio-speed, audio-pitch, audio-stem-split. Local processing, no AI billing. Results are written as audio result nodes wired from the source; returns resultNodeId and outputNodeIds.",
+      "args": {
+        "projectId": "string?",
+        "nodeId": "string",
+        "tool": "audio-trim|audio-speed|audio-pitch|audio-stem-split",
+        "startSec": "number?",
+        "endSec": "number?",
+        "speed": "number?",
+        "semitones": "number?"
       },
       "availability": "available"
     },

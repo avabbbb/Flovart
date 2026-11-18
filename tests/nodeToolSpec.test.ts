@@ -3,8 +3,8 @@ import { createWorkflowDispatcher, withWorkflowHumanApproval, workflowCommandNee
 import { createWorkflowExecutor } from '../services/workflowExecutor';
 import { createWorkflowProject } from '../components/workflow/store';
 import { createWorkflowNode } from '../components/workflow/constants';
-import { WORKFLOW_NODE_TOOLS, workflowNodeToolSpecs, workflowNodeToolIsPaid } from '../components/workflow/nodeToolCatalog';
-import { toolApprovalFor } from '../services/agentToolPolicy';
+import { WORKFLOW_NODE_TOOLS, isWorkflowNodeToolCommand, workflowNodeToolSpecs, workflowNodeToolIsPaid } from '../components/workflow/nodeToolCatalog';
+import { resolveToolApproval, toolApprovalFor } from '../services/agentToolPolicy';
 import { describeWorkflowNodeTools } from '../services/browserAgentKernel';
 import { agentToolCommand, getAgentToolSpecs } from '../tools/flovart/agent-tools.js';
 import { AGENT_PUBLIC_COMMAND_SET } from '../tools/flovart/agent-surface.js';
@@ -132,5 +132,45 @@ describe('workflow.node.tool pre-checks run before the approval card', () => {
     const ok = await dispatch({ id: 'b', command: 'workflow.node.tool', source: 'agent', args: { tool: 'video-merge', sourceNodeIds: ['vid', 'vid2'] } });
     expect(ok.ok, JSON.stringify(ok.error)).toBe(true);
     expect(nodeToolRunner).toHaveBeenCalledWith(expect.any(String), 'vid', 'video-merge', { sourceNodeIds: ['vid', 'vid2'] });
+  });
+});
+
+describe('image / video / audio tools (node_tool split by media)', () => {
+  it('publishes three tools whose tool enum matches the spec families', () => {
+    const families = { image: 'flovart_image_tool', video: 'flovart_video_tool', audio: 'flovart_audio_tool' } as const;
+    for (const [family, name] of Object.entries(families)) {
+      const spec = getAgentToolSpecs('mcp').find((item: { name: string }) => item.name === name) as unknown as { inputSchema: { properties: Record<string, { enum?: string[] }> } };
+      expect(spec, name).toBeDefined();
+      expect([...spec.inputSchema.properties.tool.enum!].sort()).toEqual(workflowNodeToolSpecs().filter(item => item.inputTypes.includes(family)).map(item => item.tool).sort());
+    }
+    expect(getAgentToolSpecs('mcp').some((item: { name: string }) => item.name === 'flovart_workflow_node_tool')).toBe(false);
+    // 每个工具只带本类参数。
+    const audio = getAgentToolSpecs('mcp').find((item: { name: string }) => item.name === 'flovart_audio_tool') as unknown as { inputSchema: { properties: Record<string, unknown> } };
+    expect(Object.keys(audio.inputSchema.properties)).not.toContain('targetLongEdge');
+  });
+
+  it('routes a family command to the same implementation and approval', async () => {
+    const { dispatch, nodeToolRunner } = setup();
+    const asked = await dispatch({ id: 'a', command: 'workflow.image.tool', source: 'agent', args: { nodeId: 'img', tool: 'upscale', targetLongEdge: 2048 } });
+    expect(asked.confirmation?.required).toBe(true);
+    expect(workflowCommandNeedsConfirmation('workflow.image.tool', { tool: 'mask' })).toBe(true);
+    expect(toolApprovalFor('workflow.image.tool', { tool: 'outpaint' }).tier).toBe('exec');
+    expect(toolApprovalFor('workflow.video.tool', { tool: 'video-trim' }).tier).toBe('write');
+    const trim = await dispatch({ id: 'b', command: 'workflow.video.tool', source: 'agent', args: { nodeId: 'vid', tool: 'video-trim', startSec: 1, endSec: 3 } });
+    expect(trim.ok, JSON.stringify(trim.error)).toBe(true);
+    expect(nodeToolRunner).toHaveBeenCalledWith(expect.any(String), 'vid', 'video-trim', { startSec: 1, endSec: 3 });
+  });
+
+  it('points to the right family when a tool is called on the wrong one', async () => {
+    const { dispatch, nodeToolRunner } = setup();
+    const wrong = await dispatch({ id: 'a', command: 'workflow.audio.tool', source: 'agent', args: { nodeId: 'vid', tool: 'video-trim', startSec: 1, endSec: 3 } });
+    expect(wrong.error?.code).toBe('BAD_REQUEST');
+    expect(wrong.error?.message).toContain('flovart_video_tool');
+    expect(nodeToolRunner).not.toHaveBeenCalled();
+  });
+
+  it('keeps a saved node-tool policy for the split tools', () => {
+    expect(isWorkflowNodeToolCommand('workflow.video.tool')).toBe(true);
+    expect(resolveToolApproval({ tool: 'workflow.video.tool', decision: { tier: 'write' }, mode: 'yolo', userPolicy: { 'workflow.node.tool': 'deny' } } as never).action).toBe('deny');
   });
 });

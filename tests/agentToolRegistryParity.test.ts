@@ -29,16 +29,21 @@ describe('one Agent tool definition, four hosts', () => {
     for (const host of AGENT_TOOL_HOSTS) {
       expect(names(host)).toEqual(expect.arrayContaining([
         'flovart_generate', 'flovart_models_list', 'flovart_note_write', 'flovart_workflow_node_stop', 'flovart_media_import',
-        'flovart_script_materialize', 'flovart_workflow_inspect', 'flovart_workflow_apply', 'flovart_workflow_node_run', 'flovart_workflow_node_tool',
+        'flovart_script_materialize', 'flovart_workflow_inspect', 'flovart_workflow_apply', 'flovart_workflow_node_run', 'flovart_image_tool', 'flovart_video_tool', 'flovart_audio_tool',
       ]));
     }
   });
 
-  it('exposes every node.tool parameter the canvas tools accept', () => {
-    const properties = getAgentToolSpecs('mcp').find(spec => spec.command === 'workflow.node.tool')!.inputSchema.properties;
-    for (const name of ['currentTimeSec', 'audio', 'filters', 'maskNodeId', 'direction', 'amount', 'action', 'x', 'y', 'width', 'height', 'style', 'count', 'semitones', 'preset']) {
-      expect(properties, name).toHaveProperty(name);
-    }
+  it('splits the canvas tools by media and every parameter lands on exactly one family that uses it', () => {
+    const props = (command: string) => getAgentToolSpecs('mcp').find(spec => spec.command === command)!.inputSchema.properties;
+    const image = props('workflow.image.tool');
+    const video = props('workflow.video.tool');
+    const audio = props('workflow.audio.tool');
+    for (const name of ['filters', 'maskNodeId', 'direction', 'amount', 'action', 'x', 'y', 'width', 'height', 'style', 'count', 'preset']) expect(image, name).toHaveProperty(name);
+    for (const name of ['currentTimeSec', 'audio', 'sourceNodeIds', 'position']) expect(video, name).toHaveProperty(name);
+    for (const name of ['semitones', 'speed']) expect(audio, name).toHaveProperty(name);
+    expect(audio).not.toHaveProperty('filters');
+    expect(image).not.toHaveProperty('semitones');
   });
 
   it('built-in Agent registers the builtin specs with the same names and schemas (projectId injected)', () => {
@@ -50,7 +55,8 @@ describe('one Agent tool definition, four hosts', () => {
       const properties = Object.keys((tool!.parameters as { properties: Record<string, unknown> }).properties).sort();
       expect(properties).toEqual(Object.keys(spec.inputSchema.properties).filter(name => name !== 'projectId').sort());
     }
-    expect(toolNames.filter(name => name.startsWith('flovart_workflow_node_tool'))).toHaveLength(1);
+    expect(toolNames.filter(name => name.startsWith('flovart_workflow_node_tool'))).toHaveLength(0);
+    expect(toolNames.filter(name => /^flovart_(image|video|audio)_tool$/.test(name))).toHaveLength(3);
   });
 
   it('local Agent registers the local specs with the same names and schemas plus idempotencyKey for writes', () => {

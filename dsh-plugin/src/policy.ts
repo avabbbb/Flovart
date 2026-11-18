@@ -38,6 +38,9 @@ const TASK_COMMAND_TOOLS: Record<string, string> = {
   'workflow.node.run': 'flovart_workflow_node_run',
   'workflow.generate': 'flovart_generate',
   'workflow.node.tool': 'flovart_workflow_node_tool',
+  'workflow.image.tool': 'flovart_image_tool',
+  'workflow.video.tool': 'flovart_video_tool',
+  'workflow.audio.tool': 'flovart_audio_tool',
   'workflow.media.import': 'flovart_media_import',
   'workflow.export': 'flovart_export',
 }

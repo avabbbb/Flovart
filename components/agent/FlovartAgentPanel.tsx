@@ -1867,7 +1867,9 @@ const APPROVAL_MODE_COPY: Record<ApprovalMode, { label: string; hint: string; ic
 const POLICY_TOOLS: ReadonlyArray<{ key: string; zho: string; en: string }> = [
   { key: 'workflow.apply', zho: '修改画布', en: 'Edit canvas' },
   { key: 'workflow.node.run', zho: '运行生成', en: 'Run generation' },
-  { key: 'workflow.node.tool', zho: '节点工具', en: 'Node tools' },
+  { key: 'workflow.image.tool', zho: '图片工具', en: 'Image tools' },
+  { key: 'workflow.video.tool', zho: '视频工具', en: 'Video tools' },
+  { key: 'workflow.audio.tool', zho: '音频工具', en: 'Audio tools' },
   { key: 'flovart_web_search', zho: '联网搜索', en: 'Web search' },
   { key: 'flovart_grep', zho: '本地文件搜索', en: 'Local file search' },
 ];

@@ -1,3 +1,4 @@
+import { isWorkflowNodeToolCommand, workflowNodeToolSpec } from '../workflow/nodeToolCatalog';
 import type { WorkflowNode } from '../workflow/types';
 import type { AgentConfirmRequest } from '../../services/agentSpendMandate';
 import { getWorkflowOperationCapabilityByNodeTool, localizeOperationLabel, parseWorkflowOperationNodeToolArguments } from '../workflow/operationRegistry';
@@ -65,7 +66,8 @@ export function describeAgentConfirmation(
 ): AgentConfirmCopy {
   const en = language === 'en';
   const args = request?.args || {};
-  switch (request?.command) {
+  // 图片 / 视频 / 音频工具命令与 workflow.node.tool 同一张卡。
+  switch (request?.command && isWorkflowNodeToolCommand(request.command) ? 'workflow.node.tool' : request?.command) {
     case 'workflow.node.run': {
       const ids = targetIds(args);
       const gates = request.gates || [];
@@ -86,7 +88,8 @@ export function describeAgentConfirmation(
     case 'workflow.node.tool': {
       const tool = String(args.tool || '');
       const capability = getWorkflowOperationCapabilityByNodeTool(tool);
-      const label = capability ? localizeOperationLabel(capability, language) : (en ? 'Run a canvas tool' : '运行画布工具');
+      const spec = workflowNodeToolSpec(tool);
+      const label = capability ? localizeOperationLabel(capability, language) : spec ? (en ? `Canvas tool: ${tool}` : spec.label) : (en ? 'Run a canvas tool' : '运行画布工具');
       let parameters = '';
       if (capability) {
         try {
@@ -95,7 +98,8 @@ export function describeAgentConfirmation(
           parameters = '';
         }
       }
-      const paid = capability ? capability.executor !== 'local-transform' : false;
+      // 计费以工具说明书为准（outpaint / mask 等未迁入 registry 的工具也会正确标出费用）。
+      const paid = spec ? spec.billing === 'paid' : true;
       const cost = paid ? (en ? 'Uses your AI service and may cost credits' : '会调用 AI 服务，可能产生费用') : '';
       return {
         title: `${label}${en ? ' · ' : ''}${nodeNames(nodes, targetIds(args), language)}`,

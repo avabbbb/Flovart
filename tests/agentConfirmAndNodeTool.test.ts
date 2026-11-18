@@ -3,7 +3,7 @@ import { createWorkflowNode } from '../components/workflow/constants';
 import { createWorkflowProject, useWorkflowStore } from '../components/workflow/store';
 import { confirmGrantKey, confirmScopesFor, describeAgentConfirmation } from '../components/agent/agentConfirmCopy';
 import { agentToolLabel, displayUserTurnText } from '../components/agent/agentTurnText';
-import { ASK_TOOL_NAME, createBrowserAgentTools, NODE_TOOL_TOOL_NAME } from '../services/browserAgentKernel';
+import { ASK_TOOL_NAME, createBrowserAgentTools, NODE_TOOL_TOOL_NAMES } from '../services/browserAgentKernel';
 import { setWorkflowNodeToolRunner } from '../services/workflowDispatcher';
 import { sessionGrantKey } from '../services/agentToolPolicy';
 
@@ -80,11 +80,13 @@ describe('built-in Agent canvas tools', () => {
     });
     setWorkflowNodeToolRunner(runner);
     const tools = createBrowserAgentTools({ projectId: project.id, confirm: vi.fn(async () => true), activeChangeSetId: 'turn-1' });
-    const tool = tools.find(item => item.name === NODE_TOOL_TOOL_NAME)!;
+    const tool = tools.find(item => item.name === NODE_TOOL_TOOL_NAMES.video)!;
     expect(tool).toBeDefined();
-    // 工具清单来自 Operation 注册表：后来接入的工具自动可用。
+    // 工具按媒体拆分：每个工具的说明只列本类工具（来自同一份说明书）。
     expect(tool.description).toContain('video-extract-frame');
-    expect(tool.description).toContain('audio-stem-split');
+    expect(tool.description).not.toContain('audio-stem-split');
+    expect(tools.find(item => item.name === NODE_TOOL_TOOL_NAMES.audio)!.description).toContain('audio-stem-split');
+    expect(tools.some(item => item.name === 'flovart_workflow_node_tool')).toBe(false);
 
     const result = await tool.execute('call-1', { nodeId: 'video-1', tool: 'video-extract-frame', position: 'current', currentTimeSec: 10 } as never, undefined as never);
     expect(runner).toHaveBeenCalledWith(project.id, 'video-1', 'video-extract-frame', { position: 'current', currentTimeSec: 10 });

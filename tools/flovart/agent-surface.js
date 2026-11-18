@@ -26,7 +26,10 @@ export const AGENT_PUBLIC_COMMANDS = Object.freeze([
   'workflow.export',
   'workflow.node.run',
   'workflow.node.stop',
-  'workflow.node.tool',
+  // 画布工具按媒体拆成三个，各自只带本类参数；workflow.node.tool 只作 CLI 兼容入口，不再给模型。
+  'workflow.image.tool',
+  'workflow.video.tool',
+  'workflow.audio.tool',
 ]);
 
 export const AGENT_PUBLIC_COMMAND_SET = new Set(AGENT_PUBLIC_COMMANDS);
@@ -77,6 +80,9 @@ export const AGENT_OPERATION_DEFINITIONS = Object.freeze({
   'workflow.node.run': Object.freeze({ sideEffects: 'generation.maybe', risk: 'cost-and-generation', permissions: Object.freeze(['workflow.run']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow', 'provider-gate']) }),
   // 画布二次处理（裁剪 / 放大 / 去背景 / 剪辑 / 抽帧 / 反推提示词…）：付费工具在浏览器侧仍需人工确认。
   'workflow.node.tool': Object.freeze({ sideEffects: 'generation.maybe', risk: 'cost-and-generation', permissions: Object.freeze(['workflow.run']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow', 'provider-gate']) }),
+  'workflow.image.tool': Object.freeze({ sideEffects: 'generation.maybe', risk: 'cost-and-generation', permissions: Object.freeze(['workflow.run']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow', 'provider-gate']) }),
+  'workflow.video.tool': Object.freeze({ sideEffects: 'generation.maybe', risk: 'cost-and-generation', permissions: Object.freeze(['workflow.run']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow', 'provider-gate']) }),
+  'workflow.audio.tool': Object.freeze({ sideEffects: 'generation.maybe', risk: 'cost-and-generation', permissions: Object.freeze(['workflow.run']), idempotent: true, mutation: true, requiredCapabilities: Object.freeze(['browser-workflow', 'provider-gate']) }),
 });
 
 // 内置 Agent 可见的命令（与 agent-tools.js 的 builtin 宿主一致；status / agent.turn 只给外部 Agent）。

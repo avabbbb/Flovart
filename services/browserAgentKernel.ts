@@ -13,7 +13,7 @@ import localforage from 'localforage';
 import { Type } from 'typebox';
 import { resolveAgentTextRoutes } from './agentTextRoutes';
 import { createBrowserWorkflowContract } from './browserWorkflowContract';
-import { workflowNodeToolSpecs } from '../components/workflow/nodeToolCatalog';
+import { WORKFLOW_NODE_TOOL_FAMILY_COMMANDS, workflowNodeToolSpecs, workflowNodeToolsOfFamily, type WorkflowNodeToolFamily } from '../components/workflow/nodeToolCatalog';
 import { browserAgentTaskLayer, BROWSER_TASKABLE_COMMANDS } from './browserAgentTasks';
 import { withWorkflowHumanApproval, workflowCommandNeedsConfirmation } from './workflowDispatcher';
 import type { ProductionSkillAttachment } from './productionSkillCatalog';
@@ -29,7 +29,6 @@ import type { WorkflowNode } from '../components/workflow/types';
 import { resolveNodeOrAlternate } from '../components/workflow/batchAlternates';
 import { loadAgentNodeMedia, type AgentVideoFrame, type AgentVideoLayout } from './agentMediaView';
 import { buildAgentAskForm, type AgentAskForm, type AgentAskSpec } from '../components/agent/agentAskForm';
-import { WORKFLOW_OPERATION_NODE_TOOLS } from '../components/workflow/operationRegistry';
 import { formatSearchSources, searchAgentWeb, WEB_SEARCH_TOOL_NAME, type AgentSearchCredential, type SearchRecency } from './agentWebSearch';
 import { formatGrepMatches, grepLocalFolders, LOCAL_GREP_TOOL_NAME } from './agentLocalGrep';
 import { resolveToolApproval, toolApprovalFor, type ApprovalContext } from './agentToolPolicy';
@@ -835,10 +834,8 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
       const command = spec.command;
       const schema = agentToolInputSchema(spec, { omit: ['projectId'] }) as { properties: Record<string, Record<string, unknown>> } & Record<string, unknown>;
       let description = spec.description;
-      if (command === 'workflow.node.tool') {
-        schema.properties.tool = { ...schema.properties.tool, enum: [...WORKFLOW_OPERATION_NODE_TOOLS, 'reverse-prompt', 'filter', 'outpaint', 'mask'] };
-        description += '先用 inspect 拿到节点 ID；视频截帧前可先用 media_view 的 times 找准时间点。可用工具：\n' + describeWorkflowNodeTools();
-      }
+      const family = WORKFLOW_NODE_TOOL_FAMILY_COMMANDS[command];
+      if (family) description += '先用 inspect 拿到节点 ID。可用工具：\n' + describeWorkflowNodeTools(family);
       return {
         name: spec.name,
         label: command,
@@ -846,7 +843,7 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
         parameters: Type.Unsafe(schema),
         execute: async (_toolCallId, params, _signal) => {
           const input = { ...(params as Record<string, unknown>) };
-          if (command === 'workflow.node.tool' && input.tool === 'video-merge' && !input.nodeId && Array.isArray(input.sourceNodeIds)) input.nodeId = input.sourceNodeIds[0];
+          if (command === 'workflow.video.tool' && input.tool === 'video-merge' && !input.nodeId && Array.isArray(input.sourceNodeIds)) input.nodeId = input.sourceNodeIds[0];
           return runCommand(command, input);
         },
       };
@@ -982,13 +979,13 @@ function createLocalGrepTool(guard: (command: string, params: Record<string, unk
   };
 }
 
-export const NODE_TOOL_TOOL_NAME = 'flovart_workflow_node_tool';
+export const NODE_TOOL_TOOL_NAMES = Object.freeze({ image: 'flovart_image_tool', video: 'flovart_video_tool', audio: 'flovart_audio_tool' });
 
 /** 画布后处理工具清单，直接来自 Operation 注册表：以后新增的工具不需要再改 Agent。 */
-export function describeWorkflowNodeTools(): string {
-  // 与 workflow.node.tool.list 同一份说明书：适用节点、计费、用法。
+export function describeWorkflowNodeTools(family?: WorkflowNodeToolFamily): string {
+  // 与 workflow.node.tool.list 同一份说明书：适用节点、计费、用法。给 family 时只列这一类。
   const billing = { free: '本地处理，免费', paid: '调用 AI 服务，会先请用户确认', llm: '调用你配置的文本 / 视觉模型' } as const;
-  return workflowNodeToolSpecs()
+  return (family ? workflowNodeToolsOfFamily(family) : workflowNodeToolSpecs())
     .map(spec => `- ${spec.tool}：${spec.label}（${spec.inputTypes.join('/')}，${billing[spec.billing]}）${spec.usage ? '；' + spec.usage : ''}`)
     .join('\n') + '\n参数的完整 schema 用 flovart_node_tool_list 查。';
 }
@@ -1113,7 +1110,7 @@ const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，Flovart 生成式 
 - flovart_export：用户要"导出/下载/打包"时用。单个媒体节点导出原文件，多个节点或分组（groupId）打 ZIP，脚本节点导出分镜 CSV；会保存到用户本机，不改画布。
 - flovart_note_write：写给人看的备注（文本节点）。只在用户明确要求写备注时使用；备注不连线、不参与生成。
 - flovart_workflow_apply：结构化修改画布（移动、连线、分组、改标题、调整参考顺序 reorder_connections 等）。operations 只允许 add_node、create_connected_node、update_node、delete_nodes、delete_connections、connect_nodes、move_nodes、reorder_nodes、reorder_connections、group_nodes、ungroup_nodes、set_batch_primary。不要用它建文本节点。新节点可以不写 id（系统生成，结果的 affectedNodeIds 带回）。一次生成多张时，第 2–N 张是首图节点上的备选（inspect 里的 alternateIds），不是独立节点：media_view 可以直接看备选 id；要把它们拆成画布上的独立节点，用 ungroup_nodes（ids 给首图节点 id 拆全部，给备选 id 只拆这几张）；set_batch_primary 把某张备选设为首图。
-- flovart_workflow_node_tool：在节点上执行后处理工具（截取视频任意秒数的帧、剪辑、音视频分离、拼接、裁剪、放大、去背景等），结果作为新节点写回画布。
+- flovart_image_tool / flovart_video_tool / flovart_audio_tool：在图片 / 视频 / 音频节点上执行后处理工具（裁剪、放大、去背景、扩图；剪辑、截帧、音视频分离、拼接；音频剪辑、变速、变调、分离），结果作为新节点写回画布。参数不确定时先用 flovart_node_tool_list 查。
 - flovart_ask：需要用户在几个方案里做选择或补充关键信息时，用 questions 结构化提问（每题 id + question；single/multi 给 options，选项写成完整方案并用 recommended 标推荐；text 收自由输入；卡片自带「其他」输入框）。开工前把会改变结果的信息一次问齐（见 Skill 的「开工前问齐」清单），不要分多轮追问；不要用它询问 API Key、Token 等秘密，也不要在正文里堆长问题让用户再回一轮。
 - flovart_workflow_media_view：查看图片/视频节点的真实画面（nodeIds）。视频默认返回一张带时间码的帧网格（count 帧数、start/end 窗口、长视频用 page 翻页；times: [秒数] 指定时间点）；需要单帧大图用 layout=frames。inspect 里的 [media] 只是脱敏占位；需要判断构图、风格或检查生成结果时调用它。用户 @引用的图片/视频会自动附带画面。用户粘贴的截图、拖入的视频会作为本轮图片内容直接附上。
 - flovart_web_search：联网搜索（Parallel 公共 MCP，免 Key，失败回退 DeepSeek）。需要外部资料、竞品信息、风格参考或事实核对时调用；结果给出来源 URL，引用时要带上。
@@ -1135,12 +1132,12 @@ command.list/schema 属于 CLI discovery/debug，不是你的工具；不得访�
 - 模型或线路不支持某个生成方式、参考数量超限时会返回 MODE_UNSUPPORTED / REFERENCE_COUNT_OUT_OF_RANGE / REFERENCE_LIMIT 与 candidates（可直接用的模型+模式）：按 min/max/got 补删参考或换 candidates 里的组合，不要逐个盲试、不要假装成功。
 - 当前没有音频生成和独立的文本生成工具；不要承诺。
 
-媒体后处理工具（用 flovart_workflow_node_tool 直接执行，与节点工具条按钮同一实现；用户想自己点时，再说明在哪个节点上点哪个按钮）：
+媒体后处理工具（图片用 flovart_image_tool、视频用 flovart_video_tool、音频用 flovart_audio_tool 直接执行，与节点工具条按钮同一实现；用户想自己点时，再说明在哪个节点上点哪个按钮）：
 - 图片：裁剪、高清放大（长边 512-8192）、去背景、拆分图层、AI 编辑（编辑/扩图/局部重绘/标注/重打光，需提示词）、旋转/镜像、宫格切分（1-6 行列）、图层贴纸、矢量化（SVG）、滤镜、反推 Prompt（图片或视频首帧，结果写回该节点的 prompt）。
 - 视频：视频剪辑（起止秒）、音视频分离（完整音轨/人声/背景音，输出无声视频 + 音频节点）、视频拼接（按顺序 ≥2 段）、截取首帧/尾帧/任意秒数的帧（position=current + currentTimeSec，输出图片节点，可直接作为下一段的 first_frame 做续镜）。只想看画面用 media_view，需要把帧留在画布上用 node_tool。
 - 音频：音频剪辑、变速（0.25-4×）、人声/伴奏分离。
 - 工具栏菜单可开启「新视频自动截首帧 / 尾帧 / 自动音视频分离」。
-其中本地处理（裁剪、旋转、宫格、剪辑、分离、拼接、截帧、变速）不花费额度；放大、去背景、AI 编辑、拆图层、图层贴纸会调用模型服务。
+其中本地处理（裁剪、旋转、宫格、剪辑、分离、拼接、截帧、变速）不花费额度；放大、去背景、AI 编辑、扩图、局部重绘、拆图层、图层贴纸会调用模型服务。
 
 其他工作台（只能引导用户操作）：
 - Iris（顶部第二个 tab，原名「逆向」）：全能后期助手，当前显示「优化中」，还不能使用，不要引导用户去那里操作，也不要承诺它的功能。以前做的逆向视频拆解结果以 subgraph 子画布留在 Workflow 里；你可以读取子画布里的镜头节点继续加工，但不能改逆向工程本身。

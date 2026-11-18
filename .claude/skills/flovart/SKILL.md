@@ -63,7 +63,7 @@ flovart agent.turn --prompt "给镜头 1 写一版提示词" --policy read-only 
   stable `mutationId`: the same id replays the same result instead of running
   twice, and a busy Agent returns `AGENT_BUSY`.
 - Anything that may take longer than a minute (`agent.turn`, a paid
-  `workflow.node.run` / `workflow.group.run` / `workflow.generate`, `workflow.node.tool`,
+  `workflow.node.run` / `workflow.group.run` / `workflow.generate`, `workflow.image.tool` / `workflow.video.tool` / `workflow.audio.tool`,
   `workflow.media.import`, `workflow.export`) can run as a background task:
   `agent.task.start --command <command> --args '<json>' --idempotency-key <key>`
   returns a `taskId` at once; poll `agent.task.get --task-id <id> --after-seq

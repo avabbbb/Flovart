@@ -5,7 +5,7 @@
 // 这里只回答「这次调用要不要先问用户」：工具按参数声明 tier（read | write | exec），
 // 再结合审批模式、用户的按工具策略和会话授权，算出 allow / prompt / deny。
 import type { WorkflowDocumentOperation } from '../components/workflow/types';
-import { isWorkflowNodeTool, workflowNodeToolIsPaid } from '../components/workflow/nodeToolCatalog';
+import { isWorkflowNodeTool, isWorkflowNodeToolCommand, workflowNodeToolIsPaid } from '../components/workflow/nodeToolCatalog';
 
 export type ToolTier = 'read' | 'write' | 'exec';
 export type ToolPolicy = 'allow' | 'deny' | 'prompt';
@@ -88,7 +88,9 @@ export function normalizeApprovalDecision(decision: unknown): ToolApprovalObject
 
 function lookupUserPolicy(map: UserToolPolicyMap | undefined, tool: string, policyKey?: string): ToolPolicy | undefined {
   if (!map) return undefined;
-  return (policyKey ? normalizeToolPolicy(map[policyKey]) : undefined) ?? normalizeToolPolicy(map[tool]);
+  return (policyKey ? normalizeToolPolicy(map[policyKey]) : undefined) ?? normalizeToolPolicy(map[tool])
+    // 拆分前保存的「节点工具」策略继续适用于图片 / 视频 / 音频工具。
+    ?? (tool !== 'workflow.node.tool' && isWorkflowNodeToolCommand(tool) ? normalizeToolPolicy(map['workflow.node.tool']) : undefined);
 }
 
 const TIER_LABEL: Record<ToolTier, string> = { read: '读取', write: '修改画布', exec: '执行高风险操作' };
@@ -202,7 +204,7 @@ const destroy = (): ToolApprovalObject => ({ tier: 'exec', override: true, hardG
 
 /**
  * 命令的审批声明。未知命令按 exec（fail safe）。
- * workflow.apply 含删除操作时升级为 exec + 删除覆盖；workflow.node.tool 调用 AI 服务时为 exec + 费用覆盖。
+ * workflow.apply 含删除操作时升级为 exec + 删除覆盖；workflow.node.tool 及图片 / 视频 / 音频工具调用 AI 服务时为 exec + 费用覆盖。
  */
 export function toolApprovalFor(command: string, args: Record<string, unknown> = {}): ToolApprovalObject {
   if (READ_COMMANDS.has(command)) return { tier: 'read' };
@@ -219,7 +221,7 @@ export function toolApprovalFor(command: string, args: Record<string, unknown> =
     ));
     return deletes ? destroy() : { tier: 'write' };
   }
-  if (command === 'workflow.node.tool') {
+  if (isWorkflowNodeToolCommand(command)) {
     const tool = String(args.tool || '');
     return isWorkflowNodeTool(tool) && workflowNodeToolIsPaid(tool) ? spend() : { tier: 'write' };
   }

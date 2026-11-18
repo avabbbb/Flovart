@@ -23,6 +23,9 @@ export const COMMAND_ALIASES = {
   flovart_workflow_node_move: 'workflow.node.move',
   flovart_workflow_node_resize: 'workflow.node.resize',
   flovart_workflow_node_tool: 'workflow.node.tool',
+  flovart_image_tool: 'workflow.image.tool',
+  flovart_video_tool: 'workflow.video.tool',
+  flovart_audio_tool: 'workflow.audio.tool',
   flovart_workflow_connect: 'workflow.connect',
   flovart_workflow_disconnect: 'workflow.disconnect',
   flovart_workflow_select: 'workflow.select',
@@ -520,7 +523,7 @@ export async function executeFlovartCommand(commandName, args = {}, runtime = {}
       patch: parseJsonOption(commandOptions.patch ?? commandOptions.patchJson ?? commandOptions['patch-json'], undefined),
       operations: parseJsonOption(commandOptions.operations ?? commandOptions.operationsJson ?? commandOptions['operations-json'] ?? commandOptions.ops ?? commandOptions['ops-json'], undefined),
       ids: commandOptions.ids === undefined ? undefined : parseListOption(commandOptions.ids),
-      ...(command === 'workflow.node.tool' ? normalizeWorkflowNodeToolArgs(commandOptions) : {}),
+      ...(command === 'workflow.node.tool' || command === 'workflow.image.tool' || command === 'workflow.video.tool' || command === 'workflow.audio.tool' ? normalizeWorkflowNodeToolArgs(commandOptions) : {}),
       ...(REGISTRY_TYPED_WORKFLOW_COMMANDS.has(command) ? registryTypedArgs(command, commandOptions) : {}),
     }).filter(([, value]) => value !== undefined));
     const source = runtime.source || 'cli';

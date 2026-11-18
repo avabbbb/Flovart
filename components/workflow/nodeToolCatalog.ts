@@ -147,3 +147,51 @@ export function workflowNodeToolIsPaid(tool: string): boolean {
 export function workflowNodeToolsFor(nodeType: string): readonly WorkflowNodeToolSpec[] {
   return workflowNodeToolSpecs().filter(spec => spec.inputTypes.includes(nodeType));
 }
+
+// ---------------------------------------------------------------------------
+// 按媒体拆分的 Agent 工具：workflow.image.tool / workflow.video.tool / workflow.audio.tool。
+// 三个命令都落到同一个 workflow.node.tool 实现；工具归属由说明书的 inputTypes 决定
+// （reverse-prompt 同时属于图片和视频）。
+// ---------------------------------------------------------------------------
+
+export type WorkflowNodeToolFamily = 'image' | 'video' | 'audio';
+
+export const WORKFLOW_NODE_TOOL_FAMILY_COMMANDS: Readonly<Record<string, WorkflowNodeToolFamily>> = Object.freeze({
+  'workflow.image.tool': 'image',
+  'workflow.video.tool': 'video',
+  'workflow.audio.tool': 'audio',
+});
+
+const FAMILY_TOOL_NAMES: Readonly<Record<WorkflowNodeToolFamily, string>> = Object.freeze({
+  image: 'flovart_image_tool',
+  video: 'flovart_video_tool',
+  audio: 'flovart_audio_tool',
+});
+
+/** workflow.node.tool 或任一媒体工具命令。 */
+export function isWorkflowNodeToolCommand(command: string): boolean {
+  return command === 'workflow.node.tool' || Object.hasOwn(WORKFLOW_NODE_TOOL_FAMILY_COMMANDS, command);
+}
+
+/** 某一类媒体可用的工具。 */
+export function workflowNodeToolsOfFamily(family: WorkflowNodeToolFamily): readonly WorkflowNodeToolSpec[] {
+  return workflowNodeToolSpecs().filter(spec => spec.inputTypes.includes(family));
+}
+
+/**
+ * 媒体工具命令 → workflow.node.tool。工具不属于这一类时给出该用哪个工具，不改命令。
+ * 其他命令原样返回。
+ */
+export function resolveWorkflowNodeToolCommand(command: string, tool: unknown):
+  | { ok: true; command: string }
+  | { ok: false; message: string } {
+  const family = WORKFLOW_NODE_TOOL_FAMILY_COMMANDS[command];
+  if (!family) return { ok: true, command };
+  const name = typeof tool === 'string' ? tool.trim() : '';
+  const spec = workflowNodeToolSpec(name);
+  if (spec && spec.inputTypes.includes(family)) return { ok: true, command: 'workflow.node.tool' };
+  const own = workflowNodeToolsOfFamily(family).map(item => item.tool).join('、');
+  if (!spec) return { ok: false, message: `${FAMILY_TOOL_NAMES[family]} 不支持工具：${name || '（空）'}。可用：${own}` };
+  const other = (spec.inputTypes as WorkflowNodeToolFamily[]).map(type => FAMILY_TOOL_NAMES[type]).filter(Boolean).join(' / ');
+  return { ok: false, message: `${name} 不是${family === 'image' ? '图片' : family === 'video' ? '视频' : '音频'}工具，请用 ${other}。${FAMILY_TOOL_NAMES[family]} 可用：${own}` };
+}
