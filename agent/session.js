@@ -70,7 +70,7 @@ export const LONG_RUNNING_COMMANDS = new Set([
 ]);
 
 export class WorkflowAgentSession {
-  constructor({ timeoutMs = 60000, longRunningTimeoutMs = 900_000, taskTimeoutMs = 30 * 60_000, isKnownAgentIdentity, workspaceLease, webUrl = null, budget } = {}) {
+  constructor({ timeoutMs = 60000, longRunningTimeoutMs = 900_000, taskTimeoutMs = 30 * 60_000, isKnownAgentIdentity, workspaceLease, webUrl = null, budget, taskStore } = {}) {
     this.timeoutMs = timeoutMs;
     this.longRunningTimeoutMs = longRunningTimeoutMs;
     this.clients = new Map();
@@ -91,8 +91,26 @@ export class WorkflowAgentSession {
       run: (command, args, source, idempotencyKey, signal, caller, runOptions) => this.callCommand(command, args, source, idempotencyKey, signal, caller, runOptions),
       stop: (command, args, source, caller) => this.callCommand(command, args, source, undefined, undefined, caller),
       taskTimeoutMs,
+      // 任务台账（index.js 传入 Agent 数据目录下的 agent-tasks.json）：重启后 agent.task.get 仍能读到任务。
+      store: taskStore,
+      // 对账 / 恢复轮询：从浏览器推来的画布快照里读任务关联节点的状态与供应商任务 ID。
+      inspect: record => this.inspectTaskNodes(record),
       onEvent: (taskId, event) => this.emit('agent_task', { taskId, ...event }),
     });
+  }
+
+  /** 任务关联节点的当前状态；没有可用的画布快照时返回 null（保持任务原状态，稍后再对账）。 */
+  inspectTaskNodes(record) {
+    const projectId = record?.args?.projectId ? String(record.args.projectId) : null;
+    const candidates = projectId
+      ? [...this.snapshots.values()].filter(snapshot => String(snapshot?.id || '') === projectId)
+      : [this.snapshot, ...this.snapshots.values()].filter(Boolean);
+    const ids = new Set(record?.nodeIds || []);
+    for (const snapshot of candidates) {
+      const nodes = Array.isArray(snapshot?.nodes) ? snapshot.nodes : [];
+      if (nodes.some(node => ids.has(String(node?.id)))) return nodes;
+    }
+    return null;
   }
 
   health() {

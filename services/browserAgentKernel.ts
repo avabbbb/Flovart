@@ -15,6 +15,7 @@ import { resolveAgentTextRoutes } from './agentTextRoutes';
 import { createBrowserWorkflowContract } from './browserWorkflowContract';
 import { WORKFLOW_NODE_TOOL_FAMILY_COMMANDS, workflowNodeToolSpecs, workflowNodeToolsOfFamily, type WorkflowNodeToolFamily } from '../components/workflow/nodeToolCatalog';
 import { browserAgentTaskLayer, BROWSER_TASKABLE_COMMANDS } from './browserAgentTasks';
+import { taskArgsHash } from '../agent/task-layer.js';
 import { withWorkflowHumanApproval, workflowCommandNeedsConfirmation } from './workflowDispatcher';
 import type { ProductionSkillAttachment } from './productionSkillCatalog';
 import { isUserSkillAttachment, skillSystemContext } from './userSkillContext';
@@ -871,7 +872,7 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
       if (command === 'agent.task.start') {
         schema.properties.command = { ...schema.properties.command, enum: [...BROWSER_TASKABLE_COMMANDS] };
         description = '把可能超过 1 分钟的命令放到后台执行（批量 / 整组生成、视频、导出等），用户确认费用后立即返回 taskId，不必等生成结束；之后用 flovart_task_get 查进度（同一轮或下一轮都可以），完成后读 result。可包装：'
-          + BROWSER_TASKABLE_COMMANDS.join('、') + '。确认、付费授权与提交前检查与直接调用相同。任务保存在当前页面，刷新后 get 返回 NOT_FOUND。';
+          + BROWSER_TASKABLE_COMMANDS.join('、') + '。确认、付费授权与提交前检查与直接调用相同。任务写入本地台账，刷新页面后仍可 get / cancel；刷新前已开始、无法确认是否已提交的任务状态为 unknown_submit（可能已扣费），不要自动重跑，先让用户核对画布。';
       }
       return {
         name: spec.name,
@@ -887,9 +888,28 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
             if (!BROWSER_TASKABLE_COMMANDS.includes(target)) throw new Error('不能放到后台的命令：' + (target || '(空)') + '。可用：' + BROWSER_TASKABLE_COMMANDS.join('、'));
             // 先在本回合完成审批，批准后才进后台；后台执行带人工批准，不会再弹卡。
             // 同一回合里对同一命令、同一参数的重试重放同一个任务：不再弹卡，也不会重复提交生成。
-            const idempotencyKey = dependencies.activeChangeSetId + ':' + target + ':' + JSON.stringify(args);
-            const replay = tasks.existing(idempotencyKey);
+            // 键用稳定的参数哈希（与键顺序无关），回合 ID 只用来限定重放范围；跨回合 / 刷新后的重复由台账按参数哈希拦截。
+            const idempotencyKey = (dependencies.activeChangeSetId || 'turn') + ':' + target + ':' + taskArgsHash(target, args);
+            const replay = await tasks.existing(idempotencyKey);
             if (replay) return { content: [{ type: 'text' as const, text: JSON.stringify(replay) }], details: replay };
+            // 同参数任务还在跑（或刷新前已开始、提交状态未知）：不再提交。刷新前的那种要用户明确确认才重新提交。
+            const duplicate = await tasks.inflight({ command: target, args });
+            let resubmit = false;
+            if (duplicate && !duplicate.resubmitRequiresConfirmation) {
+              return { content: [{ type: 'text' as const, text: JSON.stringify(duplicate) }], details: duplicate };
+            }
+            if (duplicate) {
+              const verdict = readConfirmVerdict(await dependencies.confirm('同样参数的任务在刷新页面前已经开始，可能已经提交给模型服务并扣费，当前无法确认结果。仍要重新提交一次吗？', {
+                kind: 'other',
+                command: target,
+                args,
+                tool: target,
+                grantable: false,
+                reason: '可能重复扣费',
+              }));
+              if (!verdict.approved) return { content: [{ type: 'text' as const, text: JSON.stringify(duplicate) }], details: duplicate };
+              resubmit = true;
+            }
             await guard(target, args);
             let approved = false;
             if (workflowCommandNeedsConfirmation(target, args)) {
@@ -912,9 +932,9 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
                 return { content: [{ type: 'text' as const, text: JSON.stringify({ done: true, status: 'succeeded', result: probe.result ?? { ok: true } }) }], details: probe };
               }
             }
-            result = tasks.start({ command: target, args, idempotencyKey, approved });
+            result = await tasks.start({ command: target, args, idempotencyKey, approved, resubmit });
           } else if (command === 'agent.task.get') {
-            result = tasks.get({ taskId: String(input.taskId || ''), afterSeq: typeof input.afterSeq === 'number' ? input.afterSeq : undefined });
+            result = await tasks.get({ taskId: String(input.taskId || ''), afterSeq: typeof input.afterSeq === 'number' ? input.afterSeq : undefined });
           } else {
             result = await tasks.cancel({ taskId: String(input.taskId || ''), ...(typeof input.reason === 'string' ? { reason: input.reason } : {}) });
           }

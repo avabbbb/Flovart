@@ -12,6 +12,7 @@ import { WorkflowAgentSession, WorkflowAgentSessionError } from './session.js';
 import { prepareAgentHostProjection } from './host-projection.js';
 import { importFlovartModule, importFlovartPipelineModule } from './flovart-modules.js';
 import { ReceiptError, ReceiptStore } from './receipts.js';
+import { createFileTaskStore } from './task-store.js';
 import { AgentCredentialStore, CredentialError } from './credentials.js';
 
 const { discoverAgentHosts } = await importFlovartModule('host-discovery');
@@ -187,6 +188,7 @@ export function startHttpServer() {
   // webUrl 惰性解析：WebUI 往往晚于 Agent 启动；FLOVART_WEB_URL 可显式覆盖。
   const session = new WorkflowAgentSession({
     isKnownAgentIdentity: id => Boolean(getAgentIdentity(id)),
+    taskStore: createFileTaskStore(),
     webUrl: () => process.env.FLOVART_WEB_URL || readWebDiscovery()?.url || null,
   });
   const receiptStore = new ReceiptStore();

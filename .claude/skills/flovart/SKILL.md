@@ -71,10 +71,15 @@ flovart agent.turn --prompt "给镜头 1 写一版提示词" --policy read-only 
   `error`. `agent.task.cancel --task-id <id>` stops it and asks the canvas to
   stop nodes it started (for a group run: every member of the group) (already-submitted provider jobs may still be billed).
   Confirmations, budget and pre-checks of the wrapped command still apply.
-  Tasks live in the local Agent process; after a restart `get` returns
-  `NOT_FOUND`. The built-in web Agent has the same three tools
-  (`flovart_task_start/get/cancel`) for the browser commands; its tasks live in
-  the open page and are gone after a reload.
+  Tasks are kept in a local ledger (`~/.flovart/agent-tasks.json` for the local
+  Agent, IndexedDB for the built-in web Agent, which has the same three tools
+  `flovart_task_start/get/cancel` for the browser commands), so `get` and
+  `cancel` still work after a restart or page reload; finished tasks are kept
+  7 days. A task that was in flight during the restart is reconciled against
+  its canvas nodes; if it may already have been submitted (and billed) its
+  status is `unknown_submit`: do not rerun it. Starting the same command with
+  the same args again returns that task (`resubmitRequiresConfirmation`)
+  instead of submitting twice; ask the user, cancel it, then start again.
 - CLI output is pipe-friendly: each `--json` result is one line on stdout
   (NDJSON; add `--pretty` to indent it), progress goes to stderr prefixed
   `[flovart]`. A downstream command reads node ids from stdin with

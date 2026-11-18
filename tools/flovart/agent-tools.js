@@ -84,7 +84,7 @@ const DEFINITIONS = [
     command: 'agent.task.get',
     name: 'flovart_task_get',
     surfaces: ALL,
-    description: '读取后台任务：status（queued/running/succeeded/failed/cancelled）、afterSeq 之后的增量事件；done=true 时带 result 或 error。建议每 5–10 秒轮询一次，并把上次返回的 seq 作为 afterSeq。',
+    description: '读取后台任务：status（queued/running/succeeded/failed/cancelled；unknown_submit=刷新 / 重启前可能已提交并扣费、结果待核对，不要自动重跑）、afterSeq 之后的增量事件；done=true 时带 result 或 error。建议每 5–10 秒轮询一次，并把上次返回的 seq 作为 afterSeq。',
     fields: {
       taskId: { type: 'string', minLength: 1 },
       afterSeq: { type: 'number', description: '只返回序号大于它的事件，默认 0' },
