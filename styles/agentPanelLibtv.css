@@ -87,7 +87,7 @@
 .agent-conversation__viewport,
 .agent-conversation__messages,
 .agent-todo-slot { min-width: 0; }
-.agent-conversation__header { min-width: 0; overflow: hidden; }
+.agent-conversation__header { min-width: 0; overflow-x: clip; overflow-y: visible; }
 .agent-conversation__header > * { flex-shrink: 0; }
 .agent-conversation__header > .agent-header-title { flex: 0 1 auto; min-width: 0; }
 .agent-header-actions { flex: 0 0 auto; }
