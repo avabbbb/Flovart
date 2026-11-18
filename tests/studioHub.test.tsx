@@ -124,19 +124,68 @@ describe('StudioHub window', () => {
     localStorage.removeItem(SKILL_ORDER_KEY);
   });
 
-  it('todo card uses the shared plan layout: step count, status pills and the current step expanded', () => {
+  it('todo card uses the shared plan layout: heading, 待办 count, status words and the current step expanded', () => {
     render(<AgentTodoCard language="zho" items={[
       { id: '1', content: '读取参考图', status: 'done' },
       { id: '2', content: '拆分分镜', status: 'active', note: '每镜 3 秒' },
       { id: '3', content: '批量生成', status: 'pending' },
     ]} />);
     const card = screen.getByRole('region', { name: '执行计划' });
-    expect(card).toHaveTextContent('3 个步骤');
+    expect(card).toHaveTextContent('待办3');
     expect(card).toHaveTextContent('执行中');
+    expect(within(card).getByRole('heading', { name: '正在执行第 2 步，共 3 步' })).toBeTruthy();
+    expect(card).toHaveTextContent('已完成 1 / 3');
     expect(card).toHaveTextContent('每镜 3 秒');
     expect(within(card).getByText('完成')).toBeTruthy();
     expect(within(card).getByText('待执行')).toBeTruthy();
-    expect(card).toHaveTextContent('正在执行第 2 步，共 3 步');
+    // 没有受阻步时不显示确认按钮
+    expect(within(card).queryByRole('button', { name: '确认' })).toBeNull();
+  });
+
+  it('todo card: a blocked step is expanded and offers 拒绝 / 确认 that report the step once', () => {
+    const onDecide = vi.fn();
+    const items = Array.from({ length: 8 }, (_, index) => ({
+      id: String(index + 1),
+      content: index === 7 ? '付费生成链路（node_run）——等你确认，这一步会真实扣费并生成四张高清图' : `第 ${index + 1} 步：只读工具检查（inspect / selection / models / shortcut / list / search）`,
+      status: index === 7 ? 'blocked' as const : 'done' as const,
+      note: index === 7 ? '需用户确认费用' : undefined,
+    }));
+    const { rerender } = render(<AgentTodoCard language="zho" items={items} onDecideBlocked={onDecide} />);
+    const card = screen.getByRole('region', { name: '执行计划' });
+    expect(within(card).getByRole('heading', { name: '第 8 步等你确认' })).toBeTruthy();
+    // 受阻行自动展开，说明可见；长标题单行省略，全文在 title 里
+    expect(card).toHaveTextContent('需用户确认费用');
+    expect(within(card).getByTitle(items[7].content)).toBeTruthy();
+    fireEvent.click(within(card).getByRole('button', { name: '确认' }));
+    expect(onDecide).toHaveBeenCalledWith(true, { index: 8, title: items[7].content });
+    // 同一个受阻步只回复一次
+    expect(within(card).queryByRole('button', { name: '确认' })).toBeNull();
+    expect(card).toHaveTextContent('已回复，等 Agent 继续');
+    // 清单变了（新的受阻步）再放开；拒绝走 false
+    const next = items.map(item => item.id === '8' ? { ...item, content: '付费生成链路：改成两张' } : item);
+    rerender(<AgentTodoCard language="zho" items={next} onDecideBlocked={onDecide} />);
+    fireEvent.click(within(card).getByRole('button', { name: '拒绝' }));
+    expect(onDecide).toHaveBeenLastCalledWith(false, { index: 8, title: '付费生成链路：改成两张' });
+  });
+
+  it('plan card shows 3 rows around the blocked step, then toggles 还有 N 项 / 收起', async () => {
+    const items = Array.from({ length: 8 }, (_, index) => ({
+      id: String(index + 1),
+      content: `步骤 ${index + 1}`,
+      status: index === 7 ? 'blocked' as const : 'done' as const,
+    }));
+    render(<AgentTodoCard language="zho" items={items} onDecideBlocked={vi.fn()} />);
+    const card = screen.getByRole('region', { name: '执行计划' });
+    const rows = () => Array.from(card.querySelectorAll('.flv-plan__step-title')).map(item => item.textContent || '');
+    expect(rows()).toEqual(['步骤 6', '步骤 7', '步骤 8']);
+    const more = within(card).getByRole('button', { name: '还有 5 项' });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(more);
+    expect(rows()).toHaveLength(8);
+    const less = within(card).getByRole('button', { name: '收起' });
+    expect(less).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(less);
+    await waitFor(() => expect(rows()).toHaveLength(3));
   });
 });
 

@@ -31,6 +31,26 @@ export interface StudioRightDrawerProps {
   children: React.ReactNode;
 }
 
+/** 停靠态最多占父容器的比例，与 styles/adaptive.css 的 42% 上限一致。 */
+const DOCKED_MAX_SHARE = 0.42;
+
+/**
+ * 拖拽时可用的最大宽度：停靠 = 父容器 42%；浮动 = 父容器（没有就视口）减两侧外边距。
+ * 旧版只夹在 minWidth / maxWidth 之间，窗口变窄时浮动面板会被拖出视口。
+ */
+export function availableDrawerWidth(aside: HTMLElement | null, docked: boolean, outerGap: number): number {
+  const host = aside?.parentElement?.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 0);
+  if (!host) return Number.POSITIVE_INFINITY;
+  return docked ? host * DOCKED_MAX_SHARE : host - 2 * outerGap;
+}
+
+/** 夹到 [minWidth, min(maxWidth, available)]；可用宽度比 minWidth 还小时取可用宽度（CSS 同样收窄，不溢出）。 */
+export function clampDrawerWidth(raw: number, minWidth: number, maxWidth: number, available: number): number {
+  const ceiling = Math.max(0, Math.min(maxWidth, available));
+  const floor = Math.min(minWidth, ceiling);
+  return Math.round(Math.min(ceiling, Math.max(floor, raw)));
+}
+
 /** 拖过最小宽度多少像素后，松手即收起为图标。 */
 const SNAP_COLLAPSE_PX = 72;
 
@@ -58,7 +78,7 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
     if (!resizing) return;
     const move = (event: PointerEvent) => {
       const raw = startRef.current.width + startRef.current.x - event.clientX;
-      const next = Math.min(maxWidth, Math.max(minWidth, raw));
+      const next = clampDrawerWidth(raw, minWidth, maxWidth, availableDrawerWidth(asideRef.current, docked, flush ? 0 : outerGap));
       // 拖拽期间直接操作 DOM，避免每帧触发 Workflow 巨型画布重渲染；松手时一次性 commit
       const aside = asideRef.current;
       if (aside) {
@@ -79,7 +99,7 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
         return;
       }
       const widthNow = asideRef.current ? parseFloat(asideRef.current.style.width) : Number.NaN;
-      if (Number.isFinite(widthNow)) onWidthChange(Math.min(maxWidth, Math.max(minWidth, widthNow)));
+      if (Number.isFinite(widthNow)) onWidthChange(clampDrawerWidth(widthNow, minWidth, maxWidth, availableDrawerWidth(asideRef.current, docked, flush ? 0 : outerGap)));
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', stop);
@@ -87,7 +107,7 @@ export const StudioRightDrawer: React.FC<StudioRightDrawerProps> = ({
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', stop);
     };
-  }, [maxWidth, minWidth, onOpenChange, onWidthChange, resizing]);
+  }, [docked, flush, maxWidth, minWidth, onOpenChange, onWidthChange, outerGap, resizing]);
 
   const chromeInline = Boolean(inlineChromeTabs?.includes(activeTab));
   const chrome = chromeInline ? { tabs, activeTab, onTabChange, onCollapse: () => onOpenChange(false) } : null;

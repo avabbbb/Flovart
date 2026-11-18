@@ -1,0 +1,127 @@
+/* Agent 卡片外壳（components/agent/AgentCardShell.tsx）：计划 / 提问 / 审批共用。
+   版式：Inspora 1-37「AI Agent Approval Cards」@Kevin（kvnkld）——强调色图标方块 + 标签 + 幽灵按钮的头；
+   灰色次药丸 + 反色主药丸（带 ⏎）的尾。颜色只用 --isl-* 与 DESIGN §11 --state-*；不写 hex。
+   弹性布局（DESIGN §15）：整条链 min-width:0；标签截断；尾部按钮整组可换行到下一行，绝不裁切。 */
+
+.flv-card {
+  --card-accent: var(--state-write);
+  --card-line: color-mix(in srgb, var(--isl-ink) 8%, transparent);
+  --card-inset: color-mix(in srgb, var(--isl-ink) 4%, var(--isl-card));
+  --card-row-hover: color-mix(in srgb, var(--isl-ink) 6%, transparent);
+  position: relative;
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  flex-direction: column;
+  margin: 6px 0;
+  border: 1px solid var(--card-line);
+  border-radius: 16px;
+  padding: 0;
+  overflow: hidden;
+  color: var(--isl-ink);
+  background: var(--isl-card);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--isl-ink) 5%, transparent), 0 12px 30px -18px color-mix(in srgb, var(--isl-ink) 30%, transparent);
+  font-size: 12.5px;
+  line-height: 1.45;
+  outline: none;
+  container: agent-card / inline-size;
+}
+.flv-card:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-accent) 45%, transparent); }
+.flv-card > * { min-width: 0; }
+
+/* —— 头 —— */
+.flv-card__head { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 10px 8px 6px 12px; }
+.flv-card__icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--card-accent);
+  background: color-mix(in srgb, var(--card-accent) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--card-accent) 22%, transparent);
+}
+.flv-card__icon svg { width: 14px; height: 14px; }
+.flv-card__icon[data-accent='ask'] { --card-accent: var(--state-tool); color: var(--state-tool); background: color-mix(in srgb, var(--state-tool) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--state-tool) 22%, transparent); }
+.flv-card__icon[data-accent='approve'] { color: var(--state-think); background: color-mix(in srgb, var(--state-think) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--state-think) 22%, transparent); }
+.flv-card__icon[data-accent='blocked'] { color: var(--state-blocked); background: color-mix(in srgb, var(--state-blocked) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--state-blocked) 22%, transparent); }
+.flv-card__label { min-width: 0; flex: 1 1 auto; overflow: hidden; color: var(--isl-ink); font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.flv-card__aside { display: inline-flex; min-width: 0; flex: 0 1 auto; align-items: center; gap: 6px; overflow: hidden; color: var(--isl-ink-soft); font-size: 11.5px; white-space: nowrap; }
+.flv-card__aside > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.flv-card__ghost {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  color: var(--isl-ink-ghost);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
+}
+.flv-card__ghost:hover { color: var(--isl-ink); background: var(--card-row-hover); }
+.flv-card__ghost:focus-visible { outline: 2px solid color-mix(in srgb, var(--card-accent) 55%, transparent); outline-offset: 0; }
+.flv-card__ghost svg { transition: transform var(--spring-snappy-duration, 330ms) var(--spring-snappy, ease); }
+.flv-card__ghost svg[data-collapsed='true'] { transform: rotate(-90deg); }
+
+/* 粗标题 + 灰色简介 */
+.flv-card__heading { margin: 2px 0 0; padding: 0 12px; color: var(--isl-ink); font-size: 14px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.35; overflow-wrap: anywhere; }
+.flv-card__summary { margin: 3px 0 0; padding: 0 12px; color: var(--isl-ink-soft); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+
+/* —— 尾 —— */
+.flv-card__foot { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 10px; border-top: 1px solid var(--card-line); padding: 8px 8px 8px 12px; }
+.flv-card__foot-start { display: inline-flex; min-width: 0; flex: 1 1 96px; align-items: center; gap: 6px; color: var(--isl-ink-soft); font-size: 11.5px; }
+.flv-card__foot-start > * { min-width: 0; }
+.flv-card__foot-actions { display: flex; min-width: 0; max-width: 100%; flex: 0 1 auto; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; margin-left: auto; }
+
+.flv-card__btn {
+  display: inline-flex;
+  height: 30px;
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 12px;
+  color: var(--isl-ink);
+  background: color-mix(in srgb, var(--isl-ink) 9%, transparent);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard), opacity var(--motion-fast) var(--ease-standard);
+}
+.flv-card__btn-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.flv-card__btn:hover:not(:disabled) { background: color-mix(in srgb, var(--isl-ink) 14%, transparent); }
+.flv-card__btn:active:not(:disabled) { transform: scale(.96); }
+.flv-card__btn:focus-visible { outline: 2px solid color-mix(in srgb, var(--card-accent) 60%, transparent); outline-offset: 2px; }
+.flv-card__btn:disabled { opacity: .4; cursor: not-allowed; }
+.flv-card__btn svg { width: 12px; height: 12px; flex: 0 0 auto; }
+/* 主按钮：反色药丸（深色主题白底深字；浅色主题深底白字）。 */
+.flv-card__btn--primary { color: var(--isl-card); background: var(--isl-ink); box-shadow: 0 6px 14px -8px color-mix(in srgb, var(--isl-ink) 60%, transparent); }
+.flv-card__btn--primary:hover:not(:disabled) { background: color-mix(in srgb, var(--isl-ink) 86%, var(--isl-card)); }
+.flv-card__btn--primary:disabled { opacity: .32; box-shadow: none; }
+.flv-card__enter { display: inline-grid; min-width: 16px; height: 16px; flex: 0 0 auto; place-items: center; border-radius: 4px; padding: 0 2px; color: inherit; background: color-mix(in srgb, currentColor 14%, transparent); font: inherit; font-size: 10px; line-height: 1; opacity: .8; }
+
+/* 窄卡：尾部按钮各占一半，⏎ 提示去掉，保证 280px 起不裁切。 */
+@container agent-card (max-width: 300px) {
+  .flv-card__foot-start { flex-basis: auto; }
+  .flv-card__foot-actions { flex: 1 1 auto; }
+  .flv-card__foot-actions > .flv-card__btn { flex: 1 1 auto; }
+  .flv-card__enter { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flv-card__btn, .flv-card__ghost, .flv-card__ghost svg { transition: none; }
+  .flv-card__btn:active:not(:disabled) { transform: none; }
+}

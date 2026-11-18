@@ -44,11 +44,11 @@ import { useAgentGroupInboxStore, type AgentGroupPayload } from '../../stores/us
 import { useUserSkillsStore } from '../../stores/useUserSkillsStore';
 import { isUserSkillAttachment, skillSystemContext } from '../../services/userSkillContext';
 import { AgentReferenceChip } from './AgentReferenceChip';
-import { AgentTodoCard } from './AgentTodoCard';
+import { AgentTodoCard, type BlockedTodoStep } from './AgentTodoCard';
 import { copyToClipboard, transcriptMarkdown } from './agentTranscript';
 import { resolveSearchCredential } from '../../services/agentWebSearch';
 import { readApprovalMode, readUserToolPolicy, resolveToolApproval, sessionGrantKey, toolApprovalFor, writeApprovalMode, writeUserToolPolicy, type ApprovalContext, type ApprovalMode, type ToolPolicy } from '../../services/agentToolPolicy';
-import { AGENT_TODO_TOOL_NAME, latestTodoFromMessages, todoFromToolResult, type AgentTodoItem } from './agentTodo';
+import { AGENT_TODO_TOOL_NAME, blockedTodoAction, latestTodoFromMessages, todoFromToolResult, type AgentTodoItem } from './agentTodo';
 import { AgentHeaderLeadingContext } from './agentHeaderSlot';
 import { DrawerChromeCollapse, DrawerChromeTabs } from '../studio/drawerChrome';
 import { AgentConfirmCard } from './AgentConfirmCard';
@@ -1032,8 +1032,6 @@ const userApiKeysRef = useRef(userApiKeys);
       attachments: turnAttachments,
       messageReferences: references.map(reference => ({ id: reference.id, kind: reference.type, label: reference.label })),
     };
-    stickToBottom.current = true;
-    setMessages(items => [...items, { id: outgoing.id, role: 'user', text: displayText, ...(outgoing.messageReferences.length ? { references: outgoing.messageReferences } : {}) }]);
     // 单个节点的「已加入上下文」提示随这一轮发出而结束；分组提示保留（还能保存为 Skill）。
     setGroupBanner(current => (current && current.nodeIds.length <= 1 ? null : current));
     setPrompt('');
@@ -1042,6 +1040,13 @@ const userApiKeysRef = useRef(userApiKeys);
     attachmentsRef.current = [];
     setAttachments([]);
     dispatchLayer({ type: 'close', layer: 'mention' });
+    await dispatchOutgoing(outgoing, phase);
+  };
+
+  /** 发出一轮：显示用户消息；本轮进行中时插话或排队，空闲时直接跑。不碰输入框。 */
+  const dispatchOutgoing = async (outgoing: OutgoingTurn, phase: typeof turnRef.current.phase) => {
+    stickToBottom.current = true;
+    setMessages(items => [...items, { id: outgoing.id, role: 'user', text: outgoing.displayText, ...(outgoing.messageReferences.length ? { references: outgoing.messageReferences } : {}) }]);
     if (phase !== 'idle') {
       // 不打断当前这一轮。纯文本直接插话；带媒体（附件、@图片节点）需要异步取画面，排到这一轮之后。
       const hasMedia = outgoing.attachments.length > 0 || outgoing.references.some(reference => reference.type === 'node');
@@ -1051,6 +1056,45 @@ const userApiKeysRef = useRef(userApiKeys);
       return;
     }
     await runTurn(outgoing);
+  };
+
+  /**
+   * 以用户身份发一句固定的话（执行计划卡里的「确认 / 拒绝」）：不读、不清空输入框里正在写的内容，
+   * 不带引用与附件；连接未就绪时同 send 一样提示。
+   */
+  const sendText = async (text: string) => {
+    const body = text.trim();
+    if (!body || status === 'connecting') return;
+    const phase = turnRef.current.phase;
+    if (phase === 'stopping') return;
+    if (!client.current && !kernelRef.current) {
+      const missingTextRoute = !isTauri() && !browserRouteSignature;
+      const blocker: AgentSetupBlocker = needsConfiguration || missingTextRoute ? 'credential' : 'offline';
+      setSetupBlocker(blocker);
+      setMessages(items => [...items, { id: crypto.randomUUID(), role: 'error', text: missingTextRoute ? translations[language].agentPanel.textRouteRequired : localizedAgentSetupMessage(blocker, undefined, language) }]);
+      return;
+    }
+    const requestText = applyAgentTurnPreamble(body, {
+      creationMode,
+      preferredModel: preferredModel ? { capability: preferredModel.capability, name: preferredModel.name } : null,
+    });
+    await dispatchOutgoing({ id: crypto.randomUUID(), requestText, displayText: body, references: [], attachments: [], messageReferences: [] }, phase);
+  };
+
+  /**
+   * 执行计划卡里受阻步的「确认 / 拒绝」。有等待中的工具确认（含生成计划）就直接批准 / 拒绝它；
+   * 没有（模型只把待办标成 blocked 并在正文里问）就替用户回一句话。
+   */
+  const decideBlockedTodo = (approved: boolean, step: BlockedTodoStep) => {
+    const pending = confirmation;
+    const copy = translations[language === 'zho' ? 'zho' : 'en'].planSteps;
+    const action = blockedTodoAction(pending ? { isRunPlan: isRunPlanRequest(pending.request) } : null, approved, {
+      confirm: copy.todoConfirmMessage(step.index, step.title),
+      skip: copy.todoSkipMessage(step.index),
+    });
+    if (pending && action.kind === 'run-plan') decideRunPlan(pending, action.decision, { session: false });
+    else if (pending && action.kind === 'confirm') decideConfirmation(pending, action.approved, 'once');
+    else if (action.kind === 'send') void sendText(action.text);
   };
 
   const runTurn = async (outgoing: OutgoingTurn) => {
@@ -1373,7 +1417,7 @@ const userApiKeysRef = useRef(userApiKeys);
         <AgentTurnTimeline rootRef={messagesRef} turns={conversationTurns} language={uiLanguage} onJump={() => { stickToBottom.current = false; }} />
         <AgentScrollToLatest visible={awayFromBottom && hasMessages} language={uiLanguage} onClick={scrollToLatest} />
         </div>
-        {todoItems.length > 0 && !setupGate && <div className='mx-3'><AgentTodoCard items={todoItems} language={language} /></div>}
+        {todoItems.length > 0 && !setupGate && <div className='agent-todo-slot'><AgentTodoCard items={todoItems} language={uiLanguage} onDecideBlocked={decideBlockedTodo} /></div>}
         {setupBlocker && (
           <div role="alert" data-testid="agent-setup-card" className="agent-card-on-shell mx-3 mb-2 rounded-2xl px-3.5 py-3">
             <p style={{ margin: 0, fontSize: 12, lineHeight: 1.7, color: 'var(--isl-ink-soft)' }}>{localizedAgentSetupMessage(setupBlocker, undefined, language)}</p>

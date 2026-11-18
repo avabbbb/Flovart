@@ -680,8 +680,11 @@ function SkillPlan({ skill, language }: { skill: DeckSkill; language: 'en' | 'zh
       compact
       className="studio-hub__skill-plan"
       aria-label={copy.skillTitle}
-      title={stages ? copy.skillStages : copy.skillTitle}
-      count={copy.count(steps.length)}
+      language={language}
+      label={stages ? copy.skillStages : copy.skillTitle}
+      listTitle={copy.count(steps.length)}
+      count={steps.length}
+      visibleRows={steps.length}
       steps={steps}
     />
   );

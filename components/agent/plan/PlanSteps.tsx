@@ -1,18 +1,19 @@
-import { Check, ChevronDown, Minus, X } from 'lucide-react';
+import { Check, ChevronDown, ListChecks, ListTodo, Minus, MoreHorizontal, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { forwardRef, useId, useState, type HTMLAttributes, type ReactNode } from 'react';
 
+import { translations } from '../../../utils/translations';
+import { AgentCardFoot, AgentCardHead, type AgentCardAccent } from '../AgentCardShell';
 import '../../../styles/planSteps.css';
 
 /**
  * 共用「计划」组件：Skill 详情、生成计划卡（AgentRunPlanCard）、执行计划卡（AgentTodoCard）都是一份计划，用同一套外观。
  *
- * 版式参照（登记见 docs/design/references.md）：
- * - 头 / 行 / 尾的结构：Inspora「Agent Plan」@Jeet —— 标题 + 等宽步数胶囊 + 右侧带点状态；
- *   行 = 图标 + 标题 + 右侧状态胶囊；一次只展开一行（说明 + 工具 / 模型芯片 + 行内操作）；尾 = 状态点 + 文案 / 操作 + 深色药丸主按钮。
- * - 竖向结构：Inspora「RAG Pipeline」@Jeet —— 每步一个方圆图标块，1px 连接线串起来；运行中的块和它下面的线填强调色；
- *   完成的块换成勾，右侧可带等宽耗时；待执行为灰。
- * 颜色只用 DESIGN §11 状态色（--state-*），不搬原作的绿 / 琥珀。
+ * 版式参照 Inspora 1-37「AI Agent Approval Cards」@Kevin 的 Plan Overview（登记见 docs/design/references.md）：
+ * 头 = 强调色图标方块 + 标签 + 幽灵折叠按钮；粗标题 + 灰色简介；内嵌「待办」面板（计数 + 状态圆环 + 单行省略标题）；
+ * 默认只露 3 行（保证受阻 / 进行中那一行可见），其余收进「… 还有 N 项」，展开 / 收起有高度动画；
+ * 尾 = 灰色次药丸 + 反色主药丸（带 ⏎）。原作的「N 秒后自动批准」倒计时不做（可能替用户批准付费生成）。
+ * 颜色只用 DESIGN §11 状态色（--state-*）。
  */
 
 export type PlanStepStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped' | 'blocked';
@@ -22,7 +23,7 @@ export interface PlanStep {
   id: string;
   title: string;
   status: PlanStepStatus;
-  /** 方圆图标块里的图标；运行中 / 完成 / 失败会被状态图标替换（运行中保留原图标，填强调色）。 */
+  /** 标题前的小类型图标（节点类型等）；可省。 */
   icon?: ReactNode;
   /** 展开后显示的说明。 */
   description?: ReactNode;
@@ -40,146 +41,226 @@ export interface PlanStatusLine {
 }
 
 export interface PlanStepsProps extends Omit<HTMLAttributes<HTMLElement>, 'title'> {
-  title: ReactNode;
-  /** 等宽步数胶囊，例如「4 个步骤」。 */
-  count?: ReactNode;
+  /** 头部标签，例如「执行计划」。 */
+  label: ReactNode;
+  icon?: ReactNode;
+  accent?: AgentCardAccent;
+  /** 粗标题。 */
+  heading?: ReactNode;
+  /** 标题下的灰色简介。 */
+  summary?: ReactNode;
+  /** 头部右侧的带点状态。 */
   status?: PlanStatusLine;
-  /** 标题下的一行补充（模型、编组等）。 */
+  /** 简介下的一行补充（模型、编组等）。 */
   meta?: ReactNode;
+  /** 内嵌列表的标题，缺省「待办」。 */
+  listTitle?: ReactNode;
+  /** 列表标题右侧的计数，缺省为步数。 */
+  count?: ReactNode;
   steps: readonly PlanStep[];
-  /** 状态胶囊文案；不传时不画胶囊（例如 Skill 详情只讲做什么）。 */
+  /** 状态读屏文案；不传时只有圆环。 */
   statusLabels?: Partial<Record<PlanStepStatus, string>>;
-  /** 列表的无障碍名称（也作为隐藏标题渲染，读屏可以跳到）。 */
+  /** 列表的无障碍名称。 */
   listLabel?: string;
   /** 受控展开；不传则内部维护，初值为 defaultExpandedId。 */
   expandedId?: string | null;
   defaultExpandedId?: string | null;
   onExpandedChange?: (id: string | null) => void;
+  /** 收起时也必须露出的那一行；缺省取第一条受阻 / 运行中 / 失败。 */
+  focusId?: string | null;
+  /** 收起时露出几行，默认 3。 */
+  visibleRows?: number;
   /** 列表下、尾部上的额外内容（明细、授权勾选、阻塞说明）。 */
   extra?: ReactNode;
   footer?: { status?: PlanStatusLine; actions?: ReactNode } | null;
-  /** 紧凑：嵌在别的容器里（Skill 详情），不画外壳阴影。 */
+  /** 紧凑：嵌在别的容器里（Skill 详情），不画外壳阴影、没有折叠按钮。 */
   compact?: boolean;
+  language?: 'en' | 'zho';
 }
 
-function StepTile({ step, index }: { step: PlanStep; index: number }) {
-  let glyph: ReactNode = step.icon ?? <span className="flv-plan__tile-num flv-machine">{index + 1}</span>;
-  if (step.status === 'done') glyph = <Check size={15} strokeWidth={2.6} />;
-  else if (step.status === 'failed') glyph = <X size={15} strokeWidth={2.6} />;
-  else if (step.status === 'skipped') glyph = <Minus size={15} strokeWidth={2.4} />;
-  else if (step.status === 'blocked') glyph = <span className="flv-plan__tile-bang">!</span>;
+function StatusRing({ status }: { status: PlanStepStatus }) {
+  let glyph: ReactNode = null;
+  if (status === 'done') glyph = <Check strokeWidth={3} />;
+  else if (status === 'failed') glyph = <X strokeWidth={3} />;
+  else if (status === 'skipped') glyph = <Minus strokeWidth={3} />;
+  else if (status === 'blocked') glyph = <span className="flv-plan__ring-bang">!</span>;
   return (
-    <span className="flv-plan__tile" data-status={step.status} aria-hidden="true">
+    <span className="flv-plan__ring" data-status={status} aria-hidden="true">
       {glyph}
-      {step.status === 'running' && <span className="flv-plan__tile-spin" />}
+      {status === 'running' && <span className="flv-plan__ring-spin" />}
     </span>
   );
 }
 
+/** 收起时露出的窗口：focus 前留一行、后留一行，贴边时整体平移。 */
+export function planWindow(total: number, focusIndex: number, rows: number): { start: number; end: number } {
+  if (total <= rows + 1) return { start: 0, end: total };
+  const start = focusIndex < 0 ? 0 : Math.min(Math.max(0, focusIndex - Math.max(0, rows - 2)), total - rows);
+  return { start, end: start + rows };
+}
+
 export const PlanSteps = forwardRef<HTMLElement, PlanStepsProps>(function PlanSteps({
-  title, count, status, meta, steps, statusLabels, listLabel, expandedId, defaultExpandedId = null, onExpandedChange,
-  extra, footer, compact, className, ...rest
+  label, icon, accent = 'plan', heading, summary, status, meta, listTitle, count, steps, statusLabels, listLabel,
+  expandedId, defaultExpandedId = null, onExpandedChange, focusId, visibleRows = 3,
+  extra, footer, compact, language = 'zho', className, ...rest
 }, ref) {
+  const copy = translations[language].planSteps;
   const reduce = useReducedMotion();
   const [innerExpanded, setInnerExpanded] = useState<string | null>(defaultExpandedId);
+  const [showAll, setShowAll] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const open = expandedId !== undefined ? expandedId : innerExpanded;
   const baseId = useId();
   const listHeadingId = `${baseId}-list`;
+  const bodyId = `${baseId}-body`;
   const toggle = (id: string) => {
     const next = open === id ? null : id;
     if (expandedId === undefined) setInnerExpanded(next);
     onExpandedChange?.(next);
   };
+  const height = reduce ? { duration: 0.1 } : { type: 'spring' as const, visualDuration: 0.3, bounce: 0 };
+
+  const autoFocus = steps.findIndex(step => step.status === 'blocked');
+  const focusIndex = focusId !== undefined && focusId !== null
+    ? steps.findIndex(step => step.id === focusId)
+    : autoFocus >= 0 ? autoFocus : steps.findIndex(step => step.status === 'running' || step.status === 'failed');
+  const win = planWindow(steps.length, focusIndex, visibleRows);
+  const hidden = steps.length - (win.end - win.start);
+  const canFold = hidden > 0;
+
+  const body = (
+    <>
+      {heading && <h3 className="flv-card__heading flv-plan__heading">{heading}</h3>}
+      {summary && <p className="flv-card__summary">{summary}</p>}
+      {meta && <div className="flv-plan__meta">{meta}</div>}
+      {steps.length > 0 && (
+        <div className="flv-plan__panel">
+          <div className="flv-plan__panel-head">
+            <ListTodo size={13} aria-hidden="true" />
+            <span id={listHeadingId} className="flv-plan__panel-title">{listTitle ?? copy.todoList}</span>
+            <span className="flv-plan__panel-count flv-machine">{count ?? steps.length}</span>
+          </div>
+          <ol className="flv-plan__list" aria-label={listLabel} aria-labelledby={listLabel ? undefined : listHeadingId}>
+            <AnimatePresence initial={false}>
+              {steps.map((step, index) => {
+                const inWindow = index >= win.start && index < win.end;
+                if (!showAll && !inWindow) return null;
+                const expandable = Boolean(step.description || step.chip || step.actions);
+                const isOpen = expandable && open === step.id;
+                const detailId = `${baseId}-d${index}`;
+                const statusText = statusLabels?.[step.status];
+                const head = (
+                  <>
+                    <StatusRing status={step.status} />
+                    {step.icon && <span className="flv-plan__type" aria-hidden="true">{step.icon}</span>}
+                    <span className="flv-plan__step-title" title={step.title}>{step.title}</span>
+                    {statusText && <span className="flv-plan__sr">{statusText}</span>}
+                    {step.status === 'done' && step.timing && <span className="flv-plan__timing flv-machine">{step.timing}</span>}
+                    {expandable && <ChevronDown size={14} className="flv-plan__chev" aria-hidden="true" />}
+                  </>
+                );
+                return (
+                  <motion.li
+                    key={step.id}
+                    className="flv-plan__step"
+                    data-status={step.status}
+                    data-open={isOpen ? 'true' : undefined}
+                    initial={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
+                    transition={height}
+                  >
+                    {expandable ? (
+                      <button type="button" className="flv-plan__row" aria-expanded={isOpen} aria-controls={isOpen ? detailId : undefined} onClick={() => toggle(step.id)}>{head}</button>
+                    ) : (
+                      <div className="flv-plan__row">{head}</div>
+                    )}
+                    <AnimatePresence initial={false}>
+                      {isOpen && (
+                        <motion.div
+                          key="detail"
+                          id={detailId}
+                          className="flv-plan__detail"
+                          initial={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
+                          transition={height}
+                        >
+                          <div className="flv-plan__detail-inner">
+                            {step.title.length > 16 && <p className="flv-plan__full-title">{step.title}</p>}
+                            {step.description && <div className="flv-plan__desc">{step.description}</div>}
+                            {(step.chip || step.actions) && (
+                              <div className="flv-plan__detail-foot">
+                                {step.chip && <span className="flv-plan__chip flv-machine">{step.chip}</span>}
+                                {step.actions && <span className="flv-plan__row-actions">{step.actions}</span>}
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.li>
+                );
+              })}
+            </AnimatePresence>
+          </ol>
+          {canFold && (
+            <button type="button" className="flv-plan__more" aria-expanded={showAll} onClick={() => setShowAll(value => !value)}>
+              <span className="flv-plan__more-icon" aria-hidden="true">{showAll ? <Minus size={13} /> : <MoreHorizontal size={13} />}</span>
+              <span>{showAll ? copy.showLess : copy.showMore(hidden)}</span>
+            </button>
+          )}
+        </div>
+      )}
+      {extra}
+    </>
+  );
 
   return (
-    <section ref={ref} className={`flv-plan${compact ? ' flv-plan--compact' : ''}${className ? ` ${className}` : ''}`} data-tone={status?.tone ?? 'idle'} {...rest}>
-      <header className="flv-plan__head">
-        <strong className="flv-plan__title">{title}</strong>
-        {count !== undefined && <span className="flv-plan__count flv-machine">{count}</span>}
-        {status && (
+    <section
+      ref={ref}
+      className={`flv-card flv-plan${compact ? ' flv-plan--compact' : ''}${className ? ` ${className}` : ''}`}
+      data-tone={status?.tone ?? 'idle'}
+      data-collapsed={collapsed ? 'true' : undefined}
+      {...rest}
+    >
+      <AgentCardHead
+        icon={icon ?? <ListChecks />}
+        label={label}
+        accent={accent}
+        aside={status ? (
           <span className="flv-plan__status" data-tone={status.tone} role="status">
             <span className="flv-plan__dot" aria-hidden="true" />
             <span className="flv-plan__status-text">{status.text}</span>
           </span>
+        ) : undefined}
+        collapsed={collapsed}
+        onToggleCollapsed={compact ? undefined : () => setCollapsed(value => !value)}
+        collapseLabel={copy.collapseCard}
+        expandLabel={copy.expandCard}
+      />
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <motion.div
+            key="body"
+            id={bodyId}
+            className="flv-plan__body"
+            initial={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
+            transition={height}
+          >{body}</motion.div>
         )}
-      </header>
-      {meta && <div className="flv-plan__meta">{meta}</div>}
-      <div className="flv-plan__panel">
-        {listLabel && <h4 id={listHeadingId} className="flv-plan__sr">{listLabel}</h4>}
-        <ol className="flv-plan__list" aria-labelledby={listLabel ? listHeadingId : undefined}>
-          {steps.map((step, index) => {
-            const expandable = Boolean(step.description || step.chip || step.actions);
-            const isOpen = expandable && open === step.id;
-            const detailId = `${baseId}-d${index}`;
-            const label = statusLabels?.[step.status];
-            const filledLine = step.status === 'running';
-            const head = (
-              <>
-                <StepTile step={step} index={index} />
-                <span className="flv-plan__step-title">{step.title}</span>
-                {step.status === 'done' && step.timing && <span className="flv-plan__timing flv-machine">{step.timing}</span>}
-                {label && (
-                  <AnimatePresence mode="popLayout" initial={false}>
-                    <motion.span
-                      key={step.status}
-                      className="flv-plan__pill"
-                      data-status={step.status}
-                      initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.85 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={reduce ? { duration: 0.1 } : { type: 'spring', visualDuration: 0.2, bounce: 0.2 }}
-                    >{label}</motion.span>
-                  </AnimatePresence>
-                )}
-                {expandable && <ChevronDown size={14} className="flv-plan__chev" aria-hidden="true" />}
-              </>
-            );
-            return (
-              <li key={step.id} className="flv-plan__step" data-status={step.status} data-open={isOpen ? 'true' : undefined} data-line={filledLine ? 'filled' : undefined}>
-                {expandable ? (
-                  <button type="button" className="flv-plan__row" aria-expanded={isOpen} aria-controls={isOpen ? detailId : undefined} onClick={() => toggle(step.id)}>{head}</button>
-                ) : (
-                  <div className="flv-plan__row">{head}</div>
-                )}
-                <AnimatePresence initial={false}>
-                  {isOpen && (
-                    <motion.div
-                      key="detail"
-                      id={detailId}
-                      className="flv-plan__detail"
-                      initial={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
-                      transition={reduce ? { duration: 0.1 } : { type: 'spring', visualDuration: 0.26, bounce: 0 }}
-                    >
-                      <div className="flv-plan__detail-inner">
-                        {step.description && <div className="flv-plan__desc">{step.description}</div>}
-                        {(step.chip || step.actions) && (
-                          <div className="flv-plan__detail-foot">
-                            {step.chip && <span className="flv-plan__chip flv-machine">{step.chip}</span>}
-                            {step.actions && <span className="flv-plan__row-actions">{step.actions}</span>}
-                          </div>
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </li>
-            );
-          })}
-        </ol>
-      </div>
-      {extra}
+      </AnimatePresence>
       {footer && (footer.status || footer.actions) && (
-        <footer className="flv-plan__foot">
-          {footer.status && (
+        <AgentCardFoot
+          start={footer.status ? (
             <span className="flv-plan__foot-status" data-tone={footer.status.tone}>
               <span className="flv-plan__dot" aria-hidden="true" />
-              <span>{footer.status.text}</span>
+              <span className="flv-plan__foot-text">{footer.status.text}</span>
             </span>
-          )}
-          {footer.actions && <div className="flv-plan__foot-actions">{footer.actions}</div>}
-        </footer>
+          ) : undefined}
+        >{footer.actions}</AgentCardFoot>
       )}
     </section>
   );

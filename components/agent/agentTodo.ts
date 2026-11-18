@@ -49,3 +49,23 @@ export function latestTodoFromMessages(messages: ReadonlyArray<{ role: string; t
 export function todoProgress(items: readonly AgentTodoItem[]) {
   return { done: items.filter(item => item.status === 'done').length, total: items.length };
 }
+
+/**
+ * 执行计划卡里受阻步的「确认 / 拒绝」落到哪条路径：
+ * - 有等待中的生成计划确认 → 「创建并自动生成」/「调整后再创建」；
+ * - 有等待中的其它工具确认 → 本次允许 / 拒绝；
+ * - 都没有（模型只把待办标成 blocked、在正文里问）→ 替用户回一句话。
+ */
+export type BlockedTodoAction =
+  | { kind: 'run-plan'; decision: 'auto' | 'adjust' }
+  | { kind: 'confirm'; approved: boolean }
+  | { kind: 'send'; text: string };
+
+export function blockedTodoAction(
+  pending: { isRunPlan: boolean } | null | undefined,
+  approved: boolean,
+  messages: { confirm: string; skip: string },
+): BlockedTodoAction {
+  if (pending) return pending.isRunPlan ? { kind: 'run-plan', decision: approved ? 'auto' : 'adjust' } : { kind: 'confirm', approved };
+  return { kind: 'send', text: approved ? messages.confirm : messages.skip };
+}

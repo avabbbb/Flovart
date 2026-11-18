@@ -100,6 +100,19 @@ describe('run plan card', () => {
     expect(onDecide).toHaveBeenLastCalledWith('adjust', { session: false });
   });
 
+  it('marks the primary with ⏎ but never approves from an Enter that is not on the primary', () => {
+    const onDecide = vi.fn();
+    render(<AgentRunPlanCard request={request} nodes={nodes} language="zho" onDecide={onDecide} />);
+    const card = screen.getByRole('alertdialog', { name: '生成计划' });
+    const primary = screen.getByRole('button', { name: '创建并自动生成' });
+    expect(primary.querySelector('kbd')?.textContent).toBe('⏎');
+    // 卡片拿焦点，不是主按钮：回车不批准（付费生成没有自动批准倒计时）
+    expect(document.activeElement).toBe(card);
+    fireEvent.keyDown(card, { key: 'Enter' });
+    expect(onDecide).not.toHaveBeenCalled();
+    expect(card).not.toHaveTextContent(/自动批准|Auto approve/);
+  });
+
   it('turns on the spend mandate only when the user ticks it, and blocks auto-run for a blocked plan', () => {
     const onDecide = vi.fn();
     const { rerender } = render(<AgentRunPlanCard request={request} nodes={nodes} language="en" offerMandate onDecide={onDecide} />);

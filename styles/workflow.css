@@ -346,28 +346,16 @@
 .workflow-agent__logs { flex: 1; margin: 0; padding: 12px; overflow: auto; color: var(--wf-muted); font: 10px/1.5 ui-monospace,monospace; white-space: pre-wrap; }
 .workflow-agent__draft { min-height: 0; flex: 1; overflow: auto; padding: 10px; } .workflow-agent__draft-empty { margin: 0; padding: 10px; color: var(--wf-muted); font-size: 11px; line-height: 1.6; } .workflow-agent__draft-list { margin: 0; padding: 0; list-style: none; } .workflow-agent__draft-item { margin-bottom: 7px; border: 1px solid var(--wf-border); border-radius: 8px; padding: 8px; background: var(--wf-strong); } .workflow-agent__draft-item.is-error { border-color: color-mix(in srgb,#dc4f4f 45%,var(--wf-border)); } .workflow-agent__draft-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; } .workflow-agent__draft-command { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; color: var(--wf-muted); } .workflow-agent__draft-time { flex: 0 0 auto; color: var(--wf-muted); font-size: 9px; } .workflow-agent__draft-summary { margin-top: 4px; color: inherit; font-size: 11px; line-height: 1.45; } .workflow-agent__draft-message { margin-top: 3px; color: #dc4f4f; font-size: 10px; } .workflow-agent__draft-locate { margin-top: 6px; border: 0; border-radius: 5px; padding: 4px 8px; color: var(--wf-accent); background: color-mix(in srgb,var(--wf-accent) 12%,var(--wf-strong)); cursor: pointer; font-size: 10px; }
 /* Agent 请求确认：对话流里的一张安静卡片。变量带兜底，挂到任何容器里都不会透明。 */
-.agent-confirm { --c-bg: var(--wf-strong, var(--panel-strong, #1f1f22)); --c-field: var(--wf-panel, var(--panel-bg, #18181b)); --c-border: var(--wf-border, var(--border-color, rgba(255,255,255,.12))); --c-text: var(--wf-text, var(--text-primary, #f4f4f5)); --c-muted: var(--wf-muted, var(--text-muted, #a1a1aa)); flex: none; display: grid; gap: 6px; margin: 0 0 8px; max-height: 60%; overflow: auto; padding: 12px 12px 10px; border: 1px solid var(--c-border); border-radius: 10px; background: var(--c-bg); color: var(--c-text); font-size: 12px; line-height: 1.5; outline: none; }
-.agent-confirm:focus-visible { border-color: color-mix(in srgb, var(--c-text) 35%, var(--c-border)); }
-.agent-confirm__eyebrow { display: flex; align-items: center; gap: 5px; color: var(--c-muted); font-size: 11px; }
-.agent-confirm__queue { margin-left: auto; border-radius: var(--isl-r-sm); padding: 1px 6px; color: var(--c-text); background: color-mix(in srgb, var(--c-text) 8%, transparent); font-variant-numeric: tabular-nums; }
-.agent-confirm__title { margin: 0; color: var(--c-text); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
-.agent-confirm__detail, .agent-confirm__blocked { margin: 0; color: var(--c-muted); font-size: 11px; overflow-wrap: anywhere; }
-.agent-confirm__blocked { color: color-mix(in srgb, #e5484d 75%, var(--c-text)); }
-.agent-confirm__more summary { width: max-content; color: var(--c-muted); font-size: 11px; cursor: pointer; }
-.agent-confirm__more summary:hover { color: var(--c-text); }
+/* 审批卡（AgentConfirmCard）：外壳见 styles/agentCardShell.css；这里只留卡里特有的明细 / 上限。 */
+.flv-card.agent-confirm { --card-accent: var(--state-think); flex: none; max-height: 60%; margin: 0 0 8px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.agent-confirm__queue { color: var(--isl-ink-soft); font-size: 11px; }
+.agent-confirm__blocked { margin: 6px 12px 0; color: var(--state-blocked); font-size: 11.5px; overflow-wrap: anywhere; }
+.agent-confirm__more { min-width: 0; margin: 8px 8px 0; border: 1px solid var(--card-line); border-radius: 10px; padding: 6px 8px; background: var(--card-inset); }
+.agent-confirm__more summary { width: max-content; max-width: 100%; color: var(--isl-ink-soft); font-size: 11.5px; cursor: pointer; }
+.agent-confirm__more summary:hover { color: var(--isl-ink); }
 .agent-confirm__more .flovart-plan { max-height: 220px; margin-top: 6px; font-size: 11px; }
-.agent-confirm__cap { display: block; color: var(--c-muted); font-size: 11px; line-height: 2; }
-.agent-confirm__cap input { width: 48px; height: 22px; margin: 0 4px; padding: 0 6px; border: 1px solid var(--c-border); border-radius: 6px; background: var(--c-field); color: var(--c-text); font: inherit; }
-.agent-confirm__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 4px; }
-.agent-confirm__actions > span { flex: 1 1 auto; }
-.agent-confirm__actions select { flex: 1 1 auto; min-width: 0; max-width: 62%; height: 28px; padding: 0 6px; border: 1px solid var(--c-border); border-radius: 7px; background: var(--c-field); color: var(--c-text); font: inherit; font-size: 12px; text-overflow: ellipsis; }
-.agent-confirm__actions button { flex: none; height: 28px; padding: 0 12px; border: 1px solid var(--c-border); border-radius: 7px; background: transparent; color: var(--c-text); font: inherit; font-size: 12px; font-weight: 500; white-space: nowrap; cursor: pointer; }
-.agent-confirm__actions button:hover { background: color-mix(in srgb, var(--c-text) 8%, transparent); }
-.agent-confirm__actions .agent-confirm__allow { border-color: transparent; background: var(--c-text); color: var(--c-bg); }
-.agent-confirm__actions .agent-confirm__allow:hover { background: color-mix(in srgb, var(--c-text) 88%, var(--c-bg)); }
-.agent-confirm__actions .agent-confirm__allow:disabled { opacity: .4; cursor: not-allowed; }
-.agent-confirm__actions .agent-confirm__allow--session { height: auto; min-height: 28px; padding: 4px 10px; border-color: var(--c-border); background: transparent; color: var(--c-text); white-space: normal; text-align: center; }
-.agent-confirm__actions .agent-confirm__allow--session:hover { background: color-mix(in srgb, var(--c-text) 8%, transparent); }
+.agent-confirm__cap { display: block; margin: 8px 12px 0; color: var(--isl-ink-soft); font-size: 11.5px; line-height: 2; overflow-wrap: anywhere; }
+.agent-confirm__cap input { width: 48px; height: 22px; margin: 0 4px; padding: 0 6px; border: 1px solid var(--card-line); border-radius: 6px; background: var(--card-inset); color: var(--isl-ink); font: inherit; }
 .workflow-agent__mode { display: inline-flex; border: 1px solid var(--wf-border); border-radius: 6px; padding: 2px; } .workflow-agent__mode button { border-radius: 4px; padding: 3px 6px; font-size: 10px; } .workflow-agent__mode button.is-active { color: var(--wf-text); background: color-mix(in srgb,var(--wf-accent) 16%,transparent); }
 .workflow-agent__message-attachments { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 5px; margin-top: 5px; } .workflow-agent__message-attachments img { width: 100%; aspect-ratio: 1; border-radius: 6px; object-fit: cover; }
 .workflow-agent__attachments { display: flex; gap: 6px; padding: 7px 9px 0; overflow-x: auto; } .workflow-agent__attachments > div { position: relative; flex: 0 0 48px; height: 48px; } .workflow-agent__attachments img { width: 100%; height: 100%; border-radius: 6px; object-fit: cover; } .workflow-agent__attachments button { position: absolute; top: 2px; right: 2px; display: grid; place-content: center; width: 18px; height: 18px; border: 0; border-radius: 50%; color: white; background: rgba(0,0,0,.58); cursor: pointer; }

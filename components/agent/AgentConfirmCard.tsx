@@ -2,7 +2,9 @@ import { ShieldCheck } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import type { WorkflowNode } from '../workflow/types';
 import type { AgentConfirmRequest } from '../../services/agentSpendMandate';
+import { translations } from '../../utils/translations';
 import { GenerationPlanCard } from '../GenerationPlanCard';
+import { AgentCardButton, AgentCardFoot, AgentCardHead } from './AgentCardShell';
 import { confirmScopesFor, describeAgentConfirmation, type AgentConfirmScope } from './agentConfirmCopy';
 
 interface AgentConfirmCardProps {
@@ -22,32 +24,31 @@ interface AgentConfirmCardProps {
 }
 
 /**
- * Agent 请求确认：一句话说清要做什么，一个主按钮。
- * 计划明细、费用拆分与授权上限都收进「详情」，窄侧栏里也不会挤成一团。
+ * Agent 请求确认（工具审批）。外壳同计划 / 提问卡（Inspora 1-37「AI Agent Approval Cards」@Kevin，登记见 docs/design/references.md）：
+ * 一句话说清要做什么，计划明细、费用拆分与授权上限收进「详情」。
+ * 卡片出现时拿焦点：Esc 即拒绝；不自动聚焦「本次允许」——回车只在主按钮自身有焦点时批准，输入框里误按的回车不会批准。
+ * 不做原作的「N 秒后自动批准」倒计时。
  */
 export function AgentConfirmCard({
   summary, request, offerMandate, blocked, nodes, language, planMandateNote, mandateTasks, onMandateTasksChange, onDecide, queued = 0,
 }: AgentConfirmCardProps) {
-  const L = (zho: string, en: string) => (language === 'en' ? en : zho);
+  const t = translations[language].agentConfirm;
   const copy = describeAgentConfirmation(request, nodes, language, summary);
   const scopes = confirmScopesFor(request, { offerMandate });
   const root = useRef<HTMLElement>(null);
   const gates = request?.gates || [];
   const canGrantSession = scopes.includes('session');
   // 付费授权（Spend Mandate）是有上限的会话授权；普通工具是「本会话总是允许此工具」（同一工具、同一 tier）。
-  const sessionLabel = offerMandate
-    ? L('本会话自动运行（上限内）', 'Auto-run in this chat (within limit)')
-    : L('本会话总是允许此工具', 'Always allow this tool in this chat');
+  const sessionLabel = offerMandate ? t.sessionMandate : t.sessionTool;
 
-  // 卡片出现时拿到焦点：Esc 即拒绝；不自动聚焦「允许」，避免误按回车批准。
   useEffect(() => { root.current?.focus({ preventScroll: true }); }, []);
 
   return (
     <section
       ref={root}
-      className="agent-confirm"
+      className="flv-card agent-confirm agent-card-on-shell"
       role="alertdialog"
-      aria-label={L('Agent 请求确认', 'Agent needs approval')}
+      aria-label={t.aria}
       tabIndex={-1}
       data-testid="agent-confirm"
       onKeyDown={event => {
@@ -56,35 +57,40 @@ export function AgentConfirmCard({
         onDecide(false, 'once');
       }}
     >
-      <div className="agent-confirm__eyebrow"><ShieldCheck size={13} aria-hidden="true" />{L('需要你确认', 'Needs your approval')}{queued > 0 && <span className="agent-confirm__queue">{L(`还有 ${queued} 项`, `${queued} more`)}</span>}</div>
-      <p className="agent-confirm__title">{copy.title}</p>
-      {copy.detail && <p className="agent-confirm__detail">{copy.detail}</p>}
-      {blocked && <p className="agent-confirm__blocked">{L('计划里有无法运行的项，展开详情查看原因。', 'Something in this plan cannot run. See details.')}</p>}
+      <AgentCardHead
+        icon={<ShieldCheck />}
+        accent={blocked ? 'blocked' : 'approve'}
+        label={t.label}
+        aside={queued > 0 ? <span className="agent-confirm__queue flv-machine">{t.queued(queued)}</span> : undefined}
+      />
+      <p className="flv-card__heading agent-confirm__title">{copy.title}</p>
+      {copy.detail && <p className="flv-card__summary agent-confirm__detail">{copy.detail}</p>}
+      {request?.reason && !copy.detail && <p className="flv-card__summary agent-confirm__detail">{request.reason}</p>}
+      {blocked && <p className="agent-confirm__blocked">{t.blocked}</p>}
       {gates.length > 0 && (
         <details className="agent-confirm__more" open={blocked || undefined}>
-          <summary>{L('详情', 'Details')}</summary>
+          <summary>{t.details}</summary>
           <GenerationPlanCard plan={{ items: [...gates], mandate: planMandateNote }} />
         </details>
       )}
-      {request?.reason && !copy.detail && <p className="agent-confirm__detail">{request.reason}</p>}
       {canGrantSession && offerMandate && (
         <label className="agent-confirm__cap">
-          {L('本次对话最多自动运行', 'Auto-run up to')}
+          {t.capBefore}
           <input
             type="number"
             min={1}
             value={mandateTasks}
             onChange={event => onMandateTasksChange(Math.max(1, Math.floor(Number(event.target.value) || 1)))}
-            aria-label={L('自动运行任务上限', 'Auto-run task limit')}
+            aria-label={t.capAria}
           />
-          {L('个任务，超出会再问；删除始终单独确认。', 'tasks in this chat. Deletes always ask.')}
+          {t.capAfter}
         </label>
       )}
-      <div className="agent-confirm__actions">
-        <button type="button" className="agent-confirm__deny" onClick={() => onDecide(false, 'once')}>{L('拒绝', 'Deny')}</button>
-        {canGrantSession && <button type="button" className="agent-confirm__allow agent-confirm__allow--session" disabled={blocked} onClick={() => onDecide(true, 'session' satisfies AgentConfirmScope)}>{sessionLabel}</button>}
-        <button type="button" className="agent-confirm__allow" disabled={blocked} onClick={() => onDecide(true, 'once')}>{L('本次允许', 'Allow once')}</button>
-      </div>
+      <AgentCardFoot>
+        <AgentCardButton className="agent-confirm__deny" onClick={() => onDecide(false, 'once')}>{t.deny}</AgentCardButton>
+        {canGrantSession && <AgentCardButton className="agent-confirm__allow--session" disabled={blocked} onClick={() => onDecide(true, 'session' satisfies AgentConfirmScope)}>{sessionLabel}</AgentCardButton>}
+        <AgentCardButton variant="primary" enterHint className="agent-confirm__allow" disabled={blocked} onClick={() => onDecide(true, 'once')}>{t.allowOnce}</AgentCardButton>
+      </AgentCardFoot>
     </section>
   );
 }

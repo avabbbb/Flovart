@@ -79,3 +79,24 @@
 .agent-conversation .agent-composer__controls{position:relative}
 .agent-conversation .agent-composer__tools,.agent-conversation .agent-composer__tools .agent-mode-control{position:static}
 :root .agent-conversation .agent-composer__tools .agent-mode-menu{left:0!important;right:auto!important;max-width:100%}
+
+/* 2026-11-18 窄面板（≥280px）不裁切：面板整条链 min-width:0；头部会话标题先让位（截断），图标按钮不缩、不出界。
+   旧版标题 max-width:55% 但不能缩到内容以下，头部又没有收口，300px 时右侧的复制 / 新对话 / 收起被挤出面板。 */
+.agent-conversation,
+.agent-conversation .workflow-agent__body,
+.agent-conversation__viewport,
+.agent-conversation__messages,
+.agent-todo-slot { min-width: 0; }
+.agent-conversation__header { min-width: 0; overflow: hidden; }
+.agent-conversation__header > * { flex-shrink: 0; }
+.agent-conversation__header > .agent-header-title { flex: 0 1 auto; min-width: 0; }
+.agent-header-actions { flex: 0 0 auto; }
+.agent-todo-slot { flex: none; margin: 0 0 8px; }
+/* 展开全部步骤时只让卡身滚动，头部与「拒绝 / 确认」始终露出。 */
+.agent-todo-slot .flv-plan__body { max-height: min(46vh, 420px); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.agent-todo-slot > .flv-card { margin: 0; }
+@container assistant-drawer (max-width: 360px) {
+  .agent-conversation__header { padding: 0 8px 0 10px !important; gap: 4px; }
+  .agent-conversation__header .drawer-chrome-tabs .isl-tab { padding: 3px 7px; }
+  .agent-conversation .workflow-agent__body { padding-right: 8px; padding-left: 8px; }
+}

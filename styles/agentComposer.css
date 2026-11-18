@@ -294,13 +294,13 @@
 .workflow-agent__messages .workflow-agent__message--user > .workflow-agent__quote { max-width: 85%; margin: 0 0 4px; border-left: 2px solid color-mix(in srgb, var(--isl-ink-ghost) 70%, transparent); padding: 2px 0 2px 8px; color: var(--isl-ink-soft); font-size: 11px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
 
 /* ── 生成计划卡：外观走共用 PlanSteps（styles/planSteps.css）；这里只留卡里特有的明细 / 授权 / 说明。 ── */
-.agent-plan-wrap { display: grid; gap: 6px; margin: 2px 0 14px; }
+.agent-plan-wrap { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 6px; margin: 2px 0 14px; }
 .agent-plan-wrap > .flv-plan { margin: 0; }
 .agent-plan .agent-plan__model,
 .agent-plan .agent-plan__group { display: inline-flex; min-width: 0; align-items: center; gap: 4px; }
 .agent-plan .agent-plan__model .flv-machine,
 .agent-plan .agent-plan__group-name { color: var(--isl-ink); }
-.agent-plan__assets { display: grid; gap: 8px; margin: 6px 2px 0; border-radius: 10px; padding: 6px 8px; background: color-mix(in srgb, var(--isl-ink) 4%, transparent); }
+.agent-plan__assets { display: grid; min-width: 0; gap: 8px; margin: 8px 8px 0; border-radius: 10px; padding: 6px 8px; background: color-mix(in srgb, var(--isl-ink) 4%, transparent); }
 .agent-plan__toggle { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; border: 0; padding: 2px 0; color: var(--isl-ink); background: transparent; font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
 .agent-plan__toggle > strong { font-weight: 650; }
 .agent-plan__toggle > span { display: inline-flex; align-items: center; gap: 2px; color: var(--isl-ink-soft); font-size: 11px; }

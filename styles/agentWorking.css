@@ -163,83 +163,118 @@
 @keyframes agent-step-ping { 0% { transform: scale(.6); opacity: .45; } 100% { transform: scale(1.8); opacity: 0; } }
 @keyframes agent-step-dot { 0%, 80%, 100% { opacity: .3; } 40% { opacity: 1; } }
 
-/* ── 提问表单卡（flovart_ask） ── */
-.agent-ask {
+/* ── 提问卡（flovart_ask）：外壳见 styles/agentCardShell.css。
+   版式：Inspora 1-37「AI Agent Approval Cards」@Kevin 的 Questions 卡 —— 一页一题；选项行 = 字母键帽 + 文字；
+   选中键帽反色；悬停高光跟随指针（--mx / --my）；最后一行「其他…」是输入框。 ── */
+.flv-card.agent-ask {
+  --card-accent: var(--state-tool);
   flex: none;
-  display: grid;
-  box-sizing: border-box;
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
   max-height: 60%;
-  gap: var(--space-3);
-  margin: 0 0 var(--space-2);
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border: 1px solid var(--isl-border);
-  border-radius: var(--isl-r);
-  padding: var(--space-3);
+  margin: 0 0 8px;
+}
+.agent-ask__context { display: grid; gap: 2px; }
+.agent-ask__context p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.agent-ask__page { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 8px; padding: 0 10px; }
+.agent-ask__question { margin: 0 2px; color: var(--isl-ink); font-size: 13px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
+.agent-ask__question[data-fallback] { color: var(--isl-ink-soft); font-family: var(--font-machine, ui-monospace, monospace); font-weight: 500; }
+.agent-ask__required { color: var(--state-blocked); }
+.agent-ask__options { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.agent-ask__option {
+  position: relative;
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+  border: 1px solid var(--card-line);
+  border-radius: 10px;
+  padding: 6px 10px 6px 8px;
+  color: var(--isl-ink-soft);
+  background: var(--card-inset);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  isolation: isolate;
+  transition: border-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard);
+}
+/* 跟随指针的柔光 */
+.agent-ask__option::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: radial-gradient(160px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--isl-ink) 9%, transparent), transparent 70%);
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-standard);
+  pointer-events: none;
+}
+.agent-ask__option[data-active] { border-color: color-mix(in srgb, var(--isl-ink) 18%, transparent); color: var(--isl-ink); }
+.agent-ask__option[data-active]::before,
+.agent-ask__option:hover::before { opacity: 1; }
+.agent-ask__option[data-checked] { border-color: color-mix(in srgb, var(--isl-ink) 30%, transparent); color: var(--isl-ink); }
+.agent-ask__option:focus-visible,
+.agent-ask__other:focus-within { outline: 2px solid color-mix(in srgb, var(--card-accent) 55%, transparent); outline-offset: -1px; }
+.agent-ask__key {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--isl-ink-soft);
+  background: color-mix(in srgb, var(--isl-ink) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--isl-ink) 8%, transparent);
+  font: 600 10.5px/1 var(--font-machine, ui-monospace, monospace);
+  transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
+}
+/* 选中 / 正在输入「其他」：键帽反色 */
+.agent-ask__option[data-checked] .agent-ask__key,
+.agent-ask__other:focus-within .agent-ask__key { color: var(--isl-card); background: var(--isl-ink); box-shadow: none; }
+.agent-ask__option-text { min-width: 0; flex: 1 1 auto; line-height: 1.45; overflow-wrap: anywhere; }
+.agent-ask__other { cursor: text; }
+.agent-ask__other > input {
+  min-width: 0;
+  flex: 1 1 auto;
+  height: 22px;
+  border: 0;
+  padding: 0;
   color: var(--isl-ink);
-  background: var(--isl-card);
-  font-size: 12px;
-  line-height: 18px;
+  background: transparent;
+  font: inherit;
   outline: none;
 }
-.agent-ask:focus-visible { border-color: var(--isl-border-strong); }
-.agent-ask__head { display: grid; min-width: 0; gap: var(--space-1); }
-.agent-ask__eyebrow { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--isl-mint-deep); font-size: 10px; font-weight: 600; line-height: 14px; }
-.agent-ask__title { margin: 0; color: var(--isl-ink); font-size: 13px; font-weight: 600; line-height: 20px; overflow-wrap: anywhere; }
-.agent-ask__context { display: grid; gap: 2px; color: var(--isl-ink-soft); font-size: 11.5px; line-height: 18px; }
-.agent-ask__context p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.agent-ask__field { display: grid; min-width: 0; gap: var(--space-2); }
-.agent-ask__label { color: var(--isl-ink); font-size: 11px; font-weight: 600; line-height: 16px; overflow-wrap: anywhere; }
-.agent-ask__label[data-fallback] { color: var(--isl-ink-ghost); font-family: var(--font-machine, ui-monospace, monospace); font-weight: 500; }
-.agent-ask__required { color: var(--isl-coral-deep); }
-.agent-ask__options { display: grid; min-width: 0; gap: var(--space-1); grid-template-columns: minmax(0, 1fr); }
-.agent-ask__option {
-  display: flex;
-  min-width: 0;
-  align-items: flex-start;
-  gap: var(--space-2);
-  border: 1px solid var(--isl-border);
-  border-radius: var(--isl-r-sm);
-  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
-  color: var(--isl-ink);
-  background: var(--isl-card);
-  cursor: pointer;
-  transition: border-color var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard);
-}
-.agent-ask__option:hover { background: var(--isl-surface-2); }
-.agent-ask__option[data-checked] { border-color: var(--isl-mint); background: color-mix(in srgb, var(--isl-mint) 8%, var(--isl-card)); box-shadow: 0 0 0 2px var(--isl-mint-bg); }
-.agent-ask__option input { flex: none; margin: 2px 0 0; accent-color: var(--isl-mint-deep); }
-.agent-ask__option-text { min-width: 0; font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
-.agent-ask__other { display: flex; flex-wrap: wrap; min-width: 0; align-items: center; gap: var(--space-1) var(--space-2); border: 1px dashed var(--isl-border); border-radius: var(--isl-r-sm); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3); }
-.agent-ask__other[data-filled] { border-style: solid; border-color: var(--isl-mint); }
-.agent-ask__other > label { flex: none; color: var(--isl-ink-soft); font-size: 11px; }
-.agent-ask__other > input, .agent-ask__control {
+.agent-ask__other > input::placeholder { color: var(--isl-ink-ghost); }
+.agent-ask__control {
   box-sizing: border-box;
+  width: 100%;
   min-width: 0;
-  min-height: 28px;
-  border: 1px solid transparent;
-  border-radius: var(--isl-r-sm);
-  padding: 0 var(--space-2);
+  min-height: 32px;
+  border: 1px solid var(--card-line);
+  border-radius: 10px;
+  padding: 0 10px;
   color: var(--isl-ink);
-  background: var(--isl-surface-sunk);
+  background: var(--card-inset);
   font: inherit;
-  font-size: 12px;
+  font-size: 12.5px;
 }
-.agent-ask__other > input { flex: 1 1 8rem; }
-.agent-ask__control { width: 100%; border-color: var(--isl-border); background: var(--isl-card); }
-textarea.agent-ask__control { min-height: 56px; padding: var(--space-1) var(--space-2); resize: vertical; }
-.agent-ask__other > input:focus-visible, .agent-ask__control:focus-visible { outline: 2px solid color-mix(in srgb, var(--isl-mint) 55%, transparent); outline-offset: 0; }
-.agent-ask__other > input::placeholder, .agent-ask__control::placeholder { color: var(--isl-ink-ghost); }
-.agent-ask__error { margin: 0; color: var(--isl-coral-deep); font-size: 11px; }
-.agent-ask__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); border-top: 1px solid var(--isl-border); padding-top: var(--space-3); }
-.agent-ask__actions button { min-height: 28px; flex: 0 0 auto; border: 1px solid var(--isl-border); border-radius: var(--isl-r-sm); padding: 0 var(--space-4); color: var(--isl-ink); background: transparent; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; transition: background var(--motion-fast) var(--ease-standard); }
-.agent-ask__actions button:hover { background: var(--isl-surface-2); }
-.agent-ask__actions .agent-ask__submit { border-color: transparent; color: var(--isl-card); background: var(--isl-ink); }
-.agent-ask__actions .agent-ask__submit:hover { background: color-mix(in srgb, var(--isl-ink) 86%, var(--isl-card)); }
+textarea.agent-ask__control { min-height: 64px; padding: 8px 10px; resize: vertical; }
+.agent-ask__control:focus-visible { outline: 2px solid color-mix(in srgb, var(--card-accent) 55%, transparent); outline-offset: 0; }
+.agent-ask__control::placeholder { color: var(--isl-ink-ghost); }
+.agent-ask__error { margin: 8px 12px 0; color: var(--state-blocked); font-size: 11.5px; overflow-wrap: anywhere; }
+.agent-ask__pager { display: inline-flex; align-items: center; gap: 2px; color: var(--isl-ink-soft); }
+.agent-ask__pager .flv-card__ghost { width: 24px; height: 24px; }
+.agent-ask__pager .flv-card__ghost:disabled { opacity: .35; cursor: default; }
+.agent-ask__count { min-width: 2.6em; font-size: 11.5px; text-align: center; }
+@media (prefers-reduced-motion: reduce) {
+  .agent-ask__option, .agent-ask__option::before, .agent-ask__key { transition: none; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .agent-orb-pill, .agent-orb-phase, .agent-reasoning__body, .agent-step__disc { animation: none; }

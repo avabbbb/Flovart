@@ -1,4 +1,4 @@
-import { AudioLines, ChevronRight, Clapperboard, Crosshair, Image as ImageIcon, Layers, Play, Square, Type } from 'lucide-react';
+import { AudioLines, ChevronRight, Clapperboard, Crosshair, Image as ImageIcon, Layers, Sparkles, Square, Type } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { WorkflowNode } from '../workflow/types';
 import type { AgentConfirmRequest } from '../../services/agentSpendMandate';
@@ -6,6 +6,7 @@ import { GenerationPlanCard } from '../GenerationPlanCard';
 import { translations } from '../../utils/translations';
 import { describeAgentConfirmation } from './agentConfirmCopy';
 import { buildRunPlanView, type RunPlanDecision, type RunPlanItemStatus, type RunPlanView } from './agentRunPlan';
+import { AgentCardButton } from './AgentCardShell';
 import { PlanSteps, type PlanStatusLine, type PlanStep, type PlanStepStatus, type PlanTone } from './plan/PlanSteps';
 
 interface AgentRunPlanCardProps {
@@ -57,7 +58,8 @@ function nodeIcon(kind: string | undefined) {
 
 /**
  * 生成计划卡：生成前 / 生成中给出「这一批要建 / 要跑哪些节点」。外观是共用的 PlanSteps（Agent Plan + RAG Pipeline 版式），
- * 每个节点一步：类型图标、标题、状态胶囊；展开一行看提示词、模型和「定位节点」。
+ * 每个节点一步：状态圆环、类型图标、单行标题；展开一行看提示词、模型和「定位节点」。主按钮带 ⏎（只在按钮自身有焦点时生效）。
+ * 不做原作（Inspora 1-37）的自动批准倒计时：这里批准的是付费生成。
  * 行为不变：三个选择（自动 / 手动 / 调整）、付费授权勾选与上限、blocked 禁用自动运行、Esc = 调整、待确认时 alertdialog 抢焦点；
  * 门禁明细（GenerationPlanCard）收在「资产列表」里展开。
  */
@@ -112,11 +114,11 @@ export function AgentRunPlanCard({
 
   const footActions = pending ? (
     <>
-      <button type="button" className="flv-plan__text-btn" onClick={() => onDecide?.('manual', { session: false })}>{copy.planManualRun}</button>
-      <button type="button" className="flv-plan__text-btn" title={copy.planAdjustHint} onClick={() => onDecide?.('adjust', { session: false })}>{copy.planAdjust}</button>
-      <button type="button" className="flv-plan__primary agent-plan__primary" disabled={blocked} onClick={() => onDecide?.('auto', { session: Boolean(offerMandate && session) })}>
-        <Play aria-hidden="true" />{copy.planAutoRun}
-      </button>
+      <AgentCardButton onClick={() => onDecide?.('manual', { session: false })}>{copy.planManualRun}</AgentCardButton>
+      <AgentCardButton title={copy.planAdjustHint} onClick={() => onDecide?.('adjust', { session: false })}>{copy.planAdjust}</AgentCardButton>
+      <AgentCardButton variant="primary" enterHint className="agent-plan__primary" disabled={blocked} onClick={() => onDecide?.('auto', { session: Boolean(offerMandate && session) })}>
+        {copy.planAutoRun}
+      </AgentCardButton>
     </>
   ) : decision === 'auto' ? (
     <span className="flv-plan__badge agent-plan__progress" data-tone={view.phase === 'running' ? 'running' : view.phase === 'failed' ? 'failed' : 'done'}>
@@ -173,13 +175,16 @@ export function AgentRunPlanCard({
           event.preventDefault();
           onDecide?.('adjust', { session: false });
         }}
-        title={title}
-        count={planCopy.runSteps(view.total)}
+        language={language}
+        label={copy.planCardAria}
+        icon={<Sparkles />}
+        heading={title}
         status={status}
         meta={meta}
         steps={steps}
         statusLabels={planCopy.status}
-        listLabel={copy.planWorkflow(view.total)}
+        listTitle={copy.planWorkflow(view.total)}
+        count={view.total}
         extra={extra}
         footer={{ status: footStatus, actions: footActions }}
       />
