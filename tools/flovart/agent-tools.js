@@ -73,7 +73,7 @@ const DEFINITIONS = [
   {
     command: 'agent.task.start',
     name: 'flovart_task_start',
-    surfaces: EXTERNAL,
+    surfaces: ALL,
     description: '把可能超过 1 分钟的命令放到后台执行，立即返回 taskId；之后用 flovart_task_get 轮询。可包装：agent.turn、workflow.node.run、workflow.group.run、workflow.generate、workflow.node.tool、workflow.media.import、workflow.export。被包装命令的确认、预算与 Seedance 预检照常生效；同一 idempotencyKey 重放返回同一个任务。',
     fields: {
       command: { type: 'string', enum: ['agent.turn', 'workflow.node.run', 'workflow.group.run', 'workflow.generate', 'workflow.node.tool', 'workflow.media.import', 'workflow.export'], description: '要在后台执行的命令' },
@@ -83,7 +83,7 @@ const DEFINITIONS = [
   {
     command: 'agent.task.get',
     name: 'flovart_task_get',
-    surfaces: EXTERNAL,
+    surfaces: ALL,
     description: '读取后台任务：status（queued/running/succeeded/failed/cancelled）、afterSeq 之后的增量事件；done=true 时带 result 或 error。建议每 5–10 秒轮询一次，并把上次返回的 seq 作为 afterSeq。',
     fields: {
       taskId: { type: 'string', minLength: 1 },
@@ -93,7 +93,7 @@ const DEFINITIONS = [
   {
     command: 'agent.task.cancel',
     name: 'flovart_task_cancel',
-    surfaces: EXTERNAL,
+    surfaces: ALL,
     description: '取消后台任务；它在画布上启动的生成节点会被请求停止。已经提交给模型服务的任务可能仍会计费。',
     fields: {
       taskId: { type: 'string', minLength: 1 },

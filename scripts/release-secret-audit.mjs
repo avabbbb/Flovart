@@ -23,6 +23,12 @@ const intentionalFixtures = new Set([
   'sk-live-REDTEAM0000000000000000000',
   'ghp_REDTEAM000000000000000000000000',
   'AKIAREDTEAM000000000',
+  // tests/agentProjectMemory.test.ts / tests/evalJudge.test.ts：证明记忆与评测样本会脱敏的假凭证。
+  'ghp_abcdefghijklmnopqrstuvwxyz0123',
+  'AKIAIOSFODNN7EXAMPLE',
+  'sk-abcdefghijklmnopqrstuvwxyz123456',
+  'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.abcDEFghiJKL',
+  'sk-abcdefghijklmnopqrstuvwxyz123',
 ]);
 
 function repositoryFiles() {

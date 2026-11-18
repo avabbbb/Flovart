@@ -72,7 +72,9 @@ flovart agent.turn --prompt "给镜头 1 写一版提示词" --policy read-only 
   stop nodes it started (for a group run: every member of the group) (already-submitted provider jobs may still be billed).
   Confirmations, budget and pre-checks of the wrapped command still apply.
   Tasks live in the local Agent process; after a restart `get` returns
-  `NOT_FOUND`.
+  `NOT_FOUND`. The built-in web Agent has the same three tools
+  (`flovart_task_start/get/cancel`) for the browser commands; its tasks live in
+  the open page and are gone after a reload.
 - CLI output is pipe-friendly: each `--json` result is one line on stdout
   (NDJSON; add `--pretty` to indent it), progress goes to stderr prefixed
   `[flovart]`. A downstream command reads node ids from stdin with

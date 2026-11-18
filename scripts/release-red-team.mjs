@@ -40,7 +40,13 @@ const publicSurface = read('tools/flovart/agent-surface.js');
 const publicSurfaceBlock = publicSurface.match(/AGENT_PUBLIC_COMMANDS[\s\S]*?Object\.freeze\(\[([\s\S]*?)\]\)/)?.[1] || '';
 const publicCommands = [...publicSurfaceBlock.matchAll(/'([^']+)'/g)].map(match => match[1]);
 requireCondition(
-  JSON.stringify(publicCommands) === JSON.stringify(['status', 'agent.turn', 'workflow.inspect', 'workflow.selection.get', 'workflow.focus.nodes', 'workflow.apply', 'workflow.generate', 'workflow.models.list', 'workflow.nodes.search', 'workflow.note.write', 'workflow.media.import', 'workflow.node.run', 'workflow.node.stop', 'workflow.node.tool']),
+  JSON.stringify(publicCommands) === JSON.stringify([
+    'status', 'agent.turn', 'agent.task.start', 'agent.task.get', 'agent.task.cancel',
+    'workflow.inspect', 'workflow.selection.get', 'workflow.focus.nodes', 'workflow.apply', 'workflow.generate', 'workflow.models.list',
+    'workflow.shortcut.list', 'workflow.shortcut.apply', 'workflow.group.create', 'workflow.group.run', 'workflow.nodes.search', 'workflow.cost.estimate',
+    'workflow.note.write', 'workflow.media.import', 'workflow.script.materialize', 'workflow.export',
+    'workflow.node.run', 'workflow.node.stop', 'workflow.node.tool',
+  ]),
   `Agent public surface changed unexpectedly: ${publicCommands.join(', ')}`,
 );
 observations.push(`agent-public-commands=${publicCommands.length}`);
