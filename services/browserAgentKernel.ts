@@ -13,6 +13,7 @@ import localforage from 'localforage';
 import { Type } from 'typebox';
 import { resolveAgentTextRoutes } from './agentTextRoutes';
 import { createBrowserWorkflowContract } from './browserWorkflowContract';
+import { browserAgentTaskLayer, BROWSER_TASKABLE_COMMANDS } from './browserAgentTasks';
 import { withWorkflowHumanApproval, workflowCommandNeedsConfirmation } from './workflowDispatcher';
 import type { ProductionSkillAttachment } from './productionSkillCatalog';
 import { isUserSkillAttachment, skillSystemContext } from './userSkillContext';
@@ -849,7 +850,69 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
         },
       };
     });
-  const extraTools: AgentTool[] = [];
+  // 后台任务（flovart_task_start / get / cancel）：与外部宿主同一份定义，命令清单收窄到浏览器能执行的。
+  const tasks = browserAgentTaskLayer(dependencies.projectId, envelope => workflowContract.dispatch(envelope));
+  const taskTools: AgentTool[] = getAgentToolSpecs('builtin')
+    .filter(spec => spec.command.startsWith('agent.task.'))
+    .map(spec => {
+      const command = spec.command;
+      const schema = agentToolInputSchema(spec) as { properties: Record<string, Record<string, unknown>> } & Record<string, unknown>;
+      let description = spec.description;
+      if (command === 'agent.task.start') {
+        schema.properties.command = { ...schema.properties.command, enum: [...BROWSER_TASKABLE_COMMANDS] };
+        description = '把可能超过 1 分钟的命令放到后台执行（批量 / 整组生成、视频、导出等），用户确认费用后立即返回 taskId，不必等生成结束；之后用 flovart_task_get 查进度（同一轮或下一轮都可以），完成后读 result。可包装：'
+          + BROWSER_TASKABLE_COMMANDS.join('、') + '。确认、付费授权与提交前检查与直接调用相同。任务保存在当前页面，刷新后 get 返回 NOT_FOUND。';
+      }
+      return {
+        name: spec.name,
+        label: command,
+        description,
+        parameters: Type.Unsafe(schema),
+        execute: async (_toolCallId, params) => {
+          const input = params as Record<string, unknown>;
+          let result: Record<string, unknown>;
+          if (command === 'agent.task.start') {
+            const target = String(input.command || '');
+            const args = input.args && typeof input.args === 'object' && !Array.isArray(input.args) ? { ...(input.args as Record<string, unknown>) } : {};
+            if (!BROWSER_TASKABLE_COMMANDS.includes(target)) throw new Error('不能放到后台的命令：' + (target || '(空)') + '。可用：' + BROWSER_TASKABLE_COMMANDS.join('、'));
+            // 先在本回合完成审批，批准后才进后台；后台执行带人工批准，不会再弹卡。
+            // 同一回合里对同一命令、同一参数的重试重放同一个任务：不再弹卡，也不会重复提交生成。
+            const idempotencyKey = dependencies.activeChangeSetId + ':' + target + ':' + JSON.stringify(args);
+            const replay = tasks.existing(idempotencyKey);
+            if (replay) return { content: [{ type: 'text' as const, text: JSON.stringify(replay) }], details: replay };
+            await guard(target, args);
+            let approved = false;
+            if (workflowCommandNeedsConfirmation(target, args)) {
+              const envelope = { id: crypto.randomUUID(), command: target, args: { ...args, projectId: dependencies.projectId, workspaceMode: 'browser' }, source: 'agent' } as const;
+              const probe = await workflowContract.dispatch(envelope);
+              if (!probe.ok) throw new Error(probe.error?.message || `${target} 执行失败`);
+              if (probe.confirmation?.required) {
+                const decision = toolApprovalFor(target, args);
+                const verdict = readConfirmVerdict(await dependencies.confirm(probe.confirmation.summary, {
+                  ...workflowConfirmRequest(envelope),
+                  tier: decision.tier,
+                  tool: target,
+                  grantable: false,
+                  ...(decision.reason ? { reason: decision.reason } : {}),
+                }));
+                if (!verdict.approved) throw new Error(verdict.message);
+                approved = true;
+              } else {
+                // 命令面没有要求确认就已经执行完了（不会发生在付费命令上）：直接交回结果，不再重复执行。
+                return { content: [{ type: 'text' as const, text: JSON.stringify({ done: true, status: 'succeeded', result: probe.result ?? { ok: true } }) }], details: probe };
+              }
+            }
+            result = tasks.start({ command: target, args, idempotencyKey, approved });
+          } else if (command === 'agent.task.get') {
+            result = tasks.get({ taskId: String(input.taskId || ''), afterSeq: typeof input.afterSeq === 'number' ? input.afterSeq : undefined });
+          } else {
+            result = await tasks.cancel({ taskId: String(input.taskId || ''), ...(typeof input.reason === 'string' ? { reason: input.reason } : {}) });
+          }
+          return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], details: result };
+        },
+      } satisfies AgentTool;
+    });
+  const extraTools: AgentTool[] = [...taskTools];
   extraTools.push(createWebSearchTool(dependencies.webSearch, guard));
   extraTools.push(createLocalGrepTool(guard));
   if (dependencies.ask) extraTools.push(createAskTool(dependencies.ask));
@@ -1045,6 +1108,7 @@ const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，Flovart 生成式 
 - flovart_models_list：列出模型的真实能力（各生成方式是否已配置、参考上限、张数、比例、分辨率、时长，含 RunningHub 动态模型）。选/换模型前先调，不要猜 modelId 或逐个试。
 - flovart_cost_estimate：运行前预估（只读、不扣费）：nodeIds 或 groupId → 每个节点的模型、任务数、预估费用与合计，以及被提交前检查拦下的节点。多个节点或整组运行前先调用，把清单与合计告诉用户再请求运行；cost 为 null 就说费用未知，不要自己估。
 - flovart_workflow_node_run：重跑已写好提示词的生成节点（nodeId 或 nodeIds 批量，一次确认费用），返回 batch 与 takes。
+- flovart_task_start / flovart_task_get / flovart_task_cancel：多个镜头、整组或视频生成可能要几分钟，用 flovart_task_start 包装 workflow.node.run / workflow.group.run 等放到后台（确认费用后立即返回 taskId），先告诉用户已开始，再用 flovart_task_get 查进度；不要在同一轮里高频轮询，用户问进度或下一轮再查。
 - flovart_workflow_node_stop：停止某个节点正在进行的生成。
 - flovart_media_import：把 http(s) 地址或素材库素材导入画布成为媒体节点，可直接接到生成节点作参考（加 @chip）。
 - flovart_script_materialize：把脚本节点的分镜行建成生成节点（kind=image|video，rows=1-5 / 1,3,6-9）。每行一个生成节点，行里的 imagePrompt/videoPrompt 写进 Prompt Bar，characterRefs 与 @ref:<id> 变成 @chip + 连线，脚本行回存节点 id。只建不跑：确认后把返回的 nodeIds 交给 flovart_workflow_node_run 分批运行。
