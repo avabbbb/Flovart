@@ -406,6 +406,8 @@ export interface WorkflowNodeMetadata {
   childKeys?: string[];
   /** 子画布内节点与逆向工程对象的稳定对应 key：'script' | 'shot:<id>' | 'slot:<id>'。 */
   reverseKey?: string;
+  /** Iris 故事版里的素材分类（文本：剧本 / 其他；图片：角色 / 场景 / 物品 / 其他；视频：视频片段 / 成片）。缺省按节点语义推断，见 components/reverse/irisStoryboard.ts。 */
+  storyboardTag?: 'script' | 'character' | 'scene' | 'prop' | 'clip' | 'final' | 'other';
 }
 
 /** 节点上的一份备选媒体（图片或视频，可混合）。id 稳定：来自旧的叠放兄弟节点 ID 或生成时分配。 */

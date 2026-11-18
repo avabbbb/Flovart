@@ -2,7 +2,7 @@
 
 四类：**current truth**（当前产品与系统的唯一依据）→ **提案**（未接受）→ **指南与记录**（使用、进度、开发日志）→ **归档**（只读历史）。支持等级只看 [SUPPORT_MATRIX](../SUPPORT_MATRIX.md)；AI / 自动化开发约束见 [AGENTS.md](../AGENTS.md)。
 
-产品地图：顶栏 **画布 Canvas**（GenAI 生成与 Workflow 基本盘）｜**Iris**（全能后期助手 · Personal agent：对话优先、画布为产出面，Web 独立可用，可选连接本地剪辑软件同步上下文；原名 逆向，当前为即将推出的占位）｜**Agent**（Agent 连接与状态管理）。Canvas + Agent 是 Workflow 生产工具。详见 [00](design/00-overview.md) §3.1。
+产品地图：顶栏 **画布 Canvas**（GenAI 生成与 Workflow 基本盘）｜**Iris**（全能后期助手 · Personal agent：对话优先、画布为产出面，Web 独立可用，可选连接本地剪辑软件同步上下文；原名 逆向，当前为故事版 v1：项目素材 + 同一个 Agent 对话，素材与画布同一份数据）｜**Agent**（Agent 连接与状态管理）。Canvas + Agent 是 Workflow 生产工具。详见 [00](design/00-overview.md) §3.1。
 
 ## 1. Current truth（`docs/design/`，共 11 份，上限 12，见 AGENTS.md §9）
 

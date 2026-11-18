@@ -50,6 +50,7 @@ const SettingsPanel = React.lazy(() => import('./components/SettingsPanel').then
 
 import { AgentDrawerSections } from './components/agent/AgentDrawerSections';
 const WorkflowWorkspace = React.lazy(() => import('./components/workflow/WorkflowWorkspace').then(m => ({ default: m.WorkflowWorkspace })));
+const IrisStoryboardPage = React.lazy(() => import('./components/reverse/IrisStoryboardPage').then(m => ({ default: m.IrisStoryboardPage })));
 const AssetAddModal = React.lazy(() => import('./components/AssetAddModal').then(m => ({ default: m.AssetAddModal })));
 const BrowserImportBridge = React.lazy(() => import('./components/extension/BrowserImportBridge').then(m => ({ default: m.BrowserImportBridge })));
 import { WorkflowSessionGuard } from './components/workflow/WorkflowSessionGuard';
@@ -708,7 +709,7 @@ const App: React.FC = () => {
         // connection/control page beside them.
         <div
             className="studio-layout relative flex h-full min-h-0 min-w-0"
-            data-drawer-open={canvasView !== 'agent' && rightOpen ? 'true' : 'false'}
+            data-drawer-open={canvasView === 'spatial' && rightOpen ? 'true' : 'false'}
             data-drawer-docked={!mediumViewport ? 'true' : 'false'}
         >
             <div className="studio-layout__surface relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
@@ -716,10 +717,34 @@ const App: React.FC = () => {
                     the built-in assistant remains in the right drawer beside the
                     two Workflow views. */}
                 {canvasView === 'reverse' ? (
-                    <div className="grid h-full place-content-center gap-2 px-6 text-center" style={{ color: 'var(--isl-ink)' }} data-testid="reverse-coming-soon">
-                        <div className="text-base font-bold">{language === 'zho' ? 'Iris 正在优化' : 'Iris is being refined'}</div>
-                        <div className="text-sm" style={{ color: 'var(--isl-ink-soft)' }}>{language === 'zho' ? '全能后期助手，后续版本上线。内测期间请先使用画布与 Agent，已有的逆向工程数据会保留。' : 'Your all-in-one post-production agent, coming in a later release. Use Canvas and Agent during the beta; existing reverse-breakdown projects are kept.'}</div>
-                    </div>
+                    // Iris 故事版：素材从当前画布节点派生，写入落到画布真节点；右侧是同一个 Agent（此时抽屉不挂载对话，避免同一项目起两个内核）。
+                    <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">{language === 'zho' ? '正在加载 Iris...' : 'Loading Iris...'}</div>}>
+                        <IrisStoryboardPage
+                            language={language}
+                            project={activeWorkflowProject}
+                            onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
+                            onFocusNode={handleFocusNodeFromDrawer}
+                            onNotify={(message, level) => toast.show(message, level)}
+                            chat={activeWorkflowProject ? (
+                                <FlovartAgentPanel
+                                    project={activeWorkflowProject}
+                                    onActivityChange={() => undefined}
+                                    onOpenSettings={() => setIsSettingsPanelOpen(true)}
+                                    assetLibrary={assetLibrary}
+                                    userApiKeys={userApiKeys}
+                                    onAddApiKey={handleAddApiKey}
+                                    onUpdateApiKey={handleUpdateApiKey}
+                                    onFocusNode={handleFocusNodeFromDrawer}
+                                    composerPlaceholder={language === 'zho' ? '开始你的创作，或者 @ 引用工作流/节点/资源' : 'Start creating, or @ to reference workflows, nodes and assets'}
+                                />
+                            ) : (
+                                <AgentDrawerEmptyState
+                                    language={language}
+                                    onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
+                                />
+                            )}
+                        />
+                    </Suspense>
                 ) : canvasView === 'agent' ? (
                     <AgentConnectionsPage project={activeWorkflowProject} language={language} />
                 ) : (
@@ -762,7 +787,7 @@ const App: React.FC = () => {
             </div>
 
             <StudioRightDrawer
-                open={canvasView !== 'agent' && rightOpen}
+                open={canvasView === 'spatial' && rightOpen}
                 onOpenChange={setRightOpen}
                 outerGap={0}
                 width={rightWidth}
@@ -778,7 +803,7 @@ const App: React.FC = () => {
                     { id: 'agent', label: language === 'zho' ? '对话' : 'Chat', icon: undefined },
                 ]}
             >
-                {rightTab === 'agent' && (<AgentDrawerSections projectTitle={activeWorkflowProject?.title} language={language} chatHasHeader={Boolean(activeWorkflowProject)}>{activeWorkflowProject ? (
+                {rightTab === 'agent' && canvasView === 'spatial' && (<AgentDrawerSections projectTitle={activeWorkflowProject?.title} language={language} chatHasHeader={Boolean(activeWorkflowProject)}>{activeWorkflowProject ? (
                     <FlovartAgentPanel
                         project={activeWorkflowProject}
                         onActivityChange={() => undefined}

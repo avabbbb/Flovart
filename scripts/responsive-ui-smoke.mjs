@@ -177,10 +177,10 @@ try {
   await page.locator('.studio-top-menu__modes').getByRole('button', { name: '工作流', exact: true }).click();
   await sleep(1000);
   await captureMatrix(page, 'workflow-shell', '.workflow-workspace', { allowCanvasChildren: true });
-  await page.locator('.canvas-view-switch').getByRole('tab', { name: /^(逆向|Reverse)$/ }).click();
+  await page.locator('.canvas-view-switch').getByRole('tab', { name: /^(Iris|逆向|Reverse)$/ }).click();
   await sleep(900);
-  await capture(page, 'reverse', ['reverse-1024x768', 1024, 768], '[data-testid="reverse-coming-soon"]', { allowCanvasChildren: true });
-  await capture(page, 'reverse', ['reverse-640x900', 640, 900], '[data-testid="reverse-coming-soon"]', { allowCanvasChildren: true });
+  await capture(page, 'reverse', ['reverse-1024x768', 1024, 768], '[data-testid="iris-storyboard"]', { allowCanvasChildren: true });
+  await capture(page, 'reverse', ['reverse-640x900', 640, 900], '[data-testid="iris-storyboard"]', { allowCanvasChildren: true });
 
   const onboardingVisible = await page.locator('[data-testid="onboarding-dialog"]').isVisible().catch(() => false);
   console.log(JSON.stringify({ surface: 'onboarding', status: onboardingVisible ? 'captured' : 'not-mounted-by-current-first-run-state' }));

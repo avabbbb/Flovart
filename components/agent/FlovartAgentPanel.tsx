@@ -86,6 +86,8 @@ interface FlovartAgentPanelProps {
   /** 模型选择器里新增 Key / 切换 agent-text 模型，直接写入全局 AI 服务设置 */
   onAddApiKey?: (payload: Omit<UserApiKey, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onUpdateApiKey?: (id: string, patch: Partial<Omit<UserApiKey, 'id' | 'createdAt'>>) => void;
+  /** 就绪且空闲时输入框的占位文案（Iris 故事版用「开始你的创作，或者 @ 引用…」）；缺省为抽屉文案。 */
+  composerPlaceholder?: string;
 }
 
 interface AgentReference {
@@ -178,7 +180,7 @@ function toolResultText(result: unknown, language: 'en' | 'zho') {
   return content?.filter(item => item.type === 'text').map(item => item.text).filter(Boolean).join('\n') || (language === 'en' ? 'Workflow operation completed.' : 'Workflow 操作已完成');
 }
 
-export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, assetLibrary, onFocusNode, userApiKeys = [], onAddApiKey, onUpdateApiKey }: FlovartAgentPanelProps) {
+export function FlovartAgentPanel({ project, onActivityChange, onOpenSettings, assetLibrary, onFocusNode, userApiKeys = [], onAddApiKey, onUpdateApiKey, composerPlaceholder }: FlovartAgentPanelProps) {
   const client = useRef<ManagedFlovartAgentClient | undefined>(undefined);
   const kernelRef = useRef<BrowserAgentRuntime | undefined>(undefined);
   const unsubscribeRef = useRef<(() => void) | undefined>(undefined);
@@ -1776,7 +1778,7 @@ const userApiKeysRef = useRef(userApiKeys);
                 void send('enter');
               }
             }}
-            placeholder={needsConfiguration ? t('agentPanel.composerNeedConfig') : status === 'ready' ? (sending ? t('agentPanel.inputQueueRunningHint') : t('agentPanel.composerPlaceholder')) : t('agentPanel.composerOffline')}
+            placeholder={needsConfiguration ? t('agentPanel.composerNeedConfig') : status === 'ready' ? (sending ? t('agentPanel.inputQueueRunningHint') : composerPlaceholder || t('agentPanel.composerPlaceholder')) : t('agentPanel.composerOffline')}
             aria-label={t('agentPanel.composerAria')}
             onPaste={event => {
               const files = Array.from(event.clipboardData?.files || []);
