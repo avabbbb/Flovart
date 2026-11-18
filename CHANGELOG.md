@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Agent 画布工具 schema 发现：新只读命令 `workflow.node.tool.list`（工具 `flovart_node_tool_list`，四个宿主同一份）返回每个画布工具的适用节点类型、计费（free / paid / llm）、参数 JSON Schema（由 Operation Registry 的 zod 参数生成，旧工具手写）、产出与用法，可按 nodeId / tool 过滤；内置 Agent 的工具说明也改由同一份说明书生成。`workflow.node.tool` 在弹确认卡之前检查工具是否适用于源节点（`TOOL_NOT_APPLICABLE`，附可用工具）和参数（`BAD_REQUEST`，附 schema），video-merge 逐个检查来源。**修复计费漏洞**：`outpaint`、`mask` 与 `edit` 调用同一个付费图片服务，之前经 Agent 调用不弹确认、按普通写入放行，现在与其他付费工具一样逐次确认。
 - 内置 Agent 后台任务：网页内置 Agent 也有 `flovart_task_start / get / cancel`（与本机 Agent / MCP / DSH 同一份定义与同一个任务层，命令清单收窄为浏览器能执行的：node.run、group.run、generate、node.tool、media.import、export）。费用确认卡仍在当前回合弹出，批准后才进后台并立即返回 taskId，批量 / 整组 / 视频生成不再把对话卡住几分钟；同一回合重试重放同一个任务、不再弹第二张卡；取消会停止它启动的画布节点。任务存在当前页面内存，刷新即清空。
 - 发布红队：`release-red-team` 的 Agent 公开面白名单更新为当前 24 个命令（含 agent.task.*、group、shortcut、script、export、cost.estimate）；`release-secret-audit` 按精确值豁免记忆脱敏 / 评测测试里的假凭证，`npm run release:red-team` 恢复通过。
 - Agent 基线：新增只读命令 `workflow.cost.estimate`（工具 `flovart_cost_estimate`，四个宿主同一份 schema）：nodeIds 或 groupId → 每个节点的模型、线路、任务数、预估费用、合计、费用未知与被提交前检查拦下的节点；与审批卡同一份计划（`planGenerationGate`，审批卡与预估共用），不弹卡、不扣费。`workflow.group.run` 的确认请求改为 `generation` 并带每个成员的计划，整组审批卡显示合计费用（之前为空），自动模式的付费授权也能按额度判断。`workflow.group.run` 可经 `agent.task.start` 后台执行，取消时按组解析成员并逐个停止。

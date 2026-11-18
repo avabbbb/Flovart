@@ -5,7 +5,7 @@
 // 这里只回答「这次调用要不要先问用户」：工具按参数声明 tier（read | write | exec），
 // 再结合审批模式、用户的按工具策略和会话授权，算出 allow / prompt / deny。
 import type { WorkflowDocumentOperation } from '../components/workflow/types';
-import { getWorkflowOperationCapabilityByNodeTool } from '../components/workflow/operationRegistry';
+import { isWorkflowNodeTool, workflowNodeToolIsPaid } from '../components/workflow/nodeToolCatalog';
 
 export type ToolTier = 'read' | 'write' | 'exec';
 export type ToolPolicy = 'allow' | 'deny' | 'prompt';
@@ -177,6 +177,7 @@ const READ_COMMANDS = new Set([
   'workflow.shortcut.list',
   'workflow.nodes.search',
   'workflow.cost.estimate',
+  'workflow.node.tool.list',
   'flovart_workflow_media_view',
   'flovart_web_search',
   'flovart_grep',
@@ -219,8 +220,8 @@ export function toolApprovalFor(command: string, args: Record<string, unknown> =
     return deletes ? destroy() : { tier: 'write' };
   }
   if (command === 'workflow.node.tool') {
-    const capability = getWorkflowOperationCapabilityByNodeTool(String(args.tool || ''));
-    return capability && capability.confirmation !== 'none' ? spend() : { tier: 'write' };
+    const tool = String(args.tool || '');
+    return isWorkflowNodeTool(tool) && workflowNodeToolIsPaid(tool) ? spend() : { tier: 'write' };
   }
   if (command.startsWith('workflow.node.') || command.startsWith('workflow.connect')
     || command.startsWith('workflow.disconnect') || command === 'workflow.project.create') return { tier: 'write' };

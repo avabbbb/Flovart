@@ -13,6 +13,7 @@ import localforage from 'localforage';
 import { Type } from 'typebox';
 import { resolveAgentTextRoutes } from './agentTextRoutes';
 import { createBrowserWorkflowContract } from './browserWorkflowContract';
+import { workflowNodeToolSpecs } from '../components/workflow/nodeToolCatalog';
 import { browserAgentTaskLayer, BROWSER_TASKABLE_COMMANDS } from './browserAgentTasks';
 import { withWorkflowHumanApproval, workflowCommandNeedsConfirmation } from './workflowDispatcher';
 import type { ProductionSkillAttachment } from './productionSkillCatalog';
@@ -28,7 +29,7 @@ import type { WorkflowNode } from '../components/workflow/types';
 import { resolveNodeOrAlternate } from '../components/workflow/batchAlternates';
 import { loadAgentNodeMedia, type AgentVideoFrame, type AgentVideoLayout } from './agentMediaView';
 import { buildAgentAskForm, type AgentAskForm, type AgentAskSpec } from '../components/agent/agentAskForm';
-import { WORKFLOW_OPERATION_CAPABILITIES, WORKFLOW_OPERATION_CAPABILITY_IDS, WORKFLOW_OPERATION_NODE_TOOLS } from '../components/workflow/operationRegistry';
+import { WORKFLOW_OPERATION_NODE_TOOLS } from '../components/workflow/operationRegistry';
 import { formatSearchSources, searchAgentWeb, WEB_SEARCH_TOOL_NAME, type AgentSearchCredential, type SearchRecency } from './agentWebSearch';
 import { formatGrepMatches, grepLocalFolders, LOCAL_GREP_TOOL_NAME } from './agentLocalGrep';
 import { resolveToolApproval, toolApprovalFor, type ApprovalContext } from './agentToolPolicy';
@@ -985,14 +986,11 @@ export const NODE_TOOL_TOOL_NAME = 'flovart_workflow_node_tool';
 
 /** 画布后处理工具清单，直接来自 Operation 注册表：以后新增的工具不需要再改 Agent。 */
 export function describeWorkflowNodeTools(): string {
-  const operationTools = WORKFLOW_OPERATION_CAPABILITY_IDS
-    .map(id => WORKFLOW_OPERATION_CAPABILITIES[id])
-    .filter(capability => capability.nodeTool)
-    .map(capability => {
-      const cost = capability.executor === 'local-transform' ? '本地处理，免费' : '调用 AI 服务，会先请用户确认';
-      return `- ${capability.nodeTool}：${capability.label}（${capability.mediaType}，${cost}）${capability.agentUsage ? '；' + capability.agentUsage : ''}`;
-    });
-  return [...operationTools, '- reverse-prompt：反推提示词（image/video，调用视觉模型，把结果写回节点 prompt）', '- filter：图片滤镜（image，参数 filters：{ brightness, contrast, saturation, ... }，只改节点显示参数）', '- outpaint：扩展画面（image，参数 direction/amount/prompt；direction 为 left/right/top/bottom/all）', '- mask：蒙版编辑（image，参数 prompt + maskNodeId 或 maskHref/maskMimeType；生成新的结果图）'].join('\n');
+  // 与 workflow.node.tool.list 同一份说明书：适用节点、计费、用法。
+  const billing = { free: '本地处理，免费', paid: '调用 AI 服务，会先请用户确认', llm: '调用你配置的文本 / 视觉模型' } as const;
+  return workflowNodeToolSpecs()
+    .map(spec => `- ${spec.tool}：${spec.label}（${spec.inputTypes.join('/')}，${billing[spec.billing]}）${spec.usage ? '；' + spec.usage : ''}`)
+    .join('\n') + '\n参数的完整 schema 用 flovart_node_tool_list 查。';
 }
 
 export const ASK_TOOL_NAME = 'flovart_ask';

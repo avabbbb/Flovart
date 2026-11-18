@@ -644,6 +644,11 @@ describe('workflow dispatcher', () => {
     expect(paid.confirmation?.required).toBe(true);
 
     nodeToolRunner.mockClear();
+    // video-merge 现在会在提交前检查每个来源存在且是视频节点。
+    dependencies.getState().projects[0].nodes.push(
+      createWorkflowNode('video-1', 'video', { x: 0, y: 400 }),
+      createWorkflowNode('video-2', 'video', { x: 400, y: 400 }),
+    );
     const merge = await dispatch({
       id: 'merge', command: 'workflow.node.tool',
       args: { nodeId: 'image-1', tool: 'video-merge', sourceNodeIds: ['video-2', 'video-1'], ignored: true },
@@ -666,7 +671,7 @@ describe('workflow dispatcher', () => {
   it('rejects unknown canvas tools and requires a connected tool adapter', async () => {
     const { dispatch, dependencies } = setup();
     dependencies.nodeToolRunner = undefined;
-    const missing = await dispatch(withWorkflowHumanApproval({ id: 'tool2', command: 'workflow.node.tool', args: { nodeId: 'image-1', tool: 'upscale' }, source: 'agent' }));
+    const missing = await dispatch(withWorkflowHumanApproval({ id: 'tool2', command: 'workflow.node.tool', args: { nodeId: 'image-1', tool: 'upscale', targetLongEdge: 2048 }, source: 'agent' }));
     expect(missing.error?.code).toBe('RUNNER_UNAVAILABLE');
 
     dependencies.nodeToolRunner = vi.fn();

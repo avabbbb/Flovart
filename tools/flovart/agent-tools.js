@@ -275,6 +275,18 @@ const DEFINITIONS = [
     },
   },
   {
+    command: 'workflow.node.tool.list',
+    name: 'flovart_node_tool_list',
+    aliases: ['flovart_workflow_node_tool_list'],
+    surfaces: ALL,
+    description: '画布工具说明书（只读）：每个工具的 tool id、名称、适用节点类型 inputTypes、计费 billing（free 本地免费 / paid 调用 AI 服务，执行前用户确认 / llm 用用户配置的文本或视觉模型）、'
+      + '参数 JSON Schema parameters、产出 output 与用法。给 nodeId 只列这个节点能用的工具，给 tool 只看一个。调用 flovart_workflow_node_tool 前不确定参数时先查它。',
+    fields: {
+      nodeId: { type: 'string', minLength: 1, description: '只列这个节点能用的工具' },
+      tool: { type: 'string', minLength: 1, description: '只看这一个工具，例如 upscale / video-trim' },
+    },
+  },
+  {
     command: 'workflow.note.write',
     name: 'flovart_note_write',
     surfaces: ALL,
@@ -352,7 +364,7 @@ const DEFINITIONS = [
     command: 'workflow.node.tool',
     name: 'flovart_workflow_node_tool',
     surfaces: ALL,
-    description: '在节点上执行画布后处理工具（与节点工具条同一实现：裁剪、放大、去背景、编辑、剪辑、截帧、音频分离/变速/变调、反推提示词、滤镜、扩图、蒙版等），结果直接写成 image / video / audio 结果节点并从源节点直接连线（没有 operation 中间节点），返回 resultNodeId（带生成记录的主结果，可用 flovart_workflow_node_run 原位重跑、多次结果在节点上切换版本）与 outputNodeIds（全部新结果，含宫格切分等多输出）。调用 AI 服务的工具会请用户确认。',
+    description: '在节点上执行画布后处理工具（与节点工具条同一实现：裁剪、放大、去背景、编辑、剪辑、截帧、音频分离/变速/变调、反推提示词、滤镜、扩图、蒙版等），结果直接写成 image / video / audio 结果节点并从源节点直接连线（没有 operation 中间节点），返回 resultNodeId（带生成记录的主结果，可用 flovart_workflow_node_run 原位重跑、多次结果在节点上切换版本）与 outputNodeIds（全部新结果，含宫格切分等多输出）。调用 AI 服务的工具（billing=paid）会请用户确认。每个工具适用的节点类型、计费与完整参数 schema 用 flovart_node_tool_list 查；工具不适用于该节点、参数不合法时在确认前直接返回 TOOL_NOT_APPLICABLE / BAD_REQUEST。',
     fields: {
       nodeId: { type: 'string', description: '源节点 id（video-merge 可用 sourceNodeIds）' },
       tool: { type: 'string', description: '工具 id，例如 crop / upscale / remove-background / video-trim / video-extract-frame / audio-stem-split / reverse-prompt' },

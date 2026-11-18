@@ -9,7 +9,7 @@ import { alternateAsNode, findAlternateOwner, missingNodeMessage } from '../comp
 import { applyWorkflowMutation, applyWorkflowViewOperations } from '../components/workflow/draftAuthority';
 import { applyWorkflowOps } from '../components/workflow/ops';
 import { appendWorkflowDraftLog, createWorkflowDraftLogEntry } from '../components/workflow/draftLog';
-import { isWorkflowNodeTool } from '../components/workflow/nodeToolCatalog';
+import { isWorkflowNodeTool, workflowNodeToolIsPaid, workflowNodeToolSpec, workflowNodeToolSpecs, workflowNodeToolsFor } from '../components/workflow/nodeToolCatalog';
 import { getWorkflowOperationCapabilityByNodeTool, parseWorkflowOperationNodeToolArguments } from '../components/workflow/operationRegistry';
 import { getWorkflowPersistenceError, useWorkflowStore } from '../components/workflow/store';
 import { reorderReferenceOperations } from '../components/workflow/references';
@@ -162,7 +162,7 @@ const DOCUMENT_MUTATION_COMMANDS = new Set([
   'workflow.apply', 'workflow.node.create', 'workflow.node.create-connected', 'workflow.node.update',
   'workflow.node.delete', 'workflow.node.move', 'workflow.node.resize', 'workflow.connect', 'workflow.disconnect',
 ]);
-const WORKFLOW_READ_COMMANDS = new Set(['workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.models.list', 'workflow.shortcut.list', 'workflow.nodes.search', 'workflow.cost.estimate']);
+const WORKFLOW_READ_COMMANDS = new Set(['workflow.project.list', 'workflow.inspect', 'workflow.selection.get', 'workflow.models.list', 'workflow.shortcut.list', 'workflow.nodes.search', 'workflow.cost.estimate', 'workflow.node.tool.list']);
 const SENSITIVE_KEY = /(?:api.?key|authorization|token|secret|password|storage.?key|file.?path|local.?path|data.?url)/i;
 const MEDIA_KEY = /^(?:href|poster|src|url)$/i;
 const LOCAL_PATH = /^(?:[a-z]:\\|\\\\|\/home\/|\/Users\/|\/tmp\/)/i;
@@ -536,10 +536,69 @@ function requiresWorkflowConfirmation(envelope: WorkflowCommandEnvelope) {
   if (envelope.command !== 'workflow.node.tool') return false;
   const tool = String(envelope.args.tool || '');
   if (!isWorkflowNodeTool(tool)) return false;
-  return getWorkflowOperationCapabilityByNodeTool(tool)?.confirmation !== 'none';
+  // 与工具说明书同一份计费判定：outpaint / mask 等旧工具同样调用付费服务，一样要确认。
+  return workflowNodeToolIsPaid(tool);
 }
 
 /** 工具策略层用：这条命令是否已经由命令面自己发起确认（避免重复弹窗）。 */
+/** 工具参数（去掉命令信封字段）。 */
+function nodeToolArgsOf(args: Record<string, unknown>): Record<string, unknown> {
+  const toolArgs: Record<string, unknown> = { ...args };
+  for (const key of ['projectId', 'nodeId', 'id', 'tool', 'confirmed', 'workspaceMode', 'expectedRevision', 'mutationId']) delete toolArgs[key];
+  return toolArgs;
+}
+
+/**
+ * workflow.node.tool 的提交前检查：工具存在、源节点存在且类型适用、参数符合说明书。
+ * 在弹确认卡之前做，跑不起来的调用不会先让用户批准再失败。
+ */
+export function checkWorkflowNodeToolCall(nodes: readonly WorkflowNode[], args: Record<string, unknown>):
+  | { ok: true; nodeId: string; tool: string; toolArgs: Record<string, unknown> }
+  | { ok: false; code: string; message: string; details?: Record<string, unknown> } {
+  const tool = typeof args.tool === 'string' ? args.tool.trim() : '';
+  if (!tool) return { ok: false, code: 'BAD_REQUEST', message: 'tool 不能为空。可用工具见 workflow.node.tool.list。' };
+  const spec = workflowNodeToolSpec(tool);
+  if (!spec || !isWorkflowNodeTool(tool)) {
+    return { ok: false, code: 'BAD_REQUEST', message: `不支持的画布工具：${tool}。可用：${workflowNodeToolSpecs().map(item => item.tool).join('、')}`, details: { tools: workflowNodeToolSpecs().map(item => item.tool) } };
+  }
+  const toolArgs = nodeToolArgsOf(args);
+  const sourceIds = tool === 'video-merge' && Array.isArray(toolArgs.sourceNodeIds) ? toolArgs.sourceNodeIds.map(String) : [];
+  const nodeId = String(args.nodeId || args.id || sourceIds[0] || '').trim();
+  if (!nodeId) return { ok: false, code: 'BAD_REQUEST', message: 'nodeId 不能为空' };
+  if (!nodes.some(item => item.id === nodeId)) return { ok: false, code: 'NOT_FOUND', message: missingNodeMessage(nodes, nodeId) };
+  // video-merge 只处理 sourceNodeIds；其他工具处理 nodeId。
+  for (const id of sourceIds.length ? sourceIds : [nodeId]) {
+    const node = nodes.find(item => item.id === id);
+    if (!node) return { ok: false, code: 'NOT_FOUND', message: missingNodeMessage(nodes, id) };
+    if (!spec.inputTypes.includes(node.type)) {
+      const usable = workflowNodeToolsFor(node.type).map(item => item.tool);
+      return {
+        ok: false,
+        code: 'TOOL_NOT_APPLICABLE',
+        message: `${tool}（${spec.label}）只能用于 ${spec.inputTypes.join(' / ')} 节点，${id} 是 ${node.type} 节点。` + (usable.length ? `这个节点可用：${usable.join('、')}` : '这个节点没有可用的画布工具。'),
+        details: { nodeId: id, nodeType: node.type, inputTypes: spec.inputTypes, usableTools: usable },
+      };
+    }
+  }
+  const capability = getWorkflowOperationCapabilityByNodeTool(tool);
+  if (capability) {
+    try {
+      return { ok: true, nodeId, tool, toolArgs: parseWorkflowOperationNodeToolArguments(capability.id, toolArgs) };
+    } catch (cause) {
+      const issues = (cause as { issues?: { path?: unknown[]; message?: string }[] }).issues;
+      const detail = Array.isArray(issues) && issues.length
+        ? issues.map(issue => (issue.path?.length ? issue.path.join('.') + '：' : '') + issue.message).join('；')
+        : displayError(cause);
+      return { ok: false, code: 'BAD_REQUEST', message: `${tool} 参数不对：${detail}。${spec.usage}`, details: { parameters: spec.parameters } };
+    }
+  }
+  const required = (spec.parameters.required as string[] | undefined) || [];
+  const missing = required.filter(key => toolArgs[key] === undefined || toolArgs[key] === '');
+  if (missing.length) return { ok: false, code: 'BAD_REQUEST', message: `${tool} 缺少参数：${missing.join('、')}。${spec.usage}`, details: { parameters: spec.parameters } };
+  if (tool === 'mask' && !toolArgs.maskNodeId && !toolArgs.maskHref) return { ok: false, code: 'BAD_REQUEST', message: `mask 需要 maskNodeId 或 maskHref。${spec.usage}`, details: { parameters: spec.parameters } };
+  return { ok: true, nodeId, tool, toolArgs };
+}
+
 export function workflowCommandNeedsConfirmation(command: string, args: Record<string, unknown>): boolean {
   return requiresWorkflowConfirmation({ id: 'policy-probe', command, args, source: 'agent' } as WorkflowCommandEnvelope);
 }
@@ -690,6 +749,14 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         if (approval.ok === false) return { ok: false, commandId: envelope.id, error: { code: approval.code, message: approval.message, details: { nodeIds: approval.nodeIds } } };
       }
     }
+    if (command === 'workflow.node.tool') {
+      const state = dependencies.getState();
+      const toolProject = state.projects.find(item => item.id === String(args.projectId || state.activeProjectId || ''));
+      if (toolProject) {
+        const checked = checkWorkflowNodeToolCall(toolProject.nodes, args);
+        if (checked.ok === false) return { ok: false, commandId: envelope.id, error: { code: checked.code, message: checked.message, ...(checked.details ? { details: checked.details } : {}) } };
+      }
+    }
     if (requiresWorkflowConfirmation(envelope) && !hasWorkflowHumanApproval(envelope)) {
       return {
         ok: true,
@@ -799,6 +866,24 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         result = { ok: true, commandId: envelope.id, result: listWorkflowModels(args, dependencies.getUserApiKeys?.() || []) };
       } else if (command === 'workflow.shortcut.list') {
         result = { ok: true, commandId: envelope.id, result: { shortcuts: describeSlashShortcuts() } };
+      } else if (command === 'workflow.node.tool.list') {
+        // 画布工具说明书：适用节点类型、计费（free / paid / llm）、参数 JSON Schema、产出。
+        // nodeId → 只列这个节点能用的；tool → 只看这一个。
+        const tool = typeof args.tool === 'string' ? args.tool.trim() : '';
+        const nodeId = typeof args.nodeId === 'string' ? args.nodeId.trim() : '';
+        let tools = workflowNodeToolSpecs();
+        let nodeType: string | undefined;
+        if (nodeId) {
+          const node = project?.nodes.find(item => item.id === nodeId);
+          if (!node) return error(envelope.id, 'NOT_FOUND', project ? missingNodeMessage(project.nodes, nodeId) : '当前没有可用的 Workflow 项目。');
+          nodeType = node.type;
+          tools = workflowNodeToolsFor(node.type);
+        }
+        if (tool) {
+          if (!workflowNodeToolSpec(tool)) return error(envelope.id, 'BAD_REQUEST', `不支持的画布工具：${tool}。可用：${workflowNodeToolSpecs().map(item => item.tool).join('、')}`);
+          tools = tools.filter(item => item.tool === tool);
+        }
+        result = { ok: true, commandId: envelope.id, result: { ...(nodeId ? { nodeId, nodeType } : {}), tools } };
       } else if (!project) {
         return error(envelope.id, 'NOT_FOUND', '当前没有可用的 Workflow 项目。');
       } else if (command === 'workflow.cost.estimate') {
@@ -1192,20 +1277,11 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
           draftVersion: (committed.result as { draftVersion?: number }).draftVersion,
         } };
       } else if (command === 'workflow.node.tool') {
-        const nodeId = requiredString(args.nodeId || args.id, 'nodeId');
-        const tool = requiredString(args.tool, 'tool');
-        if (!project.nodes.some(node => node.id === nodeId)) return error(envelope.id, 'NOT_FOUND', `节点不存在：${nodeId}`);
-        if (!isWorkflowNodeTool(tool)) return error(envelope.id, 'BAD_REQUEST', `不支持的画布工具：${tool}`);
+        const checked = checkWorkflowNodeToolCall(project.nodes, args);
+        if (checked.ok === false) return { ok: false, commandId: envelope.id, error: { code: checked.code, message: checked.message, ...(checked.details ? { details: checked.details } : {}) } };
+        const { nodeId, tool, toolArgs: normalizedArgs } = checked;
         const runner = dependencies.nodeToolRunner;
         if (!runner) return error(envelope.id, 'RUNNER_UNAVAILABLE', 'Workflow 画布工具适配器尚未连接。');
-        const toolArgs: Record<string, unknown> = { ...args };
-        delete toolArgs.projectId;
-        delete toolArgs.nodeId;
-        delete toolArgs.id;
-        delete toolArgs.tool;
-        delete toolArgs.confirmed;
-        const capability = getWorkflowOperationCapabilityByNodeTool(tool);
-        const normalizedArgs = capability ? parseWorkflowOperationNodeToolArguments(capability.id, toolArgs) : toolArgs;
         const outcome = await runner(project.id, nodeId, tool, normalizedArgs);
         const committed = Boolean(outcome && typeof outcome === 'object' && (outcome as { status?: string }).status === 'committed');
         // 把新产出的节点 ID 交回调用方（Agent 据此继续连线或运行），不用再整图 inspect 一次。

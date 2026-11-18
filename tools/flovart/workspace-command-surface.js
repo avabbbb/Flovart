@@ -9,6 +9,7 @@ export const WORKSPACE_READ_COMMAND_NAMES = Object.freeze([
   'workflow.shortcut.list',
   'workflow.nodes.search',
   'workflow.cost.estimate',
+  'workflow.node.tool.list',
 ]);
 
 export const WORKSPACE_WRITE_COMMAND_NAMES = Object.freeze([

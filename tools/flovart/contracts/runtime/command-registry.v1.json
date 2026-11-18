@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "16b631ecfead8dfb1c2d169c4d8dbdbafc954aff5632f53bf3117ee4f595b3d8",
+  "registryHash": "7ee9a935541a0ba77ed21bebb31f95a00a5d038ef2fce7babfe2adf8bdf49136",
   "commands": [
     {
       "name": "runtime.status",
@@ -688,6 +688,16 @@
         "projectId": "string?",
         "nodeIds": "string[]?",
         "groupId": "string?"
+      },
+      "availability": "available"
+    },
+    {
+      "name": "workflow.node.tool.list",
+      "summary": "Describe the canvas node tools agents can call through workflow.node.tool: for each tool its id, label, input node types, billing (free | paid | llm), parameter JSON Schema, output and usage. nodeId lists only the tools that node can use; tool narrows to one. Read-only.",
+      "args": {
+        "projectId": "string?",
+        "nodeId": "string?",
+        "tool": "string?"
       },
       "availability": "available"
     },
