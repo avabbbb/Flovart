@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Agent 基线：新增只读命令 `workflow.cost.estimate`（工具 `flovart_cost_estimate`，四个宿主同一份 schema）：nodeIds 或 groupId → 每个节点的模型、线路、任务数、预估费用、合计、费用未知与被提交前检查拦下的节点；与审批卡同一份计划（`planGenerationGate`，审批卡与预估共用），不弹卡、不扣费。`workflow.group.run` 的确认请求改为 `generation` 并带每个成员的计划，整组审批卡显示合计费用（之前为空），自动模式的付费授权也能按额度判断。`workflow.group.run` 可经 `agent.task.start` 后台执行，取消时按组解析成员并逐个停止。
 - 顶栏第二个 tab「逆向 / Reverse」改名 **Iris**（全能后期助手 · Personal agent），仍是“优化中”占位；内部 `canvasView: 'reverse'` 与 `reverse` 目录不变。文档按新定位更新：Web 版对话优先、画布为产出面、可选连接本地剪辑软件（Resolve 先）。官方站点改为 https://flovart.avabbbb.com（Cloudflare Worker `flovart`）。
 - 界面：右侧 Agent 对话面板改为磨砂玻璃（半透明底 + 面板内柔和环境光：顶部薄荷、右侧淡紫、底部蜜桃 + 模糊 + 白色内高光），输入框、提示卡、生成计划卡改为磨砂卡；应用其余部分不变；系统开启“减弱透明度”/高对比或浏览器不支持 backdrop-filter 时回退实底（`styles/ambientGlass.css`）。
 

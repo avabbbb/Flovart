@@ -9,12 +9,13 @@ import { AgentRuntimeError, getBrowserAgentRuntime } from './browserAgentRuntime
 import { redactWorkflowAgentValue, withWorkflowHumanApproval, type WorkflowCommandEnvelope, type WorkflowCommandResult } from './workflowDispatcher';
 import { workflowCommandSummary } from '../components/workflow/agentOps';
 import { checkRevision, revisionConflictMessage } from '../components/workflow/revisionRebase';
+import { groupRunOrder } from '../components/workflow/canvasGroups';
 import { getWorkflowOperationCapabilityByNodeTool } from '../components/workflow/operationRegistry';
 import { displayError } from './displayError';
-import { buildGenerationGateSummary, getGenerationGateDetails, type GenerationGateDetails } from './generationGate';
+import { buildGenerationGateSummary, type GenerationGateDetails } from './generationGate';
 import { planBlocked, type AgentConfirmRequest } from './agentSpendMandate';
 import { CONFIRM_DENIED_MESSAGE, readConfirmVerdict, type AgentConfirmVerdict } from './runApproval';
-import { applyPlanChecks, buildGenerationPlanChecks } from './generationPlan';
+import { planGenerationGate } from './generationPlan';
 import { setAgentModelKeysProvider } from './agentModelCatalog';
 import type { UserApiKey as GateApiKey } from '../types';
 
@@ -111,6 +112,19 @@ export function workflowConfirmRequest(envelope: WorkflowCommandEnvelope): Agent
       gates: nodes.length === nodeIds.length ? nodes.map(node => agentPlanGate(node, project)) : [],
     };
   }
+  if (envelope.command === 'workflow.group.run') {
+    // 整组执行与 node.run 同属付费生成：卡上要有每个成员的计划与合计费用，自动模式的付费授权才能按额度判断。
+    const state = useWorkflowStore.getState();
+    const project = state.projects.find(item => item.id === String(envelope.args.projectId || state.activeProjectId || ''));
+    const order = project ? groupRunOrder(project.nodes, project.connections, String(envelope.args.groupId || '')) : [];
+    const nodes = order.flatMap(nodeId => project?.nodes.filter(node => node.id === nodeId) || []);
+    return {
+      kind: 'generation',
+      command: envelope.command,
+      args: envelope.args,
+      gates: order.length && nodes.length === order.length ? nodes.map(node => agentPlanGate(node, project)) : [],
+    };
+  }
   if (envelope.command.endsWith('.delete')) return { kind: 'destructive', command: envelope.command, args: envelope.args };
   const operations = envelope.args.operations || envelope.args.ops;
   if (envelope.command === 'workflow.apply' && Array.isArray(operations)
@@ -120,15 +134,12 @@ export function workflowConfirmRequest(envelope: WorkflowCommandEnvelope): Agent
   return { kind: 'other', command: envelope.command, args: envelope.args };
 }
 
-/** 与画布入口同一份计划：门禁详情 + 提交前检查；操作节点（recipe）不预检，运行时仍兜底。 */
+/** 与画布入口同一份计划（planGenerationGate）：门禁详情 + 提交前检查。 */
 function agentPlanGate(
   node: WorkflowNode,
   project: WorkflowProject | undefined,
 ): GenerationGateDetails {
-  const keys = agentGateKeys();
-  const details = getGenerationGateDetails(node, undefined, keys);
-  if (!project || node.metadata.operation) return details;
-  return applyPlanChecks(details, buildGenerationPlanChecks({ node, project, keys, mode: details.mediaType }));
+  return planGenerationGate(node, project, agentGateKeys());
 }
 
 /** CLI/无宿主时的文本 body：与卡同一份计划，blocker 与提醒逐条列出。 */

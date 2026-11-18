@@ -5,7 +5,7 @@ import { promptIntentFromNode } from '../components/workflow/promptIntent';
 import { getProductModel, resolveProductModelRoute, type ProductModelDefinition } from './productModelCatalog';
 import { resolveProviderGenerationExtension } from './userScriptProviderAdapter';
 import { planReferenceTranscodes } from './referenceTranscode';
-import type { GenerationGateDetails, PlanNotice, PlanReference } from './generationGate';
+import { getGenerationGateDetails, type GenerationGateDetails, type PlanNotice, type PlanReference } from './generationGate';
 import { checkSeedanceReference, isSeedanceModel, seedanceBatchPreflight, type SeedanceBatchResult, type SeedanceReferenceInput } from './seedancePreflight';
 import type { CanonicalGenerationInput } from '../components/workflow/inputResolver';
 
@@ -152,4 +152,19 @@ export function seedancePreflightForNodes(
     }
   });
   return seedanceBatchPreflight(inputs);
+}
+
+/**
+ * 一个生成节点的完整计划：门禁详情（模型、线路、任务数、费用估算）+ 提交前检查（blockers / warnings）。
+ * 审批卡、Agent 确认请求与 workflow.cost.estimate 共用这一份，保证“预估”和“确认卡”永远一致。
+ * 操作节点（recipe）不预检，运行时仍兜底。
+ */
+export function planGenerationGate(
+  node: WorkflowNode,
+  project: Pick<WorkflowProject, 'nodes' | 'connections'> | undefined,
+  keys: UserApiKey[],
+): GenerationGateDetails {
+  const details = getGenerationGateDetails(node, undefined, keys);
+  if (!project || node.metadata.operation) return details;
+  return applyPlanChecks(details, buildGenerationPlanChecks({ node, project, keys, mode: details.mediaType }));
 }

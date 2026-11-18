@@ -77,6 +77,12 @@ export function describeAgentConfirmation(
         detail: gates.length ? (en ? `${gates.length} node(s) · ${tasks} task(s) · billed by your AI service` : planSummaryLine(gates)) : undefined,
       };
     }
+    case 'workflow.group.run': {
+      // 整组执行：与按批审批同一张卡——成员各运行一次，合计费用确认一次。
+      const gates = request.gates || [];
+      if (gates.length) return describeRunApproval(gates.length, gates, language);
+      break;
+    }
     case 'workflow.node.tool': {
       const tool = String(args.tool || '');
       const capability = getWorkflowOperationCapabilityByNodeTool(tool);

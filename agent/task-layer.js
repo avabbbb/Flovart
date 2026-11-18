@@ -10,6 +10,8 @@ export const AGENT_TASK_COMMAND_SET = new Set(AGENT_TASK_COMMANDS);
 export const TASKABLE_COMMANDS = Object.freeze([
   'agent.turn',
   'workflow.node.run',
+  // 整组执行：多个视频镜头可能跑十几分钟，最需要后台化。
+  'workflow.group.run',
   'workflow.generate',
   'workflow.node.tool',
   'workflow.media.import',
@@ -218,6 +220,15 @@ export function createAgentTaskLayer({
     task.cancelReason = typeof reason === 'string' && reason.trim() ? reason.trim() : '任务已取消';
     push(task, 'cancel_requested', { reason: task.cancelReason });
     const stopped = [];
+    if (stop && task.command === 'workflow.group.run' && !task.nodeIds.length && task.args.groupId) {
+      // 整组任务启动时不知道成员：取消时按组解析一次（与 group.run 同一份执行清单），再逐个停止。
+      try {
+        const scope = task.args.projectId ? { projectId: task.args.projectId } : {};
+        const response = await stop('workflow.cost.estimate', { groupId: task.args.groupId, ...scope }, source, caller);
+        const ids = response?.result?.nodeIds;
+        if (Array.isArray(ids)) task.nodeIds = ids.map(String);
+      } catch { /* 解析失败时仍会 abort 等待中的请求 */ }
+    }
     if (stop && task.nodeIds.length) {
       for (const nodeId of task.nodeIds) {
         try {

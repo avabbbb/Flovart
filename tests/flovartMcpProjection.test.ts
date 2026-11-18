@@ -55,6 +55,7 @@ describe('Flovart MCP projection', () => {
       'flovart_group_create',
       'flovart_group_run',
       'flovart_workflow_search_nodes',
+      'flovart_cost_estimate',
       'flovart_note_write',
       'flovart_media_import',
       'flovart_script_materialize',

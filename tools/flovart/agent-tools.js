@@ -74,9 +74,9 @@ const DEFINITIONS = [
     command: 'agent.task.start',
     name: 'flovart_task_start',
     surfaces: EXTERNAL,
-    description: '把可能超过 1 分钟的命令放到后台执行，立即返回 taskId；之后用 flovart_task_get 轮询。可包装：agent.turn、workflow.node.run、workflow.generate、workflow.node.tool、workflow.media.import、workflow.export。被包装命令的确认、预算与 Seedance 预检照常生效；同一 idempotencyKey 重放返回同一个任务。',
+    description: '把可能超过 1 分钟的命令放到后台执行，立即返回 taskId；之后用 flovart_task_get 轮询。可包装：agent.turn、workflow.node.run、workflow.group.run、workflow.generate、workflow.node.tool、workflow.media.import、workflow.export。被包装命令的确认、预算与 Seedance 预检照常生效；同一 idempotencyKey 重放返回同一个任务。',
     fields: {
-      command: { type: 'string', enum: ['agent.turn', 'workflow.node.run', 'workflow.generate', 'workflow.node.tool', 'workflow.media.import', 'workflow.export'], description: '要在后台执行的命令' },
+      command: { type: 'string', enum: ['agent.turn', 'workflow.node.run', 'workflow.group.run', 'workflow.generate', 'workflow.node.tool', 'workflow.media.import', 'workflow.export'], description: '要在后台执行的命令' },
       args: { type: 'object', additionalProperties: true, description: '该命令自己的参数（与直接调用时相同）' },
     },
   },
@@ -259,6 +259,19 @@ const DEFINITIONS = [
       parentId: { type: 'string', description: '只看某个子画布（分组）里的节点' },
       limit: { type: 'number', description: '每页条数，默认 20，最多 100' },
       offset: { type: 'number', description: '分页偏移，用上一页返回的 nextOffset' },
+    },
+  },
+  {
+    command: 'workflow.cost.estimate',
+    name: 'flovart_cost_estimate',
+    aliases: ['flovart_estimate_cost'],
+    surfaces: ALL,
+    description: '运行前预估费用（只读，不弹卡、不扣费）：给 nodeIds（与 flovart_workflow_node_run 相同的清单）或 groupId（flovart_group_run 会跑的成员），'
+      + '返回每个节点的模型、线路、任务数、预估费用，合计 total {tasks, cost}，费用未知的 unknownCostNodeIds，以及被提交前检查拦下的 blockedNodeIds（这些节点的审批卡无法确认，先修好）。'
+      + '与审批卡同一份计划。多个节点或整组运行前先调用它，把清单和合计告诉用户再请求运行；cost 为 null 表示至少一项没有计价规则，以 AI 服务账单为准，不要自己估一个数。',
+    fields: {
+      nodeIds: { type: 'array', items: { type: 'string' }, minItems: 1, description: '要预估的生成节点 id（与 groupId 二选一）' },
+      groupId: { type: 'string', minLength: 1, description: '分组框 id（与 nodeIds 二选一）' },
     },
   },
   {
