@@ -37,3 +37,13 @@
 /* 两侧停靠面板从顶栏下沿开始（--topbar-h 由 AppShell 量出），画布本身仍铺到顶端 */
 .app-shell:has(.workflow-workspace) .workflow-sidebar[data-docked] { margin-top: calc(var(--topbar-h, 48px) + 2px); }
 .app-shell:has(.workflow-workspace) .compact-right-panel[data-open='true'][data-docked='true'] { margin-top: calc(var(--topbar-h, 48px) + 2px); }
+
+/* 两侧面板展开时，顶栏下方面板让出的那两条要和画布一样（底色 + 随平移的网格）。
+   变量由 InfiniteWorkflow 写到 .studio-layout 上；工作区自身不再铺实底，以免盖住它。 */
+.studio-layout:has(.workflow-editor) {
+  background-color: var(--wf-band-color, transparent);
+  background-image: var(--wf-band-image, none);
+  background-size: var(--wf-band-size, auto);
+  background-position: var(--wf-band-pos, 0 0);
+}
+.studio-layout:has(.workflow-editor) .workflow-workspace { background: transparent; }

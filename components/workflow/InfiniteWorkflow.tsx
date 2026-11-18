@@ -3009,6 +3009,28 @@ export function InfiniteWorkflow({
   const promptTop = promptExpanded ? Math.max(8, (promptRootHeight - 60 - 520) / 2) : overlayBounds ? promptBelowTop : 0;
   const promptBottom = promptRootHeight - toolbarTop + 8;
   const gridSize = 24 * project.viewport.k;
+  // 画布视图下顶栏是透明浮层，但两侧停靠面板让出的顶栏下方那条（面板 margin-top）不在画布里，
+  // 会露出外层实底。把画布当前的底色 + 网格（含平移偏移）同步给 .studio-layout 当背景，让那两条与画布无缝。
+  const rootSizeKey = rootSize ? `${rootSize.width}x${rootSize.height}` : '';
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    const host = root?.closest<HTMLElement>('.studio-layout');
+    if (!root || !host) return;
+    const style = getComputedStyle(root);
+    const r = root.getBoundingClientRect();
+    const h = host.getBoundingClientRect();
+    const ox = r.left - h.left + (project.viewport.x % gridSize);
+    const oy = r.top - h.top + (project.viewport.y % gridSize);
+    host.style.setProperty('--wf-band-color', style.backgroundColor);
+    host.style.setProperty('--wf-band-image', style.backgroundImage);
+    host.style.setProperty('--wf-band-size', `${gridSize}px ${gridSize}px`);
+    host.style.setProperty('--wf-band-pos', `${ox}px ${oy}px`);
+  }, [project.viewport.x, project.viewport.y, gridSize, project.backgroundMode, theme, rootSizeKey]);
+  useEffect(() => () => {
+    const host = rootRef.current?.closest<HTMLElement>('.studio-layout');
+    if (!host) return;
+    for (const name of ['--wf-band-color', '--wf-band-image', '--wf-band-size', '--wf-band-pos']) host.style.removeProperty(name);
+  }, []);
 
   const batchGroups = useMemo(() => {
     const groups = new Map<string, WorkflowNodeData[]>();
