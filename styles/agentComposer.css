@@ -475,6 +475,8 @@
 .agent-conversation .agent-conversation__messages > .workflow-agent__messages::-webkit-scrollbar-track { background: transparent; }
 .agent-conversation .agent-conversation__messages > .workflow-agent__messages::-webkit-scrollbar-thumb { border-radius: 3px; background: color-mix(in srgb, var(--isl-ink-ghost) 55%, transparent); }
 .agent-conversation .agent-turn-rail { right: 6px; }
+/* 刻度槽贴到面板右缘：消息视口吃掉对话区右侧内边距，刻度与滚动条不再悬在内容和面板边之间 */
+.agent-conversation .agent-conversation__viewport { margin-right: -8px; }
 .agent-conversation .workflow-agent__messages .workflow-agent__message { min-width: 0; max-width: 100%; }
 .agent-conversation .workflow-agent__messages .agent-md__table > table { min-width: 100%; }
 .agent-conversation .agent-md { max-width: 100%; }
