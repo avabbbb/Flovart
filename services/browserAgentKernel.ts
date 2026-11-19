@@ -30,6 +30,7 @@ import type { WorkflowNode } from '../components/workflow/types';
 import { useWorkflowStore } from '../components/workflow/store';
 import { resolveNodeOrAlternate } from '../components/workflow/batchAlternates';
 import { loadAgentNodeMedia, type AgentVideoFrame, type AgentVideoLayout } from './agentMediaView';
+import { createCutAgentTools, CUT_TOOL_DOCS } from './cut/agentTools';
 import { buildAgentAskForm, type AgentAskForm, type AgentAskSpec } from '../components/agent/agentAskForm';
 import { formatSearchSources, searchAgentWeb, WEB_SEARCH_TOOL_NAME, type AgentSearchCredential, type SearchRecency } from './agentWebSearch';
 import { formatGrepMatches, grepLocalFolders, LOCAL_GREP_TOOL_NAME } from './agentLocalGrep';
@@ -1041,6 +1042,8 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
   extraTools.push(createLocalGrepTool(guard));
   if (dependencies.ask) extraTools.push(createAskTool(dependencies.ask));
   if (dependencies.getNodes) extraTools.push(createMediaViewTool(dependencies.getNodes));
+  // Cut 视频剪辑页：读写时间线 / 字幕 / 代理 / 导出（实现懒加载，见 services/cut/agentTools.ts）。
+  extraTools.push(...createCutAgentTools({ projectId: dependencies.projectId }));
   return [...commandTools, ...extraTools];
 }
 
@@ -1246,6 +1249,7 @@ const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Iris Agent，Iris 生成式 AI 图
 - iris_grep：在用户连接过的本地文件夹里搜文本文件（正则）。用户说“我本地的素材/文档里有…”时先用它；只能搜已授权文件夹，读不到任意路径。
 - iris_skill_read：读取技能（Skill）的完整说明（id，可选 file 读 references/、commands/ 下的文件，长文件用 offset 翻页）。任务与下方技能索引里的某个技能匹配时先读再做。
 - iris_memory：项目记忆（add/list/search/delete，只属于当前项目）。用户说“记住…”、或确认了以后还要沿用的偏好 / 设定（风格、角色/产品设定、画幅、时长、选定的模型或费用档位）时，当轮就写入一句事实，不要等到最后；长任务进行中上下文会被压缩，没写进记忆的已确认事实会丢。不要写入密钥、Token、密码或一次性过程。
+${CUT_TOOL_DOCS}
 command.list/schema 属于 CLI discovery/debug，不是你的工具；不得访问 Shell、任意文件或 Provider Secret。
 
 ## 画布能力地图
@@ -1268,7 +1272,7 @@ command.list/schema 属于 CLI discovery/debug，不是你的工具；不得访�
 其中本地处理（裁剪、旋转、宫格、剪辑、分离、拼接、截帧、变速）不花费额度；放大、去背景、AI 编辑、扩图、局部重绘、拆图层、图层贴纸会调用模型服务。
 
 其他工作台（只能引导用户操作）：
-- Cut（顶部第二个 tab，原名「逆向」，曾叫 Iris；Iris 现在是整个产品的名字）：全能后期助手，当前显示「优化中」，还不能使用，不要引导用户去那里操作，也不要承诺它的功能。以前做的逆向视频拆解结果以 subgraph 子画布留在 Workflow 里；你可以读取子画布里的镜头节点继续加工，但不能改逆向工程本身。
+- Cut（顶部第二个 tab，原名「逆向」）：视频剪辑页（时间线、字幕、快捷键、代理、导出 MP4 回画布），用上面的 iris_cut_* 工具直接读写。其中「故事版 · 逆向」子页保留以前的逆向视频拆解，结果以 subgraph 子画布留在 Workflow 里；你可以读取子画布里的镜头节点继续加工，但不能改逆向工程本身。
 - 逆向游戏美术素材：当前版本没有这个功能，不要承诺；可以用图生图、宫格切分、去背景、拆分图层组合出类似流程。
 - 素材库、网络图片：用 iris_media_import 导入（url 或 assetId），可直接接到生成节点作参考；本地文件夹与历史仍由用户从侧栏插入画布，你再通过 inspect 按节点 ID 使用。
 - 本地 Agent 连接：在 Agent 抽屉的「连接」里选择 Codex、WorkBuddy 等本机 Agent；外部 Agent 通过 Iris CLI/MCP 操作同一张画布，还能调用节点后处理工具。

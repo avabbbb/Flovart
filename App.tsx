@@ -50,7 +50,8 @@ const SettingsPanel = React.lazy(() => import('./components/SettingsPanel').then
 
 import { AgentDrawerSections } from './components/agent/AgentDrawerSections';
 const WorkflowWorkspace = React.lazy(() => import('./components/workflow/WorkflowWorkspace').then(m => ({ default: m.WorkflowWorkspace })));
-const IrisStoryboardPage = React.lazy(() => import('./components/reverse/IrisStoryboardPage').then(m => ({ default: m.IrisStoryboardPage })));
+// Cut 页（视图 id 'reverse'）：视频编辑器 + 故事版 · 逆向子页，整页懒加载。
+const CutPage = React.lazy(() => import('./components/cut/CutPage').then(m => ({ default: m.CutPage })));
 const AssetAddModal = React.lazy(() => import('./components/AssetAddModal').then(m => ({ default: m.AssetAddModal })));
 const BrowserImportBridge = React.lazy(() => import('./components/extension/BrowserImportBridge').then(m => ({ default: m.BrowserImportBridge })));
 const ExtensionInstallPrompt = React.lazy(() => import('./components/extension/ExtensionInstallPrompt').then(m => ({ default: m.ExtensionInstallPrompt })));
@@ -718,9 +719,9 @@ const App: React.FC = () => {
                     the built-in assistant remains in the right drawer beside the
                     two Workflow views. */}
                 {canvasView === 'reverse' ? (
-                    // Cut（故事版）：素材从当前画布节点派生，写入落到画布真节点；右侧是同一个 Agent（此时抽屉不挂载对话，避免同一项目起两个内核）。
+                    // Cut：视频剪辑器 + 故事版子页（素材从当前画布节点派生，写入落到画布真节点；右侧是同一个 Agent，此时抽屉不挂载对话，避免同一项目起两个内核）。
                     <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">{language === 'zho' ? '正在加载 Cut...' : 'Loading Cut...'}</div>}>
-                        <IrisStoryboardPage
+                        <CutPage
                             language={language}
                             project={activeWorkflowProject}
                             onCreateProject={() => workflowCreateProject(language === 'zho' ? '未命名工作流' : 'Untitled workflow')}
