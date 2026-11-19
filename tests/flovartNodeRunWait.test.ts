@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { executeFlovartCommand, parseCliArgs, workflowRunWaitMs } from '../tools/flovart/core.js';
 import { FlovartWorkspaceClient } from '../tools/flovart/workspace-client.js';
 
+type OperationMock = (operation: string, payload: Record<string, any>, context: Record<string, any>) => Promise<never>;
+
 function timeoutError() {
   return Object.assign(new Error('timeout'), { code: 'WORKSPACE_TIMEOUT', details: {} });
 }
@@ -16,7 +18,7 @@ describe('workflow.node.run --wait-seconds / --no-wait', () => {
   });
 
   it('returns a running receipt on timeout and does not forward the wait flag to the Workflow', async () => {
-    const operation = vi.fn(async () => { throw timeoutError(); });
+    const operation = vi.fn<OperationMock>(async () => { throw timeoutError(); });
     const result = await executeFlovartCommand('workflow.node.run', {
       'project-id': 'p1', 'node-ids': 'n1,n2', 'idempotency-key': 'run-7', 'wait-seconds': '30',
     }, { operation, source: 'cli' });
@@ -29,7 +31,7 @@ describe('workflow.node.run --wait-seconds / --no-wait', () => {
   });
 
   it('keeps the old behaviour without the flag: a timeout is still an error', async () => {
-    const operation = vi.fn(async () => { throw timeoutError(); });
+    const operation = vi.fn<OperationMock>(async () => { throw timeoutError(); });
     await expect(executeFlovartCommand('workflow.node.run', {
       'project-id': 'p1', 'node-id': 'n1', 'idempotency-key': 'run-8',
     }, { operation, source: 'cli' })).rejects.toMatchObject({ code: 'WORKSPACE_TIMEOUT' });
