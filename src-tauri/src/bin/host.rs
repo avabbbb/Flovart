@@ -1,9 +1,9 @@
-//! Chrome / Edge Native Messaging adapter for Flovart Desktop.
+//! Chrome / Edge Native Messaging adapter for Iris Desktop.
 //! It accepts a narrow typed protocol, keeps stdin/stdout open for chunked imports,
 //! and authenticates every local Control API request with the startup discovery token.
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use flovart_lib::runtime::{
+use iris_lib::runtime::{
     default_discovery_path, BrowserImportBegin, DiscoveryRecord, ProductionRuntime,
     BROWSER_IMPORT_CHUNK_BYTES,
 };
@@ -221,8 +221,8 @@ fn execute_bridge(request: BridgeRequest) -> Value {
                             &discovery,
                             &format!("/v1/browser-imports/{transfer_id}/chunks"),
                             &[
-                                ("X-Flovart-Extension-Origin", origin.as_str()),
-                                ("X-Flovart-Chunk-Sequence", &sequence.to_string()),
+                                ("X-Iris-Extension-Origin", origin.as_str()),
+                                ("X-Iris-Chunk-Sequence", &sequence.to_string()),
                             ],
                             &bytes,
                         )
@@ -253,7 +253,7 @@ fn execute_bridge(request: BridgeRequest) -> Value {
 }
 
 fn caller_origin() -> Result<String, Value> {
-    let origin = std::env::var("FLOVART_NATIVE_CALLER_ORIGIN")
+    let origin = std::env::var("IRIS_NATIVE_CALLER_ORIGIN")
         .ok()
         .or_else(|| std::env::args().nth(1))
         .unwrap_or_default();
@@ -307,7 +307,7 @@ fn wait_for_pairing(
             Some("pending") => {
                 return error_value_retryable(
                     "PAIRING_REQUIRED",
-                    "Approve this extension in Flovart Desktop, then retry.",
+                    "Approve this extension in Iris Desktop, then retry.",
                     true,
                 )
             }
@@ -342,7 +342,7 @@ fn discover_runtime() -> Result<DiscoveryRecord, Value> {
         thread::sleep(Duration::from_millis(100));
     }
     Err(runtime_unavailable(
-        "Flovart Desktop did not become ready before the bridge timeout.",
+        "Iris Desktop did not become ready before the bridge timeout.",
     ))
 }
 
@@ -365,11 +365,11 @@ fn runtime_reachable(discovery: &DiscoveryRecord) -> bool {
 
 fn wake_desktop() -> Result<(), Value> {
     let executable = desktop_executable().ok_or_else(|| {
-        runtime_unavailable("Flovart Desktop executable could not be located by the Native Host.")
+        runtime_unavailable("Iris Desktop executable could not be located by the Native Host.")
     })?;
     Command::new(&executable).spawn().map_err(|error| {
         runtime_unavailable(format!(
-            "Flovart Desktop could not be started from {}: {error}",
+            "Iris Desktop could not be started from {}: {error}",
             executable.display()
         ))
     })?;
@@ -377,13 +377,13 @@ fn wake_desktop() -> Result<(), Value> {
 }
 
 fn desktop_executable() -> Option<PathBuf> {
-    if let Some(path) = std::env::var_os("FLOVART_DESKTOP_EXECUTABLE").map(PathBuf::from) {
+    if let Some(path) = std::env::var_os("IRIS_DESKTOP_EXECUTABLE").map(PathBuf::from) {
         if path.is_file() {
             return Some(path);
         }
     }
     let parent = std::env::current_exe().ok()?.parent()?.to_path_buf();
-    ["flovart.exe", "Flovart.exe", "flovart"]
+    ["iris.exe", "Iris.exe", "iris"]
         .into_iter()
         .map(|name| parent.join(name))
         .find(|path| path.is_file())

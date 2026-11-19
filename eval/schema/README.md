@@ -1,4 +1,4 @@
-# FlovartBench data model (E1)
+# IrisBench data model (E1)
 
 The normative shape of every record is the module that produces it. The JSON
 Schema in this directory is the reviewable contract for on-disk files; the

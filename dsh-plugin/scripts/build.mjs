@@ -91,9 +91,9 @@ console.log('[dsh-plugin] client loader contract verified')
 
 // Ship the canonical Skill inside the package so DSH's / menu can load it
 // without cloning the repository.
-const skillSource = resolve(ROOT, '..', 'skills', 'flovart')
+const skillSource = resolve(ROOT, '..', 'skills', 'iris')
 const skillTarget = resolve(ROOT, 'skill')
-if (!existsSync(resolve(skillSource, 'SKILL.md'))) throw new Error('canonical skill is missing: skills/flovart/SKILL.md')
+if (!existsSync(resolve(skillSource, 'SKILL.md'))) throw new Error('canonical skill is missing: skills/iris/SKILL.md')
 rmSync(skillTarget, { recursive: true, force: true })
-cpSync(skillSource, resolve(skillTarget, 'flovart'), { recursive: true })
-console.log('[dsh-plugin] ok skill/flovart')
+cpSync(skillSource, resolve(skillTarget, 'iris'), { recursive: true })
+console.log('[dsh-plugin] ok skill/iris')

@@ -1,16 +1,16 @@
-# Flovart 贡献约定 | Contributing
+# Iris 贡献约定 | Contributing
 
 [中文](#中文) · [English](#english)
 
 ## 中文
 
-感谢参与 Flovart。为了让讨论和审查保持低成本，我们采用：
+感谢参与 Iris。为了让讨论和审查保持低成本，我们采用：
 
 > 一个 Issue 只描述一个可判断的问题；一个 PR 只交付一个可验证的目标。
 
 ### 提 Issue
 
-提交前先搜索已有 Issue，并从 [Issue 选择页](https://github.com/avabbbb/Flovart/issues/new/choose) 选择 Bug 或功能建议模板。
+提交前先搜索已有 Issue，并从 [Issue 选择页](https://github.com/avabbbb/Iris/issues/new/choose) 选择 Bug 或功能建议模板。
 
 - 先说明用户遇到的问题和场景，再提出方案；
 - Bug 必须包含最小复现步骤、预期结果、实际结果和环境；
@@ -37,7 +37,7 @@
 
 ### 审查边界
 
-- 产品顶栏是 **Canvas、Iris、Agent** 三个正式 surface（Iris 原名 逆向，是 surface 名而不是产品名）；不恢复旧的 Canvas / Art 双系统。
+- 产品顶栏是 **Canvas（画布）、Cut、Agent** 三个正式 surface（Cut 原名 逆向，后曾叫 Iris；Iris 现在是产品名）；不恢复旧的 Canvas / Art 双系统。
 - Provider 与 API 请求适配放在根目录 `services/`；共享状态优先使用现有 store/hook。
 - 当前项目、素材和生成记录主要保存在浏览器本地，不把未实现的云同步写成正式能力。
 - 新增遥测、外部请求、Secret 读取、持久化字段或费用路径时，PR 必须单独说明数据与安全影响。
@@ -47,13 +47,13 @@
 
 ## English
 
-Thank you for contributing to Flovart. We keep collaboration predictable with one rule:
+Thank you for contributing to Iris. We keep collaboration predictable with one rule:
 
 > One Issue describes one decidable problem; one PR delivers one verifiable outcome.
 
 ### Issues
 
-Search existing Issues first, then use the [Issue chooser](https://github.com/avabbbb/Flovart/issues/new/choose).
+Search existing Issues first, then use the [Issue chooser](https://github.com/avabbbb/Iris/issues/new/choose).
 
 - Describe the user problem and context before proposing a solution.
 - Bugs need minimal reproduction steps, expected behavior, actual behavior, and environment.
@@ -70,6 +70,6 @@ Search existing Issues first, then use the [Issue chooser](https://github.com/av
 5. Run relevant tests, normally `npm run test` and `npm run build`; list exact commands and explain omitted checks.
 6. Check `todo.mdx` and `pending-test.mdx` whenever feature status changes.
 
-Flovart's top-level surfaces are **Canvas, Iris, and Agent** (Iris, formerly Reverse, is a surface name, not the product name). Do not restore the old Canvas/Art dual system. Any telemetry, external request, secret access, persistence change, or paid-provider path must disclose its data and security impact in the PR.
+Iris's top-level surfaces are **Canvas, Cut, and Agent** (Cut was formerly Reverse, then briefly named Iris; Iris is now the product name). Do not restore the old Canvas/Art dual system. Any telemetry, external request, secret access, persistence change, or paid-provider path must disclose its data and security impact in the PR.
 
 By contributing, you agree that your work is released under the <a href="../LICENSE">MIT License</a>. Please also follow the <a href="CODE_OF_CONDUCT.md">Code of Conduct</a>.

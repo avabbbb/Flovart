@@ -3,7 +3,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { AGENT_DIR } from './config.js';
 
-// 本机 Agent 的任务台账：Agent 数据目录（~/.flovart，与 agent.json 同目录）下的 agent-tasks.json。
+// 本机 Agent 的任务台账：Agent 数据目录（~/.iris，与 agent.json 同目录）下的 agent-tasks.json。
 // 记录量小（保留上限 200 条），整文件写临时文件再 rename 原子替换；写入串行。
 // 文件损坏时备份为 *.corrupt 后从空台账开始，不让 Agent 启动失败。
 
@@ -30,7 +30,7 @@ export function createFileTaskStore({ file = path.join(AGENT_DIR, AGENT_TASK_LED
       }
     } catch (error) {
       try { await fsp.rename(file, file + '.' + Date.now() + '.corrupt'); } catch { /* best effort */ }
-      console.error('[flovart-agent] 任务台账损坏，已备份并从空台账开始：' + (error?.message || error));
+      console.error('[iris-agent] 任务台账损坏，已备份并从空台账开始：' + (error?.message || error));
     }
     return records;
   }

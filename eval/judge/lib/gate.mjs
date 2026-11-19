@@ -15,7 +15,7 @@ export const ADMISSION = {
 /** Admission: candidate vs baseline summaries (from summarize()) plus judge health. */
 export function admissionGate({ baseline, candidate, deterministic, judgeHealth = {} }) {
   const reasons = [];
-  if (deterministic && deterministic.passRate !== 1) reasons.push(`rule layer (FlovartBench) pass rate ${deterministic.passRate} must be 1`);
+  if (deterministic && deterministic.passRate !== 1) reasons.push(`rule layer (IrisBench) pass rate ${deterministic.passRate} must be 1`);
   if (candidate.redFailures > ADMISSION.redFailuresAllowed) reasons.push(`RED failures ${candidate.redFailures}`);
   if (baseline?.passRate !== null && baseline?.passRate !== undefined && candidate.passRate !== null) {
     const drop = baseline.passRate - candidate.passRate;

@@ -36,7 +36,7 @@ for (const path of workflowCoreFiles) {
 }
 observations.push(`workflow-core-files=${workflowCoreFiles.length}`);
 
-const publicSurface = read('tools/flovart/agent-surface.js');
+const publicSurface = read('tools/iris/agent-surface.js');
 const publicSurfaceBlock = publicSurface.match(/AGENT_PUBLIC_COMMANDS[\s\S]*?Object\.freeze\(\[([\s\S]*?)\]\)/)?.[1] || '';
 const publicCommands = [...publicSurfaceBlock.matchAll(/'([^']+)'/g)].map(match => match[1]);
 requireCondition(
@@ -51,22 +51,22 @@ requireCondition(
 );
 observations.push(`agent-public-commands=${publicCommands.length}`);
 
-const agentKit = read('tools/flovart/agent-kit.js');
+const agentKit = read('tools/iris/agent-kit.js');
 requireCondition(
-  !/file-state runtime|command-queue\.json/i.test(agentKit) && (agentKit.includes('flovart ensure --json') || agentKit.includes('status --json, then start --open')),
+  !/file-state runtime|command-queue\.json/i.test(agentKit) && (agentKit.includes('iris ensure --json') || agentKit.includes('status --json, then start --open')),
   'Packaged Agent setup guidance still points at the retired file-state/command-queue path',
 );
 
 const skillProjectionPaths = [
-  '.agents/skills/flovart/SKILL.md',
-  '.claude/skills/flovart/SKILL.md',
-  'skills/flovart/SKILL.md',
+  '.agents/skills/iris/SKILL.md',
+  '.claude/skills/iris/SKILL.md',
+  'skills/iris/SKILL.md',
 ];
 const canonicalSkill = read(skillProjectionPaths[0]);
 for (const path of skillProjectionPaths.slice(1)) {
   requireCondition(read(path) === canonicalSkill, `${path}: Skill projection drifted from ${skillProjectionPaths[0]}`);
 }
-const generatedSkillPath = 'tools/flovart/skill/flovart/SKILL.md';
+const generatedSkillPath = 'tools/iris/skill/iris/SKILL.md';
 if (existsSync(join(root, generatedSkillPath))) {
   requireCondition(read(generatedSkillPath) === canonicalSkill, `${generatedSkillPath}: generated Skill drifted from ${skillProjectionPaths[0]}`);
   observations.push('generated-skill=present-and-aligned');
@@ -76,7 +76,7 @@ if (existsSync(join(root, generatedSkillPath))) {
 observations.push(`skill-projections=${skillProjectionPaths.length}`);
 
 try {
-  const help = execFileSync(process.execPath, ['tools/flovart/cli.js', '--help'], { cwd: root, encoding: 'utf8' });
+  const help = execFileSync(process.execPath, ['tools/iris/cli.js', '--help'], { cwd: root, encoding: 'utf8' });
   requireCondition(
     help.includes('Bootstrap/admin:') && help.includes('Stable operations:') && help.includes('workflow.inspect'),
     'CLI --help did not return canonical help output',
@@ -86,10 +86,10 @@ try {
 }
 
 try {
-  const setup = execFileSync(process.execPath, ['tools/flovart/cli.js', 'setup'], { cwd: root, encoding: 'utf8' });
+  const setup = execFileSync(process.execPath, ['tools/iris/cli.js', 'setup'], { cwd: root, encoding: 'utf8' });
   requireCondition(
-    !/npx flovart-cli/.test(setup),
-    'CLI setup output advertises `npx flovart-cli`, which is not published in the npm registry',
+    !/npx (?:iris|flovart)-cli/.test(setup),
+    'CLI setup output advertises `npx iris-cli`, which is not published in the npm registry',
   );
 } catch (error) {
   requireCondition(false, `CLI setup failed: ${error instanceof Error ? error.message : String(error)}`);

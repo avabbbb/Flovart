@@ -1,11 +1,11 @@
 // 内置 Agent 的后台任务（与本机 Agent 的 agent.task.* 同一个任务层、同一份工具定义）。
 // 长命令（批量 / 整组生成、视频、导出…）不再把这一轮对话卡住几分钟：
 // 先在当前回合完成审批（策略层 + 付费确认卡），批准后才放进后台执行，立即返回 taskId；
-// 之后的回合用 flovart_task_get 轮询、flovart_task_cancel 取消（会停止它启动的画布节点）。
+// 之后的回合用 iris_task_get 轮询、iris_task_cancel 取消（会停止它启动的画布节点）。
 // 任务按项目写进浏览器任务台账（IndexedDB）：刷新页面后任务仍可 get / cancel，在途任务按画布节点
 // 状态对账（视频任务由 App 的刷新恢复续接上游，这里跟随节点状态），无法确认是否已提交的标为 unknown_submit。
 import { createAgentTaskLayer, AgentTaskError, TASKABLE_COMMANDS } from '../agent/task-layer.js';
-import { AGENT_BROWSER_COMMANDS } from '../tools/flovart/agent-surface.js';
+import { AGENT_BROWSER_COMMANDS } from '../tools/iris/agent-surface.js';
 import type { WorkflowCommandEnvelope, WorkflowCommandResult } from './workflowDispatcher';
 import { withWorkflowHumanApproval } from './workflowDispatcher';
 import { createBrowserAgentTaskStore, type AgentTaskLedgerStore } from './agentTaskStore';

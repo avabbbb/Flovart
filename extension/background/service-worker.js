@@ -1,24 +1,25 @@
 import { exactOptionalOrigin } from './import-protocol.js';
 import { transferMedia } from './media-transfer.js';
 import { NativeSession, nativeResult } from './native-client.js';
-import { purgeLegacyExtensionStorage } from './storage-migration.js';
+import { ensureRenamedExtensionStorage, purgeLegacyExtensionStorage } from './storage-migration.js';
 import { approvedWebPort, onWebMessage, requestWeb, startWebBridge } from './web-bridge.js';
 import { createWebKeyStore, registerWebKeyHandlers } from './web-keys.js';
 import { reversePromptFromMedia } from './reverse-prompt.js';
 
-const MENU_IMPORT = 'flovart-import-image';
-const MENU_IMPORT_VIDEO = 'flovart-import-video';
-const MENU_OPEN = 'flovart-open-desktop';
-const MENU_WEB_IMPORT = 'flovart-web-import-image';
-const MENU_WEB_IMPORT_VIDEO = 'flovart-web-import-video';
-const MENU_REVERSE_PROMPT = 'flovart-reverse-prompt';
+const MENU_IMPORT = 'iris-import-image';
+const MENU_IMPORT_VIDEO = 'iris-import-video';
+const MENU_OPEN = 'iris-open-desktop';
+const MENU_WEB_IMPORT = 'iris-web-import-image';
+const MENU_WEB_IMPORT_VIDEO = 'iris-web-import-video';
+const MENU_REVERSE_PROMPT = 'iris-reverse-prompt';
 // 反推结果只放 session 存储：浏览器关闭即清空，不落盘。
-const REVERSE_RESULT_KEY = 'flovartReversePrompt';
+const REVERSE_RESULT_KEY = 'irisReversePrompt';
 const MAX_IMPORT_BYTES = 64 * 1024 * 1024;
 const SUPPORTED_IMAGE_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif']);
 const SUPPORTED_VIDEO_MIME = new Set(['video/mp4', 'video/webm']);
 const BRIDGE_CAPABILITIES = ['browser.import.image', 'browser.import.video'];
 
+void ensureRenamedExtensionStorage(globalThis.chrome?.storage?.local);
 startWebBridge();
 // 网页画布同步来的 BYOK 密钥；反推等插件内能力从这里读取。
 const webKeyStore = createWebKeyStore();
@@ -26,17 +27,17 @@ void registerWebKeyHandlers(onWebMessage, webKeyStore);
 
 chrome.runtime.onInstalled.addListener(() => {
   void purgeLegacyExtensionStorage().catch(error => {
-    console.error('[Flovart Browser Import] 清理旧扩展数据失败', error);
+    console.error('[Iris Browser Import] 清理旧扩展数据失败', error);
   });
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: MENU_IMPORT,
-      title: '添加图片到 Flovart',
+      title: '添加图片到 Iris',
       contexts: ['image'],
     });
     chrome.contextMenus.create({
       id: MENU_IMPORT_VIDEO,
-      title: '添加视频到 Flovart',
+      title: '添加视频到 Iris',
       contexts: ['video'],
     });
     chrome.contextMenus.create({
@@ -56,7 +57,7 @@ chrome.runtime.onInstalled.addListener(() => {
     });
     chrome.contextMenus.create({
       id: MENU_OPEN,
-      title: '连接 / 打开 Flovart Desktop',
+      title: '连接 / 打开 Iris Desktop',
       contexts: ['page', 'image', 'video', 'selection'],
     });
   });
@@ -69,18 +70,18 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === MENU_WEB_IMPORT_VIDEO) void importSelectedMedia(info, tab, 'video', 'web');
   if (info.menuItemId === MENU_REVERSE_PROMPT) void reverseSelectedImage(info, tab);
   if (info.menuItemId === MENU_OPEN) {
-    connectDesktop().catch(error => console.error('[Flovart Browser Import] 连接 Desktop 失败', error));
+    connectDesktop().catch(error => console.error('[Iris Browser Import] 连接 Desktop 失败', error));
   }
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type === 'FLOVART_REVERSE_TO_CANVAS') {
+  if (message?.type === 'IRIS_REVERSE_TO_CANVAS') {
     sendReverseResultToCanvas()
       .then(result => sendResponse({ ok: true, result }))
       .catch(error => sendResponse({ ok: false, error: errorMessage(error) }));
     return true;
   }
-  if (message?.type !== 'FLOVART_DESKTOP_CONNECT') return undefined;
+  if (message?.type !== 'IRIS_DESKTOP_CONNECT') return undefined;
   connectDesktop()
     .then(result => sendResponse({ ok: true, result }))
     .catch(error => sendResponse({ ok: false, error: errorMessage(error) }));
@@ -88,13 +89,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 async function connectDesktop() {
-  await setBridgeStatus('connecting', '正在连接 Flovart Desktop…');
+  await setBridgeStatus('connecting', '正在连接 Iris Desktop…');
   let session;
   try {
     session = new NativeSession();
     const pairing = nativeResult(await requestPairing(session, ['browser.import.image']));
     if (pairing.status === 'rejected') throw new Error('Desktop 已拒绝此扩展连接');
-    await setBridgeStatus('connected', 'Flovart Desktop 已连接');
+    await setBridgeStatus('connected', 'Iris Desktop 已连接');
     return pairing;
   } catch (error) {
     await setBridgeStatus('error', userFacingError(error));
@@ -153,7 +154,7 @@ async function importSelectedMedia(info, tab, kind, target = 'desktop') {
     await appendImportHistory(media.name, destination);
     await setBridgeStatus('imported', '已发送到' + destination, receipt);
   } catch (error) {
-    console.error('[Flovart Browser Import]', error);
+    console.error('[Iris Browser Import]', error);
     await setBridgeStatus('error', userFacingError(error));
   } finally {
     session?.disconnect();
@@ -169,15 +170,15 @@ function formatBytes(bytes) {
 function userFacingError(error) {
   const text = errorMessage(error);
   if (/拒绝|rejected/i.test(text)) {
-    return `${text}。请在 Flovart Desktop 的首次连接弹窗中点击“允许”。`;
+    return `${text}。请在 Iris Desktop 的首次连接弹窗中点击“允许”。`;
   }
   if (/Native Host|Host 已断开|响应超时|No such native messenger|未找到|无法连接/i.test(text)) {
-    return `${text}。请先启动 Flovart Desktop（首次会自动注册 Native Host），或手动执行 extension/register-native-host.ps1。`;
+    return `${text}。请先启动 Iris Desktop（首次会自动注册 Native Host），或手动执行 extension/register-native-host.ps1。`;
   }
   return text;
 }
 
-const HISTORY_KEY = 'flovartImportHistory';
+const HISTORY_KEY = 'irisImportHistory';
 const HISTORY_LIMIT = 5;
 // 导入历史写入串行化：读-改-写之间不再被并发导入穿插覆盖。
 let importHistoryWrite = Promise.resolve();
@@ -310,7 +311,7 @@ function mediaName(sourceUrl, mimeType, kind) {
 
 async function setBridgeStatus(state, message, receipt = null) {
   const status = { state, message, receipt, updatedAt: Date.now() };
-  await chrome.storage.local.set({ flovartBridgeStatus: status });
+  await chrome.storage.local.set({ irisBridgeStatus: status });
   const badge = state === 'importing' || state === 'connecting' ? '…' : state === 'error' ? '!' : state === 'imported' ? '✓' : '';
   await chrome.action.setBadgeText({ text: badge });
   if (badge) await chrome.action.setBadgeBackgroundColor({ color: state === 'error' ? '#d14343' : '#168f82' });
@@ -337,7 +338,7 @@ async function reverseSelectedImage(info, tab) {
     });
     await setBridgeStatus('imported', '反推完成：在插件弹窗中查看、复制或发送到网页画布');
   } catch (error) {
-    console.error('[Flovart Reverse Prompt]', error);
+    console.error('[Iris Reverse Prompt]', error);
     await setBridgeStatus('error', userFacingError(error));
   }
 }

@@ -1,4 +1,4 @@
-use flovart_lib::runtime::ProductionRuntime;
+use iris_lib::runtime::ProductionRuntime;
 use serde_json::{json, Value};
 use std::{
     fs,
@@ -30,7 +30,7 @@ fn get_task(runtime: &ProductionRuntime, task_id: &str) -> Value {
 
 fn test_database_path() -> PathBuf {
     std::env::temp_dir()
-        .join(format!("flovart-runtime-recovery-{}", Uuid::now_v7()))
+        .join(format!("iris-runtime-recovery-{}", Uuid::now_v7()))
         .join("state.db")
 }
 

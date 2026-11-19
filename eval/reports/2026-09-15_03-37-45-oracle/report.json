@@ -1031,7 +1031,7 @@
     {
       "gate": "real Codex agent run",
       "status": "not-run",
-      "reason": "requires FLOVARTBENCH_ALLOW_CODEX=true and a codex binary"
+      "reason": "requires IRISBENCH_ALLOW_CODEX=true and a codex binary"
     },
     {
       "gate": "real paid Provider submission",

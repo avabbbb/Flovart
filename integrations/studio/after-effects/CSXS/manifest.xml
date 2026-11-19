@@ -17,7 +17,7 @@
         <Lifecycle><AutoVisible>true</AutoVisible></Lifecycle>
         <UI>
           <Type>Panel</Type>
-          <Menu>Flovart</Menu>
+          <Menu>Iris</Menu>
           <Geometry><Size><Width>360</Width><Height>540</Height></Size></Geometry>
         </UI>
       </DispatchInfo>

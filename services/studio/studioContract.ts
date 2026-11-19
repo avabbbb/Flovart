@@ -54,7 +54,7 @@ export interface HostImportTarget {
   sourceSelectionId?: string;
 }
 
-export interface FlovartArtifact {
+export interface IrisArtifact {
   artifactId?: string;
   taskId?: string;
   name?: string;
@@ -153,7 +153,7 @@ export interface HostArtifactPersistence {
 /** A generated Resolve asset waiting for the user to import it into the Media Pool. */
 export interface StudioGenerationCandidate {
   candidateId: string;
-  artifact: FlovartArtifact & {
+  artifact: IrisArtifact & {
     artifactId: string;
     blob: Blob;
     sha256: string;
@@ -180,14 +180,14 @@ export interface Disposable {
   dispose(): void;
 }
 
-/** The only native-host responsibilities; planning and Provider calls stay in Flovart Core. */
+/** The only native-host responsibilities; planning and Provider calls stay in Iris Core. */
 export interface CreativeHostAdapter {
   id: CreativeHostId;
   getContext(): Promise<HostContext>;
   getSelection(): Promise<HostSelection | null>;
   materializeSelection(selection: HostSelection): Promise<MaterializedHostSelection>;
-  persistArtifact?(artifact: FlovartArtifact): Promise<HostArtifactPersistence>;
-  importArtifact(artifact: FlovartArtifact, target?: HostImportTarget, persistenceReceipt?: HostArtifactPersistence): Promise<HostImportResult>;
+  persistArtifact?(artifact: IrisArtifact): Promise<HostArtifactPersistence>;
+  importArtifact(artifact: IrisArtifact, target?: HostImportTarget, persistenceReceipt?: HostArtifactPersistence): Promise<HostImportResult>;
   /** Optional host-native application step after a candidate artifact was imported. */
   applyNativeEffect?(request: HostNativeEffectRequest): Promise<HostImportResult>;
   /** Optional read from the host's persisted candidate records; no parallel app-side history. */
@@ -211,8 +211,8 @@ export interface StudioRunRequest {
   idempotencyKey: string;
 }
 
-/** A narrow client over the existing stable Flovart command surface. */
-export interface FlovartStudioCore {
+/** A narrow client over the existing stable Iris command surface. */
+export interface IrisStudioCore {
   ensure?(): Promise<unknown>;
   inspect(projectId?: string): Promise<WorkflowProject>;
   selection(projectId?: string): Promise<unknown>;
@@ -220,7 +220,7 @@ export interface FlovartStudioCore {
   registerHostResource(materialized: MaterializedHostSelection): Promise<void>;
   apply(request: StudioApplyRequest): Promise<unknown>;
   run(request: StudioRunRequest): Promise<unknown>;
-  artifactGet(args: { taskId?: string; artifactId?: string }): Promise<FlovartArtifact | null>;
+  artifactGet(args: { taskId?: string; artifactId?: string }): Promise<IrisArtifact | null>;
 }
 
 export class StudioContractError extends Error {

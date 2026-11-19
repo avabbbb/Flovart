@@ -13,7 +13,7 @@ const packages = [
   { id: 'after-effects', host: 'AEFT', runtime: 'CEP', required: ['manifest.json', 'CSXS/manifest.xml', 'index.html', 'index.js', 'panel.css', 'cep-bridge.js', 'host.jsx'],
     effect: {
       dir: 'effect',
-      required: ['FlovartEffect.cpp', 'FlovartEffect.r', 'asset-manifest.json'],
+      required: ['IrisEffect.cpp', 'IrisEffect.r', 'asset-manifest.json'],
       entryPoint: 'EffectMain',
       params: ['Asset Version', 'Blend'],
     }},
@@ -54,13 +54,13 @@ for (const spec of packages) {
   cpSync(join(root, 'shared'), join(target, 'shared'), { recursive: true });
   if (spec.id === 'resolve') {
     const candidates = [
-      process.env.FLOVART_RESOLVE_WORKFLOW_NODE,
+      process.env.IRIS_RESOLVE_WORKFLOW_NODE,
       'C:\\ProgramData\\Blackmagic Design\\DaVinci Resolve\\Support\\Developer\\Workflow Integrations\\Examples\\SamplePlugin\\WorkflowIntegration.node',
       '/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Workflow Integrations/Examples/SamplePlugin/WorkflowIntegration.node',
     ].filter(Boolean);
     const nativeModule = candidates.find(candidate => existsSync(candidate));
     if (nativeModule) cpSync(nativeModule, join(target, 'WorkflowIntegration.node'));
-    else console.warn('[studio] Resolve WorkflowIntegration.node 未找到；设置 FLOVART_RESOLVE_WORKFLOW_NODE 后重新构建可生成可运行包。');
+    else console.warn('[studio] Resolve WorkflowIntegration.node 未找到；设置 IRIS_RESOLVE_WORKFLOW_NODE 后重新构建可生成可运行包。');
   }
   const sourceText = readFileSync(join(source, 'index.js'), 'utf8');
   assert(!/(?:api.?key|provider.?key|secret|token)/i.test(sourceText), `${spec.id} panel contains a credential-shaped implementation`);
@@ -78,8 +78,8 @@ function buildEffect(spec, source, target) {
   const names = (manifest.parameters ?? []).map(p => p.name);
   for (const name of effect.params) assert(names.includes(name), `${spec.id} effect manifest missing param "${name}"`);
 
-  const sdk = process.env.FLOVART_AE_SDK_ROOT;
-  const compiler = process.env.FLOVART_AE_EFFECT_CL || 'cl';
+  const sdk = process.env.IRIS_AE_SDK_ROOT;
+  const compiler = process.env.IRIS_AE_EFFECT_CL || 'cl';
   if (sdk && existsSync(sdk)) {
     const probe = spawnSync(compiler, ['/nologo'], { stdio: 'pipe' });
     if (probe.error || probe.status === null) {
@@ -88,7 +88,7 @@ function buildEffect(spec, source, target) {
       console.warn('[studio] AE Effect SDK toolchain detected; real compile is a real-host gate (see NATIVE_EFFECT.md). Emitting source package.');
     }
   } else {
-    console.warn(`[studio] AE Effect SDK not found (set FLOVART_AE_SDK_ROOT); emitting needs-native-sdk effect source package.`);
+    console.warn(`[studio] AE Effect SDK not found (set IRIS_AE_SDK_ROOT); emitting needs-native-sdk effect source package.`);
   }
   manifest.effect.buildStatus = 'needs-native-sdk';
 

@@ -1,6 +1,6 @@
 /* 奶蛙思考加载（components/brand/NaiwaThinking.tsx）。
    原样移植自 OfferU frontend/src/app/globals.css 的 .naiwa-think / nw-* 规则（同一作者），关键帧与时长不改。
-   Flovart 只在文件末尾加了：暗色主题下的气泡底色。 */
+   Iris 只在文件末尾加了：暗色主题下的气泡底色。 */
 .naiwa-think { position: relative; display: inline-block; width: var(--naiwa-size, 72px); height: var(--naiwa-size, 72px); flex-shrink: 0; }
 .naiwa-think__svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .naiwa-think .nw-head { transform-box: view-box; transform-origin: 512px 900px; animation: nw-sway 3.6s ease-in-out infinite; }

@@ -1,19 +1,19 @@
 /**
- * Flovart DeepSeek profile bootstrap + doctor.
+ * Iris DeepSeek profile bootstrap + doctor.
  *
  * install:
  *   1. resolve $DSH_HOME (env) / ~/.dsh
- *   2. scaffold $DSH_HOME/profiles/flovart with the profile manifest
+ *   2. scaffold $DSH_HOME/profiles/iris with the profile manifest
  *      (dsh.profile.bundles = base + web-app + @flovart/dsh-plugin) and the
  *      user patch layer template
- *   3. `dsh plugin --profile flovart add <package-or-path>` (pnpm in the
+ *   3. `dsh plugin --profile iris add <package-or-path>` (pnpm in the
  *      profile dir — the dsh-supported plugin install path)
- *   4. `dsh --profile flovart --dump-config` and verify the flovart row
+ *   4. `dsh --profile iris --dump-config` and verify the iris row
  *
  * doctor:
  *   - dsh version vs the RC8 compatible set
  *   - bundle + client artifact presence
- *   - flovart CLI reachability (FLOVART_CLI / PATH)
+ *   - iris CLI reachability (IRIS_CLI / PATH)
  *   - composed config row presence
  *
  * Run with DSH_HOME=<sandbox> to test without touching the real home.
@@ -36,8 +36,8 @@ const PLUGIN_MANIFEST = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf
 const TARGET_DSH = PLUGIN_MANIFEST.peerDependencies?.['@deepseek-ai/dsh-tools'] ?? '*'
 const BUNDLES = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@flovart/dsh-plugin']
 
-const PROFILE_PATCH_TEMPLATE = `# Your patch layer for the flovart profile, applied after every bundle layer.
-# Keep provider credentials and browser connection details in Flovart.
+const PROFILE_PATCH_TEMPLATE = `# Your patch layer for the iris profile, applied after every bundle layer.
+# Keep provider credentials and browser connection details in Iris.
 # The plugin joins the visible Browser Workflow through its host-side proxy.
 []
 `
@@ -50,7 +50,7 @@ function dshHome(homeArg) {
 function run(cmd, args, opts = {}) {
   const result = spawnSync(cmd, args, { encoding: 'utf8', windowsHide: true, ...opts })
   if (result.error) {
-    console.error(`[flovart] 无法运行 ${cmd}：${result.error.message}`)
+    console.error(`[iris] 无法运行 ${cmd}：${result.error.message}`)
     process.exitCode = 1
   }
   return result
@@ -101,20 +101,20 @@ function joinWorkspace(base, ...parts) {
 export function harnessEnvironment(config, repositoryRoot = REPOSITORY_ROOT, workspaceDirectory) {
   const workspaceDir = workspaceDirectory || null
   return {
-    FLOVART_WORKSPACE_URL: config.url,
-    FLOVART_WORKSPACE_TOKEN: config.token,
-    FLOVART_CLI: quoteArg(process.execPath) + ' ' + quoteArg(joinWorkspace(repositoryRoot, 'tools', 'flovart', 'cli.js')),
-    FLOVART_WORKSPACE_MODE: 'browser',
+    IRIS_WORKSPACE_URL: config.url,
+    IRIS_WORKSPACE_TOKEN: config.token,
+    IRIS_CLI: quoteArg(process.execPath) + ' ' + quoteArg(joinWorkspace(repositoryRoot, 'tools', 'iris', 'cli.js')),
+    IRIS_WORKSPACE_MODE: 'browser',
     ...(workspaceDir ? {
-      FLOVART_AGENT_HOME: workspaceDir,
-      FLOVART_AGENT_CONFIG: joinWorkspace(workspaceDir, 'agent.json'),
-      FLOVART_CREW_DIR: joinWorkspace(workspaceDir, 'crew'),
+      IRIS_AGENT_HOME: workspaceDir,
+      IRIS_AGENT_CONFIG: joinWorkspace(workspaceDir, 'agent.json'),
+      IRIS_CREW_DIR: joinWorkspace(workspaceDir, 'crew'),
     } : {}),
   }
 }
 
 function workspaceConfigFile(file) {
-  return file || process.env.FLOVART_AGENT_CONFIG || join(homedir(), '.flovart', 'agent.json')
+  return file || process.env.IRIS_AGENT_CONFIG || join(homedir(), '.iris', 'agent.json')
 }
 
 function readWorkspaceConfig(file) {
@@ -140,10 +140,10 @@ function spawnWorkspaceOperator(workspaceDir) {
     cwd: REPOSITORY_ROOT,
     env: {
       ...process.env,
-      FLOVART_WORKSPACE_ONLY: '1',
-      FLOVART_AGENT_HOME: workspaceDir,
-      FLOVART_AGENT_CONFIG: joinWorkspace(workspaceDir, 'agent.json'),
-      FLOVART_CREW_DIR: joinWorkspace(workspaceDir, 'crew'),
+      IRIS_WORKSPACE_ONLY: '1',
+      IRIS_AGENT_HOME: workspaceDir,
+      IRIS_AGENT_CONFIG: joinWorkspace(workspaceDir, 'agent.json'),
+      IRIS_CREW_DIR: joinWorkspace(workspaceDir, 'crew'),
     },
     stdio: 'inherit',
     windowsHide: true,
@@ -157,18 +157,18 @@ function createWorkspaceSupervisor(workspaceDir) {
     probe: probeWorkspace,
     spawnWorkspace: () => spawnWorkspaceOperator(workspaceDir),
     onEvent: event => {
-      if (event.kind === 'borrowed') console.log('[flovart] 复用现有 Workspace Operator（不会由 Harness 接管其进程）。')
-      if (event.kind === 'recovering') console.warn(`[flovart] Workspace Operator 已断开，正在自动恢复：${event.error?.message || '未知原因'}`)
-      if (event.kind === 'restarted') console.log('[flovart] Workspace Operator 已恢复，Harness 会话连接保持不变。')
+      if (event.kind === 'borrowed') console.log('[iris] 复用现有 Workspace Operator（不会由 Harness 接管其进程）。')
+      if (event.kind === 'recovering') console.warn(`[iris] Workspace Operator 已断开，正在自动恢复：${event.error?.message || '未知原因'}`)
+      if (event.kind === 'restarted') console.log('[iris] Workspace Operator 已恢复，Harness 会话连接保持不变。')
     },
   })
 }
 
 /** Ensure the DSH profile joins the same visible Browser Workflow authority. */
 export function ensureVisibleWorkflow(env = process.env, runner = spawnSync) {
-  if (env.FLOVART_DSH_NO_BROWSER === '1') return { ok: true, skipped: true }
-  const repositoryCli = join(REPOSITORY_ROOT, 'tools', 'flovart', 'cli.js')
-  const cli = env.FLOVART_CLI ?? (existsSync(repositoryCli) ? `${quoteArg(process.execPath)} ${quoteArg(repositoryCli)}` : 'flovart')
+  if (env.IRIS_DSH_NO_BROWSER === '1') return { ok: true, skipped: true }
+  const repositoryCli = join(REPOSITORY_ROOT, 'tools', 'iris', 'cli.js')
+  const cli = env.IRIS_CLI ?? (existsSync(repositoryCli) ? `${quoteArg(process.execPath)} ${quoteArg(repositoryCli)}` : 'iris')
   const argv = cliArguments(cli)
   const result = runner(argv[0], [...argv.slice(1), 'ensure', '--json'], {
     cwd: REPOSITORY_ROOT,
@@ -178,14 +178,14 @@ export function ensureVisibleWorkflow(env = process.env, runner = spawnSync) {
     windowsHide: true,
   })
   if (result.error || result.status !== 0) {
-    return { ok: false, message: `Flovart ensure 失败（${result.error?.message ?? `退出码 ${result.status}`}）。` }
+    return { ok: false, message: `Iris ensure 失败（${result.error?.message ?? `退出码 ${result.status}`}）。` }
   }
   try {
     const parsed = JSON.parse(result.stdout ?? '')
     if (!parsed.ok || parsed.data?.ok !== true) return { ok: false, message: parsed.error?.message || parsed.data?.error?.message || '可见 Browser Workflow 尚未就绪。' }
     return { ok: true, result: parsed.data }
   } catch {
-    return { ok: false, message: 'Flovart ensure 输出不是有效 JSON。' }
+    return { ok: false, message: 'Iris ensure 输出不是有效 JSON。' }
   }
 }
 
@@ -207,10 +207,10 @@ function resolveDshEntrypoint() {
 
 export async function start(homeArg) {
   const home = dshHome(homeArg)
-  const profileDir = join(home, 'profiles', 'flovart')
+  const profileDir = join(home, 'profiles', 'iris')
   const manifest = readProfileManifest(profileDir)
   if (!manifest || !existsSync(join(profileDir, 'node_modules', '@flovart', 'dsh-plugin', 'lib', 'client.js'))) {
-    throw new Error('Flovart Harness Profile 尚未安装。请先运行 `npm run dsh:profile:install`。')
+    throw new Error('Iris Harness Profile 尚未安装。请先运行 `npm run dsh:profile:install`。')
   }
 
   const workspaceDir = join(home, 'workspace')
@@ -228,10 +228,10 @@ export async function start(homeArg) {
   }
   const dshArgs = [
     resolveDshEntrypoint(),
-    '--profile', 'flovart',
-    '--port', process.env.FLOVART_DSH_PORT || '0',
+    '--profile', 'iris',
+    '--port', process.env.IRIS_DSH_PORT || '0',
   ]
-  if (process.env.FLOVART_DSH_NO_OPEN === '1') dshArgs.push('--no-open')
+  if (process.env.IRIS_DSH_NO_OPEN === '1') dshArgs.push('--no-open')
   const dsh = spawn(process.execPath, dshArgs, {
     cwd: REPOSITORY_ROOT,
     env,
@@ -254,7 +254,7 @@ export async function start(homeArg) {
       workspace.waitForFailure().then(error => ({ kind: 'workspace-failure', error })),
     ])
     if (outcome.kind === 'workspace-failure') {
-      console.error(`[flovart] ${outcome.error.message}`)
+      console.error(`[iris] ${outcome.error.message}`)
       if (dsh.exitCode === null) dsh.kill()
       process.exitCode = 1
     } else if (outcome.kind === 'dsh-error') {
@@ -271,13 +271,13 @@ export async function start(homeArg) {
 
 export async function install(homeArg, packageSpec) {
   const home = dshHome(homeArg)
-  const profileDir = join(home, 'profiles', 'flovart')
+  const profileDir = join(home, 'profiles', 'iris')
   mkdirSync(profileDir, { recursive: true })
 
   const manifestPath = join(profileDir, 'package.json')
   const existing = readProfileManifest(profileDir)
   const manifest = existing ?? {
-    name: 'dsh-flovart-profile',
+    name: 'dsh-iris-profile',
     private: true,
     type: 'module',
     dsh: { profile: { bundles: BUNDLES } },
@@ -290,7 +290,7 @@ export async function install(homeArg, packageSpec) {
   const patchPath = join(profileDir, 'cordis.patch.yml')
   if (!existsSync(patchPath)) writeFileSync(patchPath, PROFILE_PATCH_TEMPLATE)
 
-  console.log(`[flovart] profile: ${profileDir}`)
+  console.log(`[iris] profile: ${profileDir}`)
   // Install the PACKED tarball, not a file: directory: a pnpm `file:` link is a
   // symlink to the repo, and Node resolves imports from the symlink target —
   // peer/deep deps in the profile's node_modules chain would be missed. A real
@@ -299,15 +299,15 @@ export async function install(homeArg, packageSpec) {
   const pack = runNpm(['pack', '--pack-destination', packDir], { cwd: ROOT })
   const tarballName = (pack.stdout ?? '').trim().split('\n').pop()
   if (!tarballName || pack.status !== 0) {
-    console.error('[flovart] npm pack 失败；请先在 dsh-plugin 目录运行 `npm run build`。')
+    console.error('[iris] npm pack 失败；请先在 dsh-plugin 目录运行 `npm run build`。')
     process.exitCode = 1
     return
   }
   // Absolute path: `dsh plugin add` forwards to pnpm running in the profile dir.
   const spec = packageSpec ?? join(packDir, tarballName)
-  const add = runDsh(['plugin', '--profile', 'flovart', 'add', spec], { env: { ...process.env, DSH_HOME: home } })
+  const add = runDsh(['plugin', '--profile', 'iris', 'add', spec], { env: { ...process.env, DSH_HOME: home } })
   if (add.status !== 0) {
-    console.error(`[flovart] dsh plugin add 失败（退出码 ${add.status}）。已生成 profile 清单，可手动执行：
+    console.error(`[iris] dsh plugin add 失败（退出码 ${add.status}）。已生成 profile 清单，可手动执行：
   cd ${profileDir}
   pnpm add ${spec}
 然后再运行 doctor。`)
@@ -315,60 +315,60 @@ export async function install(homeArg, packageSpec) {
     if (add.stderr) console.error(add.stderr)
     return
   }
-  console.log('[flovart] dsh plugin add 完成')
+  console.log('[iris] dsh plugin add 完成')
   doctor(homeArg)
 }
 
 export function doctor(homeArg) {
   const home = dshHome(homeArg)
-  console.log(`[flovart] DSH_HOME: ${home}`)
+  console.log(`[iris] DSH_HOME: ${home}`)
 
   const version = runDsh(['--version'])
   const installed = (version.stdout ?? '').trim()
-  console.log(`[flovart] dsh 版本：${installed}（兼容范围：${TARGET_DSH}）`)
+  console.log(`[iris] dsh 版本：${installed}（兼容范围：${TARGET_DSH}）`)
   const compatible = dshVersionSatisfies(installed, TARGET_DSH)
   if (compatible === false) {
-    console.error(`[flovart] 已安装版本 ${installed} 不在兼容范围 ${TARGET_DSH} 内；DSH 会拒绝加载本插件。`)
+    console.error(`[iris] 已安装版本 ${installed} 不在兼容范围 ${TARGET_DSH} 内；DSH 会拒绝加载本插件。`)
     process.exitCode = 1
   } else if (compatible === undefined) {
-    console.warn('[flovart] 无法解析 semver，跳过 dsh 版本范围校验。')
+    console.warn('[iris] 无法解析 semver，跳过 dsh 版本范围校验。')
   }
 
   // Verify the copy the profile actually loads (installed from the packed tarball),
   // not the repository build output.
-  const installedDir = join(home, 'profiles', 'flovart', 'node_modules', '@flovart', 'dsh-plugin')
+  const installedDir = join(home, 'profiles', 'iris', 'node_modules', '@flovart', 'dsh-plugin')
   const installedManifest = existsSync(join(installedDir, 'package.json'))
     ? JSON.parse(readFileSync(join(installedDir, 'package.json'), 'utf8'))
     : null
   const bundle = join(installedDir, 'lib', 'index.js')
   const client = join(installedDir, 'lib', 'client.js')
-  console.log('[flovart] installed package: ' + (installedManifest ? installedManifest.name + '@' + installedManifest.version : '缺失（先运行 install）') + ' ' + installedDir)
-  console.log('[flovart] bundle: ' + (existsSync(bundle) ? 'ok' : '缺失') + ' ' + bundle)
-  console.log('[flovart] client: ' + (existsSync(client) ? 'ok' : '缺失') + ' ' + client)
+  console.log('[iris] installed package: ' + (installedManifest ? installedManifest.name + '@' + installedManifest.version : '缺失（先运行 install）') + ' ' + installedDir)
+  console.log('[iris] bundle: ' + (existsSync(bundle) ? 'ok' : '缺失') + ' ' + bundle)
+  console.log('[iris] client: ' + (existsSync(client) ? 'ok' : '缺失') + ' ' + client)
   if (!installedManifest || !existsSync(bundle) || !existsSync(client)) process.exitCode = 1
 
   const cliProbe = runCliProbe()
-  console.log(`[flovart] CLI 探测：${cliProbe.ok ? 'ok' : '失败'}`)
+  console.log(`[iris] CLI 探测：${cliProbe.ok ? 'ok' : '失败'}`)
   if (!cliProbe.ok) {
     console.error(`  ${cliProbe.message}`)
     process.exitCode = 1
   }
 
-  const profileDir = join(home, 'profiles', 'flovart')
+  const profileDir = join(home, 'profiles', 'iris')
   const manifest = readProfileManifest(profileDir)
   if (!manifest) {
-    console.error('[flovart] profile 不存在：先运行 `node scripts/profile.mjs install`')
+    console.error('[iris] profile 不存在：先运行 `node scripts/profile.mjs install`')
     process.exitCode = 1
     return
   }
-  console.log(`[flovart] profile bundles: ${manifest.dsh?.profile?.bundles?.join(' → ') ?? '(空)'}`)
+  console.log(`[iris] profile bundles: ${manifest.dsh?.profile?.bundles?.join(' → ') ?? '(空)'}`)
 
-  const dump = runDsh(['--profile', 'flovart', '--dump-config'], {
+  const dump = runDsh(['--profile', 'iris', '--dump-config'], {
     env: { ...process.env, DSH_HOME: home },
     timeout: 60000,
   })
   if (dump.status !== 0) {
-    console.error('[flovart] `dsh --profile flovart --dump-config` 失败（退出码 ' + dump.status + '）')
+    console.error('[iris] `dsh --profile iris --dump-config` 失败（退出码 ' + dump.status + '）')
     if (dump.stdout) console.log(dump.stdout)
     if (dump.stderr) console.error(dump.stderr)
     process.exitCode = 1
@@ -376,23 +376,23 @@ export function doctor(homeArg) {
   }
   const config = dump.stdout ?? ''
   if (!config.includes('@flovart/dsh-plugin')) {
-    console.error('[flovart] 合成配置中未找到 @flovart/dsh-plugin 行；检查 bundle 安装与 dsh.profile.bundles。')
+    console.error('[iris] 合成配置中未找到 @flovart/dsh-plugin 行；检查 bundle 安装与 dsh.profile.bundles。')
     process.exitCode = 1
     return
   }
-  console.log('[flovart] 合成配置包含 flovart 插件行：ok')
+  console.log('[iris] 合成配置包含 iris 插件行：ok')
 }
 
-/** Remove only the app-managed Flovart profile; keep DSH_HOME and Workspace data. */
+/** Remove only the app-managed Iris profile; keep DSH_HOME and Workspace data. */
 export function uninstall(homeArg) {
   const home = dshHome(homeArg)
-  const profileDir = join(home, 'profiles', 'flovart')
+  const profileDir = join(home, 'profiles', 'iris')
   if (!existsSync(profileDir)) {
-    console.log(`[flovart] Flovart Harness Profile 不存在：${profileDir}`)
+    console.log(`[iris] Iris Harness Profile 不存在：${profileDir}`)
     return { removed: false, profileDir }
   }
   rmSync(profileDir, { recursive: true, force: true })
-  console.log(`[flovart] 已移除 Flovart Harness Profile：${profileDir}`)
+  console.log(`[iris] 已移除 Iris Harness Profile：${profileDir}`)
   return { removed: true, profileDir }
 }
 
@@ -407,8 +407,8 @@ function dshVersionSatisfies(version, range) {
 }
 
 function runCliProbe() {
-  const repositoryCli = join(REPOSITORY_ROOT, 'tools', 'flovart', 'cli.js')
-  const cli = process.env.FLOVART_CLI ?? (existsSync(repositoryCli) ? `${quoteArg(process.execPath)} ${quoteArg(repositoryCli)}` : 'flovart')
+  const repositoryCli = join(REPOSITORY_ROOT, 'tools', 'iris', 'cli.js')
+  const cli = process.env.IRIS_CLI ?? (existsSync(repositoryCli) ? `${quoteArg(process.execPath)} ${quoteArg(repositoryCli)}` : 'iris')
   const argv = cliArguments(cli)
   const result = spawnSync(argv[0], [...argv.slice(1), 'command.list', '--json'], {
     encoding: 'utf8',
@@ -416,7 +416,7 @@ function runCliProbe() {
     windowsHide: true,
   })
   if (result.error || result.status !== 0) {
-    return { ok: false, message: `${cli} 不可用（${result.error?.message ?? `退出码 ${result.status}`}）。开发模式可设置 FLOVART_CLI="node ${join(ROOT, '..', 'tools', 'flovart', 'cli.js')}"。` }
+    return { ok: false, message: `${cli} 不可用（${result.error?.message ?? `退出码 ${result.status}`}）。开发模式可设置 IRIS_CLI="node ${join(ROOT, '..', 'tools', 'iris', 'cli.js')}"。` }
   }
   try {
     const parsed = JSON.parse(result.stdout)
@@ -441,7 +441,7 @@ if (resolve(process.argv[1] || '') === resolve(fileURLToPath(import.meta.url))) 
     try {
       await start(homeArg)
     } catch (error) {
-      console.error(`[flovart] ${error instanceof Error ? error.message : String(error)}`)
+      console.error(`[iris] ${error instanceof Error ? error.message : String(error)}`)
       process.exitCode = 1
     }
   } else if (subcommand === 'uninstall') {

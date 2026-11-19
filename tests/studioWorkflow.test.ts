@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createWorkflowNode } from '../components/workflow/constants';
 import { StudioWorkflowController } from '../services/studio/studioWorkflow';
-import type { CreativeHostAdapter, FlovartStudioCore, HostContext, HostSelection, MaterializedHostSelection } from '../services/studio/studioContract';
+import type { CreativeHostAdapter, IrisStudioCore, HostContext, HostSelection, MaterializedHostSelection } from '../services/studio/studioContract';
 import type { WorkflowProject } from '../components/workflow/types';
 
 const selection: HostSelection = {
@@ -46,7 +46,7 @@ function adapter(): CreativeHostAdapter {
 describe('Studio Workflow controller', () => {
   it('uses the existing apply/run authority and imports the returned artifact', async () => {
     const host = adapter();
-    const core: FlovartStudioCore = {
+    const core: IrisStudioCore = {
       inspect: vi.fn(async () => project),
       selection: vi.fn(),
       registerHostResource: vi.fn(async () => undefined),
@@ -83,7 +83,7 @@ describe('Studio Workflow controller', () => {
     // 运行期间把 live selection 换成 B：submit 后 getSelection 返回 B。
     let swapped = false;
     vi.mocked(host.getSelection).mockImplementation(async () => (swapped ? selectionB : selection));
-    const core: FlovartStudioCore = {
+    const core: IrisStudioCore = {
       inspect: vi.fn(async () => project),
       selection: vi.fn(),
       registerHostResource: vi.fn(async () => undefined),
@@ -131,7 +131,7 @@ describe('Studio Workflow controller', () => {
         blob: new Blob(['clip'], { type: 'video/mp4' }),
       })),
     };
-    const core: FlovartStudioCore = {
+    const core: IrisStudioCore = {
       inspect: vi.fn(async () => project),
       selection: vi.fn(),
       registerHostResource: vi.fn(async () => undefined),
@@ -152,7 +152,7 @@ describe('Studio Workflow controller', () => {
   it('does not continue when the host selection disappears', async () => {
     const host = adapter();
     vi.mocked(host.getSelection).mockResolvedValue(null);
-    const core: FlovartStudioCore = {
+    const core: IrisStudioCore = {
       inspect: vi.fn(async () => project),
       selection: vi.fn(),
       registerHostResource: vi.fn(async () => undefined),
@@ -195,7 +195,7 @@ describe('Studio Workflow controller', () => {
       }),
       importArtifact: vi.fn(async () => ({ ok: true, targetId: 'media-pool' })),
     };
-    const core: FlovartStudioCore = {
+    const core: IrisStudioCore = {
       inspect: vi.fn(async () => project), selection: vi.fn(),
       registerHostResource: vi.fn(async () => undefined),
       apply: vi.fn(async () => ({ draftVersion: 4 })),
@@ -249,7 +249,7 @@ describe('Studio Workflow controller', () => {
       })),
       importArtifact: vi.fn(async (_artifact, target) => ({ ok: true, targetId: target?.kind })),
     };
-    const core: FlovartStudioCore = {
+    const core: IrisStudioCore = {
       inspect: vi.fn(async () => project), selection: vi.fn(), registerHostResource: vi.fn(async () => undefined),
       apply: vi.fn(async () => ({ draftVersion: 4 })),
       run: vi.fn(async () => { selectionChanged = true; return { taskId: 'task-a', artifactId: 'artifact-job-a' }; }),
@@ -297,7 +297,7 @@ describe('Studio Workflow controller', () => {
           return { ok: true, importStatus: 'confirmed' as const, targetId: 'media-pool' };
         }),
     };
-    const core: FlovartStudioCore = {
+    const core: IrisStudioCore = {
       inspect: vi.fn(async () => project), selection: vi.fn(), registerHostResource: vi.fn(async () => undefined),
       apply: vi.fn(async () => ({ draftVersion: 4 })), run: vi.fn(async () => ({ artifactId: 'artifact-job-a' })),
       artifactGet: vi.fn(async () => ({ artifactId: 'artifact-a', mimeType: 'video/mp4', blob: new Blob(['candidate'], { type: 'video/mp4' }) })),
@@ -341,7 +341,7 @@ describe('Studio Workflow controller', () => {
       })),
       importArtifact: vi.fn(async () => { throw new Error('IPC channel disconnected after request'); }),
     };
-    const core: FlovartStudioCore = {
+    const core: IrisStudioCore = {
       inspect: vi.fn(async () => project), selection: vi.fn(), registerHostResource: vi.fn(async () => undefined),
       apply: vi.fn(async () => ({ draftVersion: 4 })), run: vi.fn(async () => ({ artifactId: 'artifact-job-a' })),
       artifactGet: vi.fn(async () => ({ artifactId: 'artifact-a', mimeType: 'video/mp4', blob: new Blob(['candidate'], { type: 'video/mp4' }) })),
@@ -360,7 +360,7 @@ describe('Studio Workflow controller', () => {
 
   it('keeps legacy generate() auto-import behavior for existing non-Resolve hosts', async () => {
     const host = adapter();
-    const core: FlovartStudioCore = {
+    const core: IrisStudioCore = {
       inspect: vi.fn(async () => project), selection: vi.fn(), registerHostResource: vi.fn(async () => undefined),
       apply: vi.fn(async () => ({ draftVersion: 4 })), run: vi.fn(async () => ({ artifactId: 'artifact-job' })),
       artifactGet: vi.fn(async () => ({ artifactId: 'artifact-1', mimeType: 'image/png', blob: new Blob(['result'], { type: 'image/png' }) })),

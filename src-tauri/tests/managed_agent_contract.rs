@@ -1,4 +1,4 @@
-use flovart_lib::managed_agent::{
+use iris_lib::managed_agent::{
     parse_managed_agent_connection, plan_managed_agent_launch, ManagedAgentLaunchOptions,
 };
 use std::path::PathBuf;
@@ -20,7 +20,7 @@ fn managed_agent_connection_accepts_only_authenticated_loopback_http() {
 
 #[test]
 fn managed_agent_launch_uses_an_explicit_node_entrypoint_without_a_shell() {
-    let entrypoint = PathBuf::from("C:/flovart/managed-agent/index.js");
+    let entrypoint = PathBuf::from("C:/iris/managed-agent/index.js");
     let launch = plan_managed_agent_launch(ManagedAgentLaunchOptions {
         node: Some(PathBuf::from("C:/Program Files/nodejs/node.exe")),
         entrypoint: Some(entrypoint.clone()),
@@ -34,5 +34,5 @@ fn managed_agent_launch_uses_an_explicit_node_entrypoint_without_a_shell() {
         PathBuf::from("C:/Program Files/nodejs/node.exe")
     );
     assert_eq!(launch.args, vec![entrypoint]);
-    assert_eq!(launch.cwd, PathBuf::from("C:/flovart/managed-agent"));
+    assert_eq!(launch.cwd, PathBuf::from("C:/iris/managed-agent"));
 }

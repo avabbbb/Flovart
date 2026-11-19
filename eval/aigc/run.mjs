@@ -64,7 +64,7 @@ function cmdFixtures(args) {
 
 function cmdGrade(args) {
   if (!args.takes) throw new Error('grade needs --takes <file.jsonl>');
-  if (!toolAvailable()) throw new Error('ffprobe is not available (set FLOVART_FFPROBE / FLOVART_FFMPEG); the objective track cannot run');
+  if (!toolAvailable()) throw new Error('ffprobe is not available (set IRIS_FFPROBE / IRIS_FFMPEG); the objective track cannot run');
   const items = loadItems(resolve(args.items ?? ITEMS_DIR));
   const takes = readJsonl(resolve(args.takes));
   const { errors } = validateDataset({ items, takes });

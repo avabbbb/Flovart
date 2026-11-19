@@ -10,24 +10,24 @@ import { fileURLToPath } from 'node:url';
 // npm publication — it is not "connector ready" until the package resolves.
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const connectorRoot = join(root, 'integrations', 'workbuddy', 'flovart');
+const connectorRoot = join(root, 'integrations', 'workbuddy', 'iris');
 
 const platforms = ['darwin', 'linux', 'win32'];
 const lifecycleSections = ['init', 'auth', 'unAuth', 'status'];
 const requiredFiles = [
   'connector-meta.json',
   'cli.json',
-  'skills/flovart/SKILL.md',
+  'skills/iris/SKILL.md',
 ];
 
 // The connector installs the canonical CLI package directly — there is no
 // intermediate installer layer. @flovart/workbuddy-installer was retired and
-// must never come back; the unscoped flovart-cli name was never published.
+// must never come back; the unscoped iris-cli name was never published.
 const canonicalCliPackage = '@flovart/cli';
 const canonicalInit = /npm\s+install\s+-g\s+@flovart\/cli(?:@[\w.-]+)?\s*$/;
 // Registry specifiers that must not appear in init: the never-published
 // unscoped name and the removed installer indirection.
-const forbiddenInitSpecifiers = [/flovart-cli@/, /@flovart\/workbuddy-installer/];
+const forbiddenInitSpecifiers = [/flovart-cli@/, /iris-cli@/, /@flovart\/workbuddy-installer/];
 
 const credentialKey = /"(?:api.?key|provider.?key|secret|token|password|credential)"\s*:/i;
 // SKILL.md is user-facing guidance for the WorkBuddy agent; it must not leak
@@ -48,7 +48,7 @@ function readJson(relativePath, errors) {
   }
 }
 
-export function checkWorkBuddyConnector({ connectorDir = connectorRoot, cliSource = join(root, 'tools', 'flovart', 'cli.js') } = {}) {
+export function checkWorkBuddyConnector({ connectorDir = connectorRoot, cliSource = join(root, 'tools', 'iris', 'cli.js') } = {}) {
   const errors = [];
   const notes = [];
   const dir = connectorDir;
@@ -94,7 +94,7 @@ export function checkWorkBuddyConnector({ connectorDir = connectorRoot, cliSourc
 
     // --- Phase 22: canonical-package regression ---
     // init must install the canonical CLI package directly. The retired
-    // installer indirection and the unscoped flovart-cli name are structural
+    // installer indirection and the unscoped iris-cli name are structural
     // defects; @flovart/cli itself is real but unpublished, so it surfaces as
     // an EXTERNAL_RELEASE_GATE note rather than an error.
     let sawCanonicalInit = false;
@@ -118,16 +118,16 @@ export function checkWorkBuddyConnector({ connectorDir = connectorRoot, cliSourc
   }
 
   // --- SKILL.md ---
-  const skillPath = join(dir, 'skills', 'flovart', 'SKILL.md');
+  const skillPath = join(dir, 'skills', 'iris', 'SKILL.md');
   if (existsSync(skillPath)) {
     const skill = readFileSync(skillPath, 'utf8');
-    if (connectionJargon.test(skill)) errors.push('skills/flovart/SKILL.md leaks host connection implementation details');
+    if (connectionJargon.test(skill)) errors.push('skills/iris/SKILL.md leaks host connection implementation details');
 
     // Golden ensure UX: the skill must instruct the agent to run
-    // `flovart ensure --json` (or `flovart-cli ensure --json`) before workflow
+    // `iris ensure --json` (or `iris-cli ensure --json`) before workflow
     // operations, and ensure must be a real non-interactive CLI command.
-    if (!/flovart(?:-cli)?\s+ensure\s+--json/.test(skill)) {
-      errors.push('skills/flovart/SKILL.md does not instruct the agent to run `flovart ensure --json` before workflow ops');
+    if (!/iris(?:-cli)?\s+ensure\s+--json/.test(skill)) {
+      errors.push('skills/iris/SKILL.md does not instruct the agent to run `iris ensure --json` before workflow ops');
     }
   }
 
@@ -135,17 +135,17 @@ export function checkWorkBuddyConnector({ connectorDir = connectorRoot, cliSourc
   if (existsSync(cliSource)) {
     const source = readFileSync(cliSource, 'utf8');
     if (!/routingCommand === 'ensure'/.test(source) && !/command === 'ensure'/.test(source) && !/'ensure'/.test(source)) {
-      errors.push('tools/flovart/cli.js has no `ensure` command — SKILL.md bootstrap instruction would fail');
+      errors.push('tools/iris/cli.js has no `ensure` command — SKILL.md bootstrap instruction would fail');
     } else {
       // ensure must be non-interactive: it must not prompt via readline /
       // process.stdin for confirmation before producing its JSON result.
       const ensureBlock = source.match(/routingCommand === 'ensure'[\s\S]{0,400}?return;/);
       if (ensureBlock && /readline|createInterface|process\.stdin\.on|prompt\(/.test(ensureBlock[0])) {
-        errors.push('tools/flovart/cli.js `ensure` command is interactive — WorkBuddy runs it non-interactively and would hang');
+        errors.push('tools/iris/cli.js `ensure` command is interactive — WorkBuddy runs it non-interactively and would hang');
       }
     }
   } else {
-    errors.push('tools/flovart/cli.js not found — cannot confirm `ensure` exists');
+    errors.push('tools/iris/cli.js not found — cannot confirm `ensure` exists');
   }
 
   return {

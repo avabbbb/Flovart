@@ -1,4 +1,4 @@
-# Flovart Support Matrix
+# Iris Support Matrix
 
 这份矩阵是当前仓库证据的发布口径，并冻结 Closed Beta 范围：只有 `Beta`
 级别的集成是本次发布主推路径；`Experimental` 集成可用但未认证，不得在
@@ -10,7 +10,7 @@ onboarding 或宣传中呈现为与 Beta 路径同等就绪。`Stable` 只表示
 
 | Host / projection | Status | Evidence / boundary |
 | --- | --- | --- |
-| Codex CLI + Browser Workflow | Beta | 本次发布主推的 Agent 路径。Link/Lease focused tests、Chrome for Testing smoke 与 5 次连续真实 `codex exec`（v0.154.0）trial：Codex 读取 `.agents/skills/flovart/SKILL.md` 后经 CLI 驱动真实 Browser Workflow 完成 3 节点 + 2 顺序连接（`workflow.node.create-connected`，trial 3–7）。**脱敏证据已入库：`docs/archive/2026-10-07/evidence/release-candidate/CODEX_TRIAL_EVIDENCE.md`**；真实 Provider wire 进行中，公开安装首次启动 transcript 仍是 External Gate |
+| Codex CLI + Browser Workflow | Beta | 本次发布主推的 Agent 路径。Link/Lease focused tests、Chrome for Testing smoke 与 5 次连续真实 `codex exec`（v0.154.0）trial：Codex 读取 `.agents/skills/iris/SKILL.md` 后经 CLI 驱动真实 Browser Workflow 完成 3 节点 + 2 顺序连接（`workflow.node.create-connected`，trial 3–7）。**脱敏证据已入库：`docs/archive/2026-10-07/evidence/release-candidate/CODEX_TRIAL_EVIDENCE.md`**；真实 Provider wire 进行中，公开安装首次启动 transcript 仍是 External Gate |
 | Claude Code CLI projection | Experimental | shared Skill/CLI surface；真实登录与公开安装态未认证 |
 | OpenCode CLI projection | Experimental | shared Skill/CLI surface；Host-specific tracer 未认证 |
 | WorkBuddy CLI Connector + Skill | Experimental | official-shape artifact、schema/secret/clean fixture 与 local-ready lifecycle；真实 WorkBuddy client/Marketplace/NL tracer 未运行。Closed Beta 不作为主推路径 |
@@ -25,7 +25,7 @@ onboarding 或宣传中呈现为与 Beta 路径同等就绪。`Stable` 只表示
 | Photoshop UXP panel | Experimental | `npm run studio:build`、manifest v4、shared `CreativeHostAdapter` 与 layer contract/mock tests；真实 UXP layer → I2I → new layer 是 External Gate |
 | Premiere Pro UXP panel | Experimental | `npm run studio:build`、manifest v5 / 25.6+、clip/frame contract/mock tests；真实 UXP → artifact → Project import 是 External Gate |
 | After Effects | Experimental | 当前轻面板为 `dist-studio/after-effects` CEP/ExtendScript bridge；planned native effect 为独立 C++ Effect SDK 路径。不得假设 AE 已有可发布 UXP host；两条路径均需独立真实宿主认证 |
-| DaVinci Resolve Studio 21.1 | Experimental | **当前第一宿主方向**，同时是 Iris 的第一个上下文连接器（见下方 Iris 段）：优先验证 Blackmagic native MCP + Flovart Skill / legacy `flovart` CLI；`dist-studio/resolve` Workflow Integration 降为轻面板 / measured fallback，planned OFX 独立后置。真实 native MCP 连接、selection → durable artifact → Media Pool tracer 仍是 External Gate |
+| DaVinci Resolve Studio 21.1 | Experimental | **当前第一宿主方向**，同时是 Iris 的第一个上下文连接器（见下方 Iris 段）：优先验证 Blackmagic native MCP + Iris Skill / legacy `iris` CLI；`dist-studio/resolve` Workflow Integration 降为轻面板 / measured fallback，planned OFX 独立后置。真实 native MCP 连接、selection → durable artifact → Media Pool tracer 仍是 External Gate |
 
 ## Iris（个人 Agent）
 
@@ -45,7 +45,7 @@ The following are design targets, not capabilities certified by the panel or MCP
 
 | Capability | Status | Required evidence |
 | --- | --- | --- |
-| AE / PR native Flovart effects | Planned | Real effect controls, fixed media versions, keyframes, saved project and offline export |
+| AE / PR native Iris effects | Planned | Real effect controls, fixed media versions, keyframes, saved project and offline export |
 | Photoshop native filter | Planned | Real filter integration, selection, editable parameters and project reopening |
 | Resolve OpenFX effect | Planned / deferred | 仅在 MCP-first 真实流程证明需要 fixed-version effect parameters / keyframes / offline effect rendering 后启动；需独立 Real OFX evidence |
 | Native-effect generation without an open Workflow | Proposed | Confirm scope; verify headless service, Provider parity and persistent assets |
@@ -76,12 +76,12 @@ Provider 一律 `Experimental` / unverified，不得写进 Beta 发布口径。
 
 | Package | Status | Boundary |
 | --- | --- | --- |
-| `dist-workbuddy/flovart` | Experimental artifact | 可生成并校验；需 WorkBuddy client/Marketplace certification |
+| `dist-workbuddy/iris` | Experimental artifact | 可生成并校验；需 WorkBuddy client/Marketplace certification |
 | `dist-studio/photoshop` | Experimental artifact | 可生成并校验；Link 注入的 materialize/import/controller 尚未在真实 Photoshop 运行 |
 | `dist-studio/premiere` | Experimental artifact | 可生成并校验；Link 注入的 frame/import/controller 尚未在真实 Premiere 运行 |
 | `dist-studio/after-effects` | Experimental artifact | CEP/ExtendScript light-panel artifact；真实 AE layer tracer 尚未认证，且不代表 C++ native effect |
 | `dist-studio/resolve` | Experimental artifact | Resolve Studio Workflow Integration artifact；真实 Media Pool tracer 尚未认证，且不代表 OFX effect |
-| `tools/flovart/mcp-server.js` / `flovart-mcp` | Experimental artifact | canonical five-tool stdio projection 与 MCP SDK tests；真实 MCP Host import、Agent session 与 Provider path 未认证 |
+| `tools/iris/mcp-server.js` / `iris-mcp` | Experimental artifact | canonical five-tool stdio projection 与 MCP SDK tests；真实 MCP Host import、Agent session 与 Provider path 未认证 |
 | Built-in Workflow node plugins | Experimental | trusted in-process code，故障隔离不是安全 sandbox |
 | Community Skill package install | Experimental | 安装边界有路径/大小/数量/重复项校验，第三方包安全仍需签名与权限策略 |
 

@@ -236,7 +236,7 @@ export async function exportWorkflowCanvas(
   options: WorkflowCanvasExportOptions = {},
 ): Promise<boolean> {
   const { canvas, bounds } = await renderWorkflowCanvas(nodes, options);
-  const stem = sanitizeMediaFileStem(fileStem, 'Flovart-画布');
+  const stem = sanitizeMediaFileStem(fileStem, 'Iris-画布');
   if (format === 'pdf') {
     const jpeg = await canvasToBlob(canvas, 'image/jpeg', 0.92);
     const pdf = pdfFromJpeg(new Uint8Array(await jpeg.arrayBuffer()), canvas.width, canvas.height, bounds.width * 0.75, bounds.height * 0.75);

@@ -143,7 +143,7 @@ export function compileJudgePrompt(rubric, { swapNote = '' } = {}) {
     : '（无）';
   const schemaItems = rubric.items.map(item => `"${item.code}": {"evidence": "<摘录的原文或 null>", "verdict": 0 | 1 | "NA", "reason": "<一句话>"}`).join(',\n    ');
   const system = [
-    `你是 Flovart 的评测员（Judge），按评测标准「${rubric.title}」v${rubric.version} 逐项判定。`,
+    `你是 Iris 的评测员（Judge），按评测标准「${rubric.title}」v${rubric.version} 逐项判定。`,
     '',
     '## 输入字段',
     inputs || '（见用户消息）',

@@ -124,7 +124,7 @@ const band = score => (score >= 5 ? 5 : score >= 4 ? 4 : score >= 3 ? 3 : 1);
  * Deterministic re-audit sample: ~`fraction` of human labels (VBench-2.0 uses 20%),
  * chosen by hashing `takeId/dim/rater` with a seed so the auditor cannot pick.
  */
-export function selectAuditSample(ratings, { fraction = 0.2, seed = 'flovart' } = {}) {
+export function selectAuditSample(ratings, { fraction = 0.2, seed = 'iris' } = {}) {
   return ratings.filter(rating => rating.raterKind === 'human' && !rating.audit).filter(rating => {
     const hash = createHash('sha256').update(`${seed}:${rating.takeId}/${rating.dim}/${rating.rater}`).digest();
     return hash.readUInt32BE(0) / 0xffffffff < fraction;

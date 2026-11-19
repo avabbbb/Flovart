@@ -189,7 +189,7 @@ function excerpt(value: string): string {
 
 function describeStep(step: CanvasRecipeStep, index: number): string {
   const generation = step.type === 'image' || step.type === 'video';
-  const parts = [String(index + 1) + '. ' + (generation ? '用 flovart_generate 建' : '创建') + (NODE_TYPE_LABEL[step.type] ?? step.type) + (generation ? '生成' : '') + '节点「' + step.title + '」'];
+  const parts = [String(index + 1) + '. ' + (generation ? '用 iris_generate 建' : '创建') + (NODE_TYPE_LABEL[step.type] ?? step.type) + (generation ? '生成' : '') + '节点「' + step.title + '」'];
   if (step.model) parts.push('模型 ' + step.model);
   if (step.mode) parts.push('方式 ' + step.mode);
   if (step.inputs.length) parts.push('输入：' + step.inputs.join('、'));

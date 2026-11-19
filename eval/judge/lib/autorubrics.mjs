@@ -8,7 +8,7 @@
 //   Layer 3 validation : a pair joins the trusted (golden) set only when the
 //                        selected rules agree with the human preference in every round
 //
-// Flovart's natural preference source: when a batch produced alternates and
+// Iris's natural preference source: when a batch produced alternates and
 // the user kept one as the primary take, that take is `chosen` and the
 // discarded alternates are `rejected` (same prompt, same inputs).
 

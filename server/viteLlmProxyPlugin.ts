@@ -54,7 +54,7 @@ const middleware: Connect.NextHandleFunction = (req, res: ServerResponse, next) 
 
 export function llmProxyPlugin(): Plugin {
   return {
-    name: 'flovart-llm-proxy',
+    name: 'iris-llm-proxy',
     configureServer(server) { server.middlewares.use(middleware); },
     configurePreviewServer(server) { server.middlewares.use(middleware); },
   };

@@ -17,8 +17,8 @@ const zhT = (key: string, ...args: unknown[]): string => {
 
 const { runtimeExecute } = vi.hoisted(() => ({ runtimeExecute: vi.fn() }));
 
-vi.mock('../services/flovartRuntime', () => ({
-    getFlovartRuntimeApi: () => ({ execute: runtimeExecute }),
+vi.mock('../services/irisRuntime', () => ({
+    getIrisRuntimeApi: () => ({ execute: runtimeExecute }),
 }));
 
 const runningHubStatus = {

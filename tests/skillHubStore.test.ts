@@ -53,7 +53,7 @@ describe('useSkillHubStore', () => {
     await useSkillHubStore.getState().syncHub();
     expect(useSkillHubStore.getState().hubStatus).toBe('ready');
     expect(useSkillHubStore.getState().hubSkills).toHaveLength(1);
-    expect(localStorage.getItem('flovart.skill-hub.v1')).toContain('skills.example.com');
+    expect(localStorage.getItem('iris.skill-hub.v1')).toContain('skills.example.com');
   });
 
   it('records hub sync errors without clearing the previous list', async () => {

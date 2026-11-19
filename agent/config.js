@@ -6,19 +6,19 @@ import path from 'node:path';
 
 export const DEFAULT_AGENT_PORT = 17373;
 // Canonical agent config resolution order:
-//   FLOVART_AGENT_CONFIG (explicit file)
-//   → FLOVART_AGENT_HOME (home dir, file = <home>/agent.json)
-//   → canonical dir (~/.flovart, file = ~/.flovart/agent.json)
-//   → ~/.flovart/agent.json
-// tools/flovart/local-agent.js replicates this exact order for the packaged CLI,
+//   IRIS_AGENT_CONFIG (explicit file)
+//   → IRIS_AGENT_HOME (home dir, file = <home>/agent.json)
+//   → canonical dir (~/.iris, file = ~/.iris/agent.json)
+//   → ~/.iris/agent.json
+// tools/iris/local-agent.js replicates this exact order for the packaged CLI,
 // which cannot import this module.
 export function resolveAgentHome(env = process.env) {
-  const configured = env.FLOVART_AGENT_CONFIG ? path.resolve(env.FLOVART_AGENT_CONFIG) : null;
-  const dir = env.FLOVART_AGENT_HOME
-    ? path.resolve(env.FLOVART_AGENT_HOME)
+  const configured = env.IRIS_AGENT_CONFIG ? path.resolve(env.IRIS_AGENT_CONFIG) : null;
+  const dir = env.IRIS_AGENT_HOME
+    ? path.resolve(env.IRIS_AGENT_HOME)
     : configured
       ? path.dirname(configured)
-      : path.join(os.homedir(), '.flovart');
+      : path.join(os.homedir(), '.iris');
   return { dir, configFile: configured || path.join(dir, 'agent.json') };
 }
 
@@ -40,13 +40,13 @@ export function loadAgentConfig(create = false) {
       // 配置损坏：先把损坏文件备份为 *.corrupt 再重新生成，不静默覆盖。
       try {
         const backup = backupCorruptConfig();
-        console.error(`[flovart-agent] Agent 配置文件损坏，已备份为 ${backup}，将重新生成。原始错误：${error?.message || error}`);
+        console.error(`[iris-agent] Agent 配置文件损坏，已备份为 ${backup}，将重新生成。原始错误：${error?.message || error}`);
       } catch (backupError) {
-        console.error(`[flovart-agent] Agent 配置文件损坏且备份失败：${backupError?.message || backupError}`);
+        console.error(`[iris-agent] Agent 配置文件损坏且备份失败：${backupError?.message || backupError}`);
       }
     }
   }
-  const port = Number(process.env.FLOVART_AGENT_PORT) || DEFAULT_AGENT_PORT;
+  const port = Number(process.env.IRIS_AGENT_PORT) || DEFAULT_AGENT_PORT;
   const config = { url: `http://127.0.0.1:${port}`, token: crypto.randomBytes(18).toString('hex'), origin: null, threads: {} };
   if (create) saveAgentConfig(config);
   return config;
@@ -77,7 +77,7 @@ export async function saveAgentConfig(config) {
   } catch (error) {
     try { await fsp.rm(tempFile, { force: true }); } catch { /* best effort */ }
     // 写盘失败时降级为内存生效：调用方（请求/启动流程）不因此 500 或崩溃。
-    console.error(`[flovart-agent] Agent 配置写入失败，本次修改仅在内存中生效：${error?.message || error}`);
+    console.error(`[iris-agent] Agent 配置写入失败，本次修改仅在内存中生效：${error?.message || error}`);
   }
 }
 

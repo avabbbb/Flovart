@@ -18,7 +18,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-import { buildBrowserBootstrapUrl, issueBrowserBootstrapToken, probeWebUi, redactBootstrapUrl } from '../tools/flovart/local-agent.js';
+import { buildBrowserBootstrapUrl, issueBrowserBootstrapToken, probeWebUi, redactBootstrapUrl } from '../tools/iris/local-agent.js';
 import { resolveTestTempRoot } from './test-temp-root.mjs';
 const checkOnly = process.argv.includes('--check');
 const visible = process.argv.includes('--visible');
@@ -29,7 +29,7 @@ const visible = process.argv.includes('--visible');
 const autoApprove = process.argv.includes('--auto-approve');
 if (checkOnly) {
   const homeDir = (await import('node:os')).homedir();
-  const agentConfigPath = process.env.FLOVART_AGENT_CONFIG || join(homeDir, '.flovart', 'agent.json');
+  const agentConfigPath = process.env.IRIS_AGENT_CONFIG || join(homeDir, '.iris', 'agent.json');
   try {
     const agent = JSON.parse(readFileSync(agentConfigPath, 'utf8'));
     const response = await fetch(new URL('/health', agent.url));
@@ -58,7 +58,7 @@ if (checkOnly) {
 const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const tempRoot = resolveTestTempRoot(projectDir);
 await mkdir(tempRoot, { recursive: true });
-const testRoot = await mkdtemp(join(tempRoot, 'flovart-codex-session-'));
+const testRoot = await mkdtemp(join(tempRoot, 'iris-codex-session-'));
 
 process.env.TEMP = testRoot;
 process.env.TMP = testRoot;
@@ -78,10 +78,10 @@ async function waitFor(check, timeoutMs = 90_000, intervalMs = 300) {
     }
     await sleep(intervalMs);
   }
-  throw lastError || new Error('Timed out waiting for Flovart services.');
+  throw lastError || new Error('Timed out waiting for Iris services.');
 }
 
-const chromeExecutable = process.env.FLOVART_CHROME_PATH || chromium.executablePath();
+const chromeExecutable = process.env.IRIS_CHROME_PATH || chromium.executablePath();
 if (!existsSync(chromeExecutable)) {
   throw new Error(`Chrome for Testing executable not found: ${chromeExecutable}`);
 }
@@ -89,26 +89,26 @@ if (!existsSync(chromeExecutable)) {
 let browser = null;
 let page = null;
 try {
-  // Agent + Web are assumed already running (via `flovart ensure`). Read the
-  // default config locations the CLI writes to (~/.flovart).
+  // Agent + Web are assumed already running (via `iris ensure`). Read the
+  // default config locations the CLI writes to (~/.iris).
   const homeDir = (await import('node:os')).homedir();
-  const agentConfigPath = join(homeDir, '.flovart', 'agent.json');
-  const webDiscoveryPath = join(homeDir, '.flovart', 'web.json');
+  const agentConfigPath = join(homeDir, '.iris', 'agent.json');
+  const webDiscoveryPath = join(homeDir, '.iris', 'web.json');
 
   const agent = await waitFor(() => {
-    const file = process.env.FLOVART_AGENT_CONFIG || agentConfigPath;
+    const file = process.env.IRIS_AGENT_CONFIG || agentConfigPath;
     if (!existsSync(file)) return null;
     const c = JSON.parse(readFileSync(file, 'utf8'));
     return c?.url && c?.token ? c : null;
   });
 
   const web = await waitFor(async () => {
-    const file = process.env.FLOVART_WEB_DISCOVERY || webDiscoveryPath;
+    const file = process.env.IRIS_WEB_DISCOVERY || webDiscoveryPath;
     if (!existsSync(file)) return null;
     const d = JSON.parse(readFileSync(file, 'utf8'));
     return await probeWebUi(d.url, { timeoutMs: 1200 }).catch(() => null);
   });
-  const webDiscovery = JSON.parse(readFileSync(process.env.FLOVART_WEB_DISCOVERY || webDiscoveryPath, 'utf8'));
+  const webDiscovery = JSON.parse(readFileSync(process.env.IRIS_WEB_DISCOVERY || webDiscoveryPath, 'utf8'));
 
   // Initial connect retry: a dropped WebSocket/page during bootstrap used to
   // kill the script silently. Retry the launch+goto+mount handshake up to 3

@@ -146,7 +146,7 @@ export function renderProjectLedger(ledger: ProjectLedger, options: { maxAssets?
       .join(' ');
     lines.push('- ' + asset.type + '「' + asset.title + '」' + (tags ? '（' + tags + '）' : '') + ' → ' + asset.nodeId + (asset.promptPreview ? '：' + asset.promptPreview : ''));
   }
-  if (ledger.assets.length > maxAssets) lines.push('- …还有 ' + (ledger.assets.length - maxAssets) + ' 个，用 flovart_workflow_search_nodes 查');
+  if (ledger.assets.length > maxAssets) lines.push('- …还有 ' + (ledger.assets.length - maxAssets) + ' 个，用 iris_workflow_search_nodes 查');
   if (ledger.totals.failed || ledger.totals.running) lines.push('', '状态：失败 ' + ledger.totals.failed + '，生成中 ' + ledger.totals.running);
   if (ledger.issues.length) lines.push('', '## 一致性问题', ...ledger.issues.map(issue => '- ' + issue));
   return lines.join('\n');

@@ -12,7 +12,7 @@ import { WorkflowAgentSession } from '../agent/session.js';
 const ORIGIN = 'http' + '://127.0.0.1:5173';
 const dirs: string[] = [];
 const makeStore = () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'flovart-run-receipts-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'iris-run-receipts-'));
   dirs.push(root);
   return new ReceiptStore({ dirFor: (projectId: string) => {
     const dir = path.join(root, projectId);

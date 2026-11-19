@@ -11,7 +11,7 @@ title: 数据存储
 
 ## 本机 Agent 视频流水线存储
 
-Agent 视频流水线的 trace 存在用户本机，不经过任何服务端，也不同步到云端。它与桌面 Production Runtime 共用同一个 `flovart-state.db`（`<app_data_dir>/flovart-state.db`，identifier `com.flovart.desktop`），表由 migration 5（`tools/flovart/contracts/runtime/migrations/0005_agent_pipeline.sql`）建立：Rust `RuntimeStore` 和 Node `tools/flovart/pipeline/store.js` 执行同一份 SQL，并共用 `runtime_migrations` 账本。Node pipeline 边界是唯一写入方；Rust Runtime 只通过 `pipeline.run.get` 读取，返回与 Node `Pipeline.trace()` 相同的 JSON（`npm run e2e:pipeline:parity` 校验）。产物文件放在 `<app_data_dir>/pipeline/`；`FLOVART_PIPELINE_HOME` 可把数据库和产物一起改到指定目录（测试与隔离用）。
+Agent 视频流水线的 trace 存在用户本机，不经过任何服务端，也不同步到云端。它与桌面 Production Runtime 共用同一个 `flovart-state.db`（`<app_data_dir>/flovart-state.db`，identifier `com.flovart.desktop`），表由 migration 5（`tools/iris/contracts/runtime/migrations/0005_agent_pipeline.sql`）建立：Rust `RuntimeStore` 和 Node `tools/iris/pipeline/store.js` 执行同一份 SQL，并共用 `runtime_migrations` 账本。Node pipeline 边界是唯一写入方；Rust Runtime 只通过 `pipeline.run.get` 读取，返回与 Node `Pipeline.trace()` 相同的 JSON（`npm run e2e:pipeline:parity` 校验）。产物文件放在 `<app_data_dir>/pipeline/`；`IRIS_PIPELINE_HOME` 可把数据库和产物一起改到指定目录（测试与隔离用）。
 
 | 表 | 用途 | 关键字段 |
 | --- | --- | --- |

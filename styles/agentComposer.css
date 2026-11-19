@@ -271,7 +271,7 @@
 .agent-plan__toggle:hover > span { color: var(--isl-ink); }
 .agent-plan__toggle svg { transition: transform .15s ease; }
 .agent-plan__toggle svg.is-open { transform: rotate(90deg); }
-.agent-plan__assets .flovart-plan { max-height: 240px; overflow: auto; font-size: 11px; }
+.agent-plan__assets .iris-plan { max-height: 240px; overflow: auto; font-size: 11px; }
 .agent-plan__mandate { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 8px 8px 0; color: var(--isl-ink-soft); font-size: 11px; }
 .agent-plan__mandate input[type='number'] { width: 48px; height: 22px; padding: 0 6px; border: 1px solid color-mix(in srgb, var(--isl-ink) 14%, transparent); border-radius: 6px; color: var(--isl-ink); background: var(--isl-card); font: inherit; }
 .agent-plan__note { margin: 0; padding: 0 4px; color: var(--p-ghost, var(--isl-ink-ghost)); font-size: 11px; line-height: 1.55; overflow-wrap: anywhere; }

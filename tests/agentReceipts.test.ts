@@ -6,7 +6,7 @@ import { ReceiptStore } from '../agent/receipts.js';
 
 const dirs: string[] = [];
 const makeStore = () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'flovart-receipts-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'iris-receipts-'));
   dirs.push(root);
   return new ReceiptStore({ dirFor: (projectId: string) => {
     const dir = path.join(root, projectId);

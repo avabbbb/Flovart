@@ -18,7 +18,7 @@
  * }
  *
  * 【存储键名】
- * localforage 实例 `flovart` / store `asset_library_v2`。
+ * localforage 实例 `iris` / store `asset_library_v2`。
  * 旧版 localStorage key `making.assetLibrary.v1` 在首次加载时一次性迁移到 v2，
  * 迁移完成后删除 v1 key。dataUrl 不再分离到 IndexedDB sentry，整体落入 localforage。
  */
@@ -30,7 +30,7 @@ const V1_STORAGE_KEY = 'making.assetLibrary.v1';
 const V2_STORE_NAME = 'asset_library_v2';
 
 const assetStore = localforage.createInstance({
-  name: 'flovart',
+  name: 'iris',
   storeName: V2_STORE_NAME,
 });
 

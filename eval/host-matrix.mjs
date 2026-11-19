@@ -64,7 +64,7 @@ const ORACLES = [
 // ---------------------------------------------------------------------------
 // Chromium executable (repo convention: Playwright's Chrome for Testing).
 // ---------------------------------------------------------------------------
-const chromeExecutable = process.env.FLOVART_CHROME_PATH || chromium.executablePath();
+const chromeExecutable = process.env.IRIS_CHROME_PATH || chromium.executablePath();
 if (!existsSync(chromeExecutable)) {
   throw new Error(`Chrome for Testing executable was not found: ${chromeExecutable}`);
 }
@@ -184,7 +184,7 @@ const ORACLE_EVAL = `(oracles) => {
 
   // 6. result-reachable: a result/status message exists OR history tab can surface it.
   const historyTab = panel && Array.from(panel.querySelectorAll('.fs-tab')).find(t => t.textContent.includes('记录'));
-  const statusHasResult = statusText.length > 0 && !/等待|尚未|连接 Flovart 后即可使用/.test(statusText);
+  const statusHasResult = statusText.length > 0 && !/等待|尚未|连接 Iris 后即可使用/.test(statusText);
   results['result-reachable'] = {
     pass: statusHasResult || !!historyTab,
     detail: statusText || (historyTab ? historyTab.textContent.trim() : 'none'),
@@ -239,15 +239,15 @@ async function mountCell(page, { state, theme, plan }) {
         if (outcome === 'slow') { await new Promise(r => setTimeout(r, 400)); return { import: { ok: true, message: '已添加新结果' } }; }
         if (outcome === 'failed') throw new Error(plan.outcomeMessage || '制作失败，请重试。');
         if (outcome === 'cancelled') throw new Error(plan.outcomeMessage || '任务已取消。');
-        if (outcome === 'provider-missing') throw new Error(plan.outcomeMessage || '尚未配置生成 Provider，请在 Flovart 画布中完成设置。');
-        if (outcome === 'needs-login') throw new Error(plan.outcomeMessage || '请先登录 Flovart 账号。');
+        if (outcome === 'provider-missing') throw new Error(plan.outcomeMessage || '尚未配置生成 Provider，请在 Iris 画布中完成设置。');
+        if (outcome === 'needs-login') throw new Error(plan.outcomeMessage || '请先登录 Iris 账号。');
         if (outcome === 'offline') throw new Error(plan.outcomeMessage || '网络连接不可用，请检查网络后重试。');
         if (outcome === 'import-failed') return { import: { ok: false, message: plan.outcomeMessage || '结果添加失败，请重试。' } };
         return { import: { ok: true, message: plan.outcomeMessage || '已添加新结果' } };
       },
     };
 
-    const panel = window.FlovartStudioUI.mountInspector({
+    const panel = window.IrisStudioUI.mountInspector({
       root: app,
       adapter,
       getController: () => (plan.controller ? controller : null),

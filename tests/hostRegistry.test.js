@@ -1,14 +1,14 @@
 // @vitest-environment node
 
 import { describe, expect, it, vi } from 'vitest';
-import { discoverAgentHosts } from '../tools/flovart/host-discovery.js';
+import { discoverAgentHosts } from '../tools/iris/host-discovery.js';
 import {
   getHostRegistry,
   getDistributionTarget,
   listAgentIdentities,
-} from '../tools/flovart/host-registry.js';
+} from '../tools/iris/host-registry.js';
 
-describe('Flovart Host registry', () => {
+describe('Iris Host registry', () => {
   it('keeps Agent Identity, IDE, Distribution Target, and Runtime Surface as separate dimensions', () => {
     const registry = getHostRegistry();
 

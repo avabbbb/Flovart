@@ -157,7 +157,7 @@ export function listWorkflowHostSendRequests(project: Pick<WorkflowProject, 'nod
     .map(node => ({ nodeId: node.id, title: node.title, request: node.metadata.hostSend! }));
 }
 
-// ───────────────────────── Open in Flovart handoff ─────────────────────────
+// ───────────────────────── Open in Iris handoff ─────────────────────────
 
 export interface WorkflowHostHandoff {
   host: string;

@@ -30,7 +30,7 @@ interface AgentWorkspaceState {
   resetLayout: (projectId: string) => void;
 }
 
-const agentWorkspaceDb = localforage.createInstance({ name: 'flovart', storeName: 'agent_workspaces' });
+const agentWorkspaceDb = localforage.createInstance({ name: 'iris', storeName: 'agent_workspaces' });
 const agentWorkspaceStorage: StateStorage = {
   getItem: name => agentWorkspaceDb.getItem<string>(name),
   setItem: async (name, value) => { await agentWorkspaceDb.setItem(name, value); },
@@ -82,7 +82,7 @@ export const useAgentWorkspaceStore = create<AgentWorkspaceState>()(
       resetLayout: projectId => set(state => ({ layouts: { ...state.layouts, [projectId]: createDefaultAgentLayout() } })),
     }),
     {
-      name: 'flovart:agent-workspaces',
+      name: 'iris:agent-workspaces',
       storage: createJSONStorage(() => agentWorkspaceStorage),
       partialize: state => ({ layouts: state.layouts }),
     },

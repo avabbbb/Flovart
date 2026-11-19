@@ -15,9 +15,9 @@ const MIGRATION_0001: &str = include_str!("migrations/0001_runtime_ledger.sql");
 const MIGRATION_0002: &str = include_str!("migrations/0002_production_plan.sql");
 const MIGRATION_0003: &str = include_str!("migrations/0003_production_execution.sql");
 const MIGRATION_0004: &str = include_str!("migrations/0004_agent_text_routes.sql");
-// Agent 视频流水线表与 Node `tools/flovart/pipeline/store.js` 共用同一份 SQL 与 runtime_migrations 账本。
+// Agent 视频流水线表与 Node `tools/iris/pipeline/store.js` 共用同一份 SQL 与 runtime_migrations 账本。
 const MIGRATION_0005: &str =
-    include_str!("../../../tools/flovart/contracts/runtime/migrations/0005_agent_pipeline.sql");
+    include_str!("../../../tools/iris/contracts/runtime/migrations/0005_agent_pipeline.sql");
 
 pub struct RuntimeStore {
     connection: Mutex<Connection>,

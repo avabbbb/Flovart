@@ -10,22 +10,22 @@ export interface WorkspaceBadges {
   artifacts: number
 }
 
-export type FlovartBridgeEvent =
+export type IrisBridgeEvent =
   | { kind: 'connected' }
   | { kind: 'badges'; badges: WorkspaceBadges }
   | { kind: 'intent'; intentId: string; status: string; changeSetId?: string }
   | { kind: 'receipt'; intentId: string; status: string; changeSetId?: string }
 
-type Listener = (event: FlovartBridgeEvent) => void
+type Listener = (event: IrisBridgeEvent) => void
 
-function createBus(): { subscribe: (listener: Listener) => () => void; publish: (event: FlovartBridgeEvent) => void } {
+function createBus(): { subscribe: (listener: Listener) => () => void; publish: (event: IrisBridgeEvent) => void } {
   const listeners = new Set<Listener>()
   return {
     subscribe(listener: Listener): () => void {
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
-    publish(event: FlovartBridgeEvent): void {
+    publish(event: IrisBridgeEvent): void {
       for (const listener of [...listeners]) listener(event)
     },
   }

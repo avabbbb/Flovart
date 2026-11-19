@@ -6,8 +6,8 @@ import { translations } from '../utils/translations';
 
 const { runtimeExecute } = vi.hoisted(() => ({ runtimeExecute: vi.fn() }));
 
-vi.mock('../services/flovartRuntime', () => ({
-    getFlovartRuntimeApi: () => ({ execute: runtimeExecute }),
+vi.mock('../services/irisRuntime', () => ({
+    getIrisRuntimeApi: () => ({ execute: runtimeExecute }),
 }));
 
 const multiCredentialStatus = {

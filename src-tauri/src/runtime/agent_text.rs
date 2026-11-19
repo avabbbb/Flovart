@@ -513,9 +513,9 @@ mod tests {
                 .as_reader()
                 .read_to_string(&mut body)
                 .expect("provider body");
-            assert!(body.contains("\"name\":\"flovart_workflow_inspect\""));
+            assert!(body.contains("\"name\":\"iris_workflow_inspect\""));
             let mut response = Response::from_string(concat!(
-                "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-1\",\"function\":{\"name\":\"flovart_workflow_inspect\",\"arguments\":\"{\"}}]},\"finish_reason\":null}]}\n\n",
+                "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-1\",\"function\":{\"name\":\"iris_workflow_inspect\",\"arguments\":\"{\"}}]},\"finish_reason\":null}]}\n\n",
                 "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"projectId\\\":\\\"project-1\\\"}\"}}]},\"finish_reason\":null}]}\n\n",
                 "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n",
                 "data: [DONE]\n\n"
@@ -537,7 +537,7 @@ mod tests {
             system_prompt: Some("先读取可见 Workflow".to_owned()),
             messages: vec![json!({ "role": "user", "content": "读取当前 Workflow" })],
             tools: vec![json!({
-                "name": "flovart_workflow_inspect",
+                "name": "iris_workflow_inspect",
                 "description": "读取 Workflow",
                 "parameters": {
                     "type": "object",
@@ -556,7 +556,7 @@ mod tests {
         assert!(normalized.contains("event: toolcall-start"));
         assert!(normalized.contains("event: toolcall-delta"));
         assert!(normalized.contains("event: toolcall-end"));
-        assert!(normalized.contains("\"name\":\"flovart_workflow_inspect\""));
+        assert!(normalized.contains("\"name\":\"iris_workflow_inspect\""));
         assert!(normalized.contains("\\\"projectId\\\":\\\"project-1\\\""));
         assert!(normalized.contains("\"finishReason\":\"toolUse\""));
     }

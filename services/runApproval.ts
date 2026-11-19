@@ -2,7 +2,7 @@
  * Agent 工具 v2 · P0-3：建与跑分离后的「按批审批」（纯函数）。
  *
  * Agent 先用 workflow.generate（run=false）把一批生成节点建好，再用一次
- * workflow.node.run { nodeIds }（别名 flovart_approve_run）请求运行：
+ * workflow.node.run { nodeIds }（别名 iris_approve_run）请求运行：
  * - 审批卡列出的节点 = 本次会运行的节点，每个只运行一次（去重、保持顺序）；
  * - 费用在卡片上汇总一次确认；
  * - 列表里有不存在、文本备注或不能生成的节点时，在弹卡之前就拒绝，不让用户批准一张跑不起来的卡。
@@ -35,7 +35,7 @@ export function planRunApproval(nodes: readonly WorkflowNode[], requestedIds: re
   if (notes.length) return { ok: false, code: 'NOTE_IS_ANNOTATION', message: `${notes.join('、')} 是文本备注，不能运行；只把生成节点放进审批清单。`, nodeIds: notes };
   const notRunnable = nodeIds.filter(id => !runnableModeOf(byId.get(id)!));
   if (notRunnable.length) {
-    return { ok: false, code: 'NOT_RUNNABLE', message: `${notRunnable.join('、')} 不是图片/视频生成节点；画布工具请用 flovart_image_tool / flovart_video_tool / flovart_audio_tool。`, nodeIds: notRunnable };
+    return { ok: false, code: 'NOT_RUNNABLE', message: `${notRunnable.join('、')} 不是图片/视频生成节点；画布工具请用 iris_image_tool / iris_video_tool / iris_audio_tool。`, nodeIds: notRunnable };
   }
   return {
     ok: true,

@@ -2,7 +2,7 @@
 //
 // Primary backend: node:sqlite (built into Node >= 22.5, loaded lazily so a
 // runtime without it still works). Fallback: append-only JSONL files with the
-// same records. Force the fallback with FLOVART_AIGC_STORE=jsonl.
+// same records. Force the fallback with IRIS_AIGC_STORE=jsonl.
 // The store holds grades, withdrawals, ratings and take metadata — never media.
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
@@ -115,7 +115,7 @@ function jsonlStore(dir) {
 }
 
 /** Open (and create) the store in `dir`. backend: 'auto' | 'sqlite' | 'jsonl'. */
-export function openStore(dir, { backend = process.env.FLOVART_AIGC_STORE || 'auto' } = {}) {
+export function openStore(dir, { backend = process.env.IRIS_AIGC_STORE || 'auto' } = {}) {
   mkdirSync(dir, { recursive: true });
   if (backend !== 'jsonl') {
     const sqlite = loadSqlite();

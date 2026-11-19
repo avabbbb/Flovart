@@ -5,11 +5,11 @@ import { Context } from '../dsh-plugin/node_modules/@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
 import { runCliSync } from '../dsh-plugin/src/cli';
 import { artifactFromTask } from '../dsh-plugin/src/service';
-import { FlovartService } from '../dsh-plugin/src/service';
+import { IrisService } from '../dsh-plugin/src/service';
 
-describe('DeepSeek Harness Flovart service', () => {
+describe('DeepSeek Harness Iris service', () => {
   it('runs a synchronous CLI probe and returns its parsed outcome', () => {
-    const directory = mkdtempSync(join(tmpdir(), 'flovart-dsh-sync-cli-'));
+    const directory = mkdtempSync(join(tmpdir(), 'iris-dsh-sync-cli-'));
     const cliFile = join(directory, 'cli.mjs');
     writeFileSync(cliFile, [
       "console.log(JSON.stringify({ ok: true, data: { commands: { status: { availability: 'stable' } } } }))",
@@ -83,7 +83,7 @@ describe('DeepSeek Harness Flovart service', () => {
   });
 
   it('disposes and reactivates Cordis dependents when the CLI disappears and returns', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'flovart-dsh-health-'));
+    const directory = mkdtempSync(join(tmpdir(), 'iris-dsh-health-'));
     const stateFile = join(directory, 'state');
     const cliFile = join(directory, 'cli.mjs');
     writeFileSync(stateFile, 'ready');
@@ -105,7 +105,7 @@ describe('DeepSeek Harness Flovart service', () => {
     };
     try {
       const fiber = context.plugin(ctx => {
-        const service = new FlovartService(ctx, {
+        const service = new IrisService(ctx, {
           cli: JSON.stringify(process.execPath) + ' ' + JSON.stringify(cliFile),
           toolTimeoutMs: 2_000,
           workspaceMode: 'browser',
@@ -116,7 +116,7 @@ describe('DeepSeek Harness Flovart service', () => {
         });
         service.probe();
         ctx.effect(() => service.startHealthMonitor(20), 'test health monitor');
-        ctx.inject(['flovart'], dependent => {
+        ctx.inject(['iris'], dependent => {
           dependent.effect(() => {
             mounted += 1;
             return () => { disposed += 1 };

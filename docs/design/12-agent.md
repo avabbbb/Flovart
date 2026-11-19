@@ -6,7 +6,7 @@
 
 | 概念 | 是什么 | 不是什么 |
 | --- | --- | --- |
-| **外部 Agent 接入** | Codex、Claude Code、OpenCode、WorkBuddy 等通过 Skill + CLI（或 MCP 投影）调用 Flovart | 第二套业务实现 |
+| **外部 Agent 接入** | Codex、Claude Code、OpenCode、WorkBuddy 等通过 Skill + CLI（或 MCP 投影）调用 Iris | 第二套业务实现 |
 | **Agent surface** | 顶栏 Agent 连接与状态中心：runtime、模型 / Provider 路由、外部 Agent（Codex、Claude Code、DSH）的发现、准备、健康、每个 Agent 的状态与切换；向 Iris 供应 Agent 与模型 | 对话、run 编辑、Tasks / Artifacts 工作区 |
 | **Iris（全能后期助手 · Personal agent）** | 内置 Agent 的主场：对话优先，画布是产出面；画布上可见的多 Agent 光标、对话里的计划 / trace / 审批卡；可选宿主上下文连接器（[01](01-interaction.md) §11–§12、[11](11-iris.md)） | 没有画布产出的纯聊天页、第二份 Workflow 或业务实现、把宿主连接设为前提 |
 | **Assistant drawer** | Canvas 旁的轻量上下文助手，调用同一批受控操作；多步制作“在 Iris 中继续”进入同一 run | Host picker、Agent 安装、更高权限、独立 run 主场 |
@@ -19,28 +19,28 @@
 - 委派：`agent.turn` —— 外部 Agent 让内置 Assistant 跑一轮，默认只读、只回摘要（文本 + 工具清单 + draftVersion），同一 mutationId 幂等、一次只跑一轮。
 - 连接准备与诊断：`ensure`、`doctor`。
 - 生成与素材（宿主路径）：任务提交、`task.get`、`artifact.locate` 等，只有实现、schema、验证齐备后才写进 Skill。
-- 命令注册表 `tools/flovart/registry.js` 是唯一来源；文档里出现的命令必须在注册表中（`npm run docs:check` 校验）。
+- 命令注册表 `tools/iris/registry.js` 是唯一来源；文档里出现的命令必须在注册表中（`npm run docs:check` 校验）。
 
-命名：产品与 CLI 统一使用 Flovart / `flovart`。历史宣传片中的 `iris layer.*` 是旧代号（Iris 曾是 Flovart 的旧品牌）的概念示意，不是可执行命令，也与现在的 Iris surface 无关；以当前 CLI contract 为准。
+命名：产品与 CLI 统一使用 Iris / `iris`（2026-11-20 由 Flovart 更名）。历史宣传片中的 `iris layer.*` 是 2026-10 前旧代号的概念示意，不是可执行命令；以当前 CLI contract 为准。
 
 ## 3. Transport
 
 | Transport | 角色 |
 | --- | --- |
-| CLI + Skill | 默认外部路径（`skills/flovart/` 为 canonical，`.agents/`、`.claude/` 为投影快照，不得手改漂移） |
-| stdio MCP | 同一 operation contract 的可选投影（`tools/flovart/mcp-server.js`） |
+| CLI + Skill | 默认外部路径（`skills/iris/` 为 canonical，`.agents/`、`.claude/` 为投影快照，不得手改漂移） |
+| stdio MCP | 同一 operation contract 的可选投影（`tools/iris/mcp-server.js`） |
 | 内置 Assistant | 同一业务能力的 UI 入口 |
-| 宿主 native MCP（Resolve 21.1） | 宿主操作由 Blackmagic 官方 MCP 完成，Flovart 不复制 |
+| 宿主 native MCP（Resolve 21.1） | 宿主操作由 Blackmagic 官方 MCP 完成，Iris 不复制 |
 
 Transport 只做参数解码、权限上下文与结果编码；不做 MCP → CLI 子进程转发。
 
 内置 Assistant 的内核由 `BrowserAgentRuntime` 按项目持有（`services/browserAgentRuntime.ts`）；面板只是生命周期所有者与订阅者，不再直接构造内核。后续若让外部 Agent 通过命令面委派一轮内置对话，入口必须是这个运行时，而不是 React state。
 
 内置 Assistant（浏览器内核）的 harness：
-- **技能按需读取**：系统提示词只带技能索引（`.agents/skills/*` 的 name + description，排除给外部 CLI 用的 `flovart`、`open-flovart`，它们仍可按 id 读取）；任务命中技能时模型调用内核自带的只读工具 `flovart_skill_read` 读 SKILL.md 或 `references/`、`commands/` 下的文件（分页、拒绝越界、会话内去重）。Production Skill 面板里的手动绑定表示「强制使用」：首轮完整读取一次 SKILL.md，不截断。本机 Agent 服务对应接口 `GET /api/skills/:id/file?path=`。
+- **技能按需读取**：系统提示词只带技能索引（`.agents/skills/*` 的 name + description，排除给外部 CLI 用的 `iris`、`open-iris`，它们仍可按 id 读取）；任务命中技能时模型调用内核自带的只读工具 `iris_skill_read` 读 SKILL.md 或 `references/`、`commands/` 下的文件（分页、拒绝越界、会话内去重）。Production Skill 面板里的手动绑定表示「强制使用」：首轮完整读取一次 SKILL.md，不截断。本机 Agent 服务对应接口 `GET /api/skills/:id/file?path=`。
 - **上下文压缩**：用 pi-agent-core 内置压缩；发送前估算超过阈值（窗口减 max(15%, 16384) 预留）先压缩，请求因上下文溢出失败时压缩后重试一次（拒答、限流不重试）；会话菜单可手动「压缩上下文」。压缩只影响发给模型的上下文，面板历史、技能已读列表、项目记忆保留。
-- **项目记忆**：内核自带工具 `flovart_memory`（add / list / search / delete），按 Flovart 项目隔离、存本机 localforage、每项目最多 100 条（满了淘汰最旧），写入前脱敏密钥 / Token / 密码；摘要注入系统提示词，会话菜单可查看与删除。
-- 这三个工具与 `flovart_todo` 一样只属于内置内核，不进 `tools/flovart/agent-tools.js` 的外部工具面。
+- **项目记忆**：内核自带工具 `iris_memory`（add / list / search / delete），按 Iris 项目隔离、存本机 localforage、每项目最多 100 条（满了淘汰最旧），写入前脱敏密钥 / Token / 密码；摘要注入系统提示词，会话菜单可查看与删除。
+- 这三个工具只属于内置内核（原任务清单工具已于 2026-11-20 移除，`flovart_todo` 仅为弃用的无操作别名），不进 `tools/iris/agent-tools.js` 的外部工具面。
 
 ## 4. 权威与安全
 
@@ -54,7 +54,7 @@ Transport 只做参数解码、权限上下文与结果编码；不做 MCP → C
 
 ## 5. 宿主中的 Agent（Resolve 首发）
 
-Skill 教 Agent 组合 **Resolve native MCP（宿主状态）+ Flovart CLI（生成与素材）**。面板只显示 Agent 活动条与待确认项；对话留在 Agent 自己的界面。
+Skill 教 Agent 组合 **Resolve native MCP（宿主状态）+ Iris CLI（生成与素材）**。面板只显示 Agent 活动条与待确认项；对话留在 Agent 自己的界面。
 
 ## 6. 状态语义（面向用户）
 

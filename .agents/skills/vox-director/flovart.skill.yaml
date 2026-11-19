@@ -31,7 +31,7 @@ evals:
 license: MIT
 provenance:
   source: https://github.com/avabbbb/vox-director
-  adaptation: flovart-provider-neutral-example
+  adaptation: iris-provider-neutral-example
 trustTier: bundled-example
 inputs:
   - id: topic

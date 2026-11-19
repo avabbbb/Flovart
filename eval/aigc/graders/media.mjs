@@ -8,8 +8,8 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const FFPROBE = process.env.FLOVART_FFPROBE || 'ffprobe';
-export const FFMPEG = process.env.FLOVART_FFMPEG || 'ffmpeg';
+export const FFPROBE = process.env.IRIS_FFPROBE || 'ffprobe';
+export const FFMPEG = process.env.IRIS_FFMPEG || 'ffmpeg';
 
 export function toolAvailable(bin = FFPROBE) {
   const result = spawnSync(bin, ['-version'], { encoding: 'utf8' });

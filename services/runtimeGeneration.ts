@@ -1,4 +1,4 @@
-import { getFlovartRuntimeApi, type FlovartRuntimeApi } from './flovartRuntime';
+import { getIrisRuntimeApi, type IrisRuntimeApi } from './irisRuntime';
 import { loadRuntimeArtifactBlob } from './runtimeArtifacts';
 
 export interface RuntimeMediaResult {
@@ -55,7 +55,7 @@ export function runtimeTaskPhase(status: string | undefined): RuntimeTaskPhase {
 
 type RuntimePollOutcome = { kind: 'settled'; task: RuntimeTaskView } | { kind: 'timeout' };
 
-async function pollRuntimeTask(runtime: FlovartRuntimeApi, taskId: string, onProgress?: (message: string) => void, signal?: AbortSignal): Promise<RuntimePollOutcome> {
+async function pollRuntimeTask(runtime: IrisRuntimeApi, taskId: string, onProgress?: (message: string) => void, signal?: AbortSignal): Promise<RuntimePollOutcome> {
   const pollStart = Date.now();
   for (;;) {
     // 保留 signal.reason（默认是 AbortError），下游 isAbort 才能把停止和失败区分开。
@@ -75,7 +75,7 @@ async function pollRuntimeTask(runtime: FlovartRuntimeApi, taskId: string, onPro
 }
 
 /** 让 Runtime 取消上游任务，否则它会继续跑并计费。取消失败不能掩盖原始错误。 */
-async function cancelRuntimeTask(runtime: FlovartRuntimeApi, taskId: string, reason: 'user_abort' | 'poll_timeout'): Promise<void> {
+async function cancelRuntimeTask(runtime: IrisRuntimeApi, taskId: string, reason: 'user_abort' | 'poll_timeout'): Promise<void> {
   await runtime.execute({
     protocolVersion: '1',
     commandId: crypto.randomUUID(),
@@ -98,7 +98,7 @@ export async function runRuntimeMediaGeneration(params: {
   onProgress?: (message: string) => void;
   signal?: AbortSignal;
 }): Promise<RuntimeMediaResult> {
-  const runtime = getFlovartRuntimeApi();
+  const runtime = getIrisRuntimeApi();
   if (!runtime) throw new Error('Runtime 媒体生成需要桌面应用');
   const idempotencyKey = crypto.randomUUID();
   const submitted = await runtime.execute({

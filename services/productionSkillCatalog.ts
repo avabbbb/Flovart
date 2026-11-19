@@ -39,7 +39,7 @@ const manifestSchema = z.object({
   license: z.string().min(1),
   provenance: z.object({
     source: z.string().url(),
-    adaptation: z.literal('flovart-provider-neutral-example'),
+    adaptation: z.literal('iris-provider-neutral-example'),
   }).strict(),
   trustTier: z.literal('bundled-example'),
   inputs: skillInputsSchema.optional(),

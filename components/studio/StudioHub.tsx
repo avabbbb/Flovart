@@ -38,7 +38,7 @@ import { getBundledProductionSkill } from '../../services/productionSkillCatalog
 import { translations } from '../../utils/translations';
 
 // 放大的资源窗口：一个共享外壳，左侧栏切换 Skills / History / Timeline / Library，各自带子项；窄宽度收成图标栏。
-// 外观：bleep-app 式磨砂玻璃（--flv-frost-*，半透明），窗外是 Flovart 深色遮罩（--flv-scrim），不用白色蒙层。
+// 外观：bleep-app 式磨砂玻璃（--flv-frost-*，半透明），窗外是 Iris 深色遮罩（--flv-scrim），不用白色蒙层。
 // 业务不在这里复制：Skill 选用走 skillHubParts.resolveSkillAttachment + Composer 注册的 attachSkill；
 // 插入画布走画布注册的 insertHistory / insertLibrary；本地文件夹直接复用 LocalFolderBrowser。
 

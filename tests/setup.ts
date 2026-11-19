@@ -11,6 +11,8 @@ mkdirSync(testTempRoot, { recursive: true });
 process.env.TEMP = testTempRoot;
 process.env.TMP = testTempRoot;
 process.env.TMPDIR = testTempRoot;
+// 测试进程（及其子进程）不迁移真实用户目录里的 ~/.flovart（tools/iris/legacy-bootstrap.js）。
+process.env.IRIS_SKIP_LEGACY_COMPAT = '1';
 
 // Polyfill WebCrypto for jsdom (Node 18+)
 if (typeof globalThis.crypto === 'undefined' || !globalThis.crypto.subtle) {

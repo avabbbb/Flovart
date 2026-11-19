@@ -5,7 +5,7 @@ import { parseApiKeyText, providerFromEnvName } from '../utils/apiKeyImport';
 describe('parseApiKeyText', () => {
   it('reads .env lines with comments, export and quotes, ignoring non-key variables', () => {
     const text = [
-      '\uFEFF# Flovart keys',
+      '\uFEFF# Iris keys',
       'export OPENAI_API_KEY="sk-openai-1"',
       "ARK_API_KEY='ark-2' # volcengine",
       'OPENAI_BASE_URL=https://example.com/v1',

@@ -1,12 +1,12 @@
 # AGENTS.md
 
-本文件约束 Flovart 的 AI / 自动化开发。优先级：系统 / 开发者指令 > 用户当前明确要求 > 本文件 > 项目文档。用户已确认的新决定覆盖旧稿；历史文档不得反向改变当前产品方向。
+本文件约束 Iris 的 AI / 自动化开发。优先级：系统 / 开发者指令 > 用户当前明确要求 > 本文件 > 项目文档。用户已确认的新决定覆盖旧稿；历史文档不得反向改变当前产品方向。
 
 ## 0. 品牌
 
-- 对外产品名统一为 **Flovart**。**Iris** 自 2026-11-17 起只指 Flovart 内第二个顶级 surface（个人 Agent），不是产品名、CLI 名或宿主面板名；不要用 Iris 指代 Flovart 本身。
-- CLI、Skill、package、环境变量中的 `flovart` 不动；旧 `iris-*` 数据库字段、协议字段、持久化 key、兼容 ID、已存素材路径保持兼容，只清理纯展示、CSS 与新导出文件名。旧文档里把 Flovart 称作 Iris 的（`Iris Link`、`Iris CLI`、`Iris Studio`）是旧代号，改为 Flovart，不要读成 Iris surface。
-- canonical 仓库为 `avabbbb/Flovart`；仓库或协议迁移不混入普通品牌清理。归档与更名前的视频可保留原名并说明背景。
+- 对外产品名统一为 **Iris**（2026-11-20 由 Flovart 更名；更早的 2026-10 前旧代号也叫 Iris）。顶栏第二个 surface 2026-11-17–11-20 曾叫 Iris，现在叫 **Cut**（内部 `canvasView: 'reverse'` 不变）；旧文档里“Iris surface / 个人 Agent / Iris tab”指的就是现在的 Cut。
+- 兼容（2026-11-20 更名）：Agent 工具 `flovart_*` 保留为 `iris_*` 的弃用别名；`VITE_FLOVART_*` / `FLOVART_*` 环境变量作为 `VITE_IRIS_*` / `IRIS_*` 的回退；浏览器 localStorage / IndexedDB 与 `~/.flovart` 首次启动时复制到新名字（`utils/legacyStorageMigration.ts`、`tools/iris/legacy-home.js`），旧数据本版本不删除；`flovart.avabbbb.com` 在过渡期仍是受信 origin。线上协议与持久化格式标识（`flovart:` 模型 id 与事件名、`flovart.*/N` schema 标签、`flovart.skill.yaml`、`x-flovart-*` 头、`data-flovart-*`、`__FLOVART_*__`、`com.flovart.*`、`flovart://`、npm 包 `@flovart/*`）有意保留，改它们是独立迁移。
+- canonical 仓库为 `avabbbb/Iris`；仓库或协议迁移不混入普通品牌清理。归档与更名前的视频可保留原名并说明背景。
 
 ## 1. 开始前先确认当前事实
 
@@ -16,15 +16,15 @@
 
 ## 2. 产品地图：三个顶级 surface
 
-产品定位（2026-11-17 定案）：**Canvas + Agent 是 Flovart 的 Workflow 生产工具；Iris 是全能后期助手（Personal agent）**。
+产品定位（2026-11-17 定案）：**Canvas + Agent 是 Iris 的 Workflow 生产工具；Iris 是全能后期助手（Personal agent）**。
 
-- **Iris 先是独立的 Web 个人 Agent**：Hark 式、对话优先，Flovart 无限画布是它的产出面（计划、素材、版本都落到画布上可见、可改）。不装任何剪辑软件也完整可用；素材可拖入或上传。
+- **Iris 先是独立的 Web 个人 Agent**：Hark 式、对话优先，Iris 无限画布是它的产出面（计划、素材、版本都落到画布上可见、可改）。不装任何剪辑软件也完整可用；素材可拖入或上传。
 - **本地宿主连接器是可选增强**：用户自愿连上本地插件 / 宿主后，Iris 同步剪辑工程上下文（时间线、选择、素材、标记），免手动上传。顺序：DaVinci Resolve 先（native MCP / Scripting），剪映 / CapCut、Premiere（UXP）后续。没有连接器时不得阻塞、不得降级成“请先连接”。
 - **本地优先**：工程上下文只在本机读取，按需、可见地交给模型；连接器只读起步，凭据不进宿主工程与日志。
 - **非破坏**：写回宿主默认新增结果（Resolve 先 Add to Media Pool），不改原时间线；替换须显式且可恢复（见 §5）。
-- 爆款视频逆向拆解（Hypit 式）保留为 Iris 的一组工具与面板；游戏素材替换暂缓。
+- 爆款视频逆向拆解（Hypit 式）保留为 Cut 的一组工具与面板；游戏素材替换暂缓。
 
-顶栏固定为 **画布 Canvas｜Iris｜Agent**（原 逆向 Reverse 改名为 Iris；原 Table 已移除，不保留 `table` 视图；内部 `canvasView: 'reverse'`、`components/reverse/` 等标识在单独迁移前保持）：
+顶栏固定为 **画布 Canvas｜Cut｜Agent**（英文 Canvas / Cut / Agent，中文 画布 / Cut / Agent；原 逆向 Reverse → Iris（11-17）→ Cut（11-20）；原 Table 已移除，不保留 `table` 视图；内部 `canvasView: 'reverse'`、`components/reverse/` 等标识在单独迁移前保持）：
 
 | Surface | 拥有 | 交接 |
 | --- | --- | --- |
@@ -77,10 +77,10 @@ UI / Agent / Host entry → same generation/business function → Provider adapt
 
 宿主扩展只是 projection，不建立第二套 Workflow、Provider、任务或资产系统；边界见 `docs/design/14-creative-hosts.md`，Resolve 实现还须遵循 `integrations/studio/resolve/PRODUCT_UI_SPEC.md`（实现前重新打开 Blackmagic 当前官方页面核对视觉）。
 
-- **宿主轻面板**：当前 selection → intent / reference → plan → generate → import；复杂编排打开 Flovart。面板是宿主原生感的 contextual inspector，不是聊天页、dashboard 或缩小版 Canvas；跟随宿主主题、密度、键盘与焦点。
-- **native effect / OFX**：宿主参数、关键帧、固定版本预览与导出；render callback 不联网、不等待模型、不依赖 Agent / Flovart 在线。
+- **宿主轻面板**：当前 selection → intent / reference → plan → generate → import；复杂编排打开 Iris。面板是宿主原生感的 contextual inspector，不是聊天页、dashboard 或缩小版 Canvas；跟随宿主主题、密度、键盘与焦点。
+- **native effect / OFX**：宿主参数、关键帧、固定版本预览与导出；render callback 不联网、不等待模型、不依赖 Agent / Iris 在线。
 - 默认新增结果，不静默覆盖；替换必须显式且可恢复。Resolve P0 唯一安全输出是 **Add to Media Pool**，P1 才有 Add to new track，P2 才做 Replace / Commit。
-- **Resolve Studio 21.1 first**：宿主操作优先 Blackmagic native MCP；Flovart Skill + `flovart` CLI 提供生成与 Artifact；不建第二套 Resolve MCP，不为每个 Scripting API 建 wrapper。外部 Agent 的聊天留在 Codex / Claude 等原宿主。
+- **Resolve Studio 21.1 first**：宿主操作优先 Blackmagic native MCP；Iris Skill + `iris` CLI 提供生成与 Artifact；不建第二套 Resolve MCP，不为每个 Scripting API 建 wrapper。外部 Agent 的聊天留在 Codex / Claude 等原宿主。
 - **Iris 宿主上下文连接器**：只读同步工程上下文是第一步，写回仍走上面的安全输出。Resolve 走 native MCP / Scripting；Premiere 走当期 UXP；剪映 6.0+ 草稿加密（待验证；11.7 起外部不可读，待验证），不做破解；CapCut 国际版按明文草稿评估（待验证），实现前按当前版本核对。连接器是 Iris 的可选能力，不是使用 Iris 的前提。
 - After Effects（CEP + C++ Effect SDK）保持 Experimental，暂停扩张；Photoshop / Premiere 按当期官方 UXP API 实现。
 - Provider key、Agent token、OAuth 或私有凭据不得进入宿主工程、Skill、日志或素材 metadata。
@@ -108,7 +108,7 @@ UI / Agent / Host entry → same generation/business function → Provider adapt
 
 - 评测总纲是 `eval/eval.md`（评什么、怎么评、Rubric 与 Judge、上线门禁）；新口径改 eval.md 与 `eval/judge/rubrics/`，不另起方法文档。单轮评测与排障按「trace 现象 → 根因 → 修复 → 测试」写进 `docs/quality/<日期>-*.md`，并在 `docs/index.md` 留指针；不另起并列报告。
 - 测试匹配改动风险：文档跑 `npm run docs:check`；代码跑相关测试；宿主 / 原生效果进真实应用。
-- 普通开发 / PR 走快速通道：只跑与改动直接相关的一轮验证；缺 SDK / 宿主 / 依赖时写 `NOT_RUN locally`，确定性验证可交给 GitHub Actions。10x critical、完整 FlovartBench、依赖审计、CodeQL、发布验证、全平台安装包属于 main / scheduled / manual / release，不作普通 PR 前置。secret audit、目标 / revision / 幂等、unknown-after-submit、未授权破坏性写入仍 fail-closed。
+- 普通开发 / PR 走快速通道：只跑与改动直接相关的一轮验证；缺 SDK / 宿主 / 依赖时写 `NOT_RUN locally`，确定性验证可交给 GitHub Actions。10x critical、完整 IrisBench、依赖审计、CodeQL、发布验证、全平台安装包属于 main / scheduled / manual / release，不作普通 PR 前置。secret audit、目标 / revision / 幂等、unknown-after-submit、未授权破坏性写入仍 fail-closed。
 - 真实支持状态只由 `SUPPORT_MATRIX.md` 升级；Provider 认证区分 Fake fixture 与真实账号、扣费、429、取消、unknown-submit。
 - 不宣传未验证的实时生成、宿主 Stable、完全离线、云同步、无缝 Agent 登录态迁移或跨平台等价。
 - 浏览器验收用 Chrome for Testing / 动态隔离端口；临时文件放 `.tmp/` 或 `artifacts/`。
@@ -122,7 +122,7 @@ UI / Agent / Host entry → same generation/business function → Provider adapt
 - 提案标 **PROPOSAL / REFERENCE**，接受后蒸馏进 current truth 再归档。`docs/plans/` 只放进行中的计划；完成或作废即归档。
 - `todo.mdx` 只放未完成；已实现待现实验证进 `pending-test.mdx`；验证后更新 features。
 - 历史施工包、对标报告、面试材料、阶段性 launch checklist 不留在 active tree：移到 `docs/archive/<日期>/` 并在 `docs/index.md` 留指针。
-- `skills/flovart/` 是 canonical Skill package；`.agents/skills/flovart/`、`.claude/skills/flovart/` 是兼容投影，不反转、不手工漂移。
+- `skills/iris/` 是 canonical Skill package；`.agents/skills/iris/`、`.claude/skills/iris/` 是兼容投影，不反转、不手工漂移。
 - README outcome-first 且严格跟随 Support Matrix；不复制内部 transport、端口或过时测试数字。
 
 ## 10. 提问与执行

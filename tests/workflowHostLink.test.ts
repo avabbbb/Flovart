@@ -14,7 +14,7 @@ import {
 import { applyWorkflowOps } from '../components/workflow/ops';
 import { deriveWorkflowPresence } from '../components/workflow/presence';
 import { StudioWorkflowController } from '../services/studio/studioWorkflow';
-import type { CreativeHostAdapter, FlovartStudioCore, HostContext } from '../services/studio/studioContract';
+import type { CreativeHostAdapter, IrisStudioCore, HostContext } from '../services/studio/studioContract';
 import type { WorkflowConnection, WorkflowDraftChangeSet, WorkflowNode, WorkflowProject } from '../components/workflow/types';
 
 const clipLocator = { projectId: 'resolve-a', timelineId: 'tl-1', timelineItemId: 'item-7' };
@@ -99,11 +99,11 @@ describe('send to timeline request', () => {
   });
 });
 
-describe('Open in Flovart handoff', () => {
+describe('Open in Iris handoff', () => {
   it('parses a whitelisted handoff and keeps other hash parameters when stripping it', () => {
-    const hash = '#/app?flovartAgentUrl=x&host=resolve&label=Shot%2004&kind=video&loc.projectId=resolve-a&loc.timelineItemId=item-7';
+    const hash = '#/app?irisAgentUrl=x&host=resolve&label=Shot%2004&kind=video&loc.projectId=resolve-a&loc.timelineItemId=item-7';
     expect(parseWorkflowHostHandoff(hash)).toEqual({ host: 'resolve', label: 'Shot 04', kind: 'video', locator: { projectId: 'resolve-a', timelineItemId: 'item-7' } });
-    expect(stripWorkflowHostHandoff(hash)).toBe('#/app?flovartAgentUrl=x');
+    expect(stripWorkflowHostHandoff(hash)).toBe('#/app?irisAgentUrl=x');
     expect(stripWorkflowHostHandoff('#/app?host=resolve&loc.a=1')).toBe('#/app');
   });
 
@@ -175,7 +175,7 @@ describe('Resolve panel: sending a canvas result', () => {
       })),
       importArtifact: vi.fn(async () => ({ ok: true, importStatus: 'confirmed' as const, targetId: 'media-pool' })),
     };
-    const core: FlovartStudioCore = {
+    const core: IrisStudioCore = {
       inspect: vi.fn(async () => project),
       selection: vi.fn(),
       registerHostResource: vi.fn(),

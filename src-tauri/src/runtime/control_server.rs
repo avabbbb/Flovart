@@ -206,7 +206,7 @@ fn handle_request(mut request: Request, runtime: &Arc<ProductionRuntime>, token:
                 );
                 return;
             }
-            let Some(extension_origin) = header_value(&request, "X-Flovart-Extension-Origin")
+            let Some(extension_origin) = header_value(&request, "X-Iris-Extension-Origin")
             else {
                 respond_error(
                     request,
@@ -215,7 +215,7 @@ fn handle_request(mut request: Request, runtime: &Arc<ProductionRuntime>, token:
                 );
                 return;
             };
-            let sequence = match header_value(&request, "X-Flovart-Chunk-Sequence")
+            let sequence = match header_value(&request, "X-Iris-Chunk-Sequence")
                 .and_then(|value| value.parse::<u32>().ok())
             {
                 Some(sequence) => sequence,
@@ -434,7 +434,7 @@ fn handle_request(mut request: Request, runtime: &Arc<ProductionRuntime>, token:
                 );
                 return;
             };
-            let actor_instance_id = header_value(&request, "X-Flovart-Actor-Instance")
+            let actor_instance_id = header_value(&request, "X-Iris-Actor-Instance")
                 .unwrap_or_else(|| "control_api".to_owned());
             let body = match read_json_body(&mut request) {
                 Ok(body) => body,

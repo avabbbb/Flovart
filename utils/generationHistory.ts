@@ -6,7 +6,7 @@ const STORAGE_KEY = 'items';
 const MAX_HISTORY_ITEMS = 18;
 /** 历史元数据存 localforage，媒体正文由 mediaIndexedDBSentry 转为 Blob 引用。 */
 export const generationHistoryStorage = localforage.createInstance({
-    name: 'flovart',
+    name: 'iris',
     storeName: 'generation_history_v2',
 });
 const THUMBNAIL_MAX_DIM = 256;

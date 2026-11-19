@@ -36,7 +36,7 @@ import {
 import { resolveWorkflowDefaultModel } from './workflowPromptPolicy';
 
 /**
- * Agent 工具 v2：flovart_generate / flovart_models_list 的纯规划逻辑。
+ * Agent 工具 v2：iris_generate / iris_models_list 的纯规划逻辑。
  * 只调用模型目录（productModelCatalog / workflowPromptPolicy）的导出函数；
  * 写画布由 dispatcher 以一个原子 ChangeSet 提交，运行交给同一个 WorkflowExecutor。
  */
@@ -291,7 +291,7 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
   if (requestedId) {
     target = input.nodes.find(node => node.id === requestedId);
     if (!target) throw new WorkflowGenerateError('NOT_FOUND', '节点不存在：' + requestedId);
-    if (target.type === 'text') throw new WorkflowGenerateError('NOTE_IS_ANNOTATION', '文本节点是备注，不参与生成；请对 image/video 生成节点调用 flovart_generate，或省略 nodeId 新建一个。');
+    if (target.type === 'text') throw new WorkflowGenerateError('NOTE_IS_ANNOTATION', '文本节点是备注，不参与生成；请对 image/video 生成节点调用 iris_generate，或省略 nodeId 新建一个。');
     const targetMode = generateModeOf(target);
     if (!targetMode) throw new WorkflowGenerateError('UNSUPPORTED_TARGET', `节点 ${requestedId}（${target.type}）不是图片/视频生成节点。`);
     if (args.type !== undefined && args.type !== targetMode) throw new WorkflowGenerateError('BAD_REQUEST', `nodeId 指向 ${targetMode} 节点，与 type=${String(args.type)} 不一致`);
@@ -299,7 +299,7 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
   } else {
     if (args.type !== 'image' && args.type !== 'video') {
       throw new WorkflowGenerateError('BAD_REQUEST', args.type === 'text'
-        ? '文本节点是备注，不能当提示词或生成节点；生成请用 type=image/video，写备注请用 flovart_note_write。'
+        ? '文本节点是备注，不能当提示词或生成节点；生成请用 type=image/video，写备注请用 iris_note_write。'
         : '新建生成节点需要 type=image 或 video（或给 nodeId 复用已有生成节点）。');
     }
     mode = args.type;
@@ -355,7 +355,7 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
   const requestedModelId = text(args.modelId);
   let model = requestedModelId ? getProductModel(requestedModelId) : undefined;
   if (requestedModelId && (!model || model.capability !== mode)) {
-    throw new WorkflowGenerateError('MODEL_NOT_FOUND', `没有可用于${mode === 'image' ? '图片' : '视频'}生成的模型：${requestedModelId}。先调用 flovart_models_list。`, {
+    throw new WorkflowGenerateError('MODEL_NOT_FOUND', `没有可用于${mode === 'image' ? '图片' : '视频'}生成的模型：${requestedModelId}。先调用 iris_models_list。`, {
       compatibleModels: compatibleModels(mode, submode, kinds, keys),
     });
   }

@@ -1,21 +1,21 @@
 [[permission]]
 identifier = "runtime-control"
-description = "Allows the main Flovart WebUI to inspect and execute the typed Production Runtime contract."
+description = "Allows the main Iris WebUI to inspect and execute the typed Production Runtime contract."
 commands.allow = ["runtime_status", "runtime_execute", "runtime_artifact_read"]
 
 [[permission]]
 identifier = "keyring-metadata"
-description = "Allows the main Flovart WebUI to write, delete, and list credential metadata without reading raw secrets back."
+description = "Allows the main Iris WebUI to write, delete, and list credential metadata without reading raw secrets back."
 commands.allow = ["keyring_set", "keyring_delete", "keyring_list", "keyring_report_sync"]
 
 [[permission]]
 identifier = "managed-agent-connection"
-description = "Allows the main Flovart WebUI to start and discover the authenticated loopback Managed Agent."
+description = "Allows the main Iris WebUI to start and discover the authenticated loopback Managed Agent."
 commands.allow = ["managed_agent_connection"]
 
 [[permission]]
 identifier = "browser-import"
-description = "Allows the main Flovart WebUI to manage browser extension pairings and imported artifacts."
+description = "Allows the main Iris WebUI to manage browser extension pairings and imported artifacts."
 commands.allow = [
   "browser_import_pairing_list_pending",
   "browser_import_pairing_approve",

@@ -7,11 +7,11 @@ import { verifyUpdaterArtifacts } from '../scripts/check-updater-artifacts.mjs';
 const temporaryDirectories = [];
 
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), 'flovart-updater-artifacts-'));
+  const root = mkdtempSync(join(tmpdir(), 'iris-updater-artifacts-'));
   temporaryDirectories.push(root);
   const installers = join(root, 'installers');
   mkdirSync(installers);
-  const artifactName = 'Flovart_0.3.2_x64-setup.exe';
+  const artifactName = 'Iris_0.3.2_x64-setup.exe';
   const signature = 'test-signature-content';
   writeFileSync(join(installers, artifactName), 'deterministic updater artifact');
   writeFileSync(join(root, `${artifactName}.sig`), `${signature}\n`);
@@ -62,7 +62,7 @@ describe('release updater artifact verification', () => {
   it('rejects an insecure or version-mismatched updater URL', () => {
     const { root } = fixture();
     const manifest = JSON.parse(readFileSync(join(root, 'latest.json'), 'utf8'));
-    manifest.platforms['windows-x86_64'].url = 'http://example.test/Flovart_0.3.1_x64-setup.exe';
+    manifest.platforms['windows-x86_64'].url = 'http://example.test/Iris_0.3.1_x64-setup.exe';
     writeFileSync(join(root, 'latest.json'), JSON.stringify(manifest));
     const report = verifyUpdaterArtifacts({ artifactDir: root, expectedVersion: '0.3.2' });
     expect(report.ok).toBe(false);

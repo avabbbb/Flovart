@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// FlovartBench CLI.
+// IrisBench CLI.
 //
 // Entry points (E12):
 //   npm run eval:validate   -> node eval/run.mjs validate
@@ -61,7 +61,7 @@ const FREEZE_EXCLUDED_SUITES = new Set(['environment']);
  * ships with the code is not a holdout. A certification run mounts it by path.
  */
 function holdoutDirectory(flags) {
-  const value = flags.holdout ? String(flags.holdout) : process.env.FLOVARTBENCH_HOLDOUT_DIR;
+  const value = flags.holdout ? String(flags.holdout) : process.env.IRISBENCH_HOLDOUT_DIR;
   return value ? resolve(value) : null;
 }
 
@@ -224,14 +224,14 @@ async function cmdValidate(flags) {
   const suites = new Map();
   for (const task of tasks) suites.set(task.suite, (suites.get(task.suite) ?? 0) + 1);
 
-  console.log(`\nFlovartBench validate`);
+  console.log(`\nIrisBench validate`);
   console.log(`  tasks: ${count}`);
   for (const [suite, n] of [...suites].sort()) console.log(`    ${suite}: ${n}`);
   console.log(`  predicates: ${predicates.length}`);
   if (holdoutDir) {
     console.log(`  holdout mounted: ${holdoutDir} (${holdoutIds.length} task(s), never committed)`);
   } else {
-    console.log('  holdout mounted: none (set FLOVARTBENCH_HOLDOUT_DIR or --holdout <dir>)');
+    console.log('  holdout mounted: none (set IRISBENCH_HOLDOUT_DIR or --holdout <dir>)');
   }
 
   if (errors.length) {
@@ -601,7 +601,7 @@ async function cmdRun(flags) {
   let standInTrials = 0;
   let certifiedTrials = 0;
 
-  console.log(`\nFlovartBench run: ${tasks.length} task(s) x ${runners.length} runner(s) x ${repeat} trial(s)`);
+  console.log(`\nIrisBench run: ${tasks.length} task(s) x ${runners.length} runner(s) x ${repeat} trial(s)`);
   if (gaps.length) {
     console.log(`  excluded known gaps: ${gaps.map(task => task.id).join(', ')}`);
   }
@@ -788,7 +788,7 @@ async function latestRunWithGroup(runs, group, excludeId) {
 }
 
 function printUsage() {
-  console.log(`FlovartBench
+  console.log(`IrisBench
 
   node eval/run.mjs validate [--suite NAME]
   node eval/run.mjs oracle   [--suite NAME] [--task ID] [--repeat N]
@@ -816,7 +816,7 @@ async function main() {
 }
 
 main().catch(error => {
-  console.error(`\nFlovartBench error: ${error.message}`);
-  if (process.env.FLOVARTBENCH_DEBUG === 'true') console.error(error.stack);
+  console.error(`\nIrisBench error: ${error.message}`);
+  if (process.env.IRISBENCH_DEBUG === 'true') console.error(error.stack);
   process.exitCode = 1;
 });

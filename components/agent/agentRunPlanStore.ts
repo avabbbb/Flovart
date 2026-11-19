@@ -19,7 +19,7 @@ export interface StoredRunPlan {
 
 type RWStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
-export const RUN_PLAN_STORAGE_KEY = 'flovart.agent.runPlans.v1';
+export const RUN_PLAN_STORAGE_KEY = 'iris.agent.runPlans.v1';
 /** 每段会话最多保留的计划卡数（按选择时间保留最新的）。 */
 export const MAX_PLANS_PER_SESSION = 30;
 /** 最多保留的会话数（按最近一次写入保留）。 */

@@ -24,8 +24,8 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('browser agent steering', () => {
   let kernel: BrowserAgentKernel;
-  beforeEach(async () => { await localforage.removeItem('flovart.agent.sessions.project-steer'); });
-  afterEach(async () => { await kernel?.close(); await localforage.removeItem('flovart.agent.sessions.project-steer'); });
+  beforeEach(async () => { await localforage.removeItem('iris.agent.sessions.project-steer'); });
+  afterEach(async () => { await kernel?.close(); await localforage.removeItem('iris.agent.sessions.project-steer'); });
 
   it('injects a message sent mid-run into the running turn without aborting it', async () => {
     const bodies: Array<{ messages: Array<{ role: string; content: unknown }> }> = [];
@@ -70,8 +70,8 @@ describe('browser agent steering', () => {
 
 describe('browser agent steering boundary (codex-style pending steer)', () => {
   let kernel: BrowserAgentKernel;
-  beforeEach(async () => { await localforage.removeItem('flovart.agent.sessions.project-steer'); });
-  afterEach(async () => { await kernel?.close(); await localforage.removeItem('flovart.agent.sessions.project-steer'); });
+  beforeEach(async () => { await localforage.removeItem('iris.agent.sessions.project-steer'); });
+  afterEach(async () => { await kernel?.close(); await localforage.removeItem('iris.agent.sessions.project-steer'); });
 
   it('holds a steer until the next boundary, reports pickup with its id, and allows withdrawing before that', async () => {
     const bodies: Array<{ messages: Array<{ role: string; content: unknown }> }> = [];

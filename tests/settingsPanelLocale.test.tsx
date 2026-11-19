@@ -11,8 +11,8 @@ const { runtimeExecute, fetchModelsForProvider } = vi.hoisted(() => ({
   fetchModelsForProvider: vi.fn(),
 }));
 
-vi.mock('../services/flovartRuntime', () => ({
-  getFlovartRuntimeApi: () => ({ execute: runtimeExecute }),
+vi.mock('../services/irisRuntime', () => ({
+  getIrisRuntimeApi: () => ({ execute: runtimeExecute }),
 }));
 
 vi.mock('../services/modelFetcher', () => ({

@@ -7,7 +7,7 @@ import { AgentCardFoot, AgentCardHead, type AgentCardAccent } from '../AgentCard
 import '../../../styles/planSteps.css';
 
 /**
- * 共用「计划」组件：Skill 详情、生成计划卡（AgentRunPlanCard）、执行计划卡（AgentTodoCard）都是一份计划，用同一套外观。
+ * 共用「计划」组件：Skill 详情、生成计划卡（AgentRunPlanCard）都是一份计划（执行计划卡 AgentTodoCard 已于 2026-11-20 移除），用同一套外观。
  *
  * 版式参照 Inspora 1-37「AI Agent Approval Cards」@Kevin 的 Plan Overview（登记见 docs/design/references.md）：
  * 头 = 强调色图标方块 + 标签 + 幽灵折叠按钮；粗标题 + 灰色简介；内嵌「待办」面板（计数 + 状态圆环 + 单行省略标题）；

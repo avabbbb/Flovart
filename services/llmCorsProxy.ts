@@ -1,13 +1,13 @@
 /**
  * Web-only fetch shim: route calls to LLM gateways that block browser CORS
- * (currently OpenCode Go / Zen at opencode.ai) through Flovart's same-origin
+ * (currently OpenCode Go / Zen at opencode.ai) through Iris's same-origin
  * proxy `/api/llm-proxy/<host>/<path>`.
  *
  * - Desktop (Tauri) is untouched: native networking has no CORS.
  * - Every other provider is untouched: only hosts in PROXIED_HOSTS rewrite.
  * - OpenCode Go asks for a stable `x-opencode-session`; if the caller did not
  *   set one, a per-tab stable id is added so routing / prompt caching work.
- * - When the paired Flovart browser extension advertises `llm.fetch`, the same
+ * - When the paired Iris browser extension advertises `llm.fetch`, the same
  *   requests (and same-origin `/api/llm-proxy/...` calls such as the RunningHub
  *   docs) go straight to the upstream through the extension instead, so they do
  *   not cost Worker invocations. Any extension failure before the response head
@@ -24,7 +24,7 @@ import {
 
 export const LLM_PROXY_PATH = '/api/llm-proxy/';
 const PROXIED_HOSTS = new Set(['opencode.ai']);
-const SESSION_STORAGE_KEY = 'flovart.opencodeSessionId';
+const SESSION_STORAGE_KEY = 'iris.opencodeSessionId';
 
 let installed = false;
 
@@ -32,7 +32,7 @@ function createSessionId(): string {
   const rand = typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID().replace(/-/g, '')
     : Math.random().toString(36).slice(2) + Date.now().toString(36);
-  return `ses_flovart_${rand}`;
+  return `ses_iris_${rand}`;
 }
 
 export function getStableOpenCodeSessionId(): string {
@@ -43,7 +43,7 @@ export function getStableOpenCodeSessionId(): string {
     sessionStorage.setItem(SESSION_STORAGE_KEY, next);
     return next;
   } catch {
-    return (globalThis as { __flovartOpenCodeSession?: string }).__flovartOpenCodeSession ??=
+    return (globalThis as { __irisOpenCodeSession?: string }).__irisOpenCodeSession ??=
       createSessionId();
   }
 }
@@ -130,7 +130,7 @@ function safeBridge(): DirectBridge | null {
 async function bufferBody(body: BodyInit | null | undefined, headers: Headers, method: string): Promise<ArrayBuffer | undefined> {
   if (body == null || method === 'GET' || method === 'HEAD') return undefined;
   // Request normalizes every BodyInit (string, Blob, FormData, URLSearchParams, stream) and its implied content-type.
-  const probe = new Request('https://flovart.invalid/', { method: 'POST', body, headers, duplex: 'half' } as RequestInit);
+  const probe = new Request('https://iris.invalid/', { method: 'POST', body, headers, duplex: 'half' } as RequestInit);
   const contentType = probe.headers.get('content-type');
   if (contentType && !headers.has('content-type')) headers.set('content-type', contentType);
   return probe.arrayBuffer();

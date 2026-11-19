@@ -147,7 +147,7 @@ function describeRun(label, id, trials) {
 export function renderCompareMarkdown(result) {
   const { a, b } = result.trials;
   const lines = [];
-  lines.push('# FlovartBench Run Comparison');
+  lines.push('# IrisBench Run Comparison');
   lines.push('');
   lines.push(describeRun('A', result.runA, a));
   lines.push(describeRun('B', result.runB, b));

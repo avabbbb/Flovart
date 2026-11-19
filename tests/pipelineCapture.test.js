@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { assertCaptureUrl, normalizeCaptureArgs } from '../tools/flovart/pipeline/capture.js';
+import { assertCaptureUrl, normalizeCaptureArgs } from '../tools/iris/pipeline/capture.js';
 
 const root = mkdtempSync(join(tmpdir(), 'capture-'));
 writeFileSync(join(root, 'page.html'), '<h1>x</h1>');

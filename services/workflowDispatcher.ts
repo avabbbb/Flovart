@@ -1,7 +1,7 @@
 import { estimateRunCost, planRunApproval } from './runApproval';
 import { terminalFromFailure, terminalFromRunResult, type WorkflowRunTerminal } from './workflowRunTerminal';
 import { planMentionPrunes, type MentionPrune } from '../components/workflow/promptReferenceAlignment';
-import { WORKFLOW_NODE_PATCH_FIELDS, WORKFLOW_OPERATION_FIELDS } from '../tools/flovart/workflow-operation-schema.js';
+import { WORKFLOW_NODE_PATCH_FIELDS, WORKFLOW_OPERATION_FIELDS } from '../tools/iris/workflow-operation-schema.js';
 import { nanoid } from 'nanoid';
 import { WORKFLOW_MUTATION_COMMANDS, workflowCommandSummary } from '../components/workflow/agentOps';
 import { createWorkflowNode } from '../components/workflow/constants';
@@ -138,7 +138,7 @@ async function browserImportMediaUrl(url: string): Promise<WorkflowImportedMedia
   };
 }
 
-const NOTE_IS_ANNOTATION_MESSAGE = '文本节点是备注，只给人看、不参与生成：生成请用 flovart_generate（提示词写进生成节点的 Prompt Bar）；用户明确要求写备注时用 flovart_note_write。';
+const NOTE_IS_ANNOTATION_MESSAGE = '文本节点是备注，只给人看、不参与生成：生成请用 iris_generate（提示词写进生成节点的 Prompt Bar）；用户明确要求写备注时用 iris_note_write。';
 
 /** 非 UI 来源（Agent / CLI / MCP / Runtime）不得用通用写入建文本节点。 */
 function agentTextNodeViolation(source: WorkflowCommandEnvelope['source'], operations: WorkflowDocumentOperation[]): boolean {
@@ -332,7 +332,7 @@ function draftLogPatch(
 }
 
 function validatedNode(args: Record<string, unknown>, fallbackId?: string): WorkflowNode {
-  if (args.type === undefined || args.type === null || args.type === '') throw new Error('type 不能为空：image / video / audio（文本备注请用 flovart_note_write）');
+  if (args.type === undefined || args.type === null || args.type === '') throw new Error('type 不能为空：image / video / audio（文本备注请用 iris_note_write）');
   const type = String(args.type) as WorkflowNodeType;
   if (!NODE_TYPES.includes(type)) throw new Error(`不支持的节点类型：${type}`);
   const metadata = recordArg(args.metadata, 'metadata') as WorkflowNodeMetadata;
@@ -416,7 +416,7 @@ export function documentOperationsArg(value: unknown): WorkflowDocumentOperation
         throw new Error('operations[' + index + '] ' + operation.type + '.node 必须是带 type 的对象');
       }
       if (node.type === 'operation') {
-        throw new Error('operations[' + index + '] 不再支持 operation 节点：生成与后处理的结果直接写成 image / video / audio 结果节点（flovart_generate 或 flovart_image_tool / flovart_video_tool / flovart_audio_tool）。');
+        throw new Error('operations[' + index + '] 不再支持 operation 节点：生成与后处理的结果直接写成 image / video / audio 结果节点（iris_generate 或 iris_image_tool / iris_video_tool / iris_audio_tool）。');
       }
       // 新节点没给 id 时由系统生成（结果的 affectedNodeIds 会带回）；绝不落一个 id 为空的节点。
       if (typeof node.id === 'string' && node.id.trim()) return operation as unknown as WorkflowDocumentOperation;
@@ -1129,7 +1129,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         if (noteId) {
           const existing = project.nodes.find(node => node.id === noteId);
           if (!existing) return error(envelope.id, 'NOT_FOUND', '备注不存在：' + noteId);
-          if (existing.type !== 'text') return error(envelope.id, 'BAD_REQUEST', '节点 ' + noteId + ' 不是备注；生成节点的提示词请用 flovart_generate 写入。');
+          if (existing.type !== 'text') return error(envelope.id, 'BAD_REQUEST', '节点 ' + noteId + ' 不是备注；生成节点的提示词请用 iris_generate 写入。');
           operation = { type: 'update_node', id: noteId, metadata: { content }, ...(typeof args.title === 'string' && args.title.trim() ? { patch: { title: args.title.trim() } } : {}) };
           targetNoteId = noteId;
         } else {
@@ -1190,7 +1190,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
           diagnostics: plan.diagnostics,
           ...(plan.batchId ? { batchId: plan.batchId } : {}),
           ran: false,
-          next: plan.created.length ? '节点已建好、未运行。确认后用 flovart_workflow_node_run 的 nodeIds 运行（可分批）。' : '没有需要新建的分镜节点。',
+          next: plan.created.length ? '节点已建好、未运行。确认后用 iris_workflow_node_run 的 nodeIds 运行（可分批）。' : '没有需要新建的分镜节点。',
         };
         if (dryRun || !plan.operations.length) {
           result = { ok: true, commandId: envelope.id, result: { ...summary, dryRun, applied: false, draftVersion: project.draftVersion || 1 } };

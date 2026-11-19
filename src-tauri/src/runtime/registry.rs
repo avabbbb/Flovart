@@ -5,9 +5,9 @@ use std::collections::BTreeMap;
 use super::error::RuntimeContractError;
 
 const REGISTRY_JSON: &str =
-    include_str!("../../../tools/flovart/contracts/runtime/command-registry.v1.json");
+    include_str!("../../../tools/iris/contracts/runtime/command-registry.v1.json");
 const REGISTRY_SCHEMA_JSON: &str =
-    include_str!("../../../tools/flovart/contracts/runtime/schemas/command-registry.v1.json");
+    include_str!("../../../tools/iris/contracts/runtime/schemas/command-registry.v1.json");
 const REGISTRY_SCHEMA_ID: &str = "https://flovart.local/schemas/runtime/command-registry.v1.json";
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

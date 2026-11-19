@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { COMMAND_ALIASES, COMMAND_REGISTRY, executeFlovartCommand, normalizeCommandName } from '../tools/flovart/core.js';
-import { createRuntimeFacade } from '../tools/flovart/runtime-client.js';
-import { createShadowRuntimeFacade } from '../tools/flovart/shadow-runtime.js';
+import { COMMAND_ALIASES, COMMAND_REGISTRY, executeIrisCommand, normalizeCommandName } from '../tools/iris/core.js';
+import { createRuntimeFacade } from '../tools/iris/runtime-client.js';
+import { createShadowRuntimeFacade } from '../tools/iris/shadow-runtime.js';
 
 describe('workflow CLI metadata', () => {
   it('exposes Workflow without legacy Canvas or element contracts', () => {
@@ -24,24 +24,24 @@ describe('workflow CLI metadata', () => {
     expect(COMMAND_REGISTRY['workflow.node.run']).toBeTruthy();
     expect(COMMAND_REGISTRY['workflow.node.stop']).toBeTruthy();
     expect(COMMAND_REGISTRY['workflow.node.create-connected']).toBeTruthy();
-    expect(COMMAND_ALIASES.flovart_workflow_node_create).toBe('workflow.node.create');
-    expect(COMMAND_ALIASES.flovart_workflow_apply).toBe('workflow.apply');
-    expect(COMMAND_ALIASES.flovart_workflow_selection_get).toBe('workflow.selection.get');
-    expect(normalizeCommandName('flovart_workflow_node_create')).toBe('workflow.node.create');
-    expect(normalizeCommandName('flovart_workflow_node_stop')).toBe('workflow.node.stop');
+    expect(COMMAND_ALIASES.iris_workflow_node_create).toBe('workflow.node.create');
+    expect(COMMAND_ALIASES.iris_workflow_apply).toBe('workflow.apply');
+    expect(COMMAND_ALIASES.iris_workflow_selection_get).toBe('workflow.selection.get');
+    expect(normalizeCommandName('iris_workflow_node_create')).toBe('workflow.node.create');
+    expect(normalizeCommandName('iris_workflow_node_stop')).toBe('workflow.node.stop');
   });
 
   it('routes aliases through the canonical browser dispatcher', async () => {
     const dispatch = vi.fn().mockResolvedValue({ ok: true, commandId: 'cli', result: { nodeId: 'node-1' } });
-    await executeFlovartCommand('flovart_workflow_node_create', { type: 'config' }, { workflow: { dispatch } });
+    await executeIrisCommand('iris_workflow_node_create', { type: 'config' }, { workflow: { dispatch } });
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ command: 'workflow.node.create', source: 'cli', args: expect.objectContaining({ type: 'config' }) }));
   });
 
   it('parses comma-separated --node-ids the same way for node.run and focus.nodes', async () => {
     const dispatch = vi.fn().mockResolvedValue({ ok: true });
-    await executeFlovartCommand('workflow.focus.nodes', { 'project-id': 'p1', 'node-ids': 'a, b,a' }, { workflow: { dispatch } });
-    await executeFlovartCommand('workflow.node.run', { 'project-id': 'p1', 'node-ids': 'a,b' }, { workflow: { dispatch } });
-    await executeFlovartCommand('workflow.focus.nodes', { 'project-id': 'p1', 'node-ids': '["a","b"]' }, { workflow: { dispatch } });
+    await executeIrisCommand('workflow.focus.nodes', { 'project-id': 'p1', 'node-ids': 'a, b,a' }, { workflow: { dispatch } });
+    await executeIrisCommand('workflow.node.run', { 'project-id': 'p1', 'node-ids': 'a,b' }, { workflow: { dispatch } });
+    await executeIrisCommand('workflow.focus.nodes', { 'project-id': 'p1', 'node-ids': '["a","b"]' }, { workflow: { dispatch } });
     expect(dispatch.mock.calls[0][0].args.nodeIds).toEqual(['a', 'b', 'a']);
     expect(dispatch.mock.calls[1][0].args.nodeIds).toEqual(['a', 'b']);
     expect(dispatch.mock.calls[2][0].args.nodeIds).toEqual(['a', 'b']);
@@ -49,7 +49,7 @@ describe('workflow CLI metadata', () => {
 
   it('normalizes typed arguments for the granular workflow node tool adapter', async () => {
     const dispatch = vi.fn().mockResolvedValue({ ok: true });
-    await executeFlovartCommand('workflow.node.tool', {
+    await executeIrisCommand('workflow.node.tool', {
       'project-id': 'project-1',
       'node-id': 'image-1',
       tool: 'crop',

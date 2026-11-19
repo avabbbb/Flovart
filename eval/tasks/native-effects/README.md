@@ -2,7 +2,7 @@
 
 This directory is reserved and intentionally empty of tasks.
 
-Flovart's native effects are the AE / PR plugin path described in
+Iris's native effects are the AE / PR plugin path described in
 `docs/design/00-overview.md`. No native effect exists in a runnable
 state, so **no task is admitted here and no result is claimed**.
 

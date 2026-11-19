@@ -10,13 +10,13 @@ import { runPipelineTraceScenario } from './e2e-pipeline-trace.mjs';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(ROOT, '.tmp', 'pipeline-remotion');
 const summary = await runPipelineTraceScenario({ outDir, log: () => {} });
-const { Pipeline } = await import(pathToFileURL(join(ROOT, 'tools/flovart/pipeline/index.js')).href);
+const { Pipeline } = await import(pathToFileURL(join(ROOT, 'tools/iris/pipeline/index.js')).href);
 const pipeline = new Pipeline({ home: join(outDir, 'runtime') });
 const trace = pipeline.trace(summary.runId);
 const version = trace.run.headVersion;
 const spec = pipeline.store.getVersion(summary.runId, version).spec;
 // 场景末尾 run 已归档（只读），这里直接调用引擎渲染同一份已保存的 spec，不经命令边界写 trace。
-const { renderWithRemotion } = await import(pathToFileURL(join(ROOT, 'tools/flovart/pipeline/render.js')).href);
+const { renderWithRemotion } = await import(pathToFileURL(join(ROOT, 'tools/iris/pipeline/render.js')).href);
 const outPath = pipeline.store.scratchPath(`v${version}-remotion-draft.mp4`);
 const meta = await renderWithRemotion(spec, {
   runId: summary.runId, preset: 'draft', outPath,
@@ -24,7 +24,7 @@ const meta = await renderWithRemotion(spec, {
 });
 pipeline.close();
 const render = { ...meta, path: outPath };
-const probe = JSON.parse(spawnSync(process.env.FLOVART_FFPROBE || 'ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', render.path]).stdout.toString());
+const probe = JSON.parse(spawnSync(process.env.IRIS_FFPROBE || 'ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', render.path]).stdout.toString());
 const video = probe.streams.find(stream => stream.codec_type === 'video');
 const audio = probe.streams.find(stream => stream.codec_type === 'audio');
 const durationMs = Math.round(Number(probe.format.duration) * 1000);
@@ -40,7 +40,7 @@ for (const [label, clip] of [['caption', caption], ['text', text]]) {
   if (!clip) continue;
   const at = (clip.startMs + clip.durationMs / 2) / 1000;
   const path = join(outDir, `remotion-${label}.png`);
-  spawnSync(process.env.FLOVART_FFMPEG || 'ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-ss', String(at), '-i', render.path, '-frames:v', '1', path]);
+  spawnSync(process.env.IRIS_FFMPEG || 'ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-ss', String(at), '-i', render.path, '-frames:v', '1', path]);
   frames.push(path);
 }
 if (failures.length) {

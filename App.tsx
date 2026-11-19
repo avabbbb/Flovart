@@ -18,7 +18,7 @@ import { StudioNavigationFrame } from './components/studio/StudioNavigationFrame
 import { runCanvasSwitch, type CanvasSwitchOrigin } from './components/studio/canvasSwitchTransition';
 import { StudioRightDrawer } from './components/studio/StudioRightDrawer';
 import { StudioMediaBrowser } from './components/studio/StudioMediaBrowser';
-import { FlovartAgentPanel } from './components/agent/FlovartAgentPanel';
+import { IrisAgentPanel } from './components/agent/IrisAgentPanel';
 import { AgentConnectionsPage, AgentDrawerEmptyState } from './components/agent/AgentWorkspace';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { useWorkspaceStore } from './stores/useWorkspaceStore';
@@ -718,8 +718,8 @@ const App: React.FC = () => {
                     the built-in assistant remains in the right drawer beside the
                     two Workflow views. */}
                 {canvasView === 'reverse' ? (
-                    // Iris 故事版：素材从当前画布节点派生，写入落到画布真节点；右侧是同一个 Agent（此时抽屉不挂载对话，避免同一项目起两个内核）。
-                    <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">{language === 'zho' ? '正在加载 Iris...' : 'Loading Iris...'}</div>}>
+                    // Cut（故事版）：素材从当前画布节点派生，写入落到画布真节点；右侧是同一个 Agent（此时抽屉不挂载对话，避免同一项目起两个内核）。
+                    <Suspense fallback={<div className="grid h-full place-content-center text-sm opacity-40">{language === 'zho' ? '正在加载 Cut...' : 'Loading Cut...'}</div>}>
                         <IrisStoryboardPage
                             language={language}
                             project={activeWorkflowProject}
@@ -727,7 +727,7 @@ const App: React.FC = () => {
                             onFocusNode={handleFocusNodeFromDrawer}
                             onNotify={(message, level) => toast.show(message, level)}
                             chat={activeWorkflowProject ? (
-                                <FlovartAgentPanel
+                                <IrisAgentPanel
                                     project={activeWorkflowProject}
                                     onActivityChange={() => undefined}
                                     onOpenSettings={() => setIsSettingsPanelOpen(true)}
@@ -805,7 +805,7 @@ const App: React.FC = () => {
                 ]}
             >
                 {rightTab === 'agent' && canvasView === 'spatial' && (<AgentDrawerSections projectTitle={activeWorkflowProject?.title} language={language} chatHasHeader={Boolean(activeWorkflowProject)}>{activeWorkflowProject ? (
-                    <FlovartAgentPanel
+                    <IrisAgentPanel
                         project={activeWorkflowProject}
                         onActivityChange={() => undefined}
                         onOpenSettings={() => setIsSettingsPanelOpen(true)}

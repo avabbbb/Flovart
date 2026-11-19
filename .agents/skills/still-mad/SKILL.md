@@ -1,13 +1,13 @@
 ---
 name: still-mad
-description: Turn a song and a set of still images into a 静止系 MAD (still-image music edit) through the Flovart pipeline. Use for beat-synced edits built from illustrations, manga panels, key art, or generated keyframes, where every shot is a still with push, pull, pan, tilt, shake, or impact moves, flash cuts on the downbeat, and short title cards. Not for narrated explainers (use vox-director) or AI image-to-video.
+description: Turn a song and a set of still images into a 静止系 MAD (still-image music edit) through the Iris pipeline. Use for beat-synced edits built from illustrations, manga panels, key art, or generated keyframes, where every shot is a still with push, pull, pan, tilt, shake, or impact moves, flash cuts on the downbeat, and short title cards. Not for narrated explainers (use vox-director) or AI image-to-video.
 ---
 
 # 静止系 MAD
 
 Cut stills to the music. Motion comes from the edit, not from a video model:
 every shot is one image moved by a 2D camera (`motion` on the visual clip),
-cut on the beat, with flashes and title cards on the accents. Flovart owns
+cut on the beat, with flashes and title cards on the accents. Iris owns
 credentials, generation, budgets, artifacts and rendering.
 
 ## Boundary

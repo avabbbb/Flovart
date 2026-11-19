@@ -14,7 +14,7 @@ const ORIGIN = 'http' + '://127.0.0.1:5173';
 function fakeWindow(search = '?embed=dsh') {
   const listeners = new Set<(event: MessageEvent) => void>();
   const parent = { postMessage: vi.fn() } as unknown as Window & { postMessage: Mock };
-  const location = { origin: ORIGIN, pathname: '/flovart-app/', search, hash: '#/app' };
+  const location = { origin: ORIGIN, pathname: '/iris-app/', search, hash: '#/app' };
   const win = {
     location,
     parent,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toProductionSpecV1 } from '../tools/flovart/pipeline/render.js';
+import { toProductionSpecV1 } from '../tools/iris/pipeline/render.js';
 import { validateProductionSpec, type ProductionSpecV1 } from '../services/reverse/productionSpec';
 import { dbToLinearVolume, overlayLayout, voiceActiveAt } from '../services/reverse/remotionAdapter';
 

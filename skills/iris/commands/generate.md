@@ -1,0 +1,32 @@
+# Generation commands
+
+> Compatibility surface: these direct generation helpers remain for existing scripts and diagnostics. New Agent work uses the stable five-command surface and `workflow.node.run`.
+
+Generation is browser-backed. Keep the Iris UI open and check readiness first:
+
+```bash
+npm run iris:cli -- provider.status --json
+```
+
+Only inspect a schema when a compatibility command is unfamiliar or the
+registry reports a contract mismatch:
+
+```bash
+npm run iris:cli -- command.schema --command generate.image --json
+npm run iris:cli -- command.schema --command generate.images-batch --json
+npm run iris:cli -- command.schema --command generate.video --json
+```
+
+Examples using only registered arguments:
+
+```bash
+npm run iris:cli -- generate.image --prompt "cinematic product poster, clean hero composition" --aspect-ratio 16:9 --json
+npm run iris:cli -- generate.video --prompt "slow dolly-in, subject turns toward camera" --source-image-ids image1,image2 --duration-sec 8 --aspect-ratio 16:9 --json
+npm run iris:cli -- video.status --job-id <job-id> --json
+```
+
+`generate.images-batch` is a compatibility name: the CLI submits one Runtime `generate.image` per item, with idempotency keys `<key>:0`, `<key>:1`… so a retry with the same `--idempotency-key` only fills the failed items. On the canvas, prefer image nodes plus one `workflow.node.run --node-ids`.
+
+`generate.image` can target a Workflow project or node when the schema exposes `projectId` and `targetNodeId`. `generate.video` accepts typed image, video, or slot references according to the active Product Model and Provider Route.
+
+Do not reuse removed options such as `placeOnCanvas`, `layout`, or generic `wait` unless they reappear in `command.schema`. Retry only the failed job with the smallest prompt or reference change.

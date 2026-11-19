@@ -353,7 +353,7 @@
 .agent-confirm__more { min-width: 0; margin: 8px 8px 0; border: 1px solid var(--card-line); border-radius: 10px; padding: 6px 8px; background: var(--card-inset); }
 .agent-confirm__more summary { width: max-content; max-width: 100%; color: var(--isl-ink-soft); font-size: 11.5px; cursor: pointer; }
 .agent-confirm__more summary:hover { color: var(--isl-ink); }
-.agent-confirm__more .flovart-plan { max-height: 220px; margin-top: 6px; font-size: 11px; }
+.agent-confirm__more .iris-plan { max-height: 220px; margin-top: 6px; font-size: 11px; }
 .agent-confirm__cap { display: block; margin: 8px 12px 0; color: var(--isl-ink-soft); font-size: 11.5px; line-height: 2; overflow-wrap: anywhere; }
 .agent-confirm__cap input { width: 48px; height: 22px; margin: 0 4px; padding: 0 6px; border: 1px solid var(--card-line); border-radius: 6px; background: var(--card-inset); color: var(--isl-ink); font: inherit; }
 .workflow-agent__mode { display: inline-flex; border: 1px solid var(--wf-border); border-radius: 6px; padding: 2px; } .workflow-agent__mode button { border-radius: 4px; padding: 3px 6px; font-size: 10px; } .workflow-agent__mode button.is-active { color: var(--wf-text); background: color-mix(in srgb,var(--wf-accent) 16%,transparent); }

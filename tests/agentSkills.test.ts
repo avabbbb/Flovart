@@ -29,8 +29,8 @@ describe('skill index', () => {
   it('excludes the external-CLI skills, dedupes by id/alias and sorts', () => {
     const index = buildSkillIndex([
       entry('vox-director', 'VOX', ['community.vox-director']),
-      entry('flovart'),
-      entry('open-flovart'),
+      entry('iris'),
+      entry('open-iris'),
       entry('community.vox-director', '重复项'),
       entry('still-mad'),
     ]);
@@ -46,7 +46,7 @@ describe('skill index', () => {
 
   it('formats the prompt section with read rule, forced skill and read list', () => {
     const text = formatSkillIndexPrompt(buildSkillIndex([entry('vox-director')]), { read: ['vox-director'], forced: 'vox-director' });
-    expect(text).toContain('flovart_skill_read');
+    expect(text).toContain('iris_skill_read');
     expect(text).toContain('- vox-director：vox-director 的说明');
     expect(text).toContain('强制使用');
     expect(text).toContain('本会话已读技能：vox-director');
@@ -59,16 +59,16 @@ describe('skill index', () => {
     expect(manifestSkillId('  id: nested\nid: top.level')).toBe('top.level');
   });
 
-  it('bundled catalog: indexes local .agents/skills but keeps flovart readable by id', async () => {
+  it('bundled catalog: indexes local .agents/skills but keeps iris readable by id', async () => {
     const catalog = createBundledSkillCatalog();
     const index = buildSkillIndex(catalog.list()).map(item => item.id);
     expect(index).toEqual(expect.arrayContaining(['still-mad', 'vox-director']));
-    expect(index).not.toContain('flovart');
-    expect(index).not.toContain('open-flovart');
+    expect(index).not.toContain('iris');
+    expect(index).not.toContain('open-iris');
     const ledger = new SkillReadLedger();
-    const flovart = await readSkillForAgent({ catalog, ledger, epoch: 0, id: 'flovart' });
-    expect(flovart.details.isError).toBeFalsy();
-    expect(flovart.text).toContain('【技能 flovart · SKILL.md');
+    const iris = await readSkillForAgent({ catalog, ledger, epoch: 0, id: 'iris' });
+    expect(iris.details.isError).toBeFalsy();
+    expect(iris.text).toContain('【技能 iris · SKILL.md');
     const reference = await readSkillForAgent({ catalog, ledger, epoch: 0, id: 'community.vox-director', file: 'references/creative-direction.md' });
     expect(reference.details).toMatchObject({ id: 'vox-director', file: 'references/creative-direction.md' });
     expect(reference.text).toContain('VOX');
@@ -115,7 +115,7 @@ describe('skill pagination', () => {
   });
 });
 
-describe('flovart_skill_read', () => {
+describe('iris_skill_read', () => {
   const long = Array.from({ length: 900 }, (_, index) => `step ${index + 1}`).join('\n');
   const catalog = fakeCatalog({ demo: { 'SKILL.md': long, 'references/a.md': '# A' } }, [entry('demo', 'Demo', ['community.demo'])]);
 
@@ -192,11 +192,11 @@ describe('flovart_skill_read', () => {
 describe('skill read card', () => {
   it('summarises as 已读取 xxx 技能 and exposes the content for the expandable view', () => {
     const result = { content: [{ type: 'text', text: '【技能 vox-director · SKILL.md】\n# VOX' }], details: { forced: true } };
-    expect(summarizeToolCall({ toolName: 'flovart_skill_read', args: { id: 'vox-director', forced: true }, result, status: 'success' }).text).toBe('已读取 vox-director 技能（强制使用）');
-    expect(summarizeToolCall({ toolName: 'flovart_skill_read', result: '【技能 still-mad · references/direction.md】\n…', status: 'success' }).text).toBe('已读取 still-mad 技能 · references/direction.md');
-    expect(summarizeToolCall({ toolName: 'flovart_skill_read', args: { id: 'x' }, status: 'pending' }).text).toBe('正在读取 x 技能');
-    expect(skillReadContent('flovart_skill_read', result)).toBe('# VOX');
-    expect(skillReadContent('flovart_skill_read', '【技能 x · SKILL.md】\n已读过（…）')).toBe('');
+    expect(summarizeToolCall({ toolName: 'iris_skill_read', args: { id: 'vox-director', forced: true }, result, status: 'success' }).text).toBe('已读取 vox-director 技能（强制使用）');
+    expect(summarizeToolCall({ toolName: 'iris_skill_read', result: '【技能 still-mad · references/direction.md】\n…', status: 'success' }).text).toBe('已读取 still-mad 技能 · references/direction.md');
+    expect(summarizeToolCall({ toolName: 'iris_skill_read', args: { id: 'x' }, status: 'pending' }).text).toBe('正在读取 x 技能');
+    expect(skillReadContent('iris_skill_read', result)).toBe('# VOX');
+    expect(skillReadContent('iris_skill_read', '【技能 x · SKILL.md】\n已读过（…）')).toBe('');
     expect(skillReadContent('flovart_todo', result)).toBe('');
   });
 });

@@ -16,7 +16,7 @@ describe('Agent surfaces', () => {
     expect(screen.getByText('npm run dsh:profile:install')).toBeInTheDocument();
     expect(screen.getByTestId('agent-dsh-steps')).toHaveTextContent('npm run dsh:start');
     const handoff = screen.getByTestId('agent-handoff-prompt');
-    expect(handoff).toHaveTextContent('https://github.com/avabbbb/Flovart');
+    expect(handoff).toHaveTextContent('https://github.com/avabbbb/Iris');
     expect(handoff).toHaveTextContent('workflow.inspect --summary');
     expect(screen.getByRole('button', { name: '一键复制提示词' })).toBeInTheDocument();
     expect(screen.getByTestId('agent-env-note')).toHaveAttribute('data-env', 'local');

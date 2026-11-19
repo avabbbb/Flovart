@@ -1,25 +1,25 @@
-# Flovart Privacy Policy
+# Iris Privacy Policy
 
 Status: Pre-release draft. This Policy becomes effective when linked from an official public release.
 
 Policy version: 1.0-draft
 
-Publisher: Flovart, published and maintained by the Hong Kong individual open-source developer [@avabbbb](https://github.com/avabbbb) ("Flovart", "we", "us").
+Publisher: Iris, published and maintained by the Hong Kong individual open-source developer [@avabbbb](https://github.com/avabbbb) ("Iris", "we", "us").
 
 Primary legal jurisdiction: Hong Kong Special Administrative Region.
 
 [中文版本](./PRIVACY_POLICY.zh-CN.md)
 
-This Privacy Policy explains how Flovart handles data when you use the Official WebUI at `https://flovart.avabbbb.com`, desktop builds, browser extension bridge, source code, and related project features.
+This Privacy Policy explains how Iris handles data when you use the Official WebUI at `https://iris.avabbbb.com`, desktop builds, browser extension bridge, source code, and related project features.
 
-Flovart is designed as a local-first creative workspace. By default, the official Desktop Edition does not require an account and the publisher does not operate a hosted backend for your canvas, workflows, prompts, generated files, or API keys.
+Iris is designed as a local-first creative workspace. By default, the official Desktop Edition does not require an account and the publisher does not operate a hosted backend for your canvas, workflows, prompts, generated files, or API keys.
 
 This Policy does not cover third-party AI providers, custom endpoints, browser vendors, operating systems, cloud backup providers, extension stores, payment processors, or websites you connect to through a bridge. Those services have their own policies.
 
 
-## 1. What Flovart stores locally
+## 1. What Iris stores locally
 
-Depending on the features you use, Flovart may store data locally on your device, browser, or app profile.
+Depending on the features you use, Iris may store data locally on your device, browser, or app profile.
 
 Local data may include:
 
@@ -37,24 +37,24 @@ Storage locations may include IndexedDB, small non-business preferences in brows
 The Official WebUI and Desktop WebView each create an origin/profile-scoped workspace. They cannot silently read one another's IndexedDB, another website's storage, Windows Credential Manager, or Edge Extension storage. A restricted Local Data Service for explicit project sharing and secret-safe provider invocation is planned but is not available in the current release; current workspaces must be exported/imported separately when moving between entries.
 
 
-## 2. What Flovart does not operate by default
+## 2. What Iris does not operate by default
 
-By default, Flovart does not operate a central account system for your local project data.
+By default, Iris does not operate a central account system for your local project data.
 
-By default, Flovart does not run a project-owned cloud database for your prompts, Workflow files, generated media, or API keys.
+By default, Iris does not run a project-owned cloud database for your prompts, Workflow files, generated media, or API keys.
 
 If you deploy or use a self-hosted or SaaS backend (community hub), that backend may store user account credentials (hashed passwords, JWT tokens) and community content. The operator of that deployment is the responsible data controller or personal-information processor and must provide its own privacy notice. This Policy does not make the open-source publisher responsible for an independent deployment.
 
-By default, Flovart does not sell personal information.
+By default, Iris does not sell personal information.
 
-By default, Flovart does not include product analytics, advertising tracking, or behavioral profiling operated by the project maintainers.
+By default, Iris does not include product analytics, advertising tracking, or behavioral profiling operated by the project maintainers.
 
 These statements apply to the open-source project as provided. Modified builds, hosted forks, plugins, browser extensions, custom endpoints, or third-party distributions may behave differently.
 
 
 ## 3. Third-party AI providers and custom endpoints
 
-When you use AI features, Flovart sends requests from your device or app environment to the provider or endpoint you configure.
+When you use AI features, Iris sends requests from your device or app environment to the provider or endpoint you configure.
 
 Those requests may include:
 
@@ -88,7 +88,7 @@ Do not use browser import features on sensitive websites or confidential materia
 
 ## 5. Data security
 
-Flovart aims to keep user-controlled data local where possible, but no local system is completely secure.
+Iris aims to keep user-controlled data local where possible, but no local system is completely secure.
 
 Risks include device compromise, malware, browser profile access, browser sync, cloud backup, shared computers, untrusted extensions, untrusted plugins, local file exposure, and misconfigured custom endpoints.
 
@@ -99,21 +99,21 @@ If you believe an API key has leaked, revoke it with the provider immediately an
 
 ## 6. Data deletion and retention
 
-Because Flovart stores data locally by default, deletion usually depends on your device and browser settings.
+Because Iris stores data locally by default, deletion usually depends on your device and browser settings.
 
-You can delete local web app data by clearing site data for the Flovart origin in your browser.
+You can delete local web app data by clearing site data for the Iris origin in your browser.
 
 The current release does not automatically merge the Official WebUI workspace with Desktop Edition. Clear each origin/profile separately, or use explicit export/import where available.
 
 You can delete non-secret browser extension preferences by removing the extension or clearing extension storage. Provider Secrets are not stored by the official Edge Extension.
 
-The Official WebUI is served by a Cloudflare Worker (Cloudflare Workers with static assets). Cloudflare may process request and security data, including visitor IP addresses, under its own privacy policy. The Worker serves the static app and runs one narrow same-origin proxy at `/api/llm-proxy/`: for a short allowlist of AI gateways and public API documentation that do not accept direct browser requests (currently OpenCode at `opencode.ai` and RunningHub API docs), your browser sends the request to the Worker, which forwards it to that gateway. For those gateways only, the request — including your API key and prompt — passes through the Worker in transit over TLS; the proxy does not store or log keys or prompts, forwards no cookies, and accepts only same-origin requests. All other Provider requests go directly from your browser to the Provider. Flovart does not use the Worker as a backend for your Browser Workspace, media, or Provider Secrets.
+The Official WebUI is served by a Cloudflare Worker (Cloudflare Workers with static assets). Cloudflare may process request and security data, including visitor IP addresses, under its own privacy policy. The Worker serves the static app and runs one narrow same-origin proxy at `/api/llm-proxy/`: for a short allowlist of AI gateways and public API documentation that do not accept direct browser requests (currently OpenCode at `opencode.ai` and RunningHub API docs), your browser sends the request to the Worker, which forwards it to that gateway. For those gateways only, the request — including your API key and prompt — passes through the Worker in transit over TLS; the proxy does not store or log keys or prompts, forwards no cookies, and accepts only same-origin requests. All other Provider requests go directly from your browser to the Provider. Iris does not use the Worker as a backend for your Browser Workspace, media, or Provider Secrets.
 
 You can delete desktop app data by removing the app data directory used by your operating system.
 
 You can delete exported files, downloaded media, and backups from wherever you saved or synced them.
 
-Flovart maintainers generally cannot recover local data you delete and generally cannot delete copies held by third-party AI providers, custom endpoints, browser sync, cloud backups, or services outside the project.
+Iris maintainers generally cannot recover local data you delete and generally cannot delete copies held by third-party AI providers, custom endpoints, browser sync, cloud backups, or services outside the project.
 
 
 ## 7. Your choices and rights
@@ -132,16 +132,16 @@ Mainland China users retain any mandatory rights under the Personal Information 
 
 ## 8. Children and minors
 
-Flovart is not intended for children under 13 or the minimum age required in your jurisdiction.
+Iris is not intended for children under 13 or the minimum age required in your jurisdiction.
 
-If you are under the age of majority in your jurisdiction, use Flovart only with permission and supervision from a parent or legal guardian.
+If you are under the age of majority in your jurisdiction, use Iris only with permission and supervision from a parent or legal guardian.
 
 Do not upload children's personal information, images, school records, health information, or other sensitive material to third-party AI providers unless you have a lawful basis and proper authorization.
 
 
 ## 9. International data transfers
 
-Flovart's local-first design does not itself choose a cloud storage country for your local project data.
+Iris's local-first design does not itself choose a cloud storage country for your local project data.
 
 However, third-party AI providers, custom endpoints, browser vendors, cloud backups, and extension services may process data in other countries.
 
@@ -157,8 +157,8 @@ Material changes affecting data categories, destinations, browser permissions, P
 
 ## 11. Contact
 
-Project repository: [github.com/avabbbb/Flovart](https://github.com/avabbbb/Flovart)
+Project repository: [github.com/avabbbb/Iris](https://github.com/avabbbb/Iris)
 
-Public support, privacy questions, and notices: [GitHub Issues](https://github.com/avabbbb/Flovart/issues)
+Public support, privacy questions, and notices: [GitHub Issues](https://github.com/avabbbb/Iris/issues)
 
-Do not post API keys, passwords, identity documents, private media, confidential information, or other sensitive personal information in a public GitHub Issue. Flovart does not currently provide a separate private privacy email and normally cannot access, recover, correct, or delete data that remains solely on your device or is held by a third party.
+Do not post API keys, passwords, identity documents, private media, confidential information, or other sensitive personal information in a public GitHub Issue. Iris does not currently provide a separate private privacy email and normally cannot access, recover, correct, or delete data that remains solely on your device or is held by a third party.

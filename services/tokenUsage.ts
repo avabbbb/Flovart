@@ -41,9 +41,9 @@ export interface TokenUsageSummaryRow {
   reasoningTokens: number;
 }
 
-const STORAGE_KEY = 'flovart.tokenUsage.v1';
+const STORAGE_KEY = 'iris.tokenUsage.v1';
 export const TOKEN_USAGE_MAX_RECORDS = 2000;
-const MISSING_STORAGE_KEY = 'flovart.tokenUsage.missing.v1';
+const MISSING_STORAGE_KEY = 'iris.tokenUsage.missing.v1';
 
 function count(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;

@@ -1,7 +1,7 @@
 //! Agent 视频流水线 trace 的 Runtime 读取面（docs/design/16-agent-video-pipeline.md §4.2 / §12）。
 //!
-//! 表由 migration 5（`tools/flovart/contracts/runtime/migrations/0005_agent_pipeline.sql`）建立；
-//! Node pipeline 边界（`tools/flovart/pipeline/`）是唯一写入方，命令边界自动记 Step。
+//! 表由 migration 5（`tools/iris/contracts/runtime/migrations/0005_agent_pipeline.sql`）建立；
+//! Node pipeline 边界（`tools/iris/pipeline/`）是唯一写入方，命令边界自动记 Step。
 //! Runtime 只读：`pipeline.run.get` 返回与 Node `Pipeline.trace()` 相同形状的 JSON，
 //! 让桌面端 / 控制面在不加载 Node 的情况下也能显示同一条 trace。
 
@@ -287,7 +287,7 @@ mod tests {
     use super::*;
 
     const SCHEMA: &str =
-        include_str!("../../../tools/flovart/contracts/runtime/migrations/0005_agent_pipeline.sql");
+        include_str!("../../../tools/iris/contracts/runtime/migrations/0005_agent_pipeline.sql");
 
     fn seeded() -> Connection {
         let connection = Connection::open_in_memory().unwrap();
@@ -338,14 +338,14 @@ mod tests {
         assert!(format!("{error:?}").contains("RUN_NOT_FOUND"));
     }
 
-    /// 跨语言一致性：`FLOVART_PIPELINE_PARITY_DB` + `FLOVART_PIPELINE_PARITY_EXPECTED`
+    /// 跨语言一致性：`IRIS_PIPELINE_PARITY_DB` + `IRIS_PIPELINE_PARITY_EXPECTED`
     /// （Node `Pipeline.trace()` 的 JSON 输出，含 runId）由 `npm run e2e:pipeline:parity` 提供。
     #[test]
     #[ignore]
     fn matches_node_trace_for_real_run() {
-        let db = std::env::var("FLOVART_PIPELINE_PARITY_DB").expect("FLOVART_PIPELINE_PARITY_DB");
+        let db = std::env::var("IRIS_PIPELINE_PARITY_DB").expect("IRIS_PIPELINE_PARITY_DB");
         let expected_path =
-            std::env::var("FLOVART_PIPELINE_PARITY_EXPECTED").expect("FLOVART_PIPELINE_PARITY_EXPECTED");
+            std::env::var("IRIS_PIPELINE_PARITY_EXPECTED").expect("IRIS_PIPELINE_PARITY_EXPECTED");
         let expected: Value =
             serde_json::from_str(&std::fs::read_to_string(expected_path).unwrap()).unwrap();
         let run_id = expected["run"]["id"].as_str().unwrap();

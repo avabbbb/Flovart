@@ -16,19 +16,19 @@ $workspaceRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 
 if (-not $HostPath) {
   $candidates = @(
-    (Join-Path $workspaceRoot 'src-tauri\target\debug\flovart-host.exe'),
-    (Join-Path $workspaceRoot 'src-tauri\target\release\flovart-host.exe'),
-    (Join-Path $workspaceRoot 'src-tauri\binaries\flovart-host-x86_64-pc-windows-msvc.exe')
+    (Join-Path $workspaceRoot 'src-tauri\target\debug\iris-host.exe'),
+    (Join-Path $workspaceRoot 'src-tauri\target\release\iris-host.exe'),
+    (Join-Path $workspaceRoot 'src-tauri\binaries\iris-host-x86_64-pc-windows-msvc.exe')
   )
   $HostPath = $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
 }
 
 if (-not $HostPath -or -not (Test-Path -LiteralPath $HostPath -PathType Leaf)) {
-  throw '找不到 flovart-host.exe。请先运行 cargo build --bin flovart-host，或通过 -HostPath 指定。'
+  throw '找不到 iris-host.exe。请先运行 cargo build --bin iris-host，或通过 -HostPath 指定。'
 }
 
 $resolvedHost = (Resolve-Path -LiteralPath $HostPath).Path
-$manifestDirectory = Join-Path $env:LOCALAPPDATA 'Flovart\NativeMessagingHosts'
+$manifestDirectory = Join-Path $env:LOCALAPPDATA 'Iris\NativeMessagingHosts'
 $manifestPath = Join-Path $manifestDirectory "$hostName.json"
 $allowedOrigins = $ExtensionId | Sort-Object -Unique | ForEach-Object { "chrome-extension://$_/" }
 $manifest = [ordered]@{

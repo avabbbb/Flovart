@@ -1,4 +1,4 @@
-use flovart_lib::runtime::{BrowserImportBegin, BrowserImportStore};
+use iris_lib::runtime::{BrowserImportBegin, BrowserImportStore};
 use sha2::{Digest, Sha256};
 use std::{fs, path::PathBuf};
 use uuid::Uuid;
@@ -6,7 +6,7 @@ use uuid::Uuid;
 const EXTENSION_ORIGIN: &str = "chrome-extension://abcdefghijklmnopabcdefghijklmnop/";
 
 fn test_root() -> PathBuf {
-    std::env::temp_dir().join(format!("flovart-browser-import-test-{}", Uuid::now_v7()))
+    std::env::temp_dir().join(format!("iris-browser-import-test-{}", Uuid::now_v7()))
 }
 
 #[test]

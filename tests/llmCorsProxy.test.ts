@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { handleLlmProxy, resolveUpstreamUrl } from '../server/llmProxy';
 import { toProxiedUrl } from '../services/llmCorsProxy';
 
-const ORIGIN = 'https://flovart.avabbbb.com';
+const ORIGIN = 'https://iris.avabbbb.com';
 const CHAT = `${ORIGIN}/api/llm-proxy/opencode.ai/inference/go/openai/v1/chat/completions`;
 
 function req(url: string, init: RequestInit & { headers?: Record<string, string> } = {}) {
@@ -48,7 +48,7 @@ describe('handleLlmProxy', () => {
       expect(h.get('authorization')).toBe('Bearer sk-test');
       expect(h.get('x-opencode-session')).toBe('ses_abc');
       expect(h.get('cookie')).toBeNull();
-      expect(h.get('user-agent')).toMatch(/^flovart-web\//);
+      expect(h.get('user-agent')).toMatch(/^iris-web\//);
       return new Response('data: {"x":1}\n\ndata: [DONE]\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } });
     });
     const res = await handleLlmProxy(req(CHAT, { body: '{}', headers: { 'x-opencode-session': 'ses_abc', cookie: 'a=b' } }), { fetchImpl: fetchImpl as unknown as typeof fetch });

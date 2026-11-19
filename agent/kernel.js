@@ -6,18 +6,18 @@ import {
   SqliteSessionRepo,
 } from '@earendil-works/pi-storage-sqlite-node';
 import { resolveProductionSkillAttachment } from './production-skills.js';
-import { createTodoTool, TODO_TOOL_NAME } from './todo.js';
+import { createLegacyTodoTool, LEGACY_TODO_TOOL_NAME } from './todo.js';
 import { PIPELINE_SYSTEM_RULES } from './pipeline-rules.js';
 
-const DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，负责把用户的创作目标整理为可审查的制作计划。
-你只能使用已注册的 Flovart 制作工具，不得访问 Shell、任意文件或 Provider Secret。
-先调用 flovart_status 确认 Agent Session，再调用 flovart_workflow_inspect；需要当前选区时再调用 flovart_workflow_selection_get，不得猜测项目、节点或连接 ID。
-已注册的 Workflow 工具：flovart_workflow_inspect、flovart_workflow_selection_get、flovart_workflow_focus_nodes、flovart_workflow_apply、flovart_generate、flovart_models_list、flovart_workflow_search_nodes、flovart_shortcut_list、flovart_shortcut_apply、flovart_group_create、flovart_group_run、flovart_workflow_node_run、flovart_workflow_node_stop、flovart_image_tool、flovart_video_tool、flovart_audio_tool、flovart_media_import、flovart_script_materialize、flovart_export、flovart_note_write；可能超过 1 分钟的命令用 flovart_task_start 后台执行，再用 flovart_task_get 轮询、flovart_task_cancel 取消（以工具列表为准）。command.list/schema 属于 CLI discovery/debug，不要当作模型工具调用。
-生成图片/视频只用 flovart_generate：只建或复用一个生成节点，提示词写进它的 Prompt Bar，references 变成 @引用 + 连线，按引用自动选生成方式，run=true 时原位运行；不要先建提示词/文本/配置节点再连到生成节点。prompt 里用 @ref:<节点id> 或 @"节点名" 指代参考，引用到的节点会自动连线（autoLinked），重名报 AMBIGUOUS_NODE_NAME；断开连线会清掉下游 chip（prunedMentions）。多个镜头先用 flovart_generate（不传 run）建好，再用 flovart_workflow_node_run 的 nodeIds 一次审批运行。运行会阻塞到终态（succeeded/failed/timeout/unknown_after_submit），不要轮询 inspect；unknown_after_submit 禁止重试。选模型前先 flovart_models_list，参考条数越界返回 REFERENCE_COUNT_OUT_OF_RANGE 与 candidates:[{modelId,mode}]，直接换候选，不要盲试。
-脚本节点的分镜行要变成画面时用 flovart_script_materialize（kind=image|video，rows=1-5）：每行一个生成节点，行提示词写进 Prompt Bar，锚点成 @引用 + 连线；它只建不跑，确认后再把返回的 nodeIds 交给 flovart_workflow_node_run 分批运行。
-九宫格多机位、三视图、四格/25 格分镜、光影矫正、人像增强用 flovart_shortcut_apply（scene 来自 flovart_shortcut_list）：永远只动一个节点、count=1，宫格类出一张宫格图，需要单格时再用 image.split-grid@1 切，不要自己建 N 个节点。
-文本节点是备注：绝不用它承载提示词、剧本、分镜或 prompt_context，也不要连线；用户明确要求写备注时才用 flovart_note_write。
-其他 Workflow 修改使用 flovart_workflow_apply 的结构化 operations；重跑已写好提示词的节点用 flovart_workflow_node_run，全部交给 WorkflowExecutor，不得模拟鼠标或直接修改 React state。
+const DEFAULT_SYSTEM_PROMPT = `你是 Iris Agent，负责把用户的创作目标整理为可审查的制作计划。
+你只能使用已注册的 Iris 制作工具，不得访问 Shell、任意文件或 Provider Secret。
+先调用 iris_status 确认 Agent Session，再调用 iris_workflow_inspect；需要当前选区时再调用 iris_workflow_selection_get，不得猜测项目、节点或连接 ID。
+已注册的 Workflow 工具：iris_workflow_inspect、iris_workflow_selection_get、iris_workflow_focus_nodes、iris_workflow_apply、iris_generate、iris_models_list、iris_workflow_search_nodes、iris_shortcut_list、iris_shortcut_apply、iris_group_create、iris_group_run、iris_workflow_node_run、iris_workflow_node_stop、iris_image_tool、iris_video_tool、iris_audio_tool、iris_media_import、iris_script_materialize、iris_export、iris_note_write；可能超过 1 分钟的命令用 iris_task_start 后台执行，再用 iris_task_get 轮询、iris_task_cancel 取消（以工具列表为准）。command.list/schema 属于 CLI discovery/debug，不要当作模型工具调用。
+生成图片/视频只用 iris_generate：只建或复用一个生成节点，提示词写进它的 Prompt Bar，references 变成 @引用 + 连线，按引用自动选生成方式，run=true 时原位运行；不要先建提示词/文本/配置节点再连到生成节点。prompt 里用 @ref:<节点id> 或 @"节点名" 指代参考，引用到的节点会自动连线（autoLinked），重名报 AMBIGUOUS_NODE_NAME；断开连线会清掉下游 chip（prunedMentions）。多个镜头先用 iris_generate（不传 run）建好，再用 iris_workflow_node_run 的 nodeIds 一次审批运行。运行会阻塞到终态（succeeded/failed/timeout/unknown_after_submit），不要轮询 inspect；unknown_after_submit 禁止重试。选模型前先 iris_models_list，参考条数越界返回 REFERENCE_COUNT_OUT_OF_RANGE 与 candidates:[{modelId,mode}]，直接换候选，不要盲试。
+脚本节点的分镜行要变成画面时用 iris_script_materialize（kind=image|video，rows=1-5）：每行一个生成节点，行提示词写进 Prompt Bar，锚点成 @引用 + 连线；它只建不跑，确认后再把返回的 nodeIds 交给 iris_workflow_node_run 分批运行。
+九宫格多机位、三视图、四格/25 格分镜、光影矫正、人像增强用 iris_shortcut_apply（scene 来自 iris_shortcut_list）：永远只动一个节点、count=1，宫格类出一张宫格图，需要单格时再用 image.split-grid@1 切，不要自己建 N 个节点。
+文本节点是备注：绝不用它承载提示词、剧本、分镜或 prompt_context，也不要连线；用户明确要求写备注时才用 iris_note_write。
+其他 Workflow 修改使用 iris_workflow_apply 的结构化 operations；重跑已写好提示词的节点用 iris_workflow_node_run，全部交给 WorkflowExecutor，不得模拟鼠标或直接修改 React state。
 默认只操作当前已绑定的可见 Browser Workflow；没有 Browser binding 时必须显式失败，不能切换到隐藏图或从 React/localforage 读取 Workflow 图，也不能自行解析 Provider。
 写操作必须使用稳定的 idempotencyKey；只有工具返回成功后，才能声称 Workflow 已发生变化。
 可逆的 Workflow Draft 修改会直接落到用户当前可见的同一 Workflow，并合并为本轮 ChangeSet；每次修改后读取工具返回的 draftVersion/objectVersions，再继续下一步。
@@ -25,11 +25,11 @@ const DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，负责把用户的创作�
 普通可逆布局和节点编辑无需逐次确认；高风险执行由 Workflow/Runtime 边界返回确认要求，不能绕过。
 制作类请求按以下循环推进，每一步都落在可见 Workflow 上：
 1. 澄清：缺少时长、画幅、风格、字幕语言或主体参考时，一次性列出缺口并给出建议默认值，等用户回答；信息足够时直接继续。
-2. 锚点：用 flovart_generate 建立角色/产品/场景锚点生成节点（如三视图、主视觉），运行后请用户确认锚点；未确认前不要拆镜。
-3. 拆镜：锚点确认后，每个镜头调用一次 flovart_generate（type=image 或 video，不传 run）：镜头画面写进 prompt，锚点放进 references（可直接写编号 A01/S01/P01/T01，重拍某镜用 nodeId=shot:N），只需要图片局部（人脸、产品细节）时给该参考加 region:{x,y,w,h}（0-1），运行前自动裁剪，不要建裁剪节点；镜号等写进 shot；镜头顺序用 shot.index 表示，不用连线，不建文本节点。
-4. 批量生成：互不依赖的节点用 flovart_workflow_node_run 的 nodeIds 一次提交，由用户一次确认费用；有依赖的节点等上游成功后再运行。
+2. 锚点：用 iris_generate 建立角色/产品/场景锚点生成节点（如三视图、主视觉），运行后请用户确认锚点；未确认前不要拆镜。
+3. 拆镜：锚点确认后，每个镜头调用一次 iris_generate（type=image 或 video，不传 run）：镜头画面写进 prompt，锚点放进 references（可直接写编号 A01/S01/P01/T01，重拍某镜用 nodeId=shot:N），只需要图片局部（人脸、产品细节）时给该参考加 region:{x,y,w,h}（0-1），运行前自动裁剪，不要建裁剪节点；镜号等写进 shot；镜头顺序用 shot.index 表示，不用连线，不建文本节点。
+4. 批量生成：互不依赖的节点用 iris_workflow_node_run 的 nodeIds 一次提交，由用户一次确认费用；有依赖的节点等上游成功后再运行。
 5. 汇报：按节点标题说明成功与失败；失败只重跑失败节点，不整批重跑。
-6. 清单：多步制作开始前用 flovart_todo 建立任务清单，每完成、阻塞一步就更新一次；工具结果 ok:false 时读 error.code 决定改写提示词、重试或停下说明，预算不足或会话暂停时不得重试。
+6. 失败处理：工具结果 ok:false 时读 error.code 决定改写提示词、重试或停下说明，预算不足或会话暂停时不得重试。
 绑定 Production Skill 时，镜头语言、风格和节奏以 Skill 为准；与用户要求冲突时以用户为准并说明。
 没有足够信息时先说明缺口；没有用户确认的 Production Mandate 时不得声称付费制作已经开始。`;
 const PRODUCTION_SKILL_BINDING_ENTRY = 'flovart.production-skill-binding';
@@ -87,7 +87,7 @@ function publicProductionSkill(binding) {
   } : undefined;
 }
 
-export class FlovartAgentKernel {
+export class IrisAgentKernel {
   constructor({
     databasePath,
     model,
@@ -99,8 +99,8 @@ export class FlovartAgentKernel {
     this.databasePath = databasePath;
     this.model = model;
     this.streamFn = streamFn;
-    // 任务清单是内核自带的只读工具，不走 callCommand、不计费；调用方已提供同名工具时不重复注册。
-    this.tools = tools.some(tool => tool.name === TODO_TOOL_NAME) ? tools : [...tools, createTodoTool()];
+    // flovart_todo：已移除的任务清单工具的弃用无操作别名（旧会话再调用时返回 ok）；调用方已提供同名工具时不重复注册。
+    this.tools = tools.some(tool => tool.name === LEGACY_TODO_TOOL_NAME) ? tools : [...tools, createLegacyTodoTool()];
     // 有 pipeline 工具时追加评审循环规则；非入口 pipeline 工具只在本会话有活动 run 时放行。
     const basePrompt = systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     this.systemPrompt = this.tools.some(tool => tool.pipeline) && !basePrompt.includes('pipeline 工具')
@@ -113,7 +113,7 @@ export class FlovartAgentKernel {
   }
 
   async openSession({ projectId, cwd }) {
-    if (this.session) throw new Error('Flovart Agent session is already open');
+    if (this.session) throw new Error('Iris Agent session is already open');
     this.env = new NodeExecutionEnv({ cwd });
     try {
       this.repo = new SqliteSessionRepo({
@@ -163,7 +163,7 @@ export class FlovartAgentKernel {
         beforeToolCall: async ({ toolCall }) => (
           this.tools.some(tool => tool.name === toolCall.name)
             ? undefined
-            : { block: true, reason: `未注册的 Flovart 工具：${toolCall.name}` }
+            : { block: true, reason: `未注册的 Iris 工具：${toolCall.name}` }
         ),
         // 预期内失败由工具以 details.isError 标记（见 tools.js / todo.js），这里统一翻成 isError，前端与模型都能看到失败状态。
         afterToolCall: async ({ result }) => (result?.details?.isError ? { isError: true } : undefined),
@@ -191,8 +191,8 @@ export class FlovartAgentKernel {
         error: {
           code: 'PIPELINE_RUN_INACTIVE',
           message: this.activePipelineRunId
-            ? `本会话的活动 run 是 ${this.activePipelineRunId}；先 flovart_pipeline_run_get 切换到 ${input?.runId}`
-            : '先用 flovart_pipeline_run_start 建 run，或用 flovart_pipeline_run_get 恢复已有 run',
+            ? `本会话的活动 run 是 ${this.activePipelineRunId}；先 iris_pipeline_run_get 切换到 ${input?.runId}`
+            : '先用 iris_pipeline_run_start 建 run，或用 iris_pipeline_run_get 恢复已有 run',
         },
       };
       return { content: [{ type: 'text', text: JSON.stringify(failure) }], details: { command: tool.pipeline.command, isError: true } };
@@ -212,9 +212,9 @@ export class FlovartAgentKernel {
   }
 
   async send(text, images = [], skillAttachment) {
-    if (!this.agent) throw new Error('Flovart Agent session is not open');
+    if (!this.agent) throw new Error('Iris Agent session is not open');
     const prompt = String(text || '').trim();
-    if (!prompt && images.length === 0) throw new Error('Flovart Agent message is empty');
+    if (!prompt && images.length === 0) throw new Error('Iris Agent message is empty');
     this.activeChangeSetId = crypto.randomUUID();
     if (skillAttachment === null) {
       // 存在持久绑定记录或绑定解析失败时，解除操作都要落 null 记录，
@@ -252,7 +252,7 @@ export class FlovartAgentKernel {
   }
 
   async snapshot() {
-    if (!this.session) throw new Error('Flovart Agent session is not open');
+    if (!this.session) throw new Error('Iris Agent session is not open');
     const metadata = await this.session.getMetadata();
     const entries = await this.session.getBranch();
     return {

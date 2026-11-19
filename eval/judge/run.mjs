@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// FlovartBench Judge layer CLI (LLM-as-a-Judge for L1 / L2 / L4, see eval/eval.md).
+// IrisBench Judge layer CLI (LLM-as-a-Judge for L1 / L2 / L4, see eval/eval.md).
 //
 //   node eval/judge/run.mjs validate
 //   node eval/judge/run.mjs compile --rubric agent-run
@@ -8,8 +8,8 @@
 //   node eval/judge/run.mjs screen  --violations <file.json> [--pairs <file.json>]
 //   node eval/judge/run.mjs gate    --baseline <runDir> --candidate <runDir> [--deterministic <report.json>]
 //
-// Provider: FLOVART_JUDGE_PROVIDER=openai-compatible|replay, FLOVART_JUDGE_BASE_URL,
-// FLOVART_JUDGE_MODEL, FLOVART_JUDGE_API_KEY, FLOVART_JUDGE_REPLAY.
+// Provider: IRIS_JUDGE_PROVIDER=openai-compatible|replay, IRIS_JUDGE_BASE_URL,
+// IRIS_JUDGE_MODEL, IRIS_JUDGE_API_KEY, IRIS_JUDGE_REPLAY.
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';

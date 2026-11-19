@@ -16,7 +16,7 @@
   const resolveCopy = {
     'zh-CN': {
       language: '语言', currentClip: '当前片段', generate: '生成', references: '参考素材', task: '任务', candidates: '候选项',
-      openProject: '打开一个 Resolve 项目以使用 Flovart。', selectClip: '选择一个 Media Pool 素材或时间线片段。',
+      openProject: '打开一个 Resolve 项目以使用 Iris。', selectClip: '选择一个 Media Pool 素材或时间线片段。',
       noProject: '打开一个 Resolve 项目', noSelection: '选择一个片段或素材',
       promptPlaceholder: '描述新镜头、运动、光线或变化…', currentReference: '当前片段用作参考',
       model: '模型', auto: '自动', output: '输出', mediaPool: 'Media Pool',
@@ -24,24 +24,24 @@
       ready: '已就绪', candidateReady: '等待审核', failed: '失败', adding: '正在添加…', addToMediaPool: '添加到 Media Pool', retryAdd: '重试添加',
       importUnknown: '导入状态未知。请先检查 Resolve Media Pool，确认候选是否已添加；确认前不要重试。', verifyMediaPoolFirst: '先核对 Media Pool',
       preview: '预览', hidePreview: '收起预览', previewUnavailable: '当前环境无法预览此候选。', prepareFailed: '候选未能完成持久化校验。', importFailed: '无法添加到 Media Pool。候选已保留，可重试。', addedToMediaPool: '已添加到 Media Pool', importNotConfirmed: 'Resolve 尚未确认将结果添加到 Media Pool。', basedOn: '基于',
-      openInFlovart: '在 Flovart 中打开 ↗', openInFlovartUnavailable: 'Flovart Canvas 暂不可用。', resolveUnavailable: '项目不可用', flovartUnavailable: 'Flovart 未连接', selectClipStatus: '选择片段', readyStatus: '已就绪',
+      openInIris: '在 Iris 中打开 ↗', openInIrisUnavailable: 'Iris Canvas 暂不可用。', resolveUnavailable: '项目不可用', irisUnavailable: 'Iris 未连接', selectClipStatus: '选择片段', readyStatus: '已就绪',
       refreshSelection: '刷新当前片段', promptLabel: '描述', mediaPoolClip: 'Media Pool 片段', timelineItem: '时间线片段',
       languageChinese: '简体中文', languageEnglish: 'English',
-      fromCanvas: '来自 Flovart 画布', canvasSendHint: '画布里发来的结果，确认后才会加入 Media Pool；不改动时间线。', sending: '正在添加…',
+      fromCanvas: '来自 Iris 画布', canvasSendHint: '画布里发来的结果，确认后才会加入 Media Pool；不改动时间线。', sending: '正在添加…',
       compare: '对比', compareHide: '收起对比', compareSlider: '拖动比较两个候选', compareLeft: '左', compareRight: '右',
       hintToggle: '这是什么？', stageSubmit: '提交', stageGenerate: '生成', stageDownload: '下载', stageVerify: '校验',
       readyIn: '已就绪 · 用时', partialPreview: '预览', partialWaiting: '等待第一张预览…',
       alphaYes: '透明 ✓', alphaNo: '不透明', alphaChecking: '检查透明度…',
       agentPrepared: '准备了 1 个生成', agentReview: '填入并审核', agentDismiss: '忽略', agentFallback: 'Agent',
       pullFromCanvas: '取回画布结果', pulling: '正在取回…', nothingToPull: '画布里还没有可取回的结果。',
-      hintClip: '在 Resolve 里点选一个 Media Pool 素材或时间线片段，Flovart 会以它为参考。切换选择不会影响正在进行的任务。',
+      hintClip: '在 Resolve 里点选一个 Media Pool 素材或时间线片段，Iris 会以它为参考。切换选择不会影响正在进行的任务。',
       hintGenerate: '用一句话描述你想要的结果，例如「透明背景的霓虹标题」。点击生成后会出一个候选，不会改动时间线。',
       hintTask: '四个阶段依次点亮。不知道进度时只显示动画，不会编造百分比。',
       hintCandidates: '棋盘格表示透明区域。确认满意后再添加到 Media Pool，原片不会被替换。',
     },
     en: {
       language: 'Language', currentClip: 'Current clip', generate: 'Generate', references: 'References', task: 'Task', candidates: 'Candidates',
-      openProject: 'Open a Resolve project to use Flovart.', selectClip: 'Select a Media Pool clip or timeline item.',
+      openProject: 'Open a Resolve project to use Iris.', selectClip: 'Select a Media Pool clip or timeline item.',
       noProject: 'Open a Resolve project', noSelection: 'Select a clip or media item',
       promptPlaceholder: 'Describe the new shot, motion, lighting, or change…', currentReference: 'Current clip used as reference',
       model: 'Model', auto: 'Auto', output: 'Output', mediaPool: 'Media Pool',
@@ -49,17 +49,17 @@
       ready: 'Ready', candidateReady: 'Ready for review', failed: 'Failed', adding: 'Adding…', addToMediaPool: 'Add to Media Pool', retryAdd: 'Retry Add',
       importUnknown: 'Import status is unknown. Check the Resolve Media Pool to confirm whether the candidate was added. Do not retry before confirming.', verifyMediaPoolFirst: 'Verify Media Pool first',
       preview: 'Preview', hidePreview: 'Hide preview', previewUnavailable: 'This candidate cannot be previewed in the current host.', prepareFailed: 'Candidate did not pass persistence validation.', importFailed: 'Could not add to Media Pool. The candidate is retained and can be retried.', addedToMediaPool: 'Added to Media Pool', importNotConfirmed: 'Resolve did not confirm that the result was added to the Media Pool.', basedOn: 'Based on',
-      openInFlovart: 'Open in Flovart ↗', openInFlovartUnavailable: 'Flovart Canvas is not available.', resolveUnavailable: 'Project unavailable', flovartUnavailable: 'Flovart is not connected', selectClipStatus: 'Select a clip', readyStatus: 'Ready',
+      openInIris: 'Open in Iris ↗', openInIrisUnavailable: 'Iris Canvas is not available.', resolveUnavailable: 'Project unavailable', irisUnavailable: 'Iris is not connected', selectClipStatus: 'Select a clip', readyStatus: 'Ready',
       refreshSelection: 'Refresh current clip', promptLabel: 'Prompt', mediaPoolClip: 'Media Pool clip', timelineItem: 'Timeline item',
       languageChinese: 'Simplified Chinese', languageEnglish: 'English',
-      fromCanvas: 'FROM FLOVART CANVAS', canvasSendHint: 'Results sent from the canvas. They join the Media Pool only after you confirm; the timeline is not changed.', sending: 'Adding…',
+      fromCanvas: 'FROM IRIS CANVAS', canvasSendHint: 'Results sent from the canvas. They join the Media Pool only after you confirm; the timeline is not changed.', sending: 'Adding…',
       compare: 'Compare', compareHide: 'Hide compare', compareSlider: 'Drag to compare two candidates', compareLeft: 'Left', compareRight: 'Right',
       hintToggle: 'What is this?', stageSubmit: 'Submit', stageGenerate: 'Generate', stageDownload: 'Download', stageVerify: 'Verify',
       readyIn: 'Ready · took', partialPreview: 'Preview', partialWaiting: 'Waiting for the first preview…',
       alphaYes: 'Transparent ✓', alphaNo: 'Opaque', alphaChecking: 'Checking alpha…',
       agentPrepared: 'prepared 1 generation', agentReview: 'Fill in & review', agentDismiss: 'Dismiss', agentFallback: 'Agent',
       pullFromCanvas: 'Pull from canvas', pulling: 'Pulling…', nothingToPull: 'The canvas has no result to pull yet.',
-      hintClip: 'Select a Media Pool clip or timeline item in Resolve. Flovart uses it as the reference. Changing selection never retargets a running task.',
+      hintClip: 'Select a Media Pool clip or timeline item in Resolve. Iris uses it as the reference. Changing selection never retargets a running task.',
       hintGenerate: 'Describe the result in one sentence, e.g. "neon title on a transparent background". Generate makes a candidate and never touches the timeline.',
       hintTask: 'The four stages light up in order. When progress is unknown, only the animation runs. No made-up percentages.',
       hintCandidates: 'The checkerboard shows transparent areas. Add to Media Pool only when you like it. The source clip is never replaced.',
@@ -69,13 +69,13 @@
   // The real UXP/CEP packages and the browser preview mount this same UI.
   function mountInspector({ root, adapter, controller, getController, hostLabel, onOpenCanvas, defaultImportTarget = { kind: 'new-layer' }, preview = false, locale }) {
     root.replaceChildren();
-    root.className = 'flovart-studio-inspector';
+    root.className = 'iris-studio-inspector';
     const isResolve = adapter.id === 'resolve';
     root.dataset.studioHost = adapter.id;
     function resolveLocale() {
       if (!isResolve) return 'zh-CN';
       const requested = locale || root.dataset.locale || (() => {
-        try { return global.localStorage?.getItem('flovart.studio.resolve.locale'); } catch { return ''; }
+        try { return global.localStorage?.getItem('iris.studio.resolve.locale'); } catch { return ''; }
       })() || global.navigator?.language || '';
       return String(requested).toLowerCase().startsWith('en') ? 'en' : 'zh-CN';
     }
@@ -129,12 +129,12 @@
     const resolveController = () => getController ? getController() : controller;
     const header = el('header', undefined, 'fs-header');
     const brand = el('div', undefined, 'fs-brand');
-    brand.append(el('span', 'i', 'fs-logo'), el('strong', 'Flovart'));
+    brand.append(el('span', 'i', 'fs-logo'), el('strong', 'Iris'));
     const canvas = button('↗', 'fs-icon-button', () => {
       if (onOpenCanvas) Promise.resolve().then(() => onOpenCanvas()).catch(error => { if (!disposed) status.textContent = error.message; });
-      else status.textContent = '请连接 Flovart 后打开画布。';
+      else status.textContent = '请连接 Iris 后打开画布。';
     });
-    canvas.title = '展开 Flovart 工作区';
+    canvas.title = '展开 Iris 工作区';
     canvas.setAttribute('aria-label', canvas.title);
     let makeTab = null, historyTab = null, headerStatus = null, localeToggle = null, languageZh = null, languageEn = null;
     if (isResolve) {
@@ -153,7 +153,7 @@
     } else header.append(brand, canvas);
     const tabs = isResolve ? null : el('nav', undefined, 'fs-tabs');
     if (tabs) {
-      tabs.setAttribute('aria-label', 'Flovart 面板');
+      tabs.setAttribute('aria-label', 'Iris 面板');
       makeTab = button('制作', 'fs-tab is-active', () => showTab('make'));
       historyTab = button(adapter.id === 'after-effects' ? '候选版本' : '本次记录', 'fs-tab', () => showTab('history'));
       tabs.append(makeTab, historyTab);
@@ -189,7 +189,7 @@
     const promptLabel = el('label', isResolve ? t('promptLabel') : '你想如何创作？', 'fs-section-label');
     const promptBox = el('div', undefined, 'fs-prompt-box');
     const prompt = el('textarea');
-    prompt.id = 'flovart-studio-prompt';
+    prompt.id = 'iris-studio-prompt';
     promptLabel.htmlFor = prompt.id;
     prompt.rows = 5;
     prompt.maxLength = 8000;
@@ -350,17 +350,17 @@
     }
     const footer = el('footer', undefined, 'fs-footer');
     const connection = el('span');
-    let openInFlovart = null, pullFromCanvas = null, pulling = false;
+    let openInIris = null, pullFromCanvas = null, pulling = false;
     if (isResolve) {
       footer.classList.add('fs-resolve-footer');
-      openInFlovart = button(t('openInFlovart'), 'fs-open-in-flovart', () => {
+      openInIris = button(t('openInIris'), 'fs-open-in-iris', () => {
         if (onOpenCanvas) Promise.resolve().then(() => onOpenCanvas()).catch(error => { if (!disposed) status.textContent = error.message; });
-        else status.textContent = t('openInFlovartUnavailable');
+        else status.textContent = t('openInIrisUnavailable');
       });
       // Gyroflow-style round trip: send work to the canvas, then bring its latest result back here.
-      pullFromCanvas = button(t('pullFromCanvas'), 'fs-open-in-flovart fs-pull-canvas', () => { void pullCanvasResult(); });
+      pullFromCanvas = button(t('pullFromCanvas'), 'fs-open-in-iris fs-pull-canvas', () => { void pullCanvasResult(); });
       pullFromCanvas.hidden = true;
-      footer.append(pullFromCanvas, openInFlovart);
+      footer.append(pullFromCanvas, openInIris);
     } else footer.append(connection, el('span', preview ? '交互预览' : hostLabel, 'fs-muted'));
     const shortcut = el('div', 'Ctrl / ⌘ + Enter', 'fs-shortcut fs-mono');
     // Quiet, static guidance: a small marker that never pops up by itself; one sentence only when asked.
@@ -621,7 +621,7 @@
       const currentController = resolveController();
       if (disposed || !item?.candidateId || item.importState === 'imported' || item.importState === 'unknown' || item.importState === 'importing' || importingCandidateId) return;
       if (typeof currentController?.importCandidate !== 'function') {
-        status.textContent = t('flovartUnavailable');
+        status.textContent = t('irisUnavailable');
         update();
         return;
       }
@@ -679,7 +679,7 @@
       if (!isResolve || !resolveCopy[nextLocale] || currentLocale === nextLocale) return;
       currentLocale = nextLocale;
       root.dataset.locale = currentLocale;
-      try { global.localStorage?.setItem('flovart.studio.resolve.locale', currentLocale); } catch { /* host storage may be unavailable */ }
+      try { global.localStorage?.setItem('iris.studio.resolve.locale', currentLocale); } catch { /* host storage may be unavailable */ }
       localeToggle.setAttribute('aria-label', t('language'));
       languageZh.title = t('languageChinese'); languageZh.setAttribute('aria-label', t('languageChinese'));
       languageEn.title = t('languageEnglish'); languageEn.setAttribute('aria-label', t('languageEnglish'));
@@ -698,7 +698,7 @@
       target.options[0].textContent = t('mediaPool');
       taskSectionText.textContent = t('task');
       resolveCandidatesHeadingText.textContent = t('candidates');
-      openInFlovart.textContent = t('openInFlovart');
+      openInIris.textContent = t('openInIris');
       if (pullFromCanvas) pullFromCanvas.textContent = t('pullFromCanvas');
       for (const hint of hints) { hint.note.textContent = t(hint.key); hint.marker.title = t('hintToggle'); hint.marker.setAttribute('aria-label', t('hintToggle')); }
       renderStages(); renderAgentBanner();
@@ -794,7 +794,7 @@
         if (activeTab === 'history') renderHistory();
         update();
       } catch (error) {
-        if (!disposed) status.textContent = error?.message || '无法读取当前合成中的 Flovart 候选。';
+        if (!disposed) status.textContent = error?.message || '无法读取当前合成中的 Iris 候选。';
       } finally {
         loadingCandidates = false;
         if (documentId && activeDocumentId && activeDocumentId !== documentId && !loadedCandidateDocuments.has(activeDocumentId)) {
@@ -850,7 +850,7 @@
         generate.textContent = busy ? `${t('generating')}` : preview ? t('demoGenerate') : t('generateCandidate');
         headerStatus.textContent = !resolveProjectAvailable
           ? `○  ${t('resolveUnavailable')}`
-          : !linked ? `○  ${t('flovartUnavailable')}`
+          : !linked ? `○  ${t('irisUnavailable')}`
             : !lastSelection ? `○  ${t('selectClipStatus')}`
               : `●  ${t('readyStatus')}`;
         headerStatus.className = `fs-header-status ${resolveProjectAvailable && linked && lastSelection ? 'fs-success' : 'fs-muted'}`;
@@ -867,9 +867,9 @@
         setResolveLayout();
       } else {
         generate.textContent = busy ? '正在制作…' : preview ? '✦  演示生成并添加' : '✦  生成并添加';
-        connection.textContent = preview ? '○  示例素材' : linked ? '●  Flovart 已连接' : '○  等待 Flovart';
+        connection.textContent = preview ? '○  示例素材' : linked ? '●  Iris 已连接' : '○  等待 Iris';
         connection.className = linked && !preview ? 'fs-success' : 'fs-muted';
-        if (!linked && !status.textContent) status.textContent = '连接 Flovart 后即可使用当前工作流制作。';
+        if (!linked && !status.textContent) status.textContent = '连接 Iris 后即可使用当前工作流制作。';
       }
     }
     function refreshModels() {
@@ -1151,7 +1151,7 @@
     const onReady = () => { status.textContent = ''; refreshModels(); void refresh(); };
     refreshModels();
     global.addEventListener?.('flovart:link-ready', onReady);
-    if (isResolve) global.addEventListener?.('flovart:agent-request', onAgentRequest);
+    if (isResolve) global.addEventListener?.('iris:agent-request', onAgentRequest);
     const subscription = adapter.subscribeContext?.(() => { void refresh(); });
     void refresh(); update();
     return { refresh, dispose() {
@@ -1159,9 +1159,9 @@
       taskStopRow();
       subscription?.dispose();
       global.removeEventListener?.('flovart:link-ready', onReady);
-      global.removeEventListener?.('flovart:agent-request', onAgentRequest);
+      global.removeEventListener?.('iris:agent-request', onAgentRequest);
       if (isResolve) for (const item of history) if (item.previewUrl) global.URL?.revokeObjectURL?.(item.previewUrl);
     } };
   }
-  global.FlovartStudioUI = { mountInspector };
+  global.IrisStudioUI = { mountInspector };
 })(typeof window !== 'undefined' ? window : globalThis);

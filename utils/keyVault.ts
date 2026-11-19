@@ -6,7 +6,7 @@
 import localforage from 'localforage';
 
 const vaultStorage = localforage.createInstance({
-    name: 'flovart',
+    name: 'iris',
     storeName: 'provider_secret_vault',
 });
 const VAULT_STORAGE_KEY = 'api_keys';
@@ -37,7 +37,7 @@ const VAULT_UNREADABLE_KEY = 'api_keys.unreadable';
 
 async function deriveKey(salt: Uint8Array, derivation: KeyDerivation = 'v2'): Promise<CryptoKey> {
     const passphrase = derivation === 'v2'
-        ? 'flovart-vault-v2::' + location.origin
+        ? 'iris-vault-v2::' + location.origin
         : location.origin + '::' + navigator.userAgent;
     const keyMaterial = await crypto.subtle.importKey(
         'raw',

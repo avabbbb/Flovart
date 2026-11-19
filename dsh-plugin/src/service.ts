@@ -1,12 +1,12 @@
 /**
- * Flovart service (Node/Cordis half). Owns the CLI facade and the last known
- * runtime/registry state; is provided on `ctx.flovart` for later profile
+ * Iris service (Node/Cordis half). Owns the CLI facade and the last known
+ * runtime/registry state; is provided on `ctx.iris` for later profile
  * layers and the doctor script. The browser half never reads this service or
  * its token; the host exposes a narrow same-origin Workspace proxy instead.
  */
 
 import { Service, type Context } from '@deepseek-ai/cordis'
-import { normalizeConfig, type FlovartPluginConfig } from './config.ts'
+import { normalizeConfig, type IrisPluginConfig } from './config.ts'
 import { runCli, runCliSync, type CliOutcome } from './cli.ts'
 
 const DEFAULT_HEALTH_CHECK_MS = 10_000
@@ -27,7 +27,7 @@ export interface AgentToolSpec {
   inputSchema: { type: 'object'; properties: Record<string, Record<string, unknown>>; required: string[] }
 }
 
-export interface FlovartServiceState {
+export interface IrisServiceState {
   /** Whether the CLI launcher resolved and spoke the registry at last probe. */
   cliReady: boolean
   cliError: string | null
@@ -39,14 +39,14 @@ export interface FlovartServiceState {
   agentTools?: AgentToolSpec[] | null
 }
 
-export class FlovartServiceError extends Error {
+export class IrisServiceError extends Error {
   readonly code: string
   readonly retryable: boolean
   readonly details: unknown
 
   constructor(code: string, message: string, retryable = false, details: unknown = null) {
     super(message)
-    this.name = 'FlovartServiceError'
+    this.name = 'IrisServiceError'
     this.code = code
     this.retryable = retryable
     this.details = details
@@ -57,9 +57,9 @@ export class FlovartServiceError extends Error {
   }
 }
 
-export type FlovartServiceArgs = Record<string, unknown>
+export type IrisServiceArgs = Record<string, unknown>
 
-export interface FlovartArtifactView {
+export interface IrisArtifactView {
   taskId: string
   kind?: string
   mimeType?: string
@@ -70,7 +70,7 @@ export interface FlovartArtifactView {
   [key: string]: unknown
 }
 
-export function artifactFromTask(task: unknown, taskId: string): FlovartArtifactView | null {
+export function artifactFromTask(task: unknown, taskId: string): IrisArtifactView | null {
   if (!task || typeof task !== 'object') return null
   const result = (task as Record<string, unknown>).result
   if (!result || typeof result !== 'object') return null
@@ -79,29 +79,29 @@ export function artifactFromTask(task: unknown, taskId: string): FlovartArtifact
   return { taskId, ...(artifact as Record<string, unknown>) }
 }
 
-export class FlovartService extends Service {
-  readonly config: FlovartPluginConfig
-  state: FlovartServiceState = { cliReady: false, cliError: null, commands: null, registryHash: null }
+export class IrisService extends Service {
+  readonly config: IrisPluginConfig
+  state: IrisServiceState = { cliReady: false, cliError: null, commands: null, registryHash: null }
   private healthTimer: ReturnType<typeof setInterval> | undefined
   private probing = false
   readonly workspace = {
-    inspect: (args: FlovartServiceArgs = {}, signal?: AbortSignal) => this.invoke('workflow.inspect', args, signal),
-    selection: (args: FlovartServiceArgs = {}, signal?: AbortSignal) => this.invoke('workflow.selection.get', args, signal),
+    inspect: (args: IrisServiceArgs = {}, signal?: AbortSignal) => this.invoke('workflow.inspect', args, signal),
+    selection: (args: IrisServiceArgs = {}, signal?: AbortSignal) => this.invoke('workflow.selection.get', args, signal),
   }
   readonly workflow = {
-    apply: (args: FlovartServiceArgs, signal?: AbortSignal) => this.invoke('workflow.apply', args, signal),
-    run: (args: FlovartServiceArgs, signal?: AbortSignal) => this.invoke('workflow.node.run', args, signal),
+    apply: (args: IrisServiceArgs, signal?: AbortSignal) => this.invoke('workflow.apply', args, signal),
+    run: (args: IrisServiceArgs, signal?: AbortSignal) => this.invoke('workflow.node.run', args, signal),
   }
   readonly artifacts = {
-    get: (args: FlovartServiceArgs = {}, signal?: AbortSignal) => this.getArtifact(args, signal),
+    get: (args: IrisServiceArgs = {}, signal?: AbortSignal) => this.getArtifact(args, signal),
   }
   readonly task = {
-    inspect: (args: FlovartServiceArgs = {}, signal?: AbortSignal) => this.invoke('task.inspect', args, signal),
-    resume: (args: FlovartServiceArgs = {}, signal?: AbortSignal) => this.invoke('task.resume', args, signal),
+    inspect: (args: IrisServiceArgs = {}, signal?: AbortSignal) => this.invoke('task.inspect', args, signal),
+    resume: (args: IrisServiceArgs = {}, signal?: AbortSignal) => this.invoke('task.resume', args, signal),
   }
 
-  constructor(ctx: Context, config: Partial<FlovartPluginConfig> | undefined) {
-    super(ctx, 'flovart')
+  constructor(ctx: Context, config: Partial<IrisPluginConfig> | undefined) {
+    super(ctx, 'iris')
     this.config = normalizeConfig(config)
   }
 
@@ -158,7 +158,7 @@ export class FlovartService extends Service {
       this.state.registryHash = null
       this.state.agentTools = null
     }
-    if (wasReady !== this.state.cliReady) this.ctx.reflect.notify(['flovart'])
+    if (wasReady !== this.state.cliReady) this.ctx.reflect.notify(['iris'])
     return outcome
   }
 
@@ -170,11 +170,11 @@ export class FlovartService extends Service {
     return this.invoke('ensure', {}, signal)
   }
 
-  private async invoke(command: string, args: FlovartServiceArgs, signal?: AbortSignal): Promise<unknown> {
+  private async invoke(command: string, args: IrisServiceArgs, signal?: AbortSignal): Promise<unknown> {
     const outcome = await runCli(this.config, command, args, signal)
     if (!outcome.ok) {
       const error = outcome.error
-      throw new FlovartServiceError(
+      throw new IrisServiceError(
         error?.code ?? 'CLI_ERROR',
         error?.message ?? `${command} 执行失败`,
         error?.retryable ?? false,
@@ -183,15 +183,15 @@ export class FlovartService extends Service {
     return outcome.data
   }
 
-  private async getArtifact(args: FlovartServiceArgs, signal?: AbortSignal): Promise<unknown> {
+  private async getArtifact(args: IrisServiceArgs, signal?: AbortSignal): Promise<unknown> {
     const taskId = typeof args.taskId === 'string' ? args.taskId : undefined
     if (!taskId) {
-      throw new FlovartServiceError('INVALID_ARGUMENT', 'artifacts.get requires taskId')
+      throw new IrisServiceError('INVALID_ARGUMENT', 'artifacts.get requires taskId')
     }
     const task = await this.invoke('task.get', { taskId }, signal)
     const artifact = artifactFromTask(task, taskId)
     if (!artifact) {
-      throw new FlovartServiceError('ARTIFACT_NOT_FOUND', `Runtime task ${taskId} 没有可用 Artifact`)
+      throw new IrisServiceError('ARTIFACT_NOT_FOUND', `Runtime task ${taskId} 没有可用 Artifact`)
     }
     return artifact
   }
@@ -199,6 +199,6 @@ export class FlovartService extends Service {
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    flovart: FlovartService
+    iris: IrisService
   }
 }

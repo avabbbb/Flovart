@@ -9,7 +9,7 @@ export function persistAgentConfig(config, context, save = saveAgentConfig) {
     return true;
   } catch (error) {
     const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : 'UNKNOWN';
-    console.warn('[flovart-agent] could not persist agent config (' + context + '): ' + code);
+    console.warn('[iris-agent] could not persist agent config (' + context + '): ' + code);
     return false;
   }
 }

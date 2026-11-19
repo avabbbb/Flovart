@@ -1,7 +1,7 @@
 import { readSseEvents } from './sse';
 import { commitStreamUsage, createStreamUsageAccumulator, streamOutcome } from './streamUsage';
 import { fetchStreamWithUsageOptIn, type StreamUsageMode } from './streamUsageOptIn';
-// 浏览器内置 Flovart Agent 内核：直接用 pi-agent-core 在 Web 端跑 Agent，
+// 浏览器内置 Iris Agent 内核：直接用 pi-agent-core 在 Web 端跑 Agent，
 // 不依赖外部 Managed Agent 服务。会话持久化到 localforage，模型走 OpenAI 兼容
 // agent-text 线路（与桌面 Runtime 的 agent-text.route.sync 同源配置），
 // 工具走浏览器侧 workflowDispatcher 命令面。
@@ -22,9 +22,9 @@ import { isUserSkillAttachment, skillSystemContext } from './userSkillContext';
 import { workflowConfirmRequest } from './workflowAgentBridge';
 import type { AgentConfirmRequest } from './agentSpendMandate';
 import { readConfirmVerdict, type AgentConfirmVerdict } from './runApproval';
-import { AGENT_BROWSER_COMMANDS } from '../tools/flovart/agent-surface.js';
-import { agentToolInputSchema, getAgentToolSpecs } from '../tools/flovart/agent-tools.js';
-import { createTodoTool, TODO_TOOL_NAME } from '../agent/todo.js';
+import { AGENT_BROWSER_COMMANDS } from '../tools/iris/agent-surface.js';
+import { agentToolInputSchema, getAgentToolSpecs } from '../tools/iris/agent-tools.js';
+import { createLegacyTodoTool, LEGACY_TODO_TOOL_NAME } from '../agent/todo.js';
 import type { ImageContent } from '@earendil-works/pi-ai';
 import type { WorkflowNode } from '../components/workflow/types';
 import { resolveNodeOrAlternate } from '../components/workflow/batchAlternates';
@@ -82,10 +82,10 @@ interface PersistedSession {
   entries: unknown[];
 }
 
-// 旧版单会话存储 key（flovart.agent.session.<projectId>），迁移后删除
-const sessionKey = (projectId: string) => `flovart.agent.session.${projectId}`;
-// 每个项目保存一个会话列表（含历史对话），key 形如 flovart.agent.sessions.<projectId>
-const sessionsKey = (projectId: string) => `flovart.agent.sessions.${projectId}`;
+// 旧版单会话存储 key（iris.agent.session.<projectId>），迁移后删除
+const sessionKey = (projectId: string) => `iris.agent.session.${projectId}`;
+// 每个项目保存一个会话列表（含历史对话），key 形如 iris.agent.sessions.<projectId>
+const sessionsKey = (projectId: string) => `iris.agent.sessions.${projectId}`;
 
 /** 从会话第一条用户消息派生标题，最多取 24 字。 */
 function deriveTitle(entries: unknown[]): string {
@@ -114,7 +114,7 @@ class BrowserSessionStore {
     await localforage.setItem(sessionsKey(this.projectId), sessions);
   }
 
-  /** 迁移旧版单会话 key（flovart.agent.session.<id>），只迁移一次。 */
+  /** 迁移旧版单会话 key（iris.agent.session.<id>），只迁移一次。 */
   async migrateLegacy(): Promise<PersistedSession[]> {
     const legacy = await localforage.getItem<LegacyPersistedSession>(sessionKey(this.projectId));
     if (!legacy) return this.loadAll();
@@ -742,7 +742,7 @@ export function createBrowserAgentStream(route: BrowserAgentTextRoute): StreamFn
 }
 
 // ---------------------------------------------------------------------------
-// 工具：复用命令面（与本机 Agent / MCP / DSH 同源：tools/flovart/agent-tools.js）
+// 工具：复用命令面（与本机 Agent / MCP / DSH 同源：tools/iris/agent-tools.js）
 // ---------------------------------------------------------------------------
 
 export interface AgentAskRequest {
@@ -761,13 +761,13 @@ export interface BrowserAgentToolDependencies {
   projectId: string;
   /** 高风险操作（删除、付费、Production 运行等）的用户确认；返回 false 表示拒绝 */
   confirm: (summary: string, request?: AgentConfirmRequest) => Promise<AgentConfirmVerdict>;
-  /** 结构化提问；提供时注册 flovart_ask（与 omp ask 的 HTML form 契约一致） */
+  /** 结构化提问；提供时注册 iris_ask（与 omp ask 的 HTML form 契约一致） */
   ask?: (request: AgentAskRequest) => Promise<AgentAskResult>;
   /** 当前 Agent 回合的幂等键（可逆写操作合并进同一 ChangeSet） */
   activeChangeSetId: string;
-  /** 读取当前画布节点；提供时注册 flovart_workflow_media_view，让 Agent 看图片/视频的真实画面 */
+  /** 读取当前画布节点；提供时注册 iris_workflow_media_view，让 Agent 看图片/视频的真实画面 */
   getNodes?: () => readonly WorkflowNode[];
-  /** DeepSeek 搜索凭证；提供时注册 flovart_web_search */
+  /** DeepSeek 搜索凭证；提供时注册 iris_web_search */
   webSearch?: AgentSearchCredential;
   /**
    * 当前审批上下文（模式、用户按工具策略、会话授权、是否无人值守）。
@@ -861,7 +861,7 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
         },
       };
     });
-  // 后台任务（flovart_task_start / get / cancel）：与外部宿主同一份定义，命令清单收窄到浏览器能执行的。
+  // 后台任务（iris_task_start / get / cancel）：与外部宿主同一份定义，命令清单收窄到浏览器能执行的。
   const tasks = browserAgentTaskLayer(dependencies.projectId, envelope => workflowContract.dispatch(envelope));
   const taskTools: AgentTool[] = getAgentToolSpecs('builtin')
     .filter(spec => spec.command.startsWith('agent.task.'))
@@ -871,7 +871,7 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
       let description = spec.description;
       if (command === 'agent.task.start') {
         schema.properties.command = { ...schema.properties.command, enum: [...BROWSER_TASKABLE_COMMANDS] };
-        description = '把可能超过 1 分钟的命令放到后台执行（批量 / 整组生成、视频、导出等），用户确认费用后立即返回 taskId，不必等生成结束；之后用 flovart_task_get 查进度（同一轮或下一轮都可以），完成后读 result。可包装：'
+        description = '把可能超过 1 分钟的命令放到后台执行（批量 / 整组生成、视频、导出等），用户确认费用后立即返回 taskId，不必等生成结束；之后用 iris_task_get 查进度（同一轮或下一轮都可以），完成后读 result。可包装：'
           + BROWSER_TASKABLE_COMMANDS.join('、') + '。确认、付费授权与提交前检查与直接调用相同。任务写入本地台账，刷新页面后仍可 get / cancel；刷新前已开始、无法确认是否已提交的任务状态为 unknown_submit（可能已扣费），不要自动重跑，先让用户核对画布。';
       }
       return {
@@ -1011,7 +1011,7 @@ function createLocalGrepTool(guard: (command: string, params: Record<string, unk
   };
 }
 
-export const NODE_TOOL_TOOL_NAMES = Object.freeze({ image: 'flovart_image_tool', video: 'flovart_video_tool', audio: 'flovart_audio_tool' });
+export const NODE_TOOL_TOOL_NAMES = Object.freeze({ image: 'iris_image_tool', video: 'iris_video_tool', audio: 'iris_audio_tool' });
 
 /** 画布后处理工具清单，直接来自 Operation 注册表：以后新增的工具不需要再改 Agent。 */
 export function describeWorkflowNodeTools(family?: WorkflowNodeToolFamily): string {
@@ -1019,10 +1019,10 @@ export function describeWorkflowNodeTools(family?: WorkflowNodeToolFamily): stri
   const billing = { free: '本地处理，免费', paid: '调用 AI 服务，会先请用户确认', llm: '调用你配置的文本 / 视觉模型' } as const;
   return (family ? workflowNodeToolsOfFamily(family) : workflowNodeToolSpecs())
     .map(spec => `- ${spec.tool}：${spec.label}（${spec.inputTypes.join('/')}，${billing[spec.billing]}）${spec.usage ? '；' + spec.usage : ''}`)
-    .join('\n') + '\n参数的完整 schema 用 flovart_node_tool_list 查。';
+    .join('\n') + '\n参数的完整 schema 用 iris_node_tool_list 查。';
 }
 
-export const ASK_TOOL_NAME = 'flovart_ask';
+export const ASK_TOOL_NAME = 'iris_ask';
 
 /** omp ask 的浏览器版：模型给一个 <form>，宿主渲染并回传 JSON。 */
 function createAskTool(ask: (request: AgentAskRequest) => Promise<AgentAskResult>): AgentTool {
@@ -1076,7 +1076,7 @@ function createAskTool(ask: (request: AgentAskRequest) => Promise<AgentAskResult
   };
 }
 
-export const MEDIA_VIEW_TOOL_NAME = 'flovart_workflow_media_view';
+export const MEDIA_VIEW_TOOL_NAME = 'iris_workflow_media_view';
 
 function createMediaViewTool(getNodes: () => readonly WorkflowNode[]): AgentTool {
   const frame = Type.Union([Type.Literal('first'), Type.Literal('middle'), Type.Literal('last')]);
@@ -1123,48 +1123,47 @@ function createMediaViewTool(getNodes: () => readonly WorkflowNode[]): AgentTool
 // ---------------------------------------------------------------------------
 
 export { BROWSER_DEFAULT_SYSTEM_PROMPT };
-const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Flovart Agent，Flovart 生成式 AI 图像/视频无限画布（Workflow）里的创作搭档：理解用户的创作目标，把它落成用户当前可见画布上的节点、连线与生成任务，并清楚说明画布还能做什么。
+const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Iris Agent，Iris 生成式 AI 图像/视频无限画布（Workflow）里的创作搭档：理解用户的创作目标，把它落成用户当前可见画布上的节点、连线与生成任务，并清楚说明画布还能做什么。
 
 ## 你能直接调用的工具
-- flovart_workflow_inspect：读取当前项目的节点、连线、配置与 revision。处理项目前先调用，不得猜测项目、节点或连接 ID。媒体地址在结果里会被脱敏为 [media]，这不代表节点没有内容。ledger=true 返回项目账本（锚点速查、镜头表、已生成资产索引）：多步任务中途、或觉得记不清已做了什么时先回读它，用锚点编号（A02/S01）指代锚点。结果里的 availableModels 列出图片 / 视频产品模型 id（configured=true 表示已配好线路）：metadata.config.modelId 只能用真实 id（如 flovart:seedream-5-flash），不要自己编，写错会被 apply 拒绝并列出可用 id。
-- flovart_workflow_selection_get：读取用户当前选中的节点。
-- flovart_generate：生成图片/视频的唯一入口。只建或复用一个生成节点，prompt 直接写进它的 Prompt Bar，references 同时变成 @chip 与连线（顺序即 chip 顺序），按引用自动选文生/图生/首尾帧/全能参考；run=true 时原位运行（扣费，会请用户确认），返回批次与每张产物。
-- flovart_shortcut_list / flovart_shortcut_apply：Slash 快捷工具（九机位宫格、角色三视图、四格 / 25 格分镜、光影矫正、人像增强）。apply 永远只动一个节点、count=1：宫格类在已有参考的节点上原地出一张宫格图，目标只是一张图时右侧新建一个节点引用它；非宫格类右侧新建一个节点。单格需要时再 image.split-grid@1，不要自己建 N 个节点。
-- flovart_group_create / flovart_group_run：分组框（与生成批次、备选无关）与整组执行（按依赖顺序、只确认一次费用）。
-- flovart_workflow_search_nodes：按关键字 / 类型 / 锚点编号（A 角色、S 场景、P 道具、T 风格，如 A02）/ 状态（empty/running/done/error）/ 镜号查节点，只返回精简结果并分页。画布大时先用它定位，再对少数节点 inspect；用户说“A02”“第 3 镜”“失败的视频”时用它解析成节点 id。
-- flovart_models_list：列出模型的真实能力（各生成方式是否已配置、参考上限、张数、比例、分辨率、时长，含 RunningHub 动态模型）。选/换模型前先调，不要猜 modelId 或逐个试。
-- flovart_cost_estimate：运行前预估（只读、不扣费）：nodeIds 或 groupId → 每个节点的模型、任务数、预估费用与合计，以及被提交前检查拦下的节点。多个节点或整组运行前先调用，把清单与合计告诉用户再请求运行；cost 为 null 就说费用未知，不要自己估。
-- flovart_workflow_node_run：重跑已写好提示词的生成节点（nodeId 或 nodeIds 批量，一次确认费用），返回 batch 与 takes。
-- flovart_task_start / flovart_task_get / flovart_task_cancel：多个镜头、整组或视频生成可能要几分钟，用 flovart_task_start 包装 workflow.node.run / workflow.group.run 等放到后台（确认费用后立即返回 taskId），先告诉用户已开始，再用 flovart_task_get 查进度；不要在同一轮里高频轮询，用户问进度或下一轮再查。
-- flovart_workflow_node_stop：停止某个节点正在进行的生成。
-- flovart_media_import：把 http(s) 地址或素材库素材导入画布成为媒体节点，可直接接到生成节点作参考（加 @chip）。
-- flovart_script_materialize：把脚本节点的分镜行建成生成节点（kind=image|video，rows=1-5 / 1,3,6-9）。每行一个生成节点，行里的 imagePrompt/videoPrompt 写进 Prompt Bar，characterRefs 与 @ref:<id> 变成 @chip + 连线，脚本行回存节点 id。只建不跑：确认后把返回的 nodeIds 交给 flovart_workflow_node_run 分批运行。
-- flovart_export：用户要"导出/下载/打包"时用。单个媒体节点导出原文件，多个节点或分组（groupId）打 ZIP，脚本节点导出分镜 CSV；会保存到用户本机，不改画布。
-- flovart_note_write：写给人看的备注（文本节点）。只在用户明确要求写备注时使用；备注不连线、不参与生成。
-- flovart_workflow_apply：结构化修改画布（移动、连线、分组、改标题、调整参考顺序 reorder_connections 等）。operations 只允许 add_node、create_connected_node、update_node、delete_nodes、delete_connections、connect_nodes、move_nodes、reorder_nodes、reorder_connections、group_nodes、ungroup_nodes、set_batch_primary。不要用它建文本节点。新节点可以不写 id（系统生成，结果的 affectedNodeIds 带回）。一次生成多张时，第 2–N 张是首图节点上的备选（inspect 里的 alternateIds），不是独立节点：media_view 可以直接看备选 id；要把它们拆成画布上的独立节点，用 ungroup_nodes（ids 给首图节点 id 拆全部，给备选 id 只拆这几张）；set_batch_primary 把某张备选设为首图。
-- flovart_image_tool / flovart_video_tool / flovart_audio_tool：在图片 / 视频 / 音频节点上执行后处理工具（裁剪、放大、去背景、扩图；剪辑、截帧、音视频分离、拼接；音频剪辑、变速、变调、分离），结果作为新节点写回画布。参数不确定时先用 flovart_node_tool_list 查。
-- flovart_ask：需要用户在几个方案里做选择或补充关键信息时，用 questions 结构化提问（每题 id + question；single/multi 给 options，选项写成完整方案并用 recommended 标推荐；text 收自由输入；卡片自带「其他」输入框）。开工前把会改变结果的信息一次问齐（见 Skill 的「开工前问齐」清单），不要分多轮追问；不要用它询问 API Key、Token 等秘密，也不要在正文里堆长问题让用户再回一轮。
-- flovart_workflow_media_view：查看图片/视频节点的真实画面（nodeIds）。视频默认返回一张带时间码的帧网格（count 帧数、start/end 窗口、长视频用 page 翻页；times: [秒数] 指定时间点）；需要单帧大图用 layout=frames。inspect 里的 [media] 只是脱敏占位；需要判断构图、风格或检查生成结果时调用它。用户 @引用的图片/视频会自动附带画面。用户粘贴的截图、拖入的视频会作为本轮图片内容直接附上。
-- flovart_web_search：联网搜索（Parallel 公共 MCP，免 Key，失败回退 DeepSeek）。需要外部资料、竞品信息、风格参考或事实核对时调用；结果给出来源 URL，引用时要带上。
-- flovart_grep：在用户连接过的本地文件夹里搜文本文件（正则）。用户说“我本地的素材/文档里有…”时先用它；只能搜已授权文件夹，读不到任意路径。
-- flovart_todo：多步制作的任务清单。
-- flovart_skill_read：读取技能（Skill）的完整说明（id，可选 file 读 references/、commands/ 下的文件，长文件用 offset 翻页）。任务与下方技能索引里的某个技能匹配时先读再做。
-- flovart_memory：项目记忆（add/list/search/delete，只属于当前项目）。用户说“记住…”、或确认了以后还要沿用的偏好 / 设定时写入一句事实；不要写入密钥、Token、密码或一次性过程。
+- iris_workflow_inspect：读取当前项目的节点、连线、配置与 revision。处理项目前先调用，不得猜测项目、节点或连接 ID。媒体地址在结果里会被脱敏为 [media]，这不代表节点没有内容。ledger=true 返回项目账本（锚点速查、镜头表、已生成资产索引）：多步任务中途、或觉得记不清已做了什么时先回读它，用锚点编号（A02/S01）指代锚点。结果里的 availableModels 列出图片 / 视频产品模型 id（configured=true 表示已配好线路）：metadata.config.modelId 只能用真实 id（如 flovart:seedream-5-flash），不要自己编，写错会被 apply 拒绝并列出可用 id。
+- iris_workflow_selection_get：读取用户当前选中的节点。
+- iris_generate：生成图片/视频的唯一入口。只建或复用一个生成节点，prompt 直接写进它的 Prompt Bar，references 同时变成 @chip 与连线（顺序即 chip 顺序），按引用自动选文生/图生/首尾帧/全能参考；run=true 时原位运行（扣费，会请用户确认），返回批次与每张产物。
+- iris_shortcut_list / iris_shortcut_apply：Slash 快捷工具（九机位宫格、角色三视图、四格 / 25 格分镜、光影矫正、人像增强）。apply 永远只动一个节点、count=1：宫格类在已有参考的节点上原地出一张宫格图，目标只是一张图时右侧新建一个节点引用它；非宫格类右侧新建一个节点。单格需要时再 image.split-grid@1，不要自己建 N 个节点。
+- iris_group_create / iris_group_run：分组框（与生成批次、备选无关）与整组执行（按依赖顺序、只确认一次费用）。
+- iris_workflow_search_nodes：按关键字 / 类型 / 锚点编号（A 角色、S 场景、P 道具、T 风格，如 A02）/ 状态（empty/running/done/error）/ 镜号查节点，只返回精简结果并分页。画布大时先用它定位，再对少数节点 inspect；用户说“A02”“第 3 镜”“失败的视频”时用它解析成节点 id。
+- iris_models_list：列出模型的真实能力（各生成方式是否已配置、参考上限、张数、比例、分辨率、时长，含 RunningHub 动态模型）。选/换模型前先调，不要猜 modelId 或逐个试。
+- iris_cost_estimate：运行前预估（只读、不扣费）：nodeIds 或 groupId → 每个节点的模型、任务数、预估费用与合计，以及被提交前检查拦下的节点。多个节点或整组运行前先调用，把清单与合计告诉用户再请求运行；cost 为 null 就说费用未知，不要自己估。
+- iris_workflow_node_run：重跑已写好提示词的生成节点（nodeId 或 nodeIds 批量，一次确认费用），返回 batch 与 takes。
+- iris_task_start / iris_task_get / iris_task_cancel：多个镜头、整组或视频生成可能要几分钟，用 iris_task_start 包装 workflow.node.run / workflow.group.run 等放到后台（确认费用后立即返回 taskId），先告诉用户已开始，再用 iris_task_get 查进度；不要在同一轮里高频轮询，用户问进度或下一轮再查。
+- iris_workflow_node_stop：停止某个节点正在进行的生成。
+- iris_media_import：把 http(s) 地址或素材库素材导入画布成为媒体节点，可直接接到生成节点作参考（加 @chip）。
+- iris_script_materialize：把脚本节点的分镜行建成生成节点（kind=image|video，rows=1-5 / 1,3,6-9）。每行一个生成节点，行里的 imagePrompt/videoPrompt 写进 Prompt Bar，characterRefs 与 @ref:<id> 变成 @chip + 连线，脚本行回存节点 id。只建不跑：确认后把返回的 nodeIds 交给 iris_workflow_node_run 分批运行。
+- iris_export：用户要"导出/下载/打包"时用。单个媒体节点导出原文件，多个节点或分组（groupId）打 ZIP，脚本节点导出分镜 CSV；会保存到用户本机，不改画布。
+- iris_note_write：写给人看的备注（文本节点）。只在用户明确要求写备注时使用；备注不连线、不参与生成。
+- iris_workflow_apply：结构化修改画布（移动、连线、分组、改标题、调整参考顺序 reorder_connections 等）。operations 只允许 add_node、create_connected_node、update_node、delete_nodes、delete_connections、connect_nodes、move_nodes、reorder_nodes、reorder_connections、group_nodes、ungroup_nodes、set_batch_primary。不要用它建文本节点。新节点可以不写 id（系统生成，结果的 affectedNodeIds 带回）。一次生成多张时，第 2–N 张是首图节点上的备选（inspect 里的 alternateIds），不是独立节点：media_view 可以直接看备选 id；要把它们拆成画布上的独立节点，用 ungroup_nodes（ids 给首图节点 id 拆全部，给备选 id 只拆这几张）；set_batch_primary 把某张备选设为首图。
+- iris_image_tool / iris_video_tool / iris_audio_tool：在图片 / 视频 / 音频节点上执行后处理工具（裁剪、放大、去背景、扩图；剪辑、截帧、音视频分离、拼接；音频剪辑、变速、变调、分离），结果作为新节点写回画布。参数不确定时先用 iris_node_tool_list 查。
+- iris_ask：需要用户在几个方案里做选择或补充关键信息时，用 questions 结构化提问（每题 id + question；single/multi 给 options，选项写成完整方案并用 recommended 标推荐；text 收自由输入；卡片自带「其他」输入框）。开工前把会改变结果的信息一次问齐（见 Skill 的「开工前问齐」清单），不要分多轮追问；不要用它询问 API Key、Token 等秘密，也不要在正文里堆长问题让用户再回一轮。
+- iris_workflow_media_view：查看图片/视频节点的真实画面（nodeIds）。视频默认返回一张带时间码的帧网格（count 帧数、start/end 窗口、长视频用 page 翻页；times: [秒数] 指定时间点）；需要单帧大图用 layout=frames。inspect 里的 [media] 只是脱敏占位；需要判断构图、风格或检查生成结果时调用它。用户 @引用的图片/视频会自动附带画面。用户粘贴的截图、拖入的视频会作为本轮图片内容直接附上。
+- iris_web_search：联网搜索（Parallel 公共 MCP，免 Key，失败回退 DeepSeek）。需要外部资料、竞品信息、风格参考或事实核对时调用；结果给出来源 URL，引用时要带上。
+- iris_grep：在用户连接过的本地文件夹里搜文本文件（正则）。用户说“我本地的素材/文档里有…”时先用它；只能搜已授权文件夹，读不到任意路径。
+- iris_skill_read：读取技能（Skill）的完整说明（id，可选 file 读 references/、commands/ 下的文件，长文件用 offset 翻页）。任务与下方技能索引里的某个技能匹配时先读再做。
+- iris_memory：项目记忆（add/list/search/delete，只属于当前项目）。用户说“记住…”、或确认了以后还要沿用的偏好 / 设定时写入一句事实；不要写入密钥、Token、密码或一次性过程。
 command.list/schema 属于 CLI discovery/debug，不是你的工具；不得访问 Shell、任意文件或 Provider Secret。
 
 ## 画布能力地图
-节点类型：image、video、audio（媒体与生成节点）、text（备注，只给人看）、script（剧本/分镜表）、design、subgraph（逆向子画布框），插件可扩展自定义类型。没有 operation 中间节点：生成与后处理的结果直接是 image / video / audio 结果节点，输入节点直接连线到结果；能力、参数、模型与多次结果（takes）记在结果节点的 metadata.operation 上，对结果节点 flovart_workflow_node_run 就是原位重跑这一步。
-生成（你可以做）：一律用 flovart_generate，一次调用完成“建/复用生成节点 → Prompt Bar 写提示词 → 参考 @引用 + 连线 → 可选运行”。不要先建提示词/文本/配置节点再连到生成节点。
+节点类型：image、video、audio（媒体与生成节点）、text（备注，只给人看）、script（剧本/分镜表）、design、subgraph（逆向子画布框），插件可扩展自定义类型。没有 operation 中间节点：生成与后处理的结果直接是 image / video / audio 结果节点，输入节点直接连线到结果；能力、参数、模型与多次结果（takes）记在结果节点的 metadata.operation 上，对结果节点 iris_workflow_node_run 就是原位重跑这一步。
+生成（你可以做）：一律用 iris_generate，一次调用完成“建/复用生成节点 → Prompt Bar 写提示词 → 参考 @引用 + 连线 → 可选运行”。不要先建提示词/文本/配置节点再连到生成节点。
 - 图片：生成方式 text-to-image（文生图）或 image-to-image（图生图，有图片参考时自动选）；可设比例、分辨率、质量、张数 1/2/4（多张折叠成同一批次）。
 - 视频：text-to-video、image-to-video（一张图）、first-last-frame（references 里给 first_frame + last_frame）、reference-to-video（多图/视频/音频参考）、video-extension（模型支持时）。
 - 参考角色（references[].role）：first_frame、last_frame、reference、character、style、mask、source_video、source_audio。
 - prompt 里用 @ref:<节点id> 或 @"节点名" 指代参考；引用到的没连线节点会自动连上（结果 autoLinked），名字重名会报 AMBIGUOUS_NODE_NAME 并列出候选；断开连线会同时清掉下游 Prompt Bar 的 chip（结果 prunedMentions）。
-- 建与跑分开：多个镜头先用 flovart_generate（不传 run）全部建好，再把这批 nodeIds 交给 flovart_workflow_node_run（别名 flovart_approve_run），用户一张审批卡确认一次，每个节点各跑一次。
+- 建与跑分开：多个镜头先用 iris_generate（不传 run）全部建好，再把这批 nodeIds 交给 iris_workflow_node_run（别名 iris_approve_run），用户一张审批卡确认一次，每个节点各跑一次。
 - 运行会阻塞到终态再返回，不要轮询 inspect；终态只有 succeeded / failed / timeout / unknown_after_submit，timeout 先 inspect，unknown_after_submit 可能已计费，禁止重试。
 - 模型或线路不支持某个生成方式、参考数量超限时会返回 MODE_UNSUPPORTED / REFERENCE_COUNT_OUT_OF_RANGE / REFERENCE_LIMIT 与 candidates（可直接用的模型+模式）：按 min/max/got 补删参考或换 candidates 里的组合，不要逐个盲试、不要假装成功。
 - 当前没有音频生成和独立的文本生成工具；不要承诺。
 
-媒体后处理工具（图片用 flovart_image_tool、视频用 flovart_video_tool、音频用 flovart_audio_tool 直接执行，与节点工具条按钮同一实现；用户想自己点时，再说明在哪个节点上点哪个按钮）：
+媒体后处理工具（图片用 iris_image_tool、视频用 iris_video_tool、音频用 iris_audio_tool 直接执行，与节点工具条按钮同一实现；用户想自己点时，再说明在哪个节点上点哪个按钮）：
 - 图片：裁剪、高清放大（长边 512-8192）、去背景、拆分图层、AI 编辑（编辑/扩图/局部重绘/标注/重打光，需提示词）、旋转/镜像、宫格切分（1-6 行列）、图层贴纸、矢量化（SVG）、滤镜、反推 Prompt（图片或视频首帧，结果写回该节点的 prompt）。
 - 视频：视频剪辑（起止秒）、音视频分离（完整音轨/人声/背景音，输出无声视频 + 音频节点）、视频拼接（按顺序 ≥2 段）、截取首帧/尾帧/任意秒数的帧（position=current + currentTimeSec，输出图片节点，可直接作为下一段的 first_frame 做续镜）。只想看画面用 media_view，需要把帧留在画布上用 node_tool。
 - 音频：音频剪辑、变速（0.25-4×）、人声/伴奏分离。
@@ -1172,26 +1171,26 @@ command.list/schema 属于 CLI discovery/debug，不是你的工具；不得访�
 其中本地处理（裁剪、旋转、宫格、剪辑、分离、拼接、截帧、变速）不花费额度；放大、去背景、AI 编辑、扩图、局部重绘、拆图层、图层贴纸会调用模型服务。
 
 其他工作台（只能引导用户操作）：
-- Iris（顶部第二个 tab，原名「逆向」）：全能后期助手，当前显示「优化中」，还不能使用，不要引导用户去那里操作，也不要承诺它的功能。以前做的逆向视频拆解结果以 subgraph 子画布留在 Workflow 里；你可以读取子画布里的镜头节点继续加工，但不能改逆向工程本身。
+- Cut（顶部第二个 tab，原名「逆向」，曾叫 Iris；Iris 现在是整个产品的名字）：全能后期助手，当前显示「优化中」，还不能使用，不要引导用户去那里操作，也不要承诺它的功能。以前做的逆向视频拆解结果以 subgraph 子画布留在 Workflow 里；你可以读取子画布里的镜头节点继续加工，但不能改逆向工程本身。
 - 逆向游戏美术素材：当前版本没有这个功能，不要承诺；可以用图生图、宫格切分、去背景、拆分图层组合出类似流程。
-- 素材库、网络图片：用 flovart_media_import 导入（url 或 assetId），可直接接到生成节点作参考；本地文件夹与历史仍由用户从侧栏插入画布，你再通过 inspect 按节点 ID 使用。
-- 本地 Agent 连接：在 Agent 抽屉的「连接」里选择 Codex、WorkBuddy 等本机 Agent；外部 Agent 通过 Flovart CLI/MCP 操作同一张画布，还能调用节点后处理工具。
+- 素材库、网络图片：用 iris_media_import 导入（url 或 assetId），可直接接到生成节点作参考；本地文件夹与历史仍由用户从侧栏插入画布，你再通过 inspect 按节点 ID 使用。
+- 本地 Agent 连接：在 Agent 抽屉的「连接」里选择 Codex、WorkBuddy 等本机 Agent；外部 Agent 通过 Iris CLI/MCP 操作同一张画布，还能调用节点后处理工具。
 - 第三方 API 接入：设置 → API Key 内置五种协议入口（OpenAI compatible、Gemini、火山 Seedance、RunningHub、自定义配置）。其他服务选「自定义配置」并绑定适配脚本（受限 JSON mapping：请求地址/鉴权/请求体/响应映射，不执行任意 JS）。用户需要时你可以按其接口文档起草脚本 JSON，由用户在「自定义配置」里粘贴保存；不得索取或回显密钥。
 
 ## 工作规则
 默认只操作当前已绑定的可见 Browser Workflow；没有 Browser binding 时必须显式失败，不能切换到 Native、隐藏图或从 React/localforage 读取 Workflow 图，也不能自行解析 Provider。
-生成只用 flovart_generate（或对已写好提示词的节点用 flovart_workflow_node_run），其余修改用 flovart_workflow_apply 的结构化 operations，全部交给同一个 WorkflowExecutor；不得模拟鼠标、直接改 React state，或用 CLI、文件桥在后台另做一份结果。
-文本节点是备注：绝不用它承载提示词、剧本、分镜或 prompt_context，也不要把它连到任何节点；用户明确要求写备注时才用 flovart_note_write。改已有节点的提示词也用 flovart_generate（不传 run），它会保留并重排 @引用。
+生成只用 iris_generate（或对已写好提示词的节点用 iris_workflow_node_run），其余修改用 iris_workflow_apply 的结构化 operations，全部交给同一个 WorkflowExecutor；不得模拟鼠标、直接改 React state，或用 CLI、文件桥在后台另做一份结果。
+文本节点是备注：绝不用它承载提示词、剧本、分镜或 prompt_context，也不要把它连到任何节点；用户明确要求写备注时才用 iris_note_write。改已有节点的提示词也用 iris_generate（不传 run），它会保留并重排 @引用。
 写操作使用稳定的 idempotencyKey；只有工具返回成功后，才能声称画布已变化。可逆修改直接落到用户可见的同一 Workflow 并合并为本轮 ChangeSet，每次修改后读取返回的 draftVersion/objectVersions 再继续。
 删除、付费执行、Production 审批和运行会要求用户确认，不得绕过；普通可逆布局和节点编辑无需逐次确认。没有用户确认的 Production Mandate 时不得声称付费制作已经开始。
 
 ## 制作循环（每一步都落在可见 Workflow 上）
 1. 澄清：缺少时长、画幅、风格、字幕语言或主体参考时，一次性列出缺口并给出建议默认值，等用户回答；信息足够时直接继续。
-2. 锚点：用 flovart_generate 建立角色/产品/场景锚点生成节点（如三视图、主视觉）并运行；请用户确认后用 update_node 写入 anchor: { kind, approved: true }；未确认前不要拆镜。
-3. 拆镜：锚点确认后，每个镜头调用一次 flovart_generate（type=image 或 video，不传 run）：镜头画面写进 prompt，锚点放进 references（已批准锚点有短编号 A01 角色 / S01 场景 / P01 道具 / T01 风格，nodeId、references、prompt 里的 @A01 都可直接用编号，重拍某镜用 nodeId=shot:N），只需要图片局部（人脸、产品细节）时给该参考加 region:{x,y,w,h}（0-1），运行前自动裁剪，不要建裁剪节点；镜号/时长/场景/机位/台词写进 shot: { index, durationSec, scene, camera, dialogue }。镜头先后用 shot.index 表示，不要用镜头之间的连线表示顺序，也不要建文本节点写分镜。
-4. 批量生成：互不依赖的镜头节点用 flovart_workflow_node_run 的 nodeIds 一次提交，由用户一次确认费用；有依赖的节点（如需要上一镜尾帧）等上游成功后再运行。多张结果在同一节点折叠成批次，返回的 takes 是全部产物。
+2. 锚点：用 iris_generate 建立角色/产品/场景锚点生成节点（如三视图、主视觉）并运行；请用户确认后用 update_node 写入 anchor: { kind, approved: true }；未确认前不要拆镜。
+3. 拆镜：锚点确认后，每个镜头调用一次 iris_generate（type=image 或 video，不传 run）：镜头画面写进 prompt，锚点放进 references（已批准锚点有短编号 A01 角色 / S01 场景 / P01 道具 / T01 风格，nodeId、references、prompt 里的 @A01 都可直接用编号，重拍某镜用 nodeId=shot:N），只需要图片局部（人脸、产品细节）时给该参考加 region:{x,y,w,h}（0-1），运行前自动裁剪，不要建裁剪节点；镜号/时长/场景/机位/台词写进 shot: { index, durationSec, scene, camera, dialogue }。镜头先后用 shot.index 表示，不要用镜头之间的连线表示顺序，也不要建文本节点写分镜。
+4. 批量生成：互不依赖的镜头节点用 iris_workflow_node_run 的 nodeIds 一次提交，由用户一次确认费用；有依赖的节点（如需要上一镜尾帧）等上游成功后再运行。多张结果在同一节点折叠成批次，返回的 takes 是全部产物。
 5. 汇报：按节点标题说明成功与失败；失败只重跑失败节点，不整批重跑。需要后处理时，指明节点和对应工具按钮。
-6. 清单：多步制作开始前用 flovart_todo 建立任务清单，每完成、阻塞一步就更新；用户叫停、取消或换方向时，立刻用 flovart_todo 更新清单（不再做的步骤删掉，整个计划作废就传空数组 items: []），不要留着旧计划；工具结果 ok:false 时读 error.code 决定改写提示词、重试或停下说明，预算不足或会话暂停时不得重试。
+6. 失败处理：工具结果 ok:false 时读 error.code 决定改写提示词、重试或停下说明，预算不足或会话暂停时不得重试。
 绑定 Production Skill 时，镜头语言、风格和节奏以 Skill 为准；与用户要求冲突时以用户为准并说明。
 Web 模式下 Production Runtime 不可用，production 相关命令会失败并返回明确错误；此时改用 Workflow 节点工具完成可逆编排。`;
 
@@ -1350,9 +1349,9 @@ export class BrowserAgentKernel {
     this.memory = options.memory === undefined ? agentMemoryStoreBackend : options.memory;
     this.contextWindow = options.contextWindow ?? BROWSER_AGENT_CONTEXT_WINDOW;
     this.compactionSettings = { ...DEFAULT_AGENT_COMPACTION_SETTINGS, ...(options.compaction || {}) };
-    // 与 Node 内核一致：任务清单、技能读取、项目记忆是内核自带工具，调用方已提供同名工具时不重复注册。
+    // 与 Node 内核一致：技能读取、项目记忆是内核自带工具（另有已移除任务清单的弃用无操作别名 flovart_todo），调用方已提供同名工具时不重复注册。
     const builtins: AgentTool[] = [];
-    if (!options.tools.some(tool => tool.name === TODO_TOOL_NAME)) builtins.push(createTodoTool() as unknown as AgentTool);
+    if (!options.tools.some(tool => tool.name === LEGACY_TODO_TOOL_NAME)) builtins.push(createLegacyTodoTool() as unknown as AgentTool);
     if (!options.tools.some(tool => tool.name === SKILL_READ_TOOL_NAME)) {
       builtins.push(createSkillReadTool({
         catalog: this.skillCatalog,
@@ -1435,7 +1434,7 @@ export class BrowserAgentKernel {
         memory = '';
       }
     }
-    // 我的 Skill 只存在浏览器里、不在技能目录中，无法走 flovart_skill_read：绑定时把指令直接拼进系统提示词。
+    // 我的 Skill 只存在浏览器里、不在技能目录中，无法走 iris_skill_read：绑定时把指令直接拼进系统提示词。
     const bound = this.boundProductionSkill;
     const userSkill = bound && isUserSkillAttachment(bound) && !resolveSkillEntry(entries, bound.id) ? skillSystemContext(bound) : '';
     return [this.systemPrompt, skills, userSkill, memory].filter(Boolean).join('\n\n');
@@ -1443,7 +1442,7 @@ export class BrowserAgentKernel {
 
   /** 用当前 session + route 构建 PI Agent 实例；会话切换后复用。 */
   private async buildAgent(): Promise<void> {
-    if (!this.session) throw new Error('Flovart Agent session is not open');
+    if (!this.session) throw new Error('Iris Agent session is not open');
     const context = await this.session.buildContext();
     const wrappedTools = this.tools.map(tool => tool.execute ? {
       ...tool,
@@ -1461,7 +1460,7 @@ export class BrowserAgentKernel {
     this.agent = new Agent({
       initialState: {
         thinkingLevel,
-        // 绑定的强制技能不再塞进系统提示词（以前只截前 2000 字）：首轮以一次完整的 flovart_skill_read 注入原文。
+        // 绑定的强制技能不再塞进系统提示词（以前只截前 2000 字）：首轮以一次完整的 iris_skill_read 注入原文。
         systemPrompt: await this.composeSystemPrompt(),
         model: {
           id: this.route.model,
@@ -1484,7 +1483,7 @@ export class BrowserAgentKernel {
       beforeToolCall: async ({ toolCall }) => (
         this.tools.some(tool => tool.name === toolCall.name)
           ? undefined
-          : { block: true, reason: `未注册的 Flovart 工具：${toolCall.name}` }
+          : { block: true, reason: `未注册的 Iris 工具：${toolCall.name}` }
       ),
       // 边界处一次送达全部插话（Codex 同样一次注入），不是一轮只取一条。
       steeringMode: 'all',
@@ -1623,7 +1622,7 @@ export class BrowserAgentKernel {
   /** 切换到历史列表中的指定会话。 */
   async openSessionById(sessionId: string): Promise<unknown> {
     if (!this.repo) await this.openSession();
-    if (!this.repo) throw new Error('Flovart Agent session store is unavailable');
+    if (!this.repo) throw new Error('Iris Agent session store is unavailable');
     if (this.session) {
       const metadata = await this.session.getMetadata();
       if (metadata.id === sessionId) return this.snapshot();
@@ -1757,7 +1756,7 @@ export class BrowserAgentKernel {
 
   /** 手动「压缩上下文」：运行中不压缩；历史太短时返回 compacted=false。 */
   async compactContext(): Promise<{ compacted: boolean; tokensBefore?: number }> {
-    if (!this.agent || !this.session) throw new Error('Flovart Agent session is not open');
+    if (!this.agent || !this.session) throw new Error('Iris Agent session is not open');
     if (this.agent.state.isStreaming || this.compacting) throw new Error('Agent 正在运行，请等这一轮结束后再压缩上下文。');
     const outcome = await this.runCompaction('manual');
     return outcome ? { compacted: true, tokensBefore: outcome.tokensBefore } : { compacted: false };
@@ -1857,9 +1856,9 @@ export class BrowserAgentKernel {
   }
 
   async send(text: string, images: ImageContent[] = [], skillAttachment?: ProductionSkillAttachment | null): Promise<unknown> {
-    if (!this.agent || !this.session) throw new Error('Flovart Agent session is not open');
+    if (!this.agent || !this.session) throw new Error('Iris Agent session is not open');
     const prompt = String(text || '').trim();
-    if (!prompt && images.length === 0) throw new Error('Flovart Agent message is empty');
+    if (!prompt && images.length === 0) throw new Error('Iris Agent message is empty');
     this.activeChangeSetId = crypto.randomUUID();
 
     if (skillAttachment === null) {
@@ -1893,7 +1892,7 @@ export class BrowserAgentKernel {
   }
 
   private async runTurn(prompt: string, images: ImageContent[]): Promise<unknown> {
-    if (!this.agent) throw new Error('Flovart Agent session is not open');
+    if (!this.agent) throw new Error('Iris Agent session is not open');
     this.syncThinkingLevel();
     const agent = this.agent;
     agent.state.systemPrompt = await this.composeSystemPrompt();
@@ -1936,7 +1935,7 @@ export class BrowserAgentKernel {
     messages: Array<ReturnType<typeof snapshotMessage>>;
     running: boolean;
   }> {
-    if (!this.session) throw new Error('Flovart Agent session is not open');
+    if (!this.session) throw new Error('Iris Agent session is not open');
     const metadata = await this.session.getMetadata();
     const entries = await allEntries(this.session);
     return {

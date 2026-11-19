@@ -717,7 +717,7 @@ export function InfiniteWorkflow({
       return;
     }
     try {
-      const saved = await exportWorkflowCanvas(nodes, format, 'Flovart-' + projectRef.current.title);
+      const saved = await exportWorkflowCanvas(nodes, format, 'Iris-' + projectRef.current.title);
       if (mountedRef.current) setNotice(saved ? '已导出 ' + format.toUpperCase() : '已取消导出。');
     } catch (error) {
       if (mountedRef.current) setNotice(displayError(error, '画布导出失败'));
@@ -2370,7 +2370,7 @@ export function InfiniteWorkflow({
     // Ctrl+Z still restores the nodes — the toast advertises that affordance.
     onNotify?.(language === 'zho' ? `已删除 ${deletableIds.length} 个节点 — Ctrl+Z 撤销` : `Deleted ${deletableIds.length} node${deletableIds.length > 1 ? 's' : ''} — Ctrl+Z to undo`, 'info');
   }, [applyOps, commitFrame, language, onNotify, selectedConnectionId]);
-  // 双击子画布：切到 Iris（内部视图 'reverse'）并选中对应逆向工程。
+  // 双击子画布：切到 Cut（内部视图 'reverse'）并选中对应逆向工程。
   const openSubgraphInReverse = useCallback((node: WorkflowNodeData) => {
     const reverseProjectId = node.metadata.reverseProjectId;
     if (!reverseProjectId) return;
@@ -2397,7 +2397,7 @@ export function InfiniteWorkflow({
       if (nudgeBaseRef.current && !event.key.startsWith('Arrow')) flushNudge();
       const target = event.target instanceof Element ? event.target : null;
       // The non-modal confirm owns its own keys; Delete/Esc there must not act on the canvas selection.
-      if (target?.closest('.flovart-confirm')) return;
+      if (target?.closest('.iris-confirm')) return;
       if (event.code === 'Space') {
         if (target?.closest(SPACE_BLOCKED_TARGET)) return;
         event.preventDefault();
@@ -2861,7 +2861,7 @@ export function InfiniteWorkflow({
     const ordered = sequenced ? arrangementOrder(nodes, nodes.map(node => node.id)) : nodes;
     const media = ordered.filter(node => node.type === 'image' || node.type === 'video' || node.type === 'audio');
     const names = sequenced ? sequencedFileNames(prefix, media.length) : [];
-    const archiveName = sequenced ? names[0]?.replace(/_\d+$/, '') || 'flovart' : `Flovart-Workflow-${project.title}`;
+    const archiveName = sequenced ? names[0]?.replace(/_\d+$/, '') || 'iris' : `Iris-Workflow-${project.title}`;
     try {
       const count = await exportMediaArchive(media.map((node, index) => ({
         id: node.id,

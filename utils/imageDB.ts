@@ -6,7 +6,7 @@ import localforage from 'localforage';
  */
 
 const imageStorage = localforage.createInstance({
-    name: 'flovart-images',
+    name: 'iris-images',
     storeName: 'images',
 });
 

@@ -1,4 +1,4 @@
-//! Flovart Tauri 库入口。
+//! Iris Tauri 库入口。
 //!
 //! 模块划分：
 //! - `keyring` : 操作系统 Keyring 包装（API Key 持久化）
@@ -28,12 +28,12 @@ use crate::runtime::{default_discovery_path, ControlServer, ProductionRuntime};
 use crate::state::StateDb;
 
 /// 跨 command 共享的运行时上下文。
-pub struct FlovartContext {
+pub struct IrisContext {
     pub state_db: Arc<StateDb>,
     pub bridge_queue: Arc<BridgeQueue>,
 }
 
-impl FlovartContext {
+impl IrisContext {
     pub fn new(state_db: Arc<StateDb>, bridge_queue: Arc<BridgeQueue>) -> Self {
         Self {
             state_db,
@@ -50,7 +50,7 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             // 二开实例：把 argv 里的 flovart:// 链接转到已运行实例
             for arg in argv.iter().skip(1) {
-                if arg.starts_with("flovart://") {
+                if arg.starts_with("flovart://") || arg.starts_with("iris://") {
                     deeplink::handle_deeplink_url(app, arg);
                 }
             }
@@ -87,6 +87,8 @@ pub fn run() {
             #[cfg(any(target_os = "linux", all(debug_assertions, windows)))]
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
+                let _ = app.deep_link().register("iris");
+                // 更名前的旧协议（现有链接都是 flovart://），过渡期继续注册。
                 let _ = app.deep_link().register("flovart");
             }
 
@@ -97,7 +99,7 @@ pub fn run() {
             }
 
             // ── 4. 启动带启动期认证的 Production Runtime Control API ──
-            let ctx = FlovartContext::new(state_db.clone(), bridge_queue.clone());
+            let ctx = IrisContext::new(state_db.clone(), bridge_queue.clone());
             let app_handle = app.handle().clone();
             let ctx_arc = Arc::new(ctx);
             let discovery_path = default_discovery_path()
@@ -113,7 +115,7 @@ pub fn run() {
 
             // ── 5. 处理启动时可能携带的 flovart:// 链接 ──
             if let Some(args) = std::env::args().nth(1) {
-                if args.starts_with("flovart://") {
+                if args.starts_with("flovart://") || args.starts_with("iris://") {
                     deeplink::handle_deeplink_url(&app_handle, &args);
                 }
             }
@@ -157,7 +159,7 @@ pub fn run() {
             desktop_files::desktop_save_file,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building Flovart");
+        .expect("error while building Iris");
 
     app.run(|app_handle, event| {
         if matches!(event, tauri::RunEvent::Exit) {

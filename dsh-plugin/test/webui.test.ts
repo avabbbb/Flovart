@@ -12,7 +12,7 @@ const LOOPBACK = 'http' + '://127.0.0.1'
 // The persistent token under test: the real agent.json value when one exists
 // (never printed), else a synthetic stand-in.
 function persistentToken(): { value: string; source: string } {
-  const file = process.env.FLOVART_AGENT_CONFIG || join(homedir(), '.dsh', 'workspace', 'agent.json')
+  const file = process.env.IRIS_AGENT_CONFIG || join(homedir(), '.dsh', 'workspace', 'agent.json')
   try {
     const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'))
     if (typeof parsed === 'object' && parsed !== null && 'token' in parsed && typeof parsed.token === 'string' && parsed.token) {
@@ -48,11 +48,11 @@ function call(port: number, path: string, method = 'GET', headers: Record<string
 }
 
 function fixture(): string {
-  const base = mkdtempSync(join(tmpdir(), 'flovart-webui-'))
+  const base = mkdtempSync(join(tmpdir(), 'iris-webui-'))
   writeFileSync(join(base, 'secret.txt'), 'TOP-SECRET-OUTSIDE-ROOT')
   const root = join(base, 'webui')
   mkdirSync(join(root, 'assets'), { recursive: true })
-  writeFileSync(join(root, 'index.html'), '<!doctype html><title>flovart</title>')
+  writeFileSync(join(root, 'index.html'), '<!doctype html><title>iris</title>')
   writeFileSync(join(root, 'assets', 'app-abc.js'), 'console.log(1)')
   writeFileSync(join(root, 'robots.txt'), 'ok')
   return root
@@ -85,38 +85,38 @@ test('static serving, SPA fallback, MIME and cache headers', async () => {
   const root = fixture()
   const { server, port } = await host({ root, config: { workspaceUrl: LOOPBACK + ':1', workspaceToken: '' } })
   try {
-    const index = await call(port, '/flovart-app/?embed=dsh')
+    const index = await call(port, '/iris-app/?embed=dsh')
     assert.equal(index.status, 200)
     assert.match(String(index.headers['content-type']), /^text\/html/)
     assert.equal(index.headers['cache-control'], 'no-store')
-    assert.match(index.text, /flovart/)
+    assert.match(index.text, /iris/)
 
-    const deep = await call(port, '/flovart-app/workflow/abc')
+    const deep = await call(port, '/iris-app/workflow/abc')
     assert.equal(deep.status, 200)
     assert.equal(deep.headers['cache-control'], 'no-store')
-    assert.match(deep.text, /<title>flovart/)
+    assert.match(deep.text, /<title>iris/)
 
-    const asset = await call(port, '/flovart-app/assets/app-abc.js')
+    const asset = await call(port, '/iris-app/assets/app-abc.js')
     assert.equal(asset.status, 200)
     assert.match(String(asset.headers['content-type']), /^text\/javascript/)
     assert.match(String(asset.headers['cache-control']), /immutable/)
 
-    const plain = await call(port, '/flovart-app/robots.txt')
+    const plain = await call(port, '/iris-app/robots.txt')
     assert.equal(plain.status, 200)
     assert.equal(plain.headers['cache-control'], 'no-cache')
 
-    assert.equal((await call(port, '/flovart-app/assets/missing.js')).status, 404)
+    assert.equal((await call(port, '/iris-app/assets/missing.js')).status, 404)
 
-    const head = await call(port, '/flovart-app/', 'HEAD')
+    const head = await call(port, '/iris-app/', 'HEAD')
     assert.equal(head.status, 200)
     assert.equal(head.text, '')
 
-    const redirect = await call(port, '/flovart-app?embed=dsh')
+    const redirect = await call(port, '/iris-app?embed=dsh')
     assert.equal(redirect.status, 308)
-    assert.equal(redirect.headers.location, '/flovart-app/?embed=dsh')
+    assert.equal(redirect.headers.location, '/iris-app/?embed=dsh')
 
-    assert.equal((await call(port, '/flovart-app/', 'POST')).status, 405)
-    assert.equal((await call(port, '/flovart-appx/index.html')).status, 404)
+    assert.equal((await call(port, '/iris-app/', 'POST')).status, 405)
+    assert.equal((await call(port, '/iris-appx/index.html')).status, 404)
     assert.match(String(index.headers['content-security-policy']), /frame-ancestors 'self'/)
   } finally {
     await close(server)
@@ -128,22 +128,22 @@ test('path traversal is rejected', async () => {
   const { server, port } = await host({ root, config: { workspaceUrl: LOOPBACK + ':1', workspaceToken: '' } })
   try {
     const attempts = [
-      '/flovart-app/../secret.txt',
-      '/flovart-app/assets/../../secret.txt',
-      '/flovart-app/%2e%2e/secret.txt',
-      '/flovart-app/%2E%2E/secret.txt',
-      '/flovart-app/..%2fsecret.txt',
-      '/flovart-app/%5c..%5csecret.txt',
-      '/flovart-app/assets%5c..%5c..%5csecret.txt',
-      '/flovart-app/%00index.html',
-      '/flovart-app/C:%5cWindows%5cwin.ini',
+      '/iris-app/../secret.txt',
+      '/iris-app/assets/../../secret.txt',
+      '/iris-app/%2e%2e/secret.txt',
+      '/iris-app/%2E%2E/secret.txt',
+      '/iris-app/..%2fsecret.txt',
+      '/iris-app/%5c..%5csecret.txt',
+      '/iris-app/assets%5c..%5c..%5csecret.txt',
+      '/iris-app/%00index.html',
+      '/iris-app/C:%5cWindows%5cwin.ini',
     ]
     for (const path of attempts) {
       const reply = await call(port, path)
       assert.ok(reply.status === 403 || reply.status === 404, path + ' -> ' + reply.status)
       assert.ok(!reply.text.includes('TOP-SECRET'), path + ' leaked a file outside the root')
     }
-    const doubled = await call(port, '/flovart-app//secret.txt')
+    const doubled = await call(port, '/iris-app//secret.txt')
     assert.ok(!doubled.text.includes('TOP-SECRET'))
   } finally {
     await close(server)
@@ -156,7 +156,7 @@ test('bootstrap issues a one-time token server-side and never returns the persis
   const agentUrl = LOOPBACK + ':' + operator.port
   const { server, port } = await host({ root, config: { workspaceUrl: agentUrl, workspaceToken: PERSISTENT.value } })
   try {
-    const ok = await call(port, '/flovart-app/api/bootstrap', 'GET', sameOrigin(port))
+    const ok = await call(port, '/iris-app/api/bootstrap', 'GET', sameOrigin(port))
     assert.equal(ok.status, 200)
     assert.equal(ok.headers['cache-control'], 'no-store')
     const body: unknown = JSON.parse(ok.text)
@@ -170,13 +170,13 @@ test('bootstrap issues a one-time token server-side and never returns the persis
     // DSH Desktop's dsh-app:// proxy forwards requests without Origin or
     // Sec-Fetch-Site; it must be able to mint. Cross-site and spoofed Origin
     // are still rejected below.
-    const desktopForwarded = await call(port, '/flovart-app/api/bootstrap')
+    const desktopForwarded = await call(port, '/iris-app/api/bootstrap')
     assert.equal(desktopForwarded.status, 200)
-    const crossSite = await call(port, '/flovart-app/api/bootstrap', 'GET', { 'sec-fetch-site': 'cross-site', origin: 'http' + '://evil.example' })
+    const crossSite = await call(port, '/iris-app/api/bootstrap', 'GET', { 'sec-fetch-site': 'cross-site', origin: 'http' + '://evil.example' })
     assert.equal(crossSite.status, 403)
-    const spoofed = await call(port, '/flovart-app/api/bootstrap', 'GET', { 'sec-fetch-site': 'same-origin', origin: 'http' + '://evil.example' })
+    const spoofed = await call(port, '/iris-app/api/bootstrap', 'GET', { 'sec-fetch-site': 'same-origin', origin: 'http' + '://evil.example' })
     assert.equal(spoofed.status, 403)
-    assert.equal((await call(port, '/flovart-app/api/bootstrap', 'POST', sameOrigin(port))).status, 405)
+    assert.equal((await call(port, '/iris-app/api/bootstrap', 'POST', sameOrigin(port))).status, 405)
     assert.equal(operator.seen.length, 2)
   } finally {
     await close(server)
@@ -192,7 +192,7 @@ test('bootstrap reports a refused Operator as 503 naming the URL, without the to
   const agentUrl = LOOPBACK + ':' + deadPort
   const { server, port } = await host({ root, config: { workspaceUrl: agentUrl, workspaceToken: PERSISTENT.value } })
   try {
-    const reply = await call(port, '/flovart-app/api/bootstrap', 'GET', sameOrigin(port))
+    const reply = await call(port, '/iris-app/api/bootstrap', 'GET', sameOrigin(port))
     assert.equal(reply.status, 503)
     assert.ok(reply.text.includes(agentUrl), 'message names the URL tried')
     assert.match(reply.text, /WORKSPACE_UNREACHABLE/)
@@ -204,11 +204,11 @@ test('bootstrap reports a refused Operator as 503 naming the URL, without the to
 
 test('bootstrap without env or agent.json is 503 naming the file tried', async () => {
   const root = fixture()
-  const missing = join(mkdtempSync(join(tmpdir(), 'flovart-agent-')), 'agent.json')
-  const target = { env: { FLOVART_AGENT_CONFIG: missing } }
+  const missing = join(mkdtempSync(join(tmpdir(), 'iris-agent-')), 'agent.json')
+  const target = { env: { IRIS_AGENT_CONFIG: missing } }
   const { server, port } = await host({ root, config: { workspaceUrl: LOOPBACK + ':17372', workspaceToken: '' }, target })
   try {
-    const reply = await call(port, '/flovart-app/api/bootstrap', 'GET', sameOrigin(port))
+    const reply = await call(port, '/iris-app/api/bootstrap', 'GET', sameOrigin(port))
     assert.equal(reply.status, 503)
     assert.match(reply.text, /WORKSPACE_NOT_PREPARED/)
     assert.match(reply.text, /AGENT_CONFIG_MISSING/)
@@ -223,8 +223,8 @@ test('connection gate rejection is honored when the service exists', async () =>
   const gate = () => ({ requestRejection: () => 401 as const })
   const { server, port } = await host({ root, config: { workspaceUrl: LOOPBACK + ':1', workspaceToken: '' }, gate })
   try {
-    assert.equal((await call(port, '/flovart-app/')).status, 401)
-    assert.equal((await call(port, '/flovart-app/api/bootstrap', 'GET', sameOrigin(port))).status, 401)
+    assert.equal((await call(port, '/iris-app/')).status, 401)
+    assert.equal((await call(port, '/iris-app/api/bootstrap', 'GET', sameOrigin(port))).status, 401)
   } finally {
     await close(server)
   }
@@ -234,8 +234,8 @@ test('without a gate, cross-origin browser requests are refused', async () => {
   const root = fixture()
   const { server, port } = await host({ root, config: { workspaceUrl: LOOPBACK + ':1', workspaceToken: '' } })
   try {
-    assert.equal((await call(port, '/flovart-app/', 'GET', { 'sec-fetch-site': 'cross-site' })).status, 403)
-    assert.equal((await call(port, '/flovart-app/', 'GET', sameOrigin(port))).status, 200)
+    assert.equal((await call(port, '/iris-app/', 'GET', { 'sec-fetch-site': 'cross-site' })).status, 403)
+    assert.equal((await call(port, '/iris-app/', 'GET', sameOrigin(port))).status, 200)
   } finally {
     await close(server)
   }

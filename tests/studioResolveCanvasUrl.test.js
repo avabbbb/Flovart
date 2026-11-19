@@ -11,14 +11,14 @@ describe('Resolve canvas URL discovery', () => {
 
   it('reads the launcher discovery file when no explicit URL is configured', () => {
     const fsApi = { readFileSync: () => JSON.stringify({ url: 'http://127.0.0.1:49211' }) };
-    expect(resolveCanvasUrl({ env: { FLOVART_WEB_DISCOVERY: testTempRoot + '/flovart-web.json' }, fsApi, homeDir: testTempRoot })).toBe('http://127.0.0.1:49211/#/app');
+    expect(resolveCanvasUrl({ env: { IRIS_WEB_DISCOVERY: testTempRoot + '/iris-web.json' }, fsApi, homeDir: testTempRoot })).toBe('http://127.0.0.1:49211/#/app');
   });
 
   it('fails closed when no discovered WebUI exists or the address is not loopback', () => {
-    expect(() => resolveCanvasUrl({ env: {}, fsApi: { readFileSync: () => JSON.stringify({ url: 'https://example.com' }) }, homeDir: testTempRoot })).toThrow('未找到已启动的 Flovart WebUI');
+    expect(() => resolveCanvasUrl({ env: {}, fsApi: { readFileSync: () => JSON.stringify({ url: 'https://example.com' }) }, homeDir: testTempRoot })).toThrow('未找到已启动的 Iris WebUI');
   });
 
-  it('adds a whitelisted clip handoff for Open in Flovart and drops unsafe locator values', () => {
+  it('adds a whitelisted clip handoff for Open in Iris and drops unsafe locator values', () => {
     const url = buildCanvasHandoffUrl('http://127.0.0.1:49211', {
       label: 'Shot 04', kind: 'video', locator: { projectId: 'resolve-a', timelineItemId: 'item-7', bad: '<x>', 'no-dash': '1' },
     });

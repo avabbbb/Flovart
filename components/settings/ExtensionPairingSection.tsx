@@ -35,7 +35,7 @@ function cx(...parts: string[]): string {
 }
 
 /**
- * 网页画布与 Flovart 浏览器插件的配对入口。批准与撤销只在插件 popup 中完成，
+ * 网页画布与 Iris 浏览器插件的配对入口。批准与撤销只在插件 popup 中完成，
  * 这里只负责发起配对、展示状态和主动断开，避免网页单方面自批准。
  */
 export function ExtensionPairingSection({ isDark, t }: ExtensionPairingSectionProps) {

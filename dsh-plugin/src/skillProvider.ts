@@ -1,4 +1,4 @@
-// Bundled-skill provider: exposes the canonical Flovart Skill to DeepSeek Harness.
+// Bundled-skill provider: exposes the canonical Iris Skill to DeepSeek Harness.
 // Mirrors the pattern used by community plugins (e.g. dsh-guizang-design): the
 // package ships a vendored skill tree, registers one provider with a high rank
 // (600) so the user's own `~/.dsh/skills` or project skill wins, and adapts
@@ -54,16 +54,16 @@ function candidate(skill: ParsedSkill): SkillCandidate {
     path: skill.file,
     invocation: INVOCATION,
     source: 'bundled',
-    provider: 'flovart',
+    provider: 'iris',
     rank: RANK,
     locator: skill.dir,
     resourceBase: { kind: 'directory', path: skill.dir },
   }
 }
 
-export function createFlovartSkillProvider(root: string): SkillProvider {
+export function createIrisSkillProvider(root: string): SkillProvider {
   return {
-    name: 'flovart',
+    name: 'iris',
     async list(_options: SkillLookupOptions) {
       return readBundledSkills(root).map(candidate)
     },

@@ -12,7 +12,7 @@ import {
   type HubSkillSummary,
 } from '../services/skillHubClient';
 
-const HUB_STORAGE_KEY = 'flovart.skill-hub.v1';
+const HUB_STORAGE_KEY = 'iris.skill-hub.v1';
 
 export type SkillHubStatus = 'idle' | 'syncing' | 'ready' | 'error';
 export type SkillRegistryStatus = 'idle' | 'loading' | 'ready' | 'unavailable' | 'error';

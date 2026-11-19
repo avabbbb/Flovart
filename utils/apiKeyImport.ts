@@ -10,7 +10,7 @@ export interface ParsedKeyEntry {
   provider: string | null;
 }
 
-// Common variable names -> Flovart provider ids (aiGateway AIProvider).
+// Common variable names -> Iris provider ids (aiGateway AIProvider).
 const ENV_NAME_PROVIDERS: Array<[RegExp, string]> = [
   [/^OPENAI_API_KEY$/i, 'openai'],
   [/^(GEMINI|GOOGLE|GOOGLE_AI|GOOGLE_GENAI)_API_KEY$/i, 'google'],

@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 // Production Skill 输入槽位（manifest 的 inputs 字段，可选）。
 // 对齐 LibTV「填空式」启动：选中 Skill 时按槽位生成起始提示词，而不是固定模板。
-// tools/flovart/skill-package.js 的 parseSkillInputs 是同一契约的 JS 侧校验，改动需两边同步。
+// tools/iris/skill-package.js 的 parseSkillInputs 是同一契约的 JS 侧校验，改动需两边同步。
 export const SKILL_INPUT_KINDS = ['text', 'longtext', 'image', 'video', 'audio', 'choice'] as const;
 export type SkillInputKind = (typeof SKILL_INPUT_KINDS)[number];
 

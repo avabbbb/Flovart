@@ -1,13 +1,13 @@
-# Flovart Agent Evaluation (`FlovartBench` v0.2)
+# Iris Agent Evaluation (`IrisBench` v0.2)
 
 > 评测体系总说明（五层评测对象、规则 / Judge / 实验三层方法、四步归因、三阶段上线治理、Auto Rubrics）见 [eval.md](eval.md)。本文件只讲规则层（L3 / L5 的确定性部分）的跑法；LLM-as-a-Judge 层在 [`judge/`](judge/)。
 
-A system-level eval harness for Flovart's Agent / Workflow / Runtime chain.
+A system-level eval harness for Iris's Agent / Workflow / Runtime chain.
 
 It answers one question:
 
 > Can a real agent, given only a natural-language instruction and no reference
-> answer, drive Flovart through the real CLI / MCP / Workflow / Runtime surfaces
+> answer, drive Iris through the real CLI / MCP / Workflow / Runtime surfaces
 > to the correct final state - repeatedly - without writing to the wrong
 > project, double-charging a Provider, bypassing cost approval, or leaking a
 > secret?
@@ -103,7 +103,7 @@ host platform, so a Windows-frozen hash would be stale on POSIX.
 checked, so a rejection for the wrong reason fails, and an unexpected rejection
 also fails. `Test that it failed` is not a test.
 
-`FLOVARTBENCH_ALLOW_CODEX=true` plus a real `codex` binary on PATH is required
+`IRISBENCH_ALLOW_CODEX=true` plus a real `codex` binary on PATH is required
 before the Codex runner will do anything other than report itself blocked.
 
 ### Outcome claims
@@ -112,7 +112,7 @@ A runner may report `claim: { status: succeeded | failed | unsupported, code? }`
 The engine records it as `score.claim` (`{ status: 'missing' }` when absent) and
 never in `worldNormalized`, so frozen hashes are unaffected. Only the oracle
 (`task.solution.claim ?? succeeded`) and `codex` emit one;
-external agents end with a last-line `{"flovartClaim":{...}}` (see the canonical
+external agents end with a last-line `{"irisClaim":{...}}` (see the canonical
 Skill). A claim is never trusted as success:
 
 - `expected.claim` (optional) is a CAPABILITY assertion that must also hold.
@@ -159,7 +159,7 @@ A task is scoped to the surfaces that can express it:
 | Runner | Real surface |
 | --- | --- |
 | `oracle` | `createOperationGateway` -> `workspace.execute` |
-| `cli` | `executeFlovartCommand` (the `npm run flovart:cli` dispatcher) |
+| `cli` | `executeIrisCommand` (the `npm run iris:cli` dispatcher) |
 | `mcp` | `createMcpServer` over a real MCP transport |
 | `nop` | nothing at all; used to prove graders discriminate |
 | `codex` | external agent; blocked unless a real binary and opt-in exist |

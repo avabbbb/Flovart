@@ -56,7 +56,7 @@
       ],
       "evidence": [
         "results/judgeC1 agt01={taPlaceholder:\"请先配置 Agent 文本模型映射\", needConfig:true, errorChip:true, sendPt:null}",
-        "components/agent/FlovartAgentPanel.tsx:578 placeholder + :514 打开模型映射 quick-fix button"
+        "components/agent/IrisAgentPanel.tsx:578 placeholder + :514 打开模型映射 quick-fix button"
       ],
       "consequence": "A first-time user hits a wall of jargon ('模型映射', '可用线路', '网页直连访问凭证') and must manually add an AI provider credential before the assistant can do anything. No example, no default, no inline 'add a key' wizard — just a disabled send button. Major confusion + unnecessary steps. M1.",
       "status": "DEFERRED",
@@ -80,7 +80,7 @@
       ],
       "consequence": "A first-time user looking for the Agent finds three offline services and must discover a tucked-away 'optional built-in assistant' fallback. Lost context + unclear ownership of who can actually help. M1.",
       "status": "DEFERRED",
-      "defense": "Reproduced (judgeA1): Agent view shows 当前 AGENT Codex 离线 Beta, WorkBuddy 离线 实验性, DeepSeek Harness 离线 实验性, each with bare 重试; \"Flovart 本地服务暂时离线\". 3 offline agents. Note: on CURRENT build the \"内置助手是可选的本地备用入口 / 打开可选内置助手\" text is NOT present in body — only the canvas-side drawer path exists. Core claim (all agents offline, no usable headline assistant) confirmed.",
+      "defense": "Reproduced (judgeA1): Agent view shows 当前 AGENT Codex 离线 Beta, WorkBuddy 离线 实验性, DeepSeek Harness 离线 实验性, each with bare 重试; \"Iris 本地服务暂时离线\". 3 offline agents. Note: on CURRENT build the \"内置助手是可选的本地备用入口 / 打开可选内置助手\" text is NOT present in body — only the canvas-side drawer path exists. Core claim (all agents offline, no usable headline assistant) confirmed.",
       "verdict": "CONFIRMED",
       "judge": "ReproducerJudge",
       "deferred": "All agents offline; Codex unusable; alternates experimental. Depends on backend availability — not fixable in source."
@@ -128,10 +128,10 @@
       "group": "ux",
       "title": "Delete current workflow executes instantly with no confirmation and no undo",
       "severity": "P0",
-      "scenario": "heu-canvas2.mjs — user opens Flovart menu and clicks 删除当前工作流 on a populated canvas",
+      "scenario": "heu-canvas2.mjs — user opens Iris menu and clicks 删除当前工作流 on a populated canvas",
       "steps": [
         "Create a workflow (empty state → 新建工作流), add a 文本 node so the canvas has real content",
-        "Open the Flovart top-left menu",
+        "Open the Iris top-left menu",
         "Click 删除当前工作流"
       ],
       "evidence": [
@@ -140,10 +140,10 @@
       ],
       "consequence": "A single accidental click on a menu item destroys the entire workflow and all its nodes. No confirmation, no undo offer, no toast. NN/g error-prevention violated on the most destructive action in the app.",
       "status": "FIXED",
-      "defense": "Reproduced twice (judgeB1 + judgeD1): Flovart menu → 删除当前工作流 executes instantly — nodes→0, zero role=dialog/alertdialog, zero toast, empty-state returns. No confirmation, no undo offer. Confirmed P0.",
+      "defense": "Reproduced twice (judgeB1 + judgeD1): Iris menu → 删除当前工作流 executes instantly — nodes→0, zero role=dialog/alertdialog, zero toast, empty-state returns. No confirmation, no undo offer. Confirmed P0.",
       "verdict": "CONFIRMED",
       "judge": "ReproducerJudge",
-      "fix": "components/studio/StudioTopMenu.tsx: 'Delete current workflow' menu item now opens an inline role=alertdialog inside the Flovart popover instead of executing instantly. Dialog shows the project title, requires clicking 'Delete' to confirm, offers 'Cancel'. Verified live — judge-04-batch now reports dialog:1 (was 0) and nodes stay at 2 until confirmed."
+      "fix": "components/studio/StudioTopMenu.tsx: 'Delete current workflow' menu item now opens an inline role=alertdialog inside the Iris popover instead of executing instantly. Dialog shows the project title, requires clicking 'Delete' to confirm, offers 'Cancel'. Verified live — judge-04-batch now reports dialog:1 (was 0) and nodes stay at 2 until confirmed."
     },
     {
       "id": "UX-HEU-02",
@@ -186,7 +186,7 @@
       "defense": "Reproduced with correct toggle (title-attr click, judgeB1): after Switch to English the top bar is English (Workflow/Agent/Offline/Production ready/Canvas/Table/Layers) BUT the Agent-workspace empty-state card stays Chinese: \"使用节点组织提示词、参考素材和生成配置。新建工作流\" and AgentWorkspace.tsx:25 is a hardcoded Chinese literal (创建画布后，你和助手可以一起编辑，结果会保存在这里). zhChars=28 remain on the Agent view. Mixed-language confirmed (narrower than \"all Agent strings\" but real).",
       "verdict": "CONFIRMED",
       "judge": "ReproducerJudge",
-      "deferred": "English mode leaves ~all Agent-view strings in Chinese. Requires i18n sweep across FlovartAgentPanel + AgentWorkspace — large surface."
+      "deferred": "English mode leaves ~all Agent-view strings in Chinese. Requires i18n sweep across IrisAgentPanel + AgentWorkspace — large surface."
     },
     {
       "id": "UX-HEU-04",
@@ -300,8 +300,8 @@
         "Read the top bar left-to-right on first launch and populated canvas"
       ],
       "evidence": [
-        "Header text: 'Flovart Workflow 工作流 Agent dev 10:47:25 离线 制作台就绪 Switch to English' — a literal 'dev' badge and ticking clock are permanent chrome (results/heu-nav3 00-initial)",
-        "The same object is called 工作流 (nav, empty-state 新建工作流, header), 项目 (创建项目 CTA, '助手需要一个 Workflow 项目'), 画布 (Agent view '创建画布后…', Flovart menu '回到画布'), and 'Workflow' in English chrome — four terms for one concept in one screen",
+        "Header text: 'Iris Workflow 工作流 Agent dev 10:47:25 离线 制作台就绪 Switch to English' — a literal 'dev' badge and ticking clock are permanent chrome (results/heu-nav3 00-initial)",
+        "The same object is called 工作流 (nav, empty-state 新建工作流, header), 项目 (创建项目 CTA, '助手需要一个 Workflow 项目'), 画布 (Agent view '创建画布后…', Iris menu '回到画布'), and 'Workflow' in English chrome — four terms for one concept in one screen",
         "Assistant empty state says '助手需要一个 Workflow 项目' with CTA '创建项目' while canvas says '新建工作流' for the same action"
       ],
       "consequence": "A debug build marker in production chrome undermines status trust, and four names for the same object forces users to map synonyms mentally. Minimalism + consistency polish gap.",
@@ -348,7 +348,7 @@
       "defense": "Reproduced & sharpened (judgeD1/judgeE1): with the right panel collapsed, the 打开模型映射 button is rendered at x=1511 (cx=1523 > vw 1440) — pushed OFF-VIEWPORT, elementFromPoint null, getByText click timed out twice. The repair CTA for the blocking config error is unreachable while the panel is collapsed (whether occluded by the toggle or off-edge — either way physically unclickable). Confirmed.",
       "verdict": "CONFIRMED",
       "judge": "ReproducerJudge",
-      "fix": "Same root cause as UX-FTC-01 — fixed by StudioRightDrawer.tsx display:none when collapsed. The '打开模型映射' quick-fix button inside FlovartAgentPanel used to render at x=1511 (off-viewport) inside the 2px collapsed drawer; now the drawer either renders open (button reachable at x=1251 inside) or display:none (button not in a11y/hit-test tree at all). Verified live: judge-04-batch heu11.rect now {x:1251, y:100, w:68, isSelf:true} — elementFromPoint hits the actual button."
+      "fix": "Same root cause as UX-FTC-01 — fixed by StudioRightDrawer.tsx display:none when collapsed. The '打开模型映射' quick-fix button inside IrisAgentPanel used to render at x=1511 (off-viewport) inside the 2px collapsed drawer; now the drawer either renders open (button reachable at x=1251 inside) or display:none (button not in a11y/hit-test tree at all). Verified live: judge-04-batch heu11.rect now {x:1251, y:100, w:68, isSelf:true} — elementFromPoint hits the actual button."
     },
     {
       "id": "UX-HEU-12",
@@ -418,7 +418,7 @@
         "Create project, open right drawer (打开右侧面板 / 打开 Agent toolbar button)",
         "Agent tab is active; composer textarea visible at x=1102 w=316 inside 360px drawer",
         "Type 'bubble-check-77' and click 发送 (send)",
-        "Inline errors render: '对话需要配置…请在设置的\"模型映射\"中为 Agent 文本能力配置可用线路' and 'Flovart Agent 未连接：仅桌面端可用'",
+        "Inline errors render: '对话需要配置…请在设置的\"模型映射\"中为 Agent 文本能力配置可用线路' and 'Iris Agent 未连接：仅桌面端可用'",
         "Composer retains typed text (taValue unchanged after send); no message bubble is appended"
       ],
       "evidence": [
@@ -452,7 +452,7 @@
       "defense": "Reproduced (judgeC1): clicked 自动 mode trigger → popover open (1). Escape → still open (1). Outside click at (500,450) → still open (1). Textarea hit-test while popover open → isSelf:false, covered by STRONG element. Only re-clicking the trigger dismissed (afterToggle:0). Violates Escape+outside-click popover convention; blocks composer. Confirmed.",
       "verdict": "CONFIRMED",
       "judge": "ReproducerJudge",
-      "fix": "components/agent/FlovartAgentPanel.tsx: added a document-level Escape keydown + mousedown listener that dismisses all transient popovers in the agent panel (modeOpen, infoPanel, sessionsOpen, mentionOpen, attachmentOpen). Outside clicks close the popover; clicks inside the popover or on the trigger button are filtered out so menu items still register. Verified live: judge scenario pops the 自动 mode trigger → Escape now closes it; outside click at (500,450) also closes it; composer textarea hit-test no longer covered while popover is open."
+      "fix": "components/agent/IrisAgentPanel.tsx: added a document-level Escape keydown + mousedown listener that dismisses all transient popovers in the agent panel (modeOpen, infoPanel, sessionsOpen, mentionOpen, attachmentOpen). Outside clicks close the popover; clicks inside the popover or on the trigger button are filtered out so menu items still register. Verified live: judge scenario pops the 自动 mode trigger → Escape now closes it; outside click at (500,450) also closes it; composer textarea hit-test no longer covered while popover is open."
     },
     {
       "id": "UX-AGT-03",
@@ -565,18 +565,18 @@
       "severity": "P1",
       "scenario": "Path B (Built-in Agent -> Workflow mutation) trace",
       "steps": [
-        "Trace managed path: FlovartAgentAgentPanel -> WorkflowAgentBridge.handleToolCall",
+        "Trace managed path: IrisAgentAgentPanel -> WorkflowAgentBridge.handleToolCall",
         "Trace browser path: BrowserAgentKernel tool execute -> workflowContract.dispatch",
         "Compare gate order"
       ],
       "evidence": [
         "services/workflowAgentBridge.ts:263-276 pre-dispatch confirmWrite",
         "services/browserAgentKernel.ts:429-434 dispatch-first, no pre-gate",
-        "FlovartAgentPanel.tsx:246 confirmWrite auto-approves in auto mode"
+        "IrisAgentPanel.tsx:246 confirmWrite auto-approves in auto mode"
       ],
       "consequence": "Same user intent passes through materially different gate sequences depending on which kernel implementation happens to be active (managed sidecar vs in-page). Any future confirmation rule must be written twice; a rule added to only one path silently diverges the two Agent modes.",
       "status": "DEFERRED",
-      "defense": "Independently re-traced source. workflowAgentBridge.ts:263-270 managed path pre-gates every non-read workflow command via options.confirmWrite BEFORE dispatch (FlovartAgentPanel.tsx:246 auto-approves only when modeRef===\"auto\"), THEN dispatches and handles confirmation.required for high-risk. browserAgentKernel.ts:429-434 has NO pre-dispatch gate — dispatches first, confirms only on result.confirmation.required. Two materially different orderings kept in sync by hand. Confirmed.",
+      "defense": "Independently re-traced source. workflowAgentBridge.ts:263-270 managed path pre-gates every non-read workflow command via options.confirmWrite BEFORE dispatch (IrisAgentPanel.tsx:246 auto-approves only when modeRef===\"auto\"), THEN dispatches and handles confirmation.required for high-risk. browserAgentKernel.ts:429-434 has NO pre-dispatch gate — dispatches first, confirms only on result.confirmation.required. Two materially different orderings kept in sync by hand. Confirmed.",
       "verdict": "CONFIRMED",
       "judge": "ReproducerJudge",
       "deferred": "Built-in Agent has two confirmation-gate orderings (managed bridge vs browser kernel). Real architectural divergence."
@@ -648,18 +648,18 @@
       "severity": "P2",
       "scenario": "Path F (WorkBuddy Skill -> CLI -> Workflow) trace",
       "steps": [
-        "Read tools/flovart/cli.js:169-175 unAuth branch",
-        "Compare with workbuddy.auth which performs real ensureFlovart",
+        "Read tools/iris/cli.js:169-175 unAuth branch",
+        "Compare with workbuddy.auth which performs real ensureIris",
         "Check connector statusMatch contract"
       ],
       "evidence": [
-        "codePath: tools/flovart/cli.js:169-175 — unAuth prints {state:'local-ready', message:'…不会注销或影响其它 Host'} unconditionally; no state is inspected or cleared",
-        "codePath: integrations/workbuddy/flovart/cli.json:13-24 — statusMatch is the string '\"state\":\"local-ready\"', so WorkBuddy's connector state machine sees unAuth output as proof of readiness",
-        "codePath: tools/flovart/cli.js:156-158 — comment documents the intent: local-ready semantics, no account to revoke; deliberate design, but the response shape collides with the status contract"
+        "codePath: tools/iris/cli.js:169-175 — unAuth prints {state:'local-ready', message:'…不会注销或影响其它 Host'} unconditionally; no state is inspected or cleared",
+        "codePath: integrations/workbuddy/iris/cli.json:13-24 — statusMatch is the string '\"state\":\"local-ready\"', so WorkBuddy's connector state machine sees unAuth output as proof of readiness",
+        "codePath: tools/iris/cli.js:156-158 — comment documents the intent: local-ready semantics, no account to revoke; deliberate design, but the response shape collides with the status contract"
       ],
-      "consequence": "A WorkBuddy connector that runs unAuth then status-like validation will believe the integration is live even on a machine where flovart-cli was never authenticated or services are down. Documented and intentional, but the success shape is indistinguishable from a real logout — a host-level ambiguity rather than an app bug.",
+      "consequence": "A WorkBuddy connector that runs unAuth then status-like validation will believe the integration is live even on a machine where iris-cli was never authenticated or services are down. Documented and intentional, but the success shape is indistinguishable from a real logout — a host-level ambiguity rather than an app bug.",
       "status": "DEFENDED",
-      "defense": "The unconditional 'local-ready' is the CORRECT connector-contract response, not a bug. tools/flovart/cli.js:156-158 documents the intent explicitly: WorkBuddy's connector lifecycle is local-ready semantics, not an OAuth flow — unAuth must NOT revoke Flovart credentials shared by other Hosts, and there is no WorkBuddy account to clear. Returning anything but 'local-ready' would make the WorkBuddy state machine believe the integration is broken. Critically, the honest readiness signal exists separately: workbuddy.status (cli.js:159-162) calls getLocalStatus() and reports state 'local-ready' vs 'offline' truthfully. unAuth is a no-op acknowledgment by design; status is the real probe. A connector that treats unAuth output as proof of readiness is misusing the contract — WorkBuddy's cli.json statusMatch on '\"state\":\"local-ready\"' applies to status, not unAuth. DEFENDED: intentional contract semantics with a real status surface available."
+      "defense": "The unconditional 'local-ready' is the CORRECT connector-contract response, not a bug. tools/iris/cli.js:156-158 documents the intent explicitly: WorkBuddy's connector lifecycle is local-ready semantics, not an OAuth flow — unAuth must NOT revoke Iris credentials shared by other Hosts, and there is no WorkBuddy account to clear. Returning anything but 'local-ready' would make the WorkBuddy state machine believe the integration is broken. Critically, the honest readiness signal exists separately: workbuddy.status (cli.js:159-162) calls getLocalStatus() and reports state 'local-ready' vs 'offline' truthfully. unAuth is a no-op acknowledgment by design; status is the real probe. A connector that treats unAuth output as proof of readiness is misusing the contract — WorkBuddy's cli.json statusMatch on '\"state\":\"local-ready\"' applies to status, not unAuth. DEFENDED: intentional contract semantics with a real status surface available."
     },
     {
       "id": "ARCH-STATE-01",
@@ -753,11 +753,11 @@
     {
       "id": "ARCH-STATE-05",
       "group": "arch",
-      "title": "themeMode double-sourced: zustand persist key 'flovart-workspace' AND legacy localStorage 'themeMode.v1' read at store init — last hydration wins",
+      "title": "themeMode double-sourced: zustand persist key 'iris-workspace' AND legacy localStorage 'themeMode.v1' read at store init — last hydration wins",
       "severity": "P2",
       "scenario": "Theme persistence across reloads",
       "steps": [
-        "Read stores/useWorkspaceStore.ts:24-31 (init reads 'themeMode.v1'), :46-62 (persist writes 'flovart-workspace' including themeMode)"
+        "Read stores/useWorkspaceStore.ts:24-31 (init reads 'themeMode.v1'), :46-62 (persist writes 'iris-workspace' including themeMode)"
       ],
       "evidence": [
         "stores/useWorkspaceStore.ts:26 (localStorage.getItem('themeMode.v1'))",
@@ -765,7 +765,7 @@
       ],
       "consequence": "Two storage keys for one fact; on fresh profile themeMode.v1 wins, after persist hydrate order determines value — theme can silently revert to a stale preference.",
       "status": "DEFENDED",
-      "defense": "The 'themeMode.v1' read at stores/useWorkspaceStore.ts:24-31 is a one-time legacy-migration seed in the store initializer, not an ongoing dual-writer. Zustand persist (key 'flovart-workspace', version 2) hydrates AFTER init and overwrites themeMode with the persisted value — so the persisted key is authoritative and 'last hydration wins' resolves correctly to the newer source. The 'themeMode.v1' seed only matters on a first-run before any persist record exists, which is exactly what a migration shim is for. The only residual is that the old key is never deleted from localStorage (harmless; it is never read again after persist writes the new key). This is the standard legacy-key migration pattern, not a split-brain — the two keys are not concurrently live because persist hydration always wins. DEFENDED."
+      "defense": "The 'themeMode.v1' read at stores/useWorkspaceStore.ts:24-31 is a one-time legacy-migration seed in the store initializer, not an ongoing dual-writer. Zustand persist (key 'iris-workspace', version 2) hydrates AFTER init and overwrites themeMode with the persisted value — so the persisted key is authoritative and 'last hydration wins' resolves correctly to the newer source. The 'themeMode.v1' seed only matters on a first-run before any persist record exists, which is exactly what a migration shim is for. The only residual is that the old key is never deleted from localStorage (harmless; it is never read again after persist writes the new key). This is the standard legacy-key migration pattern, not a split-brain — the two keys are not concurrently live because persist hydration always wins. DEFENDED."
     },
     {
       "id": "ARCH-STATE-06",
@@ -815,18 +815,18 @@
       "severity": "P1",
       "scenario": "Start with desktop agent running, restart without it (or vice versa) — chat history changes",
       "steps": [
-        "Read components/agent/FlovartAgentPanel.tsx:229-291 (getManagedAgentConnection() decides backend per mount)",
+        "Read components/agent/IrisAgentPanel.tsx:229-291 (getManagedAgentConnection() decides backend per mount)",
         "Read services/browserAgentKernel.ts:57-81 (localforage session persistence per projectId)",
         "Read agent/kernel.js:84-93 (SqliteSessionRepo per projectId)"
       ],
       "evidence": [
-        "FlovartAgentPanel.tsx:229-270 backend chosen by probe",
+        "IrisAgentPanel.tsx:229-270 backend chosen by probe",
         "browserAgentKernel.ts:57-67 localforage vs agent/kernel.js:84-93 SQLite",
-        "FlovartAgentPanel.tsx:208 frozen activeChangeSetId vs kernel rotation"
+        "IrisAgentPanel.tsx:208 frozen activeChangeSetId vs kernel rotation"
       ],
       "consequence": "Same project, different assistant history depending on a race-y connection probe; pending drafts and bound production skills don't carry over. Tools built with empty activeChangeSetId while kernel uses its own — idempotency keys disagree inside one session.",
       "status": "DEFERRED",
-      "defense": "Re-traced. Two backends are necessary (browser kernel localforage vs managed SQLite across a process boundary — cannot share). But the finding survives: (a) backend chosen at mount by connection probe → same projectId shows different chat history across restarts, no migration; (b) concrete embedded bug — FlovartAgentPanel.tsx:208 freezes tools with activeChangeSetId=\"\" while kernel rotates its own (browserAgentKernel.ts:510,700,573) → idempotency keys disagree within one session. Confirmed.",
+      "defense": "Re-traced. Two backends are necessary (browser kernel localforage vs managed SQLite across a process boundary — cannot share). But the finding survives: (a) backend chosen at mount by connection probe → same projectId shows different chat history across restarts, no migration; (b) concrete embedded bug — IrisAgentPanel.tsx:208 freezes tools with activeChangeSetId=\"\" while kernel rotates its own (browserAgentKernel.ts:510,700,573) → idempotency keys disagree within one session. Confirmed.",
       "verdict": "CONFIRMED",
       "judge": "ReproducerJudge",
       "deferred": "Assistant session backend chosen at mount by connection probe — localforage fallback path. Architectural."
@@ -1183,7 +1183,7 @@
     {
       "id": "ARCH-COMP-04",
       "group": "arch",
-      "title": "tools/flovart/runtime-client.js: COMPLEX_BUT_COHESIVE — ACL/DACL verification + discovery + HTTP/SSE client in one file but single purpose",
+      "title": "tools/iris/runtime-client.js: COMPLEX_BUT_COHESIVE — ACL/DACL verification + discovery + HTTP/SSE client in one file but single purpose",
       "severity": "P2",
       "scenario": "Static audit of the runtime client",
       "steps": [
@@ -1191,31 +1191,31 @@
         "Reviewed the responsibility spread"
       ],
       "evidence": [
-        "tools/flovart/runtime-client.js — Windows icacls DACL parsing (L60-204: verifyDiscoveryPermissions/findDaclLine/parseDaclAces/assertDiscoveryDacl/DISCOVERY_ALLOWED_SIDS) + discovery file load/validation (assertDiscovery L210-244) + FlovartRuntimeClient HTTP+SSE class (L254-450) + createRuntimeFacade (L452-466)",
+        "tools/iris/runtime-client.js — Windows icacls DACL parsing (L60-204: verifyDiscoveryPermissions/findDaclLine/parseDaclAces/assertDiscoveryDacl/DISCOVERY_ALLOWED_SIDS) + discovery file load/validation (assertDiscovery L210-244) + IrisRuntimeClient HTTP+SSE class (L254-450) + createRuntimeFacade (L452-466)",
         "All parts serve one contract: safely locate + authenticate + talk to the local Production Runtime; the DACL code exists only to gate the discovery file the client then reads"
       ],
       "consequence": "Cohesive — every function supports the single 'connect to trusted local runtime' mission. Moderate complexity concentrated in Windows ACL parsing (OS-specific, inherently branchy). Not a split candidate; the DACL block is self-contained but its only consumer is this client, so extraction buys nothing. Verdict: COMPLEX_BUT_COHESIVE.",
       "status": "DEFENDED",
-      "defense": "The prosecutor's own verdict is COMPLEX_BUT_COHESIVE — and it is correct. tools/flovart/runtime-client.js has a single mission: safely locate + authenticate + talk to the local Production Runtime. The Windows DACL parsing block (L60-204) exists ONLY to gate the discovery file the client then reads (assertDiscovery L210-244 feeds FlovartRuntimeClient L254-450). Every function supports the one contract; the complexity is OS-inherent (icacls DACL parsing is unavoidably branchy). Extracting the DACL block buys nothing — its only consumer is this client. This is a security boundary done right: verify ACL before trusting a discovery file. DEFENDED — cohesive, single-purpose, security-driven."
+      "defense": "The prosecutor's own verdict is COMPLEX_BUT_COHESIVE — and it is correct. tools/iris/runtime-client.js has a single mission: safely locate + authenticate + talk to the local Production Runtime. The Windows DACL parsing block (L60-204) exists ONLY to gate the discovery file the client then reads (assertDiscovery L210-244 feeds IrisRuntimeClient L254-450). Every function supports the one contract; the complexity is OS-inherent (icacls DACL parsing is unavoidably branchy). Extracting the DACL block buys nothing — its only consumer is this client. This is a security boundary done right: verify ACL before trusting a discovery file. DEFENDED — cohesive, single-purpose, security-driven."
     },
     {
       "id": "ARCH-COMP-05",
       "group": "arch",
-      "title": "components/agent/AgentHostPicker.tsx + services/managedAgentConnection.ts + services/managedFlovartAgent.ts: all COMPLEX_BUT_COHESIVE (small)",
+      "title": "components/agent/AgentHostPicker.tsx + services/managedAgentConnection.ts + services/managedIrisAgent.ts: all COMPLEX_BUT_COHESIVE (small)",
       "severity": "P2",
       "scenario": "Static audit of agent host picker and managed agent connection pair",
       "steps": [
-        "Measured sizes/complexity: AgentHostPicker 207L (component CC≈31), managedAgentConnection 39L, managedFlovartAgent 122L",
+        "Measured sizes/complexity: AgentHostPicker 207L (component CC≈31), managedAgentConnection 39L, managedIrisAgent 122L",
         "Reviewed responsibility scope"
       ],
       "evidence": [
         "components/agent/AgentHostPicker.tsx:59-206 — one component doing host discovery scan + selection persistence + per-host status mapping + readiness badges; all sub-helpers (publicStatusFor/statusDot/actionLabel/hostReadiness) serve the picker UI only",
         "services/managedAgentConnection.ts — single function getManagedAgentConnection, one seam (browser binding → dock fallback → Tauri invoke), 4 branch tokens",
-        "services/managedFlovartAgent.ts — ManagedFlovartAgentClient with SSE parsing + turn-event surface; single purpose: stream the managed agent session"
+        "services/managedIrisAgent.ts — ManagedIrisAgentClient with SSE parsing + turn-event surface; single purpose: stream the managed agent session"
       ],
       "consequence": "All three are cohesive single-purpose units of appropriate size. AgentHostPicker's CC≈31 comes from JSX status mapping, not logic sprawl. No action.",
       "status": "DEFENDED",
-      "defense": "The prosecutor's own verdict is COMPLEX_BUT_COHESIVE and explicitly 'No action'. Verified: AgentHostPicker.tsx (207L, CC≈31 from JSX status-mapping not logic sprawl) does host discovery + selection persistence + readiness badges — one UI purpose; managedAgentConnection.ts (39L, single getManagedAgentConnection, one seam browser→dock→Tauri, 4 branches); managedFlovartAgent.ts (122L, single SSE-stream client for the managed session). All three are small cohesive single-purpose units. There is no debt to defend — the finding is an exoneration. DEFENDED."
+      "defense": "The prosecutor's own verdict is COMPLEX_BUT_COHESIVE and explicitly 'No action'. Verified: AgentHostPicker.tsx (207L, CC≈31 from JSX status-mapping not logic sprawl) does host discovery + selection persistence + readiness badges — one UI purpose; managedAgentConnection.ts (39L, single getManagedAgentConnection, one seam browser→dock→Tauri, 4 branches); managedIrisAgent.ts (122L, single SSE-stream client for the managed session). All three are small cohesive single-purpose units. There is no debt to defend — the finding is an exoneration. DEFENDED."
     },
     {
       "id": "ARCH-LEG-01",
@@ -1234,7 +1234,7 @@
       ],
       "consequence": "Dead legacy: a spatial floating-panel canvas design (the old Agent workspace with draggable Production Crew panel) survives as a persisted store whose only runtime effect is holding an IndexedDB connection and running a codex-main→crew-main migration for a UI that no longer exists. The 'crew' kind and 'Production Crew' title are legacy vocabulary the current AgentWorkspace renders as a static tab ('助手'). Candidate for removal: keep AgentPanelStatus type, delete the store+migration+localforage instance, update the two tests.",
       "status": "DEFERRED",
-      "defense": "Verified: AgentWorkspace.tsx imports ONLY `type AgentPanelStatus`; FlovartAgentPanel uses `import type` too — store module likely never evaluated in production. Runtime API (useAgentWorkspaceStore/ensureLayout/updatePanel/setViewport/resetLayout) consumed only by tests/agentWorkspace*.test.*. Production Crew/crew-main spatial layout + codex-main→crew-main migration serve a dead floating-panel UI. Dead legacy confirmed.",
+      "defense": "Verified: AgentWorkspace.tsx imports ONLY `type AgentPanelStatus`; IrisAgentPanel uses `import type` too — store module likely never evaluated in production. Runtime API (useAgentWorkspaceStore/ensureLayout/updatePanel/setViewport/resetLayout) consumed only by tests/agentWorkspace*.test.*. Production Crew/crew-main spatial layout + codex-main→crew-main migration serve a dead floating-panel UI. Dead legacy confirmed.",
       "verdict": "CONFIRMED",
       "judge": "ReproducerJudge",
       "deferred": "agentWorkspaceStore.ts has persisted spatial-panel store with Production Crew strings — legacy surface."
@@ -1272,11 +1272,11 @@
       ],
       "evidence": [
         "grep: zero production importers; only the two test files reference them",
-        ".agents/skills/flovart/scripts/add-agent-role.js patches the dead file"
+        ".agents/skills/iris/scripts/add-agent-role.js patches the dead file"
       ],
       "consequence": "633 lines of the old multi-role agent orchestrator and collaboration pipeline remain reachable only through their own tests — they pin types like AgentRole/AgentBudget and keep a script (add-agent-role.js) that teaches contributors to extend a dead file. Candidate for deletion: removes a phantom 'Agent role' subsystem that contradicts the current two-role (external harness + workspace operator) model. Keep-or-kill decision needed because tests currently provide the only coverage.",
       "status": "DEFERRED",
-      "defense": "Verified: grep — agentOrchestrator.ts and collaborationPipeline.ts are reachable ONLY through tests/agentOrchestrator.test.ts + tests/collaborationPipeline.test.ts; zero production importers (nothing in App.tsx/RouterHost graph). Worse: .agents/skills/flovart/scripts/add-agent-role.js patches agentOrchestrator by string surgery, teaching contributors to extend a dead file. Confirmed dead residue.",
+      "defense": "Verified: grep — agentOrchestrator.ts and collaborationPipeline.ts are reachable ONLY through tests/agentOrchestrator.test.ts + tests/collaborationPipeline.test.ts; zero production importers (nothing in App.tsx/RouterHost graph). Worse: .agents/skills/iris/scripts/add-agent-role.js patches agentOrchestrator by string surgery, teaching contributors to extend a dead file. Confirmed dead residue.",
       "verdict": "CONFIRMED",
       "judge": "ReproducerJudge",
       "deferred": "agentOrchestrator.ts + collaborationPipeline.ts — zero production callers."
@@ -1324,21 +1324,21 @@
     {
       "id": "ARCH-LEG-06",
       "group": "arch",
-      "title": "agent/ directory duplicates tools/flovart/managed-agent/ (12/15 files byte-identical) — source-mode mirror fallback",
+      "title": "agent/ directory duplicates tools/iris/managed-agent/ (12/15 files byte-identical) — source-mode mirror fallback",
       "severity": "P2",
       "scenario": "Dead-legacy hunt: duplicated agent runtime",
       "steps": [
-        "Diffed agent/*.js vs tools/flovart/managed-agent/*.js",
+        "Diffed agent/*.js vs tools/iris/managed-agent/*.js",
         "Traced the runtime path that selects between them"
       ],
       "evidence": [
-        "agent/ and tools/flovart/managed-agent/ have identical file lists (15 files); 12 are byte-identical; diffs: index.js (agent version imports AGENT_PUBLIC_COMMAND_SET via importFlovartModule; managed version differs ~650 bytes), skill-package.js + skill-registry.js (agent/* are re-export shims to ../tools/flovart/*; managed-agent/* re-export ../skill-package.js relative to packaged layout)",
-        "tools/flovart/cli.js:110 — `await import('./managed-agent/index.js').catch(() => import('../../agent/index.js'))`: agent/ is the fallback when the packaged managed-agent/ subtree is absent (i.e. raw source checkout without prepack)",
+        "agent/ and tools/iris/managed-agent/ have identical file lists (15 files); 12 are byte-identical; diffs: index.js (agent version imports AGENT_PUBLIC_COMMAND_SET via importIrisModule; managed version differs ~650 bytes), skill-package.js + skill-registry.js (agent/* are re-export shims to ../tools/iris/*; managed-agent/* re-export ../skill-package.js relative to packaged layout)",
+        "tools/iris/cli.js:110 — `await import('./managed-agent/index.js').catch(() => import('../../agent/index.js'))`: agent/ is the fallback when the packaged managed-agent/ subtree is absent (i.e. raw source checkout without prepack)",
         "package.json + scripts/build-agent-sidecar.mjs + build-agent-toolkit.mjs also reference agent/index.js — it is the source-of-truth copy the toolkit build consumes"
       ],
       "consequence": "Not dead, but a duplication pattern: managed-agent/ is a prepack-generated mirror while agent/ is the editable source. Risk: contributors edit one copy (the two index.js files already diverged) — the 12 identical files drift silently since nothing checks parity except the build. Candidate: either generate managed-agent/ at pack time (single source) or document the mirror; flag index.js divergence (AGENT_PUBLIC_COMMAND_SET import present only in agent/) as an already-visible drift.",
       "status": "DEFENDED",
-      "defense": "Verified the duplication is an intentional source→packaged mirror, not accidental copy-paste. agent/ and tools/flovart/managed-agent/ each hold 15 files; diff confirms 12 byte-identical and exactly 3 differ (index.js, skill-package.js, skill-registry.js) — and those 3 MUST differ because they resolve the public command set and skill-package layout relative to a packaged vs source tree. scripts/build-agent-sidecar.mjs:137,173 generates/patches the managed-agent mirror at pack time. tools/flovart/cli.js:110 'await import(\"./managed-agent/index.js\").catch(() => import(\"../../agent/index.js\"))' is the deliberate fallback so a raw source checkout (no prepack) still works. This is checked-in build output so the CLI runs without a build step — a legitimate pattern. The index.js divergence the finding flags is the POINT (AGENT_PUBLIC_COMMAND_SET resolves differently per layout), not drift. Residual: no automated parity check on the 12 identical files — a hardening opportunity, not debt. DEFENDED."
+      "defense": "Verified the duplication is an intentional source→packaged mirror, not accidental copy-paste. agent/ and tools/iris/managed-agent/ each hold 15 files; diff confirms 12 byte-identical and exactly 3 differ (index.js, skill-package.js, skill-registry.js) — and those 3 MUST differ because they resolve the public command set and skill-package layout relative to a packaged vs source tree. scripts/build-agent-sidecar.mjs:137,173 generates/patches the managed-agent mirror at pack time. tools/iris/cli.js:110 'await import(\"./managed-agent/index.js\").catch(() => import(\"../../agent/index.js\"))' is the deliberate fallback so a raw source checkout (no prepack) still works. This is checked-in build output so the CLI runs without a build step — a legitimate pattern. The index.js divergence the finding flags is the POINT (AGENT_PUBLIC_COMMAND_SET resolves differently per layout), not drift. Residual: no automated parity check on the 12 identical files — a hardening opportunity, not debt. DEFENDED."
     },
     {
       "id": "ARCH-LEG-07",

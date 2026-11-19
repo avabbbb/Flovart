@@ -47,6 +47,6 @@
 
 ## 开跑前需要
 
-1. 用户浏览器里的 Flovart 画布已连接（ensure 返回 ready）。
+1. 用户浏览器里的 Iris 画布已连接（ensure 返回 ready）。
 2. provider.status 里 runningHub 为 ready，且设置中已导入 Seedream v5 图生图脚本。
 3. 实跑后写 README.md（复现记录），并在 DEMO_RECORDING.md 登记。

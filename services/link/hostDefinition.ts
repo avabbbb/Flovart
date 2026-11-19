@@ -1,4 +1,4 @@
-export type FlovartHostKind = 'coding-agent' | 'assistant' | 'native-plugin';
+export type IrisHostKind = 'coding-agent' | 'assistant' | 'native-plugin';
 
 export type HostPublicDetection = 'available' | 'unavailable' | 'manual-import' | 'external-plugin' | 'unknown';
 
@@ -29,7 +29,7 @@ export interface ActivationResult {
 
 export interface RepairResult extends PreparationResult {}
 
-export interface FlovartHostCapabilities {
+export interface IrisHostCapabilities {
   inspect: boolean;
   mutate: boolean;
   run: boolean;
@@ -37,7 +37,7 @@ export interface FlovartHostCapabilities {
   plugin?: boolean;
 }
 
-export interface FlovartHostLifecycleAdapter {
+export interface IrisHostLifecycleAdapter {
   detect(): Promise<HostDetection>;
   inspectAuth?(): Promise<AuthState>;
   prepare(): Promise<PreparationResult>;
@@ -45,19 +45,19 @@ export interface FlovartHostLifecycleAdapter {
   repair?(): Promise<RepairResult>;
 }
 
-export interface FlovartHostDefinition extends FlovartHostLifecycleAdapter {
+export interface IrisHostDefinition extends IrisHostLifecycleAdapter {
   id: string;
   label: string;
-  kind: FlovartHostKind;
-  capabilities: FlovartHostCapabilities;
+  kind: IrisHostKind;
+  capabilities: IrisHostCapabilities;
 }
 
 const unavailable = (id: string, status: HostPublicDetection = 'unknown'): Promise<HostDetection> => Promise.resolve({ id, available: false, status });
 const notImplemented = (message: string): Promise<PreparationResult> => Promise.resolve({ ok: false, error: { code: 'HOST_NEEDS_SETUP', message } });
 
-export function defineFlovartHost(
-  definition: Pick<FlovartHostDefinition, 'id' | 'label' | 'kind' | 'capabilities'> & Partial<FlovartHostLifecycleAdapter>,
-): FlovartHostDefinition {
+export function defineIrisHost(
+  definition: Pick<IrisHostDefinition, 'id' | 'label' | 'kind' | 'capabilities'> & Partial<IrisHostLifecycleAdapter>,
+): IrisHostDefinition {
   return {
     ...definition,
     detect: definition.detect || (() => unavailable(definition.id)),

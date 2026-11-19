@@ -8,12 +8,12 @@ function hosts() {
   const context = { Blob, setInterval, clearInterval, console };
   vm.runInNewContext(source, context);
   return (context as unknown as {
-    FlovartStudioHosts: {
+    IrisStudioHosts: {
       materialized: (selection: unknown, value: unknown) => { selection: unknown; resource: { kind: string }; reference: { kind: string }; blob: Blob };
       createAfterEffectsAdapter: (options: unknown) => any;
       createResolveAdapter: (options: unknown) => any;
     };
-  }).FlovartStudioHosts;
+  }).IrisStudioHosts;
 }
 
 describe('Studio host bridge contract', () => {

@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CANONICAL_COMMAND_REGISTRY } from '../tools/flovart/registry.js';
-import { SKILL_COMMAND_NAMES } from '../tools/flovart/skill-commands.js';
+import { CANONICAL_COMMAND_REGISTRY } from '../tools/iris/registry.js';
+import { SKILL_COMMAND_NAMES } from '../tools/iris/skill-commands.js';
 
 const stableAgentSurface = [
   'ensure',
@@ -15,16 +15,16 @@ const stableAgentSurface = [
 ];
 
 const skillProjectionPaths = [
-  '.agents/skills/flovart/SKILL.md',
-  '.claude/skills/flovart/SKILL.md',
-  'skills/flovart/SKILL.md',
+  '.agents/skills/iris/SKILL.md',
+  '.claude/skills/iris/SKILL.md',
+  'skills/iris/SKILL.md',
 ];
-const generatedSkillProjectionPath = 'tools/flovart/skill/flovart/SKILL.md';
-// `skills/flovart` is the canonical package; `.agents/skills/flovart` is the
+const generatedSkillProjectionPath = 'tools/iris/skill/iris/SKILL.md';
+// `skills/iris` is the canonical package; `.agents/skills/iris` is the
 // committed snapshot that `init --target project-skill` copies. Comparing the
 // whole tree (not just SKILL.md) catches a missing commands/ or scripts/ dir.
 const skillPackageProjections = [
-  { canonical: 'skills/flovart', snapshot: '.agents/skills/flovart' },
+  { canonical: 'skills/iris', snapshot: '.agents/skills/iris' },
 ];
 const packageJson = JSON.parse(fs.readFileSync(path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), 'package.json'), 'utf8'));
 const minimumNodeVersion = String(packageJson.engines?.node || '').match(/\d+\.\d+\.\d+/)?.[0] || '';
@@ -43,34 +43,34 @@ const requiredDocPaths = [
   'docs/design/00-overview.md',
   'docs/design/01-interaction.md',
   'docs/index.md',
-  '.agents/skills/flovart/SKILL.md',
-  '.claude/skills/flovart/SKILL.md',
-  'skills/flovart/SKILL.md',
-  'skills/flovart/scripts/install.md',
+  '.agents/skills/iris/SKILL.md',
+  '.claude/skills/iris/SKILL.md',
+  'skills/iris/SKILL.md',
+  'skills/iris/scripts/install.md',
 ];
 
 const compatibilityMarker = /legacy|compatib|diagnos|debug|deprecated|historical|retired|removed|曾|历史|兼容|诊断|调试|旧路径|迁移|仅用于|不再|删除|替换|only for/i;
 const pseudoCliCommands = new Set(['install', 'start', 'update']);
 const lifecycleCommands = new Set(['ensure']);
-const commandInvocation = /(?:npx\s+flovart-cli|npm\s+run\s+flovart:cli\s+--|flovart-cli)\s+([a-z][a-z0-9]*(?:[.-][a-z0-9]+)*)/gi;
+const commandInvocation = /(?:npx\s+iris-cli|npm\s+run\s+iris:cli\s+--|iris-cli)\s+([a-z][a-z0-9]*(?:[.-][a-z0-9]+)*)/gi;
 const schemaCommand = /--command\s+([a-z][a-z0-9]*(?:[.-][a-z0-9]+)*)/gi;
 const publicDocPath = /^(?:README(?:\.en|\.zh-CN)?\.md|docs\/overview\/|docs\/content\/docs\/)/i;
-const installerVersion = /Flovart[_ -](\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)_x64-setup\.exe/gi;
+const installerVersion = /Iris[_ -](\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)_x64-setup\.exe/gi;
 const tagVersion = /\bgit tag v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\b/gi;
 const retiredPublicPathPatterns = [
   [/\bcanvas\.inspect\b/i, 'canvas.inspect'],
-  [/\.flovart[\\/]command-queue\.json/i, 'file command queue'],
+  [/\.iris[\\/]command-queue\.json/i, 'file command queue'],
   [/\bfile-state\s+runtime\b/i, 'file-state runtime'],
   [/\binit\s+--host\b/i, 'init --host'],
 ];
 
 function commandDocs(rootDir) {
-  const directory = path.join(rootDir, 'skills/flovart/commands');
+  const directory = path.join(rootDir, 'skills/iris/commands');
   if (!fs.existsSync(directory)) return [];
   return fs.readdirSync(directory)
     .filter(name => name.endsWith('.md'))
     .sort()
-    .map(name => path.join('skills/flovart/commands', name));
+    .map(name => path.join('skills/iris/commands', name));
 }
 
 function gitVisibleDocPaths(rootDir) {
@@ -157,7 +157,7 @@ export function checkDocsContract({ rootDir = path.resolve(path.dirname(fileURLT
     for (const [pattern, label] of [
       [/\binit\s+--host\b/i, 'init --host'],
       [/\bcanvas\.inspect\b/i, 'canvas.inspect'],
-      [/\.flovart[\\/]command-queue\.json/i, 'file command queue'],
+      [/\.iris[\\/]command-queue\.json/i, 'file command queue'],
     ]) {
       if (pattern.test(text) && !compatibilityMarker.test(text)) errors.push(`${relativePath}: removed path ${label} is still documented`);
     }

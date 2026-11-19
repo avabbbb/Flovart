@@ -12,7 +12,7 @@ import {
   getBundledProductionSkill,
   listBundledProductionSkills,
 } from '../services/productionSkillCatalog';
-import { auditVoxProductionSpec } from '../tools/flovart/vox-director-quality.js';
+import { auditVoxProductionSpec } from '../tools/iris/vox-director-quality.js';
 
 describe('bundled Production Skill catalog', () => {
   const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../.agents/skills/vox-director');

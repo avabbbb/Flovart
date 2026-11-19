@@ -1,10 +1,10 @@
-import type { FlovartArtifact, FlovartStudioCore, MaterializedHostSelection, StudioApplyRequest, StudioRunRequest } from './studioContract';
+import type { IrisArtifact, IrisStudioCore, MaterializedHostSelection, StudioApplyRequest, StudioRunRequest } from './studioContract';
 
-export type StableFlovartCommandExecutor = (command: string, args: Record<string, unknown>) => Promise<unknown>;
+export type StableIrisCommandExecutor = (command: string, args: Record<string, unknown>) => Promise<unknown>;
 
-export interface FlovartStudioLinkOptions {
+export interface IrisStudioLinkOptions {
   registerHostResource: (materialized: MaterializedHostSelection) => Promise<void>;
-  artifactGet: (args: { taskId?: string; artifactId?: string }) => Promise<FlovartArtifact | null>;
+  artifactGet: (args: { taskId?: string; artifactId?: string }) => Promise<IrisArtifact | null>;
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -16,17 +16,17 @@ export function commandData<T>(value: unknown): T {
   const response = record(value);
   if (response?.ok === false) {
     const error = record(response.error);
-    throw new Error(`${String(error?.code || 'COMMAND_FAILED')}: ${String(error?.message || 'Flovart 命令失败')}`);
+    throw new Error(`${String(error?.code || 'COMMAND_FAILED')}: ${String(error?.message || 'Iris 命令失败')}`);
   }
   if (response && 'result' in response) return response.result as T;
   if (response && 'data' in response) return response.data as T;
   return value as T;
 }
 
-export function createFlovartStudioCore(
-  execute: StableFlovartCommandExecutor,
-  link: FlovartStudioLinkOptions,
-): FlovartStudioCore {
+export function createIrisStudioCore(
+  execute: StableIrisCommandExecutor,
+  link: IrisStudioLinkOptions,
+): IrisStudioCore {
   const command = async <T>(name: string, args: Record<string, unknown> = {}) => commandData<T>(await execute(name, args));
   return {
     ensure: () => command('ensure'),

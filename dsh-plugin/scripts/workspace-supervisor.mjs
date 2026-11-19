@@ -69,7 +69,7 @@ export class WorkspaceSupervisor {
     if (existingHealth) {
       if (existingHealth.serviceMode !== 'workspace-only') {
         this.state = 'failed'
-        throw new Error(`端口 ${new URL(existingConfig.url).port || '17372'} 正被旧 Flovart Agent 占用。请先关闭它，再由 Harness 启动 Workspace Operator。`)
+        throw new Error(`端口 ${new URL(existingConfig.url).port || '17372'} 正被旧 Iris Agent 占用。请先关闭它，再由 Harness 启动 Workspace Operator。`)
       }
       this.config = existingConfig
       this.ownership = 'external'

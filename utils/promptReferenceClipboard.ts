@@ -1,4 +1,4 @@
-export const FLOVART_PROMPT_CLIPBOARD_MIME = 'application/x-flovart-prompt+json';
+export const IRIS_PROMPT_CLIPBOARD_MIME = 'application/x-flovart-prompt+json';
 
 export interface PromptReferenceMention {
   id: string;

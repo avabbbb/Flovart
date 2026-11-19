@@ -6,7 +6,7 @@
 ## 0. 准备
 
 - Node >=22.19.0，仓库根目录执行 npm install。
-- 启动：npm run flovart:cli -- start --source --web（或桌面端）。
+- 启动：npm run iris:cli -- start --source --web（或桌面端）。
 - 准备 1 张参考图、可选 1 段参考视频（时长不超过模型上限，超限会在计划卡里被拦下）。
 
 ## 1. 配置服务（设置 → + 添加 AI 服务）
@@ -44,7 +44,7 @@
 ## 4. 自动化对照（fake provider，不花钱）
 
 ```bash
-FLOVART_CHROME_PATH=<chrome.exe> node scripts/e2e-provider-trace.mjs success   # 也可以 cancel / double / submit_lost / download_error / rate_limit / reload_mid / overlimit_ref / dsh_three_shot
+IRIS_CHROME_PATH=<chrome.exe> node scripts/e2e-provider-trace.mjs success   # 也可以 cancel / double / submit_lost / download_error / rate_limit / reload_mid / overlimit_ref / dsh_three_shot
 ```
 
 输出在 `.tmp/e2e-trace/<scenario>.json` 与截图；`checks.http` 是 fake provider 实际收到的请求，`checks.expectations` 是本场景的判定。

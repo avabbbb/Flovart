@@ -1,4 +1,4 @@
-# Flovart 文档
+# Iris 文档
 
 完整文档地图见 [docs/index.md](index.md)（current truth / 提案 / 指南 / 归档）。当前支持状态以 [SUPPORT_MATRIX.md](../SUPPORT_MATRIX.md) 为准。
 

@@ -7,19 +7,19 @@ describe('shadow runtime facade', () => {
     let tempDir = '';
 
     beforeEach(() => {
-        tempDir = mkdtempSync(join(tmpdir(), 'flovart-shadow-'));
-        process.env.FLOVART_SHADOW_STATE_FILE = join(tempDir, 'state.json');
+        tempDir = mkdtempSync(join(tmpdir(), 'iris-shadow-'));
+        process.env.IRIS_SHADOW_STATE_FILE = join(tempDir, 'state.json');
     });
 
     afterEach(() => {
-        delete process.env.FLOVART_SHADOW_STATE_FILE;
+        delete process.env.IRIS_SHADOW_STATE_FILE;
         if (tempDir) {
             rmSync(tempDir, { recursive: true, force: true });
         }
     });
 
     it('keeps Workflow graph state alive without browser runtime', async () => {
-        const { createShadowRuntimeFacade } = await import('../tools/flovart/shadow-runtime.js');
+        const { createShadowRuntimeFacade } = await import('../tools/iris/shadow-runtime.js');
         const runtime = createShadowRuntimeFacade();
         const dispatch = (command: string, args: Record<string, unknown> = {}) => runtime.workflow.dispatch({ id: crypto.randomUUID(), command, args, source: 'cli' });
 

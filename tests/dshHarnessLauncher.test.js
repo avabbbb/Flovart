@@ -20,12 +20,12 @@ class FakeChild extends EventEmitter {
   }
 }
 
-describe('Flovart Harness launcher', () => {
+describe('Iris Harness launcher', () => {
   it('uses ensure for profile bootstrap instead of creating a hidden Director binding', () => {
     const assembly = JSON.parse(readFileSync(join(process.cwd(), 'dsh-plugin', 'assembly.json'), 'utf8'));
     const bootstrap = assembly.entrypoints?.hostTools?.bootstrap;
 
-    expect(bootstrap).toBe('flovart ensure --json');
+    expect(bootstrap).toBe('iris ensure --json');
     expect(bootstrap).not.toContain('director.bind');
     expect(assembly.entrypoints?.workflowView).toMatchObject({
       kind: 'contextual-conversation-view',
@@ -38,27 +38,27 @@ describe('Flovart Harness launcher', () => {
   it('injects an opaque Workspace session instead of user-facing Agent fields', () => {
     const env = harnessEnvironment(
       { url: 'http://127.0.0.1:17372', token: 'opaque-session-token' },
-      'H:\\Flovart Project',
-      'H:\\Flovart Project\\workspace',
+      'H:\\Iris Project',
+      'H:\\Iris Project\\workspace',
     );
 
     expect(env).toMatchObject({
-      FLOVART_WORKSPACE_URL: 'http://127.0.0.1:17372',
-      FLOVART_WORKSPACE_TOKEN: 'opaque-session-token',
-      FLOVART_WORKSPACE_MODE: 'browser',
-      FLOVART_AGENT_HOME: 'H:\\Flovart Project\\workspace',
-      FLOVART_AGENT_CONFIG: 'H:\\Flovart Project\\workspace\\agent.json',
-      FLOVART_CREW_DIR: 'H:\\Flovart Project\\workspace\\crew',
+      IRIS_WORKSPACE_URL: 'http://127.0.0.1:17372',
+      IRIS_WORKSPACE_TOKEN: 'opaque-session-token',
+      IRIS_WORKSPACE_MODE: 'browser',
+      IRIS_AGENT_HOME: 'H:\\Iris Project\\workspace',
+      IRIS_AGENT_CONFIG: 'H:\\Iris Project\\workspace\\agent.json',
+      IRIS_CREW_DIR: 'H:\\Iris Project\\workspace\\crew',
     });
-    expect(env.FLOVART_CLI).toContain('tools\\flovart\\cli.js');
-    expect(env).not.toHaveProperty('FLOVART_AGENT_URL');
-    expect(env).not.toHaveProperty('FLOVART_AGENT_TOKEN');
+    expect(env.IRIS_CLI).toContain('tools\\iris\\cli.js');
+    expect(env).not.toHaveProperty('IRIS_AGENT_URL');
+    expect(env).not.toHaveProperty('IRIS_AGENT_TOKEN');
   });
 
   it('ensures the visible Browser Workflow through the same CLI authority', () => {
     const calls = [];
     const result = ensureVisibleWorkflow({
-      FLOVART_CLI: 'node "H:\\Flovart Project\\tools\\flovart\\cli.js"',
+      IRIS_CLI: 'node "H:\\Iris Project\\tools\\iris\\cli.js"',
     }, (command, args, options) => {
       calls.push({ command, args, options });
       return { status: 0, stdout: JSON.stringify({ ok: true, data: { ok: true, state: 'ready', browser: 'ready' } }) };
@@ -66,7 +66,7 @@ describe('Flovart Harness launcher', () => {
 
     expect(result).toMatchObject({ ok: true, result: { state: 'ready', browser: 'ready' } });
     expect(calls).toHaveLength(1);
-    expect(calls[0].args).toEqual(['H:\\Flovart Project\\tools\\flovart\\cli.js', 'ensure', '--json']);
+    expect(calls[0].args).toEqual(['H:\\Iris Project\\tools\\iris\\cli.js', 'ensure', '--json']);
     expect(calls[0].options.cwd).toBe(process.cwd());
   });
 
@@ -141,9 +141,9 @@ describe('Flovart Harness launcher', () => {
     expect(children[1].exitCode).toBe(0);
   });
 
-  it('uninstalls only the app-managed Flovart profile and preserves the workspace directory', () => {
-    const home = join(tmpdir(), `flovart-dsh-uninstall-${process.pid}-${Date.now()}`);
-    const profile = join(home, 'profiles', 'flovart');
+  it('uninstalls only the app-managed Iris profile and preserves the workspace directory', () => {
+    const home = join(tmpdir(), `iris-dsh-uninstall-${process.pid}-${Date.now()}`);
+    const profile = join(home, 'profiles', 'iris');
     const workspace = join(home, 'workspace');
     try {
       mkdirSync(profile, { recursive: true });

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { FlovartAgentPanel } from '../components/agent/FlovartAgentPanel';
+import { IrisAgentPanel } from '../components/agent/IrisAgentPanel';
 import { createWorkflowProject } from '../components/workflow/store';
 import { getManagedAgentConnection } from '../services/managedAgentConnection';
 import { attachmentKind, mergeComposerAttachments, type AgentComposerAttachment } from '../services/agentComposerAttachments';
@@ -46,11 +46,11 @@ describe('agent composer attachments', () => {
       }));
     });
 
-    const renderPanel = () => render(<FlovartAgentPanel project={{ ...createWorkflowProject('附件项目'), id: 'project-attach' }} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} />);
+    const renderPanel = () => render(<IrisAgentPanel project={{ ...createWorkflowProject('附件项目'), id: 'project-attach' }} onActivityChange={vi.fn()} onOpenSettings={vi.fn()} />);
 
     it('attaches a pasted screenshot and enables sending without text', async () => {
       renderPanel();
-      const input = await screen.findByPlaceholderText('告诉 Flovart Agent 你想制作什么');
+      const input = await screen.findByPlaceholderText('告诉 Iris Agent 你想制作什么');
       fireEvent.paste(input, { clipboardData: { files: [new File(['abc'], 'paste.png', { type: 'image/png' })] } });
 
       expect(await screen.findByLabelText('本轮附件')).toBeInTheDocument();
@@ -61,7 +61,7 @@ describe('agent composer attachments', () => {
 
     it('drops a video onto the composer and removes it again', async () => {
       renderPanel();
-      await screen.findByPlaceholderText('告诉 Flovart Agent 你想制作什么');
+      await screen.findByPlaceholderText('告诉 Iris Agent 你想制作什么');
       const composer = screen.getByTestId('agent-composer');
       fireEvent.drop(composer, { dataTransfer: { files: [new File(['abc'], 'clip.mp4', { type: 'video/mp4' })], items: [] } });
 
@@ -75,7 +75,7 @@ describe('agent composer attachments', () => {
     it('drops an image onto the composer: it lands on the canvas and is referenced as a node, not attached', async () => {
       insertLocalImagesIntoProject.mockResolvedValueOnce({ ok: true, nodes: [{ id: 'node-dropped', title: '图片 3' }] });
       renderPanel();
-      await screen.findByPlaceholderText('告诉 Flovart Agent 你想制作什么');
+      await screen.findByPlaceholderText('告诉 Iris Agent 你想制作什么');
       const file = new File(['abc'], 'meeting.webp', { type: 'image/webp' });
       fireEvent.drop(screen.getByTestId('agent-composer'), { dataTransfer: { files: [file], items: [] } });
 
@@ -87,7 +87,7 @@ describe('agent composer attachments', () => {
     it('falls back to an attachment when the image cannot be placed on the canvas', async () => {
       insertLocalImagesIntoProject.mockResolvedValueOnce({ ok: false, error: 'x' });
       renderPanel();
-      await screen.findByPlaceholderText('告诉 Flovart Agent 你想制作什么');
+      await screen.findByPlaceholderText('告诉 Iris Agent 你想制作什么');
       fireEvent.drop(screen.getByTestId('agent-composer'), { dataTransfer: { files: [new File(['abc'], 'a.png', { type: 'image/png' })], items: [] } });
       expect(await screen.findByLabelText('移除附件 a.png')).toBeInTheDocument();
     });

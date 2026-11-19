@@ -7,14 +7,14 @@ const expected = String(process.argv[2] || readFileSync(resolve(root, 'VERSION')
 const rootPackage = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
 const tauriConfig = JSON.parse(readFileSync(resolve(root, 'src-tauri/tauri.conf.json'), 'utf8'));
 const lockfile = JSON.parse(readFileSync(resolve(root, 'package-lock.json'), 'utf8'));
-const releaseRepository = 'avabbbb/Flovart';
+const releaseRepository = 'avabbbb/Iris';
 const retiredRepositoryOwner = ['Paker', 'kk'].join('-');
 const sources = {
   VERSION: readFileSync(resolve(root, 'VERSION'), 'utf8').trim(),
   'package.json': JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version,
   'package-lock.json': lockfile.version,
   'package-lock.json packages[""]': lockfile.packages?.['']?.version,
-  'tools/flovart/package.json': JSON.parse(readFileSync(resolve(root, 'tools/flovart/package.json'), 'utf8')).version,
+  'tools/iris/package.json': JSON.parse(readFileSync(resolve(root, 'tools/iris/package.json'), 'utf8')).version,
   'src-tauri/tauri.conf.json': tauriConfig.version,
   'src-tauri/Cargo.toml': readFileSync(resolve(root, 'src-tauri/Cargo.toml'), 'utf8').match(/^version\s*=\s*"([^"]+)"/m)?.[1],
 };
@@ -51,4 +51,4 @@ if (mismatches.length || errors.length) {
   details.push(...errors);
   throw new Error(details.join('; '));
 }
-console.log(`Flovart release identity is aligned at ${expected} (${releaseRepository}).`);
+console.log(`Iris release identity is aligned at ${expected} (${releaseRepository}).`);

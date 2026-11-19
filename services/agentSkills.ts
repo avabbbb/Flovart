@@ -1,5 +1,5 @@
 // 内置 Agent 的「渐进式技能」：系统提示词只放技能索引（名称 + 一句描述），
-// 任务命中某个技能时由模型调用 flovart_skill_read 读取完整 SKILL.md 或其 references/、commands/ 下的文件。
+// 任务命中某个技能时由模型调用 iris_skill_read 读取完整 SKILL.md 或其 references/、commands/ 下的文件。
 // 思路参考 oh-my-pi（MIT，© Mario Zechner / Can Bölük / Stencil Labs）：
 //   packages/coding-agent/src/prompts/system/system-prompt.md 的「Matching skill → MUST read skill://<name> first」索引，
 //   packages/coding-agent/src/internal-urls/skill-protocol.ts 的 skill://<name>[/<path>] 读取与越界拦截。
@@ -7,12 +7,12 @@
 import { Type } from 'typebox';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
-export const SKILL_READ_TOOL_NAME = 'flovart_skill_read';
+export const SKILL_READ_TOOL_NAME = 'iris_skill_read';
 /** 会话里记录「读过哪个技能文件」的自定义 entry；不进模型上下文，压缩后依然保留。 */
 export const SKILL_READ_ENTRY = 'flovart.skill-read';
 
-/** flovart / open-flovart 是给外部 CLI Agent 用的，不进内置 Agent 的索引，但仍可按 id 读取。 */
-export const SKILL_INDEX_EXCLUDED_IDS: ReadonlySet<string> = new Set(['flovart', 'open-flovart']);
+/** iris / open-iris 是给外部 CLI Agent 用的，不进内置 Agent 的索引，但仍可按 id 读取。 */
+export const SKILL_INDEX_EXCLUDED_IDS: ReadonlySet<string> = new Set(['iris', 'open-iris']);
 
 /** 索引里每条描述的上限：保留 still-mad 这类「不适用于…」的消歧句，又不让单条描述撑爆提示词。 */
 export const SKILL_INDEX_DESCRIPTION_MAX = 400;
@@ -284,7 +284,7 @@ export async function readSkillForAgent(input: {
   };
 }
 
-/** flovart_skill_read：只读、不触达画布、不计费；与 flovart_todo 一样是内核自带工具，不进外部工具面。 */
+/** iris_skill_read：只读、不触达画布、不计费；与 iris_memory 一样是内核自带工具，不进外部工具面。 */
 export function createSkillReadTool(options: {
   catalog: AgentSkillCatalog;
   ledger: SkillReadLedger;

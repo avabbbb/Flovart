@@ -40,12 +40,12 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('browser agent request structure', () => {
   it('sends the system prompt as the first message so every request shares a stable prefix', () => {
-    const body = buildBrowserAgentRequestBody(route, { systemPrompt: '你是 Flovart Agent', messages: [userMessage] });
+    const body = buildBrowserAgentRequestBody(route, { systemPrompt: '你是 Iris Agent', messages: [userMessage] });
     const messages = body.messages as Array<{ role: string; content: unknown }>;
-    expect(messages[0]).toEqual({ role: 'system', content: '你是 Flovart Agent' });
+    expect(messages[0]).toEqual({ role: 'system', content: '你是 Iris Agent' });
     expect(messages[1].role).toBe('user');
     // 同一会话追加一轮：之前的请求必须是新请求的前缀（前缀缓存才能命中）。
-    const longer = buildBrowserAgentRequestBody(route, { systemPrompt: '你是 Flovart Agent', messages: [userMessage, { role: 'assistant', content: [{ type: 'text', text: 'ok' }], stopReason: 'stop', timestamp: 1 } as never, userMessage] });
+    const longer = buildBrowserAgentRequestBody(route, { systemPrompt: '你是 Iris Agent', messages: [userMessage, { role: 'assistant', content: [{ type: 'text', text: 'ok' }], stopReason: 'stop', timestamp: 1 } as never, userMessage] });
     const prefix = JSON.stringify(messages);
     expect(JSON.stringify(longer.messages).startsWith(prefix.slice(0, -1))).toBe(true);
   });

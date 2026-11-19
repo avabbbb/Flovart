@@ -4,7 +4,7 @@
 
 ## English
 
-Flovart is a local-first product: projects, assets, generation history and provider API keys
+Iris is a local-first product: projects, assets, generation history and provider API keys
 live primarily on the user's own device. Because Closed Beta testing means strangers will
 touch provider keys, local files, the loopback Runtime and Agent permission boundaries,
 please report vulnerabilities privately instead of opening a public Issue.
@@ -23,11 +23,11 @@ The beta line is a release candidate, not a stable channel. Only the most recent
 
 Use **GitHub private vulnerability reporting** on the repository's Security tab:
 
-- Go to [github.com/avabbbb/Flovart/security](https://github.com/avabbbb/Flovart/security)
+- Go to [github.com/avabbbb/Iris/security](https://github.com/avabbbb/Iris/security)
   and choose **"Report a vulnerability"** (Private vulnerability reporting → draft
   security advisory). This keeps the report private between you and the maintainers.
 
-Flovart does not currently provide a separate private security email — this matches the
+Iris does not currently provide a separate private security email — this matches the
 contact policy in the [Terms of Service](docs/TERMS_OF_SERVICE.md) and
 [Privacy Policy](docs/PRIVACY_POLICY.md). If private vulnerability reporting is not yet
 enabled on the repository (see the maintainer checklist below), open a minimal public
@@ -60,9 +60,9 @@ Out of scope:
 
 - Third-party provider account behavior, billing, pricing, cancellation, or ToS — those
   belong to the provider, per the [support matrix](SUPPORT_MATRIX.md).
-- Content issues on the official WebUI (`flovart.avabbbb.com`) that cannot affect a local
+- Content issues on the official WebUI (`iris.avabbbb.com`) that cannot affect a local
   install. Flaws in its same-origin LLM proxy (`/api/llm-proxy/`, `server/llmProxy.ts`, served
-  by the `flovart` Cloudflare Worker in `worker/index.ts`) are in scope.
+  by the `iris` Cloudflare Worker in `worker/index.ts`) are in scope.
 - Issues that require a real third-party host login (real Codex/DSH/WorkBuddy
   account, real UXP host) — those remain External Gates until certified; report them if
   you can demonstrate the flaw in repository-controlled code.
@@ -91,14 +91,14 @@ Out of scope:
 
 ### Provider API keys are user-supplied and local-only
 
-Flovart does **not** bundle model services and does not hold your provider keys. Keys are
+Iris does **not** bundle model services and does not hold your provider keys. Keys are
 entered by the user, stored locally (the Web path uses a localforage vault that is obfuscated at rest: its key derives from browser data, so it stops casual reading but not malware or same-origin scripts),
 and sent only to the provider endpoint the user configured. (Exception on the official WebUI:
 for the few allowlisted gateways that reject browser CORS, the request and key pass through the
-same-origin proxy of the `flovart` Cloudflare Worker in transit; it does not store or log them.) Agent and CLI paths receive
+same-origin proxy of the `iris` Cloudflare Worker in transit; it does not store or log them.) Agent and CLI paths receive
 redacted readiness/capability state, not raw credentials. A leaked key is almost always a
 device-side or provider-side incident — rotate it at the provider first, then report the
-Flovart path that exposed it if one exists.
+Iris path that exposed it if one exists.
 
 ### Security controls already in the repository
 
@@ -147,7 +147,7 @@ Evidence snapshot to reconcile against:
 
 ## 中文
 
-Flovart 是本地优先产品：项目、素材、生成历史和 Provider API Key 主要保存在用户自己的设备上。
+Iris 是本地优先产品：项目、素材、生成历史和 Provider API Key 主要保存在用户自己的设备上。
 Closed Beta 意味着外部测试者会接触 Provider Key、本地文件、loopback Runtime 与 Agent 权限边界，
 请通过私下渠道报告漏洞，不要直接开公开 Issue。
 
@@ -164,11 +164,11 @@ beta 线是发布候选，不是稳定通道；只有最新的 `main` 构建会�
 
 使用仓库 Security 标签页的 **GitHub 私密漏洞报告**：
 
-- 打开 [github.com/avabbbb/Flovart/security](https://github.com/avabbbb/Flovart/security)，
+- 打开 [github.com/avabbbb/Iris/security](https://github.com/avabbbb/Iris/security)，
   选择 **"Report a vulnerability"**（Private vulnerability reporting → 草稿安全公告），
   报告只在你与维护者之间可见。
 
-Flovart 目前不提供独立的安全邮箱，与[服务条款](docs/TERMS_OF_SERVICE.zh-CN.md)和
+Iris 目前不提供独立的安全邮箱，与[服务条款](docs/TERMS_OF_SERVICE.zh-CN.md)和
 [隐私政策](docs/PRIVACY_POLICY.zh-CN.md)中的联系方式一致。如果仓库尚未开启私密漏洞报告
 （见上方维护者清单），只开一个最小化公开 Issue 写明「安全问题——需要私下联系」，
 **不要**附细节、PoC、Key 或未脱敏日志。
@@ -193,7 +193,7 @@ Flovart 目前不提供独立的安全邮箱，与[服务条款](docs/TERMS_OF_S
 不在范围内：
 
 - 第三方 Provider 的账号、计费、定价、取消或条款行为——按[支持矩阵](SUPPORT_MATRIX.md)归属 Provider。
-- 官方 WebUI（`flovart.avabbbb.com`）中不影响本地安装的内容问题。其同源 LLM 代理（`/api/llm-proxy/`、`server/llmProxy.ts`，由 `worker/index.ts` 的 Cloudflare Worker `flovart` 提供）的缺陷在范围内。
+- 官方 WebUI（`iris.avabbbb.com`）中不影响本地安装的内容问题。其同源 LLM 代理（`/api/llm-proxy/`、`server/llmProxy.ts`，由 `worker/index.ts` 的 Cloudflare Worker `iris` 提供）的缺陷在范围内。
 - 必须依赖真实第三方宿主登录（真实 Codex/DSH/WorkBuddy 账号、真实 UXP 宿主）才能触发的问题——
   在认证前仍属 External Gate；若能在仓库自有代码中演示缺陷则仍可报告。
 - 需要物理接触用户设备或本机已有特权执行才能造成的拒绝服务。
@@ -217,7 +217,7 @@ Flovart 目前不提供独立的安全邮箱，与[服务条款](docs/TERMS_OF_S
 
 ### Provider API Key 由用户自备、仅保存在本地
 
-Flovart **不**捆绑模型服务，也不持有你的 Provider Key。Key 由用户输入、保存在本地
-（Web 路径使用本地混淆存储的 localforage Vault：密钥来自浏览器信息，只能防止随手查看，不能防恶意软件或同源脚本），只发往用户自己配置的 Provider 端点（官方 WebUI 的例外：少数不支持浏览器 CORS 的白名单网关，请求与 Key 会在传输中经过 Cloudflare Worker `flovart` 的同源代理，代理不保存、不记录）。
+Iris **不**捆绑模型服务，也不持有你的 Provider Key。Key 由用户输入、保存在本地
+（Web 路径使用本地混淆存储的 localforage Vault：密钥来自浏览器信息，只能防止随手查看，不能防恶意软件或同源脚本），只发往用户自己配置的 Provider 端点（官方 WebUI 的例外：少数不支持浏览器 CORS 的白名单网关，请求与 Key 会在传输中经过 Cloudflare Worker `iris` 的同源代理，代理不保存、不记录）。
 Agent 与 CLI 只能拿到脱敏后的就绪/能力状态，拿不到原始凭据。Key 泄漏几乎都是设备侧或
-Provider 侧事件——先去 Provider 处轮换 Key，再报告可能暴露它的 Flovart 路径（如果存在）。
+Provider 侧事件——先去 Provider 处轮换 Key，再报告可能暴露它的 Iris 路径（如果存在）。

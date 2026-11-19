@@ -52,12 +52,12 @@ export interface LocalFolderEntry {
 }
 
 const sourcesStorage = localforage.createInstance({
-  name: 'flovart_local_folder',
+  name: 'iris_local_folder',
   storeName: 'sources',
 });
 
 const thumbnailsStorage = localforage.createInstance({
-  name: 'flovart_local_folder',
+  name: 'iris_local_folder',
   storeName: 'thumbnails',
 });
 
@@ -226,7 +226,7 @@ export async function pickLocalFolder(): Promise<LocalFolderSource> {
   if (!showDirectoryPicker) {
     throw new LocalFolderError('UNSUPPORTED', '当前环境不支持直接读取本地文件夹，请改用素材导入或桌面端入口。');
   }
-  const handle = await showDirectoryPicker({ mode: 'read', id: 'flovart-local-folder' });
+  const handle = await showDirectoryPicker({ mode: 'read', id: 'iris-local-folder' });
   const existing = await listLocalFolderSources();
   const match = existing.find(source => source.name === handle.name);
   const source = await saveSource(handle, match?.id);
@@ -263,7 +263,7 @@ export async function getLocalFolderPermission(folderId: string): Promise<LocalF
 
 type LocalFolderPermissionListener = (folderId: string) => void;
 const permissionListeners = new Set<LocalFolderPermissionListener>();
-const PERMISSION_CHANNEL = 'flovart.local-folder.permission';
+const PERMISSION_CHANNEL = 'iris.local-folder.permission';
 let permissionChannel: BroadcastChannel | null | undefined;
 
 function ensurePermissionChannel(): BroadcastChannel | null {

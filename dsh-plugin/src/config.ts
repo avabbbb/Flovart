@@ -1,37 +1,37 @@
 /**
- * Plugin config shape. Mirrors the `config` block of the `flovart` row in
+ * Plugin config shape. Mirrors the `config` block of the `iris` row in
  * `cordis.patch.yml`; defaults keep the plugin bootable when a profile layer
  * omits keys.
  */
 
-export interface FlovartPluginConfig {
+export interface IrisPluginConfig {
   /** Loopback Workspace Operator origin prepared by the launcher. */
   workspaceUrl: string
   /** Host-only Workspace Operator credential; never serialized to the browser. */
   workspaceToken: string
-  /** Flovart CLI launcher: a bare binary name or a full command line (quoted tokens allowed). */
+  /** Iris CLI launcher: a bare binary name or a full command line (quoted tokens allowed). */
   cli: string
   /** Per-CLI-call timeout in milliseconds. */
   toolTimeoutMs: number
   /** DSH always joins the visible Browser Workflow authority. */
   workspaceMode: 'browser'
-  /** Flovart-side sandbox for plugin tool calls: read-only denies every Workflow write. */
+  /** Iris-side sandbox for plugin tool calls: read-only denies every Workflow write. */
   sandbox: 'read-only' | 'workspace-write'
-  /** Flovart-side approval: never allows, on-request asks for paid/delete, untrusted asks for every write. */
+  /** Iris-side approval: never allows, on-request asks for paid/delete, untrusted asks for every write. */
   approval: 'never' | 'on-request' | 'untrusted'
 }
 
-export const DEFAULT_CONFIG: FlovartPluginConfig = {
+export const DEFAULT_CONFIG: IrisPluginConfig = {
   workspaceUrl: 'http://127.0.0.1:17372',
   workspaceToken: '',
-  cli: 'flovart',
+  cli: 'iris',
   toolTimeoutMs: 30000,
   workspaceMode: 'browser',
   sandbox: 'workspace-write',
   approval: 'on-request',
 }
 
-export function normalizeConfig(config: Partial<FlovartPluginConfig> | undefined): FlovartPluginConfig {
+export function normalizeConfig(config: Partial<IrisPluginConfig> | undefined): IrisPluginConfig {
   return {
     ...DEFAULT_CONFIG,
     ...config,

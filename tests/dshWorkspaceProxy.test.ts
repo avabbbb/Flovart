@@ -45,7 +45,7 @@ describe('DeepSeek Harness Workspace proxy', () => {
     });
     const proxyPort = await listen(http.createServer(handler));
 
-    const response = await fetch(`http://127.0.0.1:${proxyPort}/flovart-workspace/api/tools`, {
+    const response = await fetch(`http://127.0.0.1:${proxyPort}/iris-workspace/api/tools`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ command: 'workflow.project.list' }),
@@ -60,11 +60,11 @@ describe('DeepSeek Harness Workspace proxy', () => {
   });
 
   it('rejects unrelated paths and non-loopback workspace targets', () => {
-    expect(resolveWorkspaceProxyPath('/flovart-workspace/health', 'GET')).toBe('/health');
-    expect(resolveWorkspaceProxyPath('/flovart-workspace/api/tools', 'POST')).toBe('/api/tools');
-    expect(resolveWorkspaceProxyPath('/flovart-workspace/api/tools', 'GET')).toBeNull();
-    expect(resolveWorkspaceProxyPath('/flovart-workspace/director/handoff', 'POST')).toBeNull();
-    expect(resolveWorkspaceProxyPath('/flovart-workspace/agent/flovart/turn', 'POST')).toBeNull();
+    expect(resolveWorkspaceProxyPath('/iris-workspace/health', 'GET')).toBe('/health');
+    expect(resolveWorkspaceProxyPath('/iris-workspace/api/tools', 'POST')).toBe('/api/tools');
+    expect(resolveWorkspaceProxyPath('/iris-workspace/api/tools', 'GET')).toBeNull();
+    expect(resolveWorkspaceProxyPath('/iris-workspace/director/handoff', 'POST')).toBeNull();
+    expect(resolveWorkspaceProxyPath('/iris-workspace/agent/iris/turn', 'POST')).toBeNull();
     expect(resolveWorkspaceProxyPath('/other/health', 'GET')).toBeNull();
     expect(loopbackOrigin("http://127.0.0.1:17372")?.hostname).toBe('127.0.0.1');
     expect(loopbackOrigin("https://example.com")).toBeNull();

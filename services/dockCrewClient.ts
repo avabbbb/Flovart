@@ -5,8 +5,8 @@
  * 与 Node 侧 workspace-client 约定一致：请求头携带 x-flovart-agent-token。
  */
 
-export const DOCK_AGENT_URL_KEY = 'flovart.agent.url';
-export const DOCK_AGENT_TOKEN_KEY = 'flovart.agent.token';
+export const DOCK_AGENT_URL_KEY = 'iris.agent.url';
+export const DOCK_AGENT_TOKEN_KEY = 'iris.agent.token';
 
 export class DockClientError extends Error {
   constructor(

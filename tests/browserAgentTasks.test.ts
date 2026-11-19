@@ -5,7 +5,7 @@ import { createBrowserAgentTools } from '../services/browserAgentKernel';
 import { resetBrowserAgentTasks, BROWSER_TASKABLE_COMMANDS } from '../services/browserAgentTasks';
 import { setWorkflowExecutor } from '../services/workflowDispatcher';
 import { createWorkflowExecutor } from '../services/workflowExecutor';
-import { getAgentToolSpecs } from '../tools/flovart/agent-tools.js';
+import { getAgentToolSpecs } from '../tools/iris/agent-tools.js';
 
 const deferred = () => {
   let resolve!: (value: unknown) => void;
@@ -44,11 +44,11 @@ describe('built-in Agent background tasks', () => {
   it('exposes the same task tools as external hosts, narrowed to browser commands', () => {
     const { tools } = setup();
     const list = tools('t1');
-    for (const name of ['flovart_task_start', 'flovart_task_get', 'flovart_task_cancel']) {
+    for (const name of ['iris_task_start', 'iris_task_get', 'iris_task_cancel']) {
       expect(list.some(tool => tool.name === name)).toBe(true);
       expect(getAgentToolSpecs('builtin').some((spec: { name: string }) => spec.name === name)).toBe(true);
     }
-    const start = list.find(tool => tool.name === 'flovart_task_start')!;
+    const start = list.find(tool => tool.name === 'iris_task_start')!;
     const enumValues = (start.parameters as unknown as { properties: { command: { enum: string[] } } }).properties.command.enum;
     expect(enumValues).toEqual([...BROWSER_TASKABLE_COMMANDS]);
     expect(enumValues).not.toContain('agent.turn');
@@ -57,17 +57,17 @@ describe('built-in Agent background tasks', () => {
 
   it('confirms the cost up front, returns a taskId without waiting, and reports the result in a later turn', async () => {
     const { pending, runNode, confirm, tools, call } = setup();
-    const started = await call(tools('t1'), 'flovart_task_start', { command: 'workflow.node.run', args: { nodeIds: ['s1', 's2'] } });
+    const started = await call(tools('t1'), 'iris_task_start', { command: 'workflow.node.run', args: { nodeIds: ['s1', 's2'] } });
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(confirm.mock.calls[0][1]).toMatchObject({ kind: 'generation', command: 'workflow.node.run' });
     expect(started).toMatchObject({ command: 'workflow.node.run', done: false });
     expect(started.taskId).toBeTruthy();
     await vi.waitFor(() => expect(runNode).toHaveBeenCalledTimes(2));
-    const mid = await call(tools('t2'), 'flovart_task_get', { taskId: started.taskId });
+    const mid = await call(tools('t2'), 'iris_task_get', { taskId: started.taskId });
     expect(mid).toMatchObject({ status: 'running', done: false });
     pending.resolve(undefined);
-    await vi.waitFor(async () => expect((await call(tools('t2'), 'flovart_task_get', { taskId: started.taskId })).done).toBe(true));
-    const done = await call(tools('t2'), 'flovart_task_get', { taskId: started.taskId });
+    await vi.waitFor(async () => expect((await call(tools('t2'), 'iris_task_get', { taskId: started.taskId })).done).toBe(true));
+    const done = await call(tools('t2'), 'iris_task_get', { taskId: started.taskId });
     expect(done.status).toBe('succeeded');
     expect(confirm).toHaveBeenCalledTimes(1);
   });
@@ -75,7 +75,7 @@ describe('built-in Agent background tasks', () => {
   it('starts nothing when the user declines the cost card', async () => {
     const { runNode, tools } = setup();
     const list = createBrowserAgentTools({ projectId: useWorkflowStore.getState().activeProjectId!, confirm: vi.fn(async () => false), activeChangeSetId: 't', getApproval: () => ({ mode: 'yolo' }) });
-    const start = list.find(tool => tool.name === 'flovart_task_start')!;
+    const start = list.find(tool => tool.name === 'iris_task_start')!;
     await expect(start.execute('c', { command: 'workflow.node.run', args: { nodeIds: ['s1'] } } as never, new AbortController().signal)).rejects.toThrow();
     expect(runNode).not.toHaveBeenCalled();
     void tools;
@@ -84,22 +84,22 @@ describe('built-in Agent background tasks', () => {
   it('replays the same task when the model retries the same call in one turn', async () => {
     const { confirm, tools, call } = setup();
     const list = tools('t1');
-    const a = await call(list, 'flovart_task_start', { command: 'workflow.node.run', args: { nodeIds: ['s1'] } });
-    const b = await call(list, 'flovart_task_start', { command: 'workflow.node.run', args: { nodeIds: ['s1'] } });
+    const a = await call(list, 'iris_task_start', { command: 'workflow.node.run', args: { nodeIds: ['s1'] } });
+    const b = await call(list, 'iris_task_start', { command: 'workflow.node.run', args: { nodeIds: ['s1'] } });
     expect(b).toMatchObject({ taskId: a.taskId, replayed: true });
     expect(confirm).toHaveBeenCalledTimes(1);
   });
 
   it('rejects commands the browser cannot background', async () => {
     const { tools } = setup();
-    const start = tools('t1').find(tool => tool.name === 'flovart_task_start')!;
+    const start = tools('t1').find(tool => tool.name === 'iris_task_start')!;
     await expect(start.execute('c', { command: 'agent.turn', args: {} } as never, new AbortController().signal)).rejects.toThrow(/不能放到后台/);
   });
 
   it('cancel stops the nodes the task started', async () => {
     const { stopNode, tools, call } = setup();
-    const started = await call(tools('t1'), 'flovart_task_start', { command: 'workflow.node.run', args: { nodeIds: ['s1', 's2'] } });
-    const cancelled = await call(tools('t2'), 'flovart_task_cancel', { taskId: started.taskId });
+    const started = await call(tools('t1'), 'iris_task_start', { command: 'workflow.node.run', args: { nodeIds: ['s1', 's2'] } });
+    const cancelled = await call(tools('t2'), 'iris_task_cancel', { taskId: started.taskId });
     expect(cancelled.stoppedNodeIds).toEqual(['s1', 's2']);
     expect(stopNode).toHaveBeenCalledTimes(2);
   });

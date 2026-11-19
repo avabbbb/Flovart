@@ -16,7 +16,7 @@ import { createLlmProxyFetch } from '../services/llmCorsProxy';
 
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => false }));
 
-const ORIGIN = 'https://flovart.avabbbb.com';
+const ORIGIN = 'https://iris.avabbbb.com';
 const base: ExtensionPromptInput = {
   reason: 'configured',
   status: 'not-installed',

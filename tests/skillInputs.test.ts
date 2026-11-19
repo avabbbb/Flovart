@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { skillInputsSchema } from '../services/skillInputs';
 import { buildProductionSkillStarterPrompt } from '../services/productionSkillLaunch';
 import { getBundledProductionSkill } from '../services/productionSkillCatalog';
-import { parseProductionSkillManifest } from '../tools/flovart/skill-package.js';
+import { parseProductionSkillManifest } from '../tools/iris/skill-package.js';
 
 const voxYaml = readFileSync('.agents/skills/vox-director/flovart.skill.yaml', 'utf8');
 

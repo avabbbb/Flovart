@@ -5,7 +5,7 @@ import { validateWorkflowConnection } from './ops';
 import { workflowMediaStorage } from './storage';
 import type { WorkflowConnection, WorkflowNode, WorkflowProject } from './types';
 
-export const WORKFLOW_EXPORT_APP = 'flovart-workflow';
+export const WORKFLOW_EXPORT_APP = 'iris-workflow';
 export const WORKFLOW_EXPORT_VERSION = 1;
 
 interface WorkflowExportAsset {
@@ -67,7 +67,7 @@ export async function serializeWorkflowProjects(projects: WorkflowProject[]): Pr
   return { app: WORKFLOW_EXPORT_APP, version: WORKFLOW_EXPORT_VERSION, exportedAt: new Date().toISOString(), projects: exported };
 }
 
-export async function downloadWorkflowProjects(projects: WorkflowProject[], fileName = 'Flovart-Workflow') {
+export async function downloadWorkflowProjects(projects: WorkflowProject[], fileName = 'Iris-Workflow') {
   if (!projects.length) throw new Error('没有可导出的工作流');
   const exported = await serializeWorkflowProjects(projects);
   const blob = new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' });
@@ -152,7 +152,7 @@ function validateExport(value: unknown): asserts value is WorkflowExportFile {
     || value.app !== WORKFLOW_EXPORT_APP
     || value.version !== WORKFLOW_EXPORT_VERSION
     || !Array.isArray(value.projects)) {
-    throw new Error('不是受支持的 Flovart Workflow 文件');
+    throw new Error('不是受支持的 Iris Workflow 文件');
   }
   value.projects.forEach((entry, index) => {
     if (!isRecord(entry) || !Array.isArray(entry.assets)) throw new Error(`第 ${index + 1} 个工作流导出项无效`);
@@ -256,5 +256,5 @@ function readWorkflowFileText(file: File): Promise<string> {
 }
 
 function safeFileName(value: string) {
-  return (value.trim() || 'Flovart-Workflow').replace(/[\\/:*?"<>|]/g, '_');
+  return (value.trim() || 'Iris-Workflow').replace(/[\\/:*?"<>|]/g, '_');
 }

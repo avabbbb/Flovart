@@ -1,6 +1,6 @@
-// End-to-end trace: real browser UI + real HTTP fake provider + Flovart CLI.
+// End-to-end trace: real browser UI + real HTTP fake provider + Iris CLI.
 // The fake service is added through the Settings dialog (the user path), the
-// canvas is driven only through public flovart CLI commands, and the plan card
+// canvas is driven only through public iris CLI commands, and the plan card
 // is answered in the UI. Output: .tmp/e2e-trace/<scenario>.json (+ .png).
 //
 // Usage: node scripts/e2e-provider-trace.mjs [success|cancel|double|submit_lost|download_error|rate_limit|reload_mid|overlimit_ref|dsh_three_shot]
@@ -10,7 +10,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-import { buildBrowserBootstrapUrl, issueBrowserBootstrapToken, probeWebUi, redactBootstrapUrl } from '../tools/flovart/local-agent.js';
+import { buildBrowserBootstrapUrl, issueBrowserBootstrapToken, probeWebUi, redactBootstrapUrl } from '../tools/iris/local-agent.js';
 import { createFakeProviderServer } from './fake-provider-server.mjs';
 import { resolveTestTempRoot } from './test-temp-root.mjs';
 
@@ -22,17 +22,17 @@ const outDir = join(projectDir, '.tmp', 'e2e-trace');
 await mkdir(outDir, { recursive: true });
 const tempRoot = resolveTestTempRoot(projectDir);
 await mkdir(tempRoot, { recursive: true });
-const testRoot = await mkdtemp(join(tempRoot, 'flovart-e2e-'));
+const testRoot = await mkdtemp(join(tempRoot, 'iris-e2e-'));
 const env = {
   ...process.env,
   TEMP: testRoot, TMP: testRoot, TMPDIR: testRoot,
-  FLOVART_PROJECT_DIR: projectDir,
-  FLOVART_AGENT_CONFIG: join(testRoot, 'agent.json'),
-  FLOVART_WEB_DISCOVERY: join(testRoot, 'web.json'),
-  FLOVART_BROWSER_LAUNCH_STATE: join(testRoot, 'browser-launch.json'),
+  IRIS_PROJECT_DIR: projectDir,
+  IRIS_AGENT_CONFIG: join(testRoot, 'agent.json'),
+  IRIS_WEB_DISCOVERY: join(testRoot, 'web.json'),
+  IRIS_BROWSER_LAUNCH_STATE: join(testRoot, 'browser-launch.json'),
 };
 process.env.TEMP = testRoot; process.env.TMP = testRoot; process.env.TMPDIR = testRoot;
-const AGENT = process.env.FLOVART_E2E_AGENT || 'codex';
+const AGENT = process.env.IRIS_E2E_AGENT || 'codex';
 const MODEL = 'flovart:grok-imagine-video';
 const sleep = ms => new Promise(done => setTimeout(done, ms));
 const steps = [];
@@ -52,7 +52,7 @@ async function waitFor(stage, check, timeoutMs = 60_000) {
 
 function cli(args) {
   return new Promise(done => {
-    execFile(process.execPath, ['tools/flovart/cli.js', ...args, '--agent-identity', AGENT, '--json'], { cwd: projectDir, env, windowsHide: true, maxBuffer: 32 * 1024 * 1024 }, (error, stdout, stderr) => {
+    execFile(process.execPath, ['tools/iris/cli.js', ...args, '--agent-identity', AGENT, '--json'], { cwd: projectDir, env, windowsHide: true, maxBuffer: 32 * 1024 * 1024 }, (error, stdout, stderr) => {
       const out = String(stdout).trim();
       let json = null;
       try { json = JSON.parse(out || 'null'); } catch { try { json = JSON.parse(out.split('\n').filter(Boolean).pop() || 'null'); } catch {} }
@@ -87,7 +87,7 @@ await listening.promise;
 const providerOrigin = 'http:' + '//' + '127.0.0.1:' + provider.address().port;
 step('fake-provider-up', { mode: providerMode });
 
-const agentCli = spawn(process.execPath, ['tools/flovart/cli.js', 'start', '--source', '--web', '--web-port=0', '--agent-port=0', '--no-open'], { cwd: projectDir, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+const agentCli = spawn(process.execPath, ['tools/iris/cli.js', 'start', '--source', '--web', '--web-port=0', '--agent-port=0', '--no-open'], { cwd: projectDir, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
 let cliOutput = '';
 agentCli.stdout.on('data', chunk => { cliOutput += String(chunk); });
 agentCli.stderr.on('data', chunk => { cliOutput += String(chunk); });
@@ -96,21 +96,21 @@ let browser = null;
 let page = null;
 const trace = { scenario, providerMode, ok: false, steps, cli: [], checks: {} };
 try {
-  const web = await waitFor('web-discovery', async () => existsSync(env.FLOVART_WEB_DISCOVERY) && probeWebUi(readJson(env.FLOVART_WEB_DISCOVERY).url, { timeoutMs: 800 }).catch(() => null), 90_000);
-  const agent = await waitFor('agent-config', () => existsSync(env.FLOVART_AGENT_CONFIG) && readJson(env.FLOVART_AGENT_CONFIG)?.token ? readJson(env.FLOVART_AGENT_CONFIG) : null);
+  const web = await waitFor('web-discovery', async () => existsSync(env.IRIS_WEB_DISCOVERY) && probeWebUi(readJson(env.IRIS_WEB_DISCOVERY).url, { timeoutMs: 800 }).catch(() => null), 90_000);
+  const agent = await waitFor('agent-config', () => existsSync(env.IRIS_AGENT_CONFIG) && readJson(env.IRIS_AGENT_CONFIG)?.token ? readJson(env.IRIS_AGENT_CONFIG) : null);
   const bootstrapUrl = buildBrowserBootstrapUrl(web, { ...agent, bootstrapToken: await issueBrowserBootstrapToken(agent) }, '#/app');
-  browser = await chromium.launchPersistentContext(join(testRoot, 'chrome-profile'), { headless: true, locale: 'zh-CN', executablePath: process.env.FLOVART_CHROME_PATH || chromium.executablePath(), args: ['--no-first-run', '--no-default-browser-check'] });
+  browser = await chromium.launchPersistentContext(join(testRoot, 'chrome-profile'), { headless: true, locale: 'zh-CN', executablePath: process.env.IRIS_CHROME_PATH || chromium.executablePath(), args: ['--no-first-run', '--no-default-browser-check'] });
   page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const consoleErrors = [];
   page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text().slice(0, 300)); });
   await page.addInitScript(() => {
     const originalFetch = window.fetch;
-    window.flovartVideoPosts = 0;
+    window.irisVideoPosts = 0;
     window.fetch = function (input, init) {
       try {
         const url = typeof input === 'string' ? input : (input && input.url) || String(input);
         const method = (init && init.method) || (input && input.method) || 'GET';
-        if (/post/i.test(method) && /videos/.test(url)) window.flovartVideoPosts += 1;
+        if (/post/i.test(method) && /videos/.test(url)) window.irisVideoPosts += 1;
       } catch { /* observation only */ }
       return originalFetch.apply(this, arguments);
     };
@@ -177,9 +177,9 @@ try {
       refs.push({ refId, linkId });
     }
     const blockedRun = cli(['workflow.node.run', '--project-id', projectId, '--node-id', nodeId, '--idempotency-key', 'e2e-run-blocked']);
-    const blockedCard = page.locator('.flovart-confirm[role="alertdialog"]');
+    const blockedCard = page.locator('.iris-confirm[role="alertdialog"]');
     await blockedCard.waitFor({ state: 'visible', timeout: 60_000 });
-    const blockedButtons = blockedCard.locator('.flovart-confirm__actions button');
+    const blockedButtons = blockedCard.locator('.iris-confirm__actions button');
     trace.checks.blocked = { cardText: (await blockedCard.innerText()).slice(0, 1200), confirmDisabled: await blockedButtons.last().isDisabled() };
     await page.screenshot({ path: join(outDir, scenario + '-blocked-card.png') });
     // A forced click on the disabled confirm must still not submit.
@@ -220,11 +220,11 @@ try {
     trace.checks.dsh = { videoShots: videoCount };
     // One batch run, one plan card.
     const batch = tool(['workflow.node.run', '--project-id', projectId, '--node-ids', shotIds.join(','), '--idempotency-key', 'dsh-three-shot-run']);
-    const card3 = page.locator('.flovart-confirm[role="alertdialog"]');
+    const card3 = page.locator('.iris-confirm[role="alertdialog"]');
     await card3.waitFor({ state: 'visible', timeout: 60_000 });
     trace.checks.dsh.batchCardText = (await card3.innerText()).slice(0, 1200);
     await page.screenshot({ path: join(outDir, scenario + '-batch-card.png') });
-    await card3.locator('.flovart-confirm__actions button').last().click();
+    await card3.locator('.iris-confirm__actions button').last().click();
     await sleep(1500);
     trace.checks.dsh.secondCardDuringBatch = await card3.isVisible().catch(() => false);
     await batch.catch(error => ({ error: String(error) }));
@@ -250,11 +250,11 @@ try {
   const runKey = 'e2e-run-' + scenario;
   const runs = [cli(['workflow.node.run', '--project-id', projectId, '--node-id', runNodeId, '--idempotency-key', runKey])];
   if (scenario === 'double') runs.push(cli(['workflow.node.run', '--project-id', projectId, '--node-id', nodeId, '--idempotency-key', runKey + '-again']));
-  const card = page.locator('.flovart-confirm[role="alertdialog"]');
+  const card = page.locator('.iris-confirm[role="alertdialog"]');
   await card.waitFor({ state: 'visible', timeout: 60_000 });
   trace.checks.planCardText = (await card.innerText()).slice(0, 1200);
   await page.screenshot({ path: join(outDir, scenario + '-plan-card.png') });
-  const buttons = card.locator('.flovart-confirm__actions button');
+  const buttons = card.locator('.iris-confirm__actions button');
   if (scenario === 'cancel') await buttons.nth((await buttons.count()) - 2).click();
   else await buttons.last().click();
   step(scenario === 'cancel' ? 'plan-cancelled' : 'plan-confirmed');
@@ -298,7 +298,7 @@ try {
   trace.checks.http = requests;
   trace.checks.submitCount = requests.filter(r => r.method === 'POST' && /videos/.test(r.path)).length;
   // Read-only observation: how many video POSTs the app itself issued via window.fetch (before any reload).
-  trace.checks.appFetchVideoPosts = await page.evaluate(() => window.flovartVideoPosts ?? null).catch(() => null);
+  trace.checks.appFetchVideoPosts = await page.evaluate(() => window.irisVideoPosts ?? null).catch(() => null);
 
   // 6. Playback in the browser.
   trace.checks.video = await page.evaluate(() => Array.from(document.querySelectorAll('video')).map(v => ({ readyState: v.readyState, duration: Number.isFinite(v.duration) ? v.duration : null, hasSrc: Boolean(v.currentSrc) })));

@@ -6,8 +6,8 @@ import { createWorkflowNode } from '../components/workflow/constants';
 import { WORKFLOW_NODE_TOOLS, isWorkflowNodeToolCommand, workflowNodeToolSpecs, workflowNodeToolIsPaid } from '../components/workflow/nodeToolCatalog';
 import { resolveToolApproval, toolApprovalFor } from '../services/agentToolPolicy';
 import { describeWorkflowNodeTools } from '../services/browserAgentKernel';
-import { agentToolCommand, getAgentToolSpecs } from '../tools/flovart/agent-tools.js';
-import { AGENT_PUBLIC_COMMAND_SET } from '../tools/flovart/agent-surface.js';
+import { agentToolCommand, getAgentToolSpecs } from '../tools/iris/agent-tools.js';
+import { AGENT_PUBLIC_COMMAND_SET } from '../tools/iris/agent-surface.js';
 import type { WorkflowProject } from '../components/workflow/types';
 
 const setup = () => {
@@ -60,7 +60,7 @@ describe('node tool spec (schema discovery)', () => {
   it('builds the built-in Agent tool guide from the same spec', () => {
     const guide = describeWorkflowNodeTools();
     expect(guide).toContain('- outpaint：扩展画面（image，调用 AI 服务，会先请用户确认）');
-    expect(guide).toContain('flovart_node_tool_list');
+    expect(guide).toContain('iris_node_tool_list');
   });
 });
 
@@ -83,7 +83,7 @@ describe('workflow.node.tool.list', () => {
 
   it('is a public read tool on every host', () => {
     expect(AGENT_PUBLIC_COMMAND_SET.has('workflow.node.tool.list')).toBe(true);
-    expect(agentToolCommand('flovart_node_tool_list')).toBe('workflow.node.tool.list');
+    expect(agentToolCommand('iris_node_tool_list')).toBe('workflow.node.tool.list');
     expect(toolApprovalFor('workflow.node.tool.list', {})).toEqual({ tier: 'read' });
     for (const host of ['builtin', 'local', 'mcp', 'dsh']) {
       expect(getAgentToolSpecs(host).some((spec: { command: string }) => spec.command === 'workflow.node.tool.list')).toBe(true);
@@ -137,15 +137,15 @@ describe('workflow.node.tool pre-checks run before the approval card', () => {
 
 describe('image / video / audio tools (node_tool split by media)', () => {
   it('publishes three tools whose tool enum matches the spec families', () => {
-    const families = { image: 'flovart_image_tool', video: 'flovart_video_tool', audio: 'flovart_audio_tool' } as const;
+    const families = { image: 'iris_image_tool', video: 'iris_video_tool', audio: 'iris_audio_tool' } as const;
     for (const [family, name] of Object.entries(families)) {
       const spec = getAgentToolSpecs('mcp').find((item: { name: string }) => item.name === name) as unknown as { inputSchema: { properties: Record<string, { enum?: string[] }> } };
       expect(spec, name).toBeDefined();
       expect([...spec.inputSchema.properties.tool.enum!].sort()).toEqual(workflowNodeToolSpecs().filter(item => item.inputTypes.includes(family)).map(item => item.tool).sort());
     }
-    expect(getAgentToolSpecs('mcp').some((item: { name: string }) => item.name === 'flovart_workflow_node_tool')).toBe(false);
+    expect(getAgentToolSpecs('mcp').some((item: { name: string }) => item.name === 'iris_workflow_node_tool')).toBe(false);
     // 每个工具只带本类参数。
-    const audio = getAgentToolSpecs('mcp').find((item: { name: string }) => item.name === 'flovart_audio_tool') as unknown as { inputSchema: { properties: Record<string, unknown> } };
+    const audio = getAgentToolSpecs('mcp').find((item: { name: string }) => item.name === 'iris_audio_tool') as unknown as { inputSchema: { properties: Record<string, unknown> } };
     expect(Object.keys(audio.inputSchema.properties)).not.toContain('targetLongEdge');
   });
 
@@ -165,7 +165,7 @@ describe('image / video / audio tools (node_tool split by media)', () => {
     const { dispatch, nodeToolRunner } = setup();
     const wrong = await dispatch({ id: 'a', command: 'workflow.audio.tool', source: 'agent', args: { nodeId: 'vid', tool: 'video-trim', startSec: 1, endSec: 3 } });
     expect(wrong.error?.code).toBe('BAD_REQUEST');
-    expect(wrong.error?.message).toContain('flovart_video_tool');
+    expect(wrong.error?.message).toContain('iris_video_tool');
     expect(nodeToolRunner).not.toHaveBeenCalled();
   });
 

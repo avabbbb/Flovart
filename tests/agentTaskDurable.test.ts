@@ -244,25 +244,25 @@ describe('browser task ledger (IndexedDB)', () => {
       const out = await tool.execute('c', params as never, new AbortController().signal);
       return JSON.parse((out.content[0] as { text: string }).text);
     };
-    const started = await call('flovart_task_start', { command: 'workflow.node.run', args: { nodeIds: ['s1'] } });
+    const started = await call('iris_task_start', { command: 'workflow.node.run', args: { nodeIds: ['s1'] } });
     await vi.waitFor(() => expect(runNode).toHaveBeenCalledTimes(1));
     await browserAgentTaskLayer(project.id, vi.fn() as never).reconcile();
     expect(confirm).toHaveBeenCalledTimes(1);
 
     resetBrowserAgentTasks(); // 页面刷新：内存任务层没了，IndexedDB 台账还在
-    const got = await call('flovart_task_get', { taskId: started.taskId }, 't2');
+    const got = await call('iris_task_get', { taskId: started.taskId }, 't2');
     expect(got).toMatchObject({ taskId: started.taskId, recovered: true, done: false });
     expect(['unknown_submit', 'running']).toContain(got.status);
 
     confirm.mockResolvedValueOnce(false);
-    const again = await call('flovart_task_start', { command: 'workflow.node.run', args: { nodeIds: ['s1'] } }, 't2');
+    const again = await call('iris_task_start', { command: 'workflow.node.run', args: { nodeIds: ['s1'] } }, 't2');
     expect(again).toMatchObject({ taskId: started.taskId, resubmitRequiresConfirmation: true });
     expect(confirm).toHaveBeenCalledTimes(2);
     expect(confirm.mock.calls[1][1]).toMatchObject({ kind: 'other', command: 'workflow.node.run' });
     await new Promise(resolve => setTimeout(resolve, 20));
     expect(runNode).toHaveBeenCalledTimes(1);
 
-    const cancelled = await call('flovart_task_cancel', { taskId: started.taskId }, 't3');
+    const cancelled = await call('iris_task_cancel', { taskId: started.taskId }, 't3');
     expect(cancelled).toMatchObject({ status: 'cancelled', done: true });
   });
 

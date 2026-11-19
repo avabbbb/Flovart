@@ -1,21 +1,21 @@
 [package]
-name = "flovart"
+name = "iris"
 version = "0.3.0"
-description = "Flovart - AI creative layer for professional editing tools"
-authors = ["Flovart"]
+description = "Iris - AI creative layer for professional editing tools"
+authors = ["Iris"]
 edition = "2021"
-default-run = "flovart"
+default-run = "iris"
 
 [lib]
-name = "flovart_lib"
+name = "iris_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [[bin]]
-name = "flovart"
+name = "iris"
 path = "src/main.rs"
 
 [[bin]]
-name = "flovart-host"
+name = "iris-host"
 path = "src/bin/host.rs"
 
 [build-dependencies]

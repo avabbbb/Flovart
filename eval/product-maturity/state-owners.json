@@ -10,9 +10,9 @@
       "App.tsx handleRunWorkflowNode / project transfer / BrowserImportBridge routing"
     ],
     "readers": [
-      "App.tsx, RouterHost.tsx, WorkflowWorkspace, InfiniteWorkflow, WorkflowSidebar, WorkflowProjectList, FlovartAgentPanel, BrowserImportBridge, TableWorkspace, dispatchWorkflowCommand, agent bridge snapshot publisher"
+      "App.tsx, RouterHost.tsx, WorkflowWorkspace, InfiniteWorkflow, WorkflowSidebar, WorkflowProjectList, IrisAgentPanel, BrowserImportBridge, TableWorkspace, dispatchWorkflowCommand, agent bridge snapshot publisher"
     ],
-    "persistedBy": "localforage 'flovart_workflow_v2'/'workflow_projects' key 'flovart:workflow:projects' (debounced 400ms write, migration backup key)",
+    "persistedBy": "localforage 'iris_workflow_v2'/'workflow_projects' key 'iris:workflow:projects' (debounced 400ms write, migration backup key)",
     "issues": [
       "Also mirrored to agent/session.js on the Node side as `session.snapshot` (pushSnapshot); the browser Zustand store and the Agent process each hold a mutable copy — they reconcile only via revision/lease checks, so they can diverge between pushes",
       "useProductionProjectionAdapter rewrites nodes/connections/selectedNodeIds into the store every 1.5s when Tauri runtime present — a second writer that bypasses InfiniteWorkflow's own edit path",
@@ -74,7 +74,7 @@
     "readers": [
       "AgentHostPicker, WorkflowWorkspace (writer revoked banner), StudioTopMenu, hostActivation.ensureHostReady, agentHostDiscovery"
     ],
-    "persistedBy": "not persisted (connection params in sessionStorage keys flovart.agent.bootstrap.*; dock URL in localStorage 'flovart.agent.url', token in sessionStorage 'flovart.agent.token')",
+    "persistedBy": "not persisted (connection params in sessionStorage keys iris.agent.bootstrap.*; dock URL in localStorage 'iris.agent.url', token in sessionStorage 'iris.agent.token')",
     "issues": [
       "Owner >1 for 'agent connection' fact: useAgentConnectionStore (UI mirror), module-global browserWorkflowBinding (services/browserWorkflowBinding.ts — own listener set), dockCrewClient localStorage+sessionStorage keys, AND the authoritative session.js state in the agent process. Four representations; the store is a *cache* of events pushed over SSE, so it is eventually-consistent and can show writerStatus 'active' after the agent-side writer died",
       "projectId/revision inside the connection store duplicates workflow store state; update() rewrites it on every project snapshot — a render-loop write path",
@@ -114,7 +114,7 @@
   },
   {
     "state": "localFolderGrant (LocalFolderSource + FileSystemDirectoryHandle + permission)",
-    "owner": "services/localFolderSource.ts — module functions over localforage 'flovart'/'local_folder_sources' + 'local_folder_handles' + sessionHandles Map",
+    "owner": "services/localFolderSource.ts — module functions over localforage 'iris'/'local_folder_sources' + 'local_folder_handles' + sessionHandles Map",
     "writers": [
       "pickLocalFolder / adoptLocalFolderHandle (DnD) → saveSource+saveHandle",
       "forgetLocalFolderSource removes source+handle+thumbnails",
@@ -131,7 +131,7 @@
   },
   {
     "state": "providerTask (generationProviderTaskId, usage records)",
-    "owner": "split: node.metadata.generationProviderTaskId in project store (persisted); activeRequests Map in services/workflowGeneration.ts (ephemeral); UsageRecord rows in usageMonitor localforage 'flovart_usage_v2'",
+    "owner": "split: node.metadata.generationProviderTaskId in project store (persisted); activeRequests Map in services/workflowGeneration.ts (ephemeral); UsageRecord rows in usageMonitor localforage 'iris_usage_v2'",
     "writers": [
       "runWorkflowGeneration event handlers set node.metadata.generationProviderTaskId + updateApiUsage(status/providerTaskId)",
       "App.tsx recovery effect re-runs nodes with resumeProviderTaskId after reload",
@@ -187,7 +187,7 @@
     "state": "panel/drawer/shell state (activeView, canvasView, left/right drawer open+tab+width, themeMode, language)",
     "owner": "split: stores/useWorkspaceStore.ts persists activeView/canvasView/themeMode/language; WorkflowWorkspace.tsx useState owns desktopLeftOpen/mobileLeftOpen/desktopRightOpen/mobileRightOpen/rightTab/rightWidth; agentWorkspaceStore.ts persists agent view layout per project",
     "writers": [
-      "useWorkspaceStore setters (persist 'flovart-workspace' v2)",
+      "useWorkspaceStore setters (persist 'iris-workspace' v2)",
       "WorkflowWorkspace setState + localStorage 'workflowRightPanelOpenV2' / 'workflowRightPanelWidth' writes",
       "agentDrawerRequest module-global requestNonce + listeners (cross-view 'open agent drawer' signal)",
       "agentWorkspaceStore updatePanel/setViewport/resetLayout (localforage 'agent_workspaces')"
@@ -195,7 +195,7 @@
     "readers": ["App.tsx shell, StudioTopMenu, WorkflowWorkspace layout, AgentWorkspace panels"],
     "persistedBy": "zustand persist (workspace store) + raw localStorage keys (right panel) + localforage (agent workspaces) + in-memory agentDrawerRequest nonce",
     "issues": [
-      "themeMode is double-sourced: persisted inside 'flovart-workspace' (partialize includes themeMode) AND independently read at store-init from localStorage 'themeMode.v1' (useWorkspaceStore.ts:26) — the init reads a DIFFERENT key than the persist writes; on a fresh browser the persist key is empty so themeMode.v1 wins, but after any setThemeMode the two keys can disagree and whichever hydrates last wins",
+      "themeMode is double-sourced: persisted inside 'iris-workspace' (partialize includes themeMode) AND independently read at store-init from localStorage 'themeMode.v1' (useWorkspaceStore.ts:26) — the init reads a DIFFERENT key than the persist writes; on a fresh browser the persist key is empty so themeMode.v1 wins, but after any setThemeMode the two keys can disagree and whichever hydrates last wins",
       "Four persistence channels for shell UI: zustand persist, raw localStorage, localforage, module nonce — right drawer open state is in localStorage while left drawer is pure useState, so left/right behave differently across reload for no user-visible reason",
       "agentDrawerRequest is a module-global nonce consumed via consumeWorkflowAgentDrawerRequest — a request fired while WorkflowWorkspace is mounted AND handled by listener is ALSO consumed on next mount (nonce not cleared), can re-open the drawer unexpectedly",
       "activeView 'agent' vs canvasView 'table'/'spatial' split across two fields; migrations.ts maps old 'table' activeView → canvasView — legacy combos can produce contradictory states (activeView=agent + canvasView=table) that App.tsx renders ambiguously"
@@ -205,8 +205,8 @@
     "state": "assetLibrary (folders + items)",
     "owner": "App.tsx useState assetLibrary (React state is the live owner); utils/assetStorage.ts module cachedLibrary is a second in-memory copy",
     "writers": ["App.tsx setAssetLibrary + saveAssetLibraryAsync effect; assetStorage mutator helpers return new lib; setAssetLibraryCache keeps module cache in sync ONLY when callers remember"],
-    "readers": ["Workflow asset pickers, FlovartAgentPanel mention groups, media.ts getAssetById (reads module cache, not React state), StudioMediaBrowser"],
-    "persistedBy": "localforage 'flovart'/'asset_library_v2' key 'library' (debounced via effect on state change)",
+    "readers": ["Workflow asset pickers, IrisAgentPanel mention groups, media.ts getAssetById (reads module cache, not React state), StudioMediaBrowser"],
+    "persistedBy": "localforage 'iris'/'asset_library_v2' key 'library' (debounced via effect on state change)",
     "issues": [
       "Two live copies: React state in App.tsx and module-global cachedLibrary — getAssetById resolves storageKey 'asset-library:<id>' against the module cache, which is only fresh if every mutation path calls setAssetLibraryCache; addAsset/removeAsset helpers do NOT touch the cache (App.tsx must resync manually), so canvas nodes can resolve a deleted asset or fail to resolve a just-added one",
       "Save is fire-and-forget .catch(console.error) — quota failure silently drops the library while UI keeps showing items"
@@ -225,8 +225,8 @@
   },
   {
     "state": "agentSession / agentMessages (in-app assistant)",
-    "owner": "per-panel: FlovartAgentPanel useState messages + kernelRef/clientRef; browser path BrowserAgentKernel persists sessions to localforage per projectId; managed path agent/kernel.js SqliteSessionRepo + session.js snapshot",
-    "writers": ["FlovartAgentPanel send/stream handlers, kernel.appendMessage, session.subscribe events, consumePendingProductionSkill on project change"],
+    "owner": "per-panel: IrisAgentPanel useState messages + kernelRef/clientRef; browser path BrowserAgentKernel persists sessions to localforage per projectId; managed path agent/kernel.js SqliteSessionRepo + session.js snapshot",
+    "writers": ["IrisAgentPanel send/stream handlers, kernel.appendMessage, session.subscribe events, consumePendingProductionSkill on project change"],
     "readers": ["panel render, WorkflowAgentMessages, session list dropdown"],
     "persistedBy": "browser kernel: localforage key per projectId; managed agent: SQLite session repo on disk; panel useState is a view copy rebuilt from snapshot on mount",
     "issues": [
@@ -238,7 +238,7 @@
   {
     "state": "auth/user (hub account)",
     "owner": "stores/useAuthStore.ts",
-    "writers": ["login/register/logout/init → authApi + setToken (sessionStorage 'flovart.hub.token' via hubClient)"],
+    "writers": ["login/register/logout/init → authApi + setToken (sessionStorage 'iris.hub.token' via hubClient)"],
     "readers": ["auth components, community publish, skillHub"],
     "persistedBy": "sessionStorage token key (hubClient TOKEN_KEY) + legacy localStorage migration",
     "issues": [
@@ -258,8 +258,8 @@
   {
     "state": "pendingProductionSkill (composer handoff)",
     "owner": "stores/useProductionSkillComposerStore.ts",
-    "writers": ["queuePendingProductionSkill (skill launch), FlovartAgentPanel consume on project.id change"],
-    "readers": ["FlovartAgentPanel mount effect"],
+    "writers": ["queuePendingProductionSkill (skill launch), IrisAgentPanel consume on project.id change"],
+    "readers": ["IrisAgentPanel mount effect"],
     "persistedBy": "none",
     "issues": [
       "Consume-on-mount keyed by project.id: if the drawer is closed when the skill is queued, the pending item sits in the map until the panel next mounts for that project — silent deferred action with no badge"

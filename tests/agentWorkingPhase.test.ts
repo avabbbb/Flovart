@@ -18,7 +18,7 @@ describe('agentWorkingPhase', () => {
   });
 
   it('follows the pending tool and counts steps', () => {
-    const messages = [user, { role: 'tool', toolName: 'flovart_workflow_inspect', status: 'success' }, { role: 'tool', toolName: 'flovart_workflow_apply', status: 'pending' }];
+    const messages = [user, { role: 'tool', toolName: 'iris_workflow_inspect', status: 'success' }, { role: 'tool', toolName: 'iris_workflow_apply', status: 'pending' }];
     expect(agentWorkingPhase({ turnPhase: 'sending', messages })).toEqual({ state: 'shaping', label: '正在修改画布', steps: 2 });
     expect(agentWorkingPhase({ turnPhase: 'sending', messages, language: 'en' }).label).toBe('Editing the canvas');
   });

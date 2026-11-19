@@ -2,7 +2,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { workflowMediaStorage } from '../components/workflow/storage';
 import { webBrowserImportStorageKey } from './webBrowserImportReceiver';
 
-const PREFIX = 'flovart-browser-import:';
+const PREFIX = 'iris-browser-import:';
 const cache = new Map<string, Promise<Blob>>();
 
 interface BrowserImportArtifactPayload {

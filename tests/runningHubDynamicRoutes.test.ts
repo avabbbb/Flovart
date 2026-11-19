@@ -282,7 +282,7 @@ describe('refreshRunningHubDocRoutes', () => {
         ]);
         expect(notified).toBeGreaterThan(0);
         expect(getRunningHubRoutesVersion()).toBeGreaterThan(before);
-        expect(localStorage.getItem('flovart.runningHubDocRoutes.v1')).toContain('vidu/start-end-to-video-q2-pro');
+        expect(localStorage.getItem('iris.runningHubDocRoutes.v1')).toContain('vidu/start-end-to-video-q2-pro');
 
         // TTL 内再次调用直接用缓存
         const second = fakeFetch();

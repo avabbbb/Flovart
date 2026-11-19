@@ -59,18 +59,17 @@ const COPY = {
 
 /** 工具 → 球的状态与文案。读 / 搜 → searching，规划 → solving，改画布 → shaping，等用户 → listening，其余调用 → working。 */
 const TOOL_PHASES: Record<string, { state: AgentOrbState; copy: Copy }> = {
-  flovart_workflow_inspect: { state: 'searching', copy: { zho: '正在读取画布', en: 'Reading the canvas' } },
-  flovart_workflow_selection_get: { state: 'searching', copy: { zho: '正在读取选中节点', en: 'Reading the selection' } },
-  flovart_workflow_search_nodes: { state: 'searching', copy: { zho: '正在查找节点', en: 'Finding nodes' } },
-  flovart_workflow_media_view: { state: 'searching', copy: { zho: '正在查看画面', en: 'Looking at the media' } },
-  flovart_web_search: { state: 'searching', copy: { zho: '正在联网搜索', en: 'Searching the web' } },
-  flovart_grep: { state: 'searching', copy: { zho: '正在搜索本地文件', en: 'Searching local files' } },
-  flovart_todo: { state: 'solving', copy: { zho: '正在规划任务', en: 'Planning the steps' } },
-  flovart_skill_read: { state: 'searching', copy: { zho: '正在读取技能', en: 'Reading the skill' } },
-  flovart_memory: { state: 'solving', copy: { zho: '正在整理项目记忆', en: 'Updating project memory' } },
-  flovart_workflow_apply: { state: 'shaping', copy: { zho: '正在修改画布', en: 'Editing the canvas' } },
-  flovart_workflow_node_run: { state: 'working', copy: { zho: '正在提交生成', en: 'Starting generation' } },
-  flovart_ask: { state: 'listening', copy: { zho: '等你回答', en: 'Waiting for your answer' } },
+  iris_workflow_inspect: { state: 'searching', copy: { zho: '正在读取画布', en: 'Reading the canvas' } },
+  iris_workflow_selection_get: { state: 'searching', copy: { zho: '正在读取选中节点', en: 'Reading the selection' } },
+  iris_workflow_search_nodes: { state: 'searching', copy: { zho: '正在查找节点', en: 'Finding nodes' } },
+  iris_workflow_media_view: { state: 'searching', copy: { zho: '正在查看画面', en: 'Looking at the media' } },
+  iris_web_search: { state: 'searching', copy: { zho: '正在联网搜索', en: 'Searching the web' } },
+  iris_grep: { state: 'searching', copy: { zho: '正在搜索本地文件', en: 'Searching local files' } },
+  iris_skill_read: { state: 'searching', copy: { zho: '正在读取技能', en: 'Reading the skill' } },
+  iris_memory: { state: 'solving', copy: { zho: '正在整理项目记忆', en: 'Updating project memory' } },
+  iris_workflow_apply: { state: 'shaping', copy: { zho: '正在修改画布', en: 'Editing the canvas' } },
+  iris_workflow_node_run: { state: 'working', copy: { zho: '正在提交生成', en: 'Starting generation' } },
+  iris_ask: { state: 'listening', copy: { zho: '等你回答', en: 'Waiting for your answer' } },
 };
 
 /** 未登记工具按名字里的动词兜底：读 / 查 / 搜 → searching，计划 → solving，其余 → working。 */

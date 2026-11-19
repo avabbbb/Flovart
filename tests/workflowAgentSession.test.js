@@ -253,7 +253,7 @@ describe('workflow agent session', () => {
     session.openEvents(new URL('http://127.0.0.1/events?clientId=browser-1'), response);
     session.updateSnapshot({ id: 'project-1' }, 'browser-1');
     const controller = new AbortController();
-    const call = session.callCommand('workflow.inspect', {}, 'flovart-agent', undefined, controller.signal);
+    const call = session.callCommand('workflow.inspect', {}, 'iris-agent', undefined, controller.signal);
 
     controller.abort();
 

@@ -53,7 +53,7 @@ function referenceMeta(reference: PlanReference) {
 function Notices({ kind, notices }: { kind: 'warning' | 'blocker'; notices?: PlanNotice[] }) {
   if (!notices?.length) return null;
   return (
-    <ul className="flovart-plannotices" data-kind={kind}>
+    <ul className="iris-plannotices" data-kind={kind}>
       {notices.map((notice, index) => <li key={notice.code + index}>{notice.message}</li>)}
     </ul>
   );
@@ -64,27 +64,27 @@ function PlanItem({ item, showTitle }: { item: GenerationGateDetails; showTitle:
   const shownOnReference = new Set(item.references?.filter(reference => reference.status !== 'ok' && reference.message).map(reference => reference.message));
   const blockers = item.blockers?.filter(notice => !shownOnReference.has(notice.message));
   return (
-    <section className="flovart-planitem">
-      {showTitle && item.nodeTitle && <div className="flovart-plantitle">{item.nodeTitle}</div>}
-      <div className="flovart-planrow">{[item.serviceLabel, item.modelLabel, item.routeLabel].filter(Boolean).join(' · ')}</div>
-      {spec && <div className="flovart-planrow">{spec}</div>}
+    <section className="iris-planitem">
+      {showTitle && item.nodeTitle && <div className="iris-plantitle">{item.nodeTitle}</div>}
+      <div className="iris-planrow">{[item.serviceLabel, item.modelLabel, item.routeLabel].filter(Boolean).join(' · ')}</div>
+      {spec && <div className="iris-planrow">{spec}</div>}
       {item.references?.length ? (
-        <ul className="flovart-planrefs">
+        <ul className="iris-planrefs">
           {item.references.map((reference, index) => {
             const meta = referenceMeta(reference);
             return (
               <li key={reference.title + index} data-status={reference.status} title={reference.message}>
                 <span aria-hidden="true">{STATUS_ICON[reference.status]}</span> {reference.title}
-                {meta && <span className="flovart-planmuted"> {meta}</span>}
-                {reference.message && reference.status !== 'ok' && <div className="flovart-planmuted">{reference.message}</div>}
+                {meta && <span className="iris-planmuted"> {meta}</span>}
+                {reference.message && reference.status !== 'ok' && <div className="iris-planmuted">{reference.message}</div>}
               </li>
             );
           })}
         </ul>
       ) : null}
-      <div className="flovart-planrow" data-basis={item.costBasis ?? 'unknown'}>预估额度：{planCostLine(item)}</div>
+      <div className="iris-planrow" data-basis={item.costBasis ?? 'unknown'}>预估额度：{planCostLine(item)}</div>
       {item.budget && (
-        <div className="flovart-planrow" data-exceed={item.budget.wouldExceed || undefined}>
+        <div className="iris-planrow" data-exceed={item.budget.wouldExceed || undefined}>
           预算：已用 {money(item.budget.currency, item.budget.used)} / {money(item.budget.currency, item.budget.limit)}
         </div>
       )}
@@ -101,11 +101,11 @@ export const NO_REFUND_NOTICE = '提交后服务商可能立即开始计费；�
 export function GenerationPlanCard({ plan }: { plan: UiConfirmPlan }) {
   const batch = plan.items.length > 1;
   return (
-    <div className="flovart-plan">
+    <div className="iris-plan">
       {plan.items.map((item, index) => <PlanItem key={index} item={item} showTitle={batch} />)}
-      {batch && <div className="flovart-plansummary">{planSummaryLine(plan.items)}</div>}
-      <div className="flovart-planmuted flovart-plannorefund">{NO_REFUND_NOTICE}</div>
-      {plan.mandate && <div className="flovart-planmandate">{plan.mandate}</div>}
+      {batch && <div className="iris-plansummary">{planSummaryLine(plan.items)}</div>}
+      <div className="iris-planmuted iris-plannorefund">{NO_REFUND_NOTICE}</div>
+      {plan.mandate && <div className="iris-planmandate">{plan.mandate}</div>}
     </div>
   );
 }

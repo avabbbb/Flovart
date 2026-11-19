@@ -23,7 +23,7 @@ export async function syncRuntimeAgentTextRoutes(
       commandId: 'cmd_' + crypto.randomUUID(),
       command: 'agent-text.route.sync',
       args: { routes },
-      actor: { kind: 'ui', instanceId: 'flovart-webui' },
+      actor: { kind: 'ui', instanceId: 'iris-webui' },
     },
   });
   return routes.length;

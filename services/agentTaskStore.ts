@@ -13,7 +13,7 @@ const SEPARATOR = '::';
 let instance: LocalForage | null = null;
 
 function ledger(): LocalForage {
-  if (!instance) instance = localforage.createInstance({ name: 'flovart_agent_tasks_v1', storeName: 'tasks' });
+  if (!instance) instance = localforage.createInstance({ name: 'iris_agent_tasks_v1', storeName: 'tasks' });
   return instance;
 }
 

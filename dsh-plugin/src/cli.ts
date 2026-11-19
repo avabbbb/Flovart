@@ -1,12 +1,12 @@
 /**
- * Flovart CLI facade execution. Every model tool and every service probe
- * reaches Flovart through this single public boundary — the host never
+ * Iris CLI facade execution. Every model tool and every service probe
+ * reaches Iris through this single public boundary — the host never
  * touches loopback private routes, WebUI state, Discovery Tokens or MCP.
  */
 
 import { spawn, spawnSync } from 'node:child_process'
 import type { SpawnSyncReturns } from 'node:child_process'
-import type { FlovartPluginConfig } from './config.ts'
+import type { IrisPluginConfig } from './config.ts'
 
 export interface CliFailure {
   code: string
@@ -29,7 +29,7 @@ export function cliArgv(cli: string): [string, ...string[]] {
   while ((match = pattern.exec(cli)) !== null) {
     tokens.push(match[1] ?? match[2]!)
   }
-  return tokens.length > 0 ? (tokens as [string, ...string[]]) : ['flovart']
+  return tokens.length > 0 ? (tokens as [string, ...string[]]) : ['iris']
 }
 
 export function buildCliCommand(cli: string, command: string, args: Record<string, unknown>): [string, ...string[]] {
@@ -67,7 +67,7 @@ export function parseCliOutcome(command: string, stdout: string, stderr: string)
 
 /** Run a short, bounded CLI probe for the synchronous Cordis lifecycle hook. */
 export function runCliSync(
-  config: FlovartPluginConfig,
+  config: IrisPluginConfig,
   command: string,
   args: Record<string, unknown> = {},
 ): CliOutcome {
@@ -93,7 +93,7 @@ export function runCliSync(
       data: null,
       error: {
         code: code === 'ENOENT' ? 'CLI_NOT_FOUND' : 'CLI_SPAWN_FAILED',
-        message: `无法启动 Flovart CLI：${argv[0]}（${(error as Error).message}）。请安装 Agent Toolkit 或设置 FLOVART_CLI。`,
+        message: `无法启动 Iris CLI：${argv[0]}（${(error as Error).message}）。请安装 Agent Toolkit 或设置 IRIS_CLI。`,
         retryable: false,
       },
     }
@@ -110,7 +110,7 @@ export function runCliSync(
         code: timedOut ? 'CLI_TIMEOUT' : code === 'ENOENT' ? 'CLI_NOT_FOUND' : 'CLI_SPAWN_FAILED',
         message: timedOut
           ? `命令 ${command} 执行超过 ${config.toolTimeoutMs}ms 已终止`
-          : `无法启动 Flovart CLI：${argv[0]}（${result.error.message}）。请安装 Agent Toolkit 或设置 FLOVART_CLI。`,
+          : `无法启动 Iris CLI：${argv[0]}（${result.error.message}）。请安装 Agent Toolkit 或设置 IRIS_CLI。`,
         retryable: timedOut,
       },
     }
@@ -136,7 +136,7 @@ function errnoCode(error: Error): string | undefined {
 }
 
 export async function runCli(
-  config: FlovartPluginConfig,
+  config: IrisPluginConfig,
   command: string,
   args: Record<string, unknown> = {},
   signal?: AbortSignal,
@@ -175,7 +175,7 @@ export async function runCli(
         ok: false, command, data: null,
         error: {
           code: code === 'ENOENT' ? 'CLI_NOT_FOUND' : 'CLI_SPAWN_FAILED',
-          message: `无法启动 Flovart CLI：${argv[0]}（${error.message}）。请安装 Agent Toolkit 或设置 FLOVART_CLI。`,
+          message: `无法启动 Iris CLI：${argv[0]}（${error.message}）。请安装 Agent Toolkit 或设置 IRIS_CLI。`,
           retryable: false,
         },
       })

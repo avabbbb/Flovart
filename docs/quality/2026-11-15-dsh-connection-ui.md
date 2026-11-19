@@ -1,6 +1,6 @@
 # 2026-11-15 DSH 链接错误与连接面板 UI
 
-范围：浏览器画布 ↔ 本机 Flovart Agent（Workspace Operator，DSH / Codex / CLI 都经它连到可见画布）的连接链路；Agent 抽屉里的「连接指引 / 连接状态 / 运行日志」三页；DSH 嵌入页头部状态。
+范围：浏览器画布 ↔ 本机 Iris Agent（Workspace Operator，DSH / Codex / CLI 都经它连到可见画布）的连接链路；Agent 抽屉里的「连接指引 / 连接状态 / 运行日志」三页；DSH 嵌入页头部状态。
 
 复现方式：沙箱内 Vite dev server + 本地 mock Agent（`/health`、`/hosts`、`/events` SSE、`/crew/protocol`、`/activity`），分别模拟正常、SSE 永不 hello、token 失效、端口无服务、协议版本不同；Playwright（Chromium headless shell，zh-CN）在 360 / 768 / 1440 宽与抽屉最小 280 宽截图。截图不入库。
 
@@ -15,12 +15,12 @@
 | 5 | 状态卡在「正在连接…」 | SSE 连接建立但从不发 `hello`（代理缓冲、半死进程）时既无 hello 也无 error | `hello` 10s 超时即按超时失败并退避重连 | › does not stay "connecting" when the stream opens but never says hello |
 | 6 | 画布同步失败后状态仍显示「已连接」；或显示错误后不再恢复 | `publishLatest` 的 catch 只回调外部 `onStatus`，没更新 store；也没有恢复路径 | 同步失败写入 `sync_failed`（或探针结果）；下一次成功发布自动回到 ready | › recovers from a failed canvas sync on the next successful publish |
 | 7 | 每次启动都闪一下「未连接 / 还没有连接本机 Agent」 | Adapter 在 bootstrap 还没设置 binding 时就把状态写成 offline | bootstrap 进行中时 Adapter 不覆盖状态，由 bootstrap 决定结果 | 截图 `connecting-*-log`：日志只有「正在连接…」 |
-| 8 | DSH 头部在 iframe 还没连上时就显示「已连接」 | `FlovartFrame` 把「已把 token 交给 iframe」当成连接成功 | 交出 token 后显示「正在连接画布」；嵌入页把真实 `status + issue kind` 通过 `flovart:dsh-link` 回传（不带 URL / token / 报错原文） | `dshEmbedBridge.test.ts` › reports the real link state to the host |
+| 8 | DSH 头部在 iframe 还没连上时就显示「已连接」 | `IrisFrame` 把「已把 token 交给 iframe」当成连接成功 | 交出 token 后显示「正在连接画布」；嵌入页把真实 `status + issue kind` 通过 `flovart:dsh-link` 回传（不带 URL / token / 报错原文） | `dshEmbedBridge.test.ts` › reports the real link state to the host |
 | 9 | 连接失败提示「无法连接到该 AI 服务」「API Key 无效」 | Host discovery 的网络错误走了 Provider 用的 `displayError` | 改为链接分类文案 | 代码审查 |
 
 **分类探针**（`services/agentLinkIssue.ts`）：浏览器拿不到 EventSource 的状态码，CORS 拒绝与端口拒绝都表现为 `TypeError`，所以用访问规则不同的两个端点区分：
 
-- `/health`（无鉴权、总是可跨源读取）：超时 → `timeout`；快速网络失败 → `refused`（Agent 未运行 / 端口不对）；慢失败 → `unreachable`；HTTPS 线上页 → `blocked_by_page`；非 Flovart 应答 → `wrong_service`。
+- `/health`（无鉴权、总是可跨源读取）：超时 → `timeout`；快速网络失败 → `refused`（Agent 未运行 / 端口不对）；慢失败 → `unreachable`；HTTPS 线上页 → `blocked_by_page`；非 Iris 应答 → `wrong_service`。
 - `/crew/protocol`（需 token、只对已授权来源回 CORS 头）：401 → `auth`；`/health` 通而它网络失败或 403 → `cors`；404 或 `protocolVersion` ≠ 1 → `version`。
 - 两者都正常但流仍断 → `stream_lost`（继续自动重连）。
 

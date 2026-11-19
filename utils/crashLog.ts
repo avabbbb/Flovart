@@ -2,7 +2,7 @@
 // Captures uncaught errors and unhandled promise rejections into a bounded
 // ring buffer in localStorage. Nothing is sent over the network.
 
-export const CRASH_LOG_STORAGE_KEY = 'flovart:crash-log';
+export const CRASH_LOG_STORAGE_KEY = 'iris:crash-log';
 export const CRASH_LOG_LIMIT = 50;
 
 export type CrashLogEntry = {
@@ -67,7 +67,7 @@ export function clearCrashLog(): void {
 export function exportCrashLog(): string {
   const env = ((import.meta as unknown as { env?: Record<string, string | undefined> }).env) || {};
   return JSON.stringify({
-    app: 'flovart',
+    app: 'iris',
     version: env.VITE_APP_VERSION ?? 'dev',
     commit: env.VITE_APP_COMMIT_SHA ?? 'local',
     exportedAt: new Date().toISOString(),

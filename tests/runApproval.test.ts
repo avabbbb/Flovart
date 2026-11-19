@@ -5,7 +5,7 @@ import { createWorkflowDispatcher, withWorkflowHumanApproval, type WorkflowDispa
 import { createWorkflowExecutor } from '../services/workflowExecutor';
 import { createWorkflowProject } from '../components/workflow/store';
 import { createWorkflowNode } from '../components/workflow/constants';
-import { agentToolCommand } from '../tools/flovart/agent-tools.js';
+import { agentToolCommand } from '../tools/iris/agent-tools.js';
 import type { WorkflowProject } from '../components/workflow/types';
 import type { GenerationGateDetails } from '../services/generationGate';
 
@@ -32,8 +32,8 @@ describe('run approval (build then approve once)', () => {
     expect(copy.title).toBe('批准运行这 2 个节点（各一次）');
   });
 
-  it('exposes flovart_approve_run as the batch-run tool', () => {
-    expect(agentToolCommand('flovart_approve_run')).toBe('workflow.node.run');
+  it('exposes iris_approve_run as the batch-run tool', () => {
+    expect(agentToolCommand('iris_approve_run')).toBe('workflow.node.run');
   });
 
   it('refuses an unrunnable list before asking, then runs each approved node once', async () => {

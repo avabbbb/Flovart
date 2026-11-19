@@ -11,7 +11,7 @@ import type { TimelineActor, WorkflowTimelineEvent } from './timeline';
 // 有界追加（每个画布最近 500 条），独立的 localforage 实例，不进入 Workflow 主持久化（不动 version 4）。
 
 export const WORKFLOW_TIMELINE_EVENT_LIMIT = 500;
-const storage = localforage.createInstance({ name: 'flovart', storeName: 'workflow_timeline_v1' });
+const storage = localforage.createInstance({ name: 'iris', storeName: 'workflow_timeline_v1' });
 
 export const actorFromSurface = (surface: WorkflowExecutionSurface | undefined): TimelineActor => (
   surface === 'browser-agent' ? 'agent' : surface === 'cli' || surface === 'dsh' || surface === 'runtime' ? 'external' : 'you'

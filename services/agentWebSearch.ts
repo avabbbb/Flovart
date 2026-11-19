@@ -34,7 +34,7 @@ const MAX_QUERY_CHARACTERS = 128;
 const MAX_SNIPPET_CHARACTERS = 240;
 const REQUEST_TIMEOUT_MS = 30_000;
 
-export const WEB_SEARCH_TOOL_NAME = 'flovart_web_search';
+export const WEB_SEARCH_TOOL_NAME = 'iris_web_search';
 
 export function resolveSearchCredential(keys: readonly UserApiKey[]): AgentSearchCredential | null {
   const usable = keys.filter(item => item.status !== 'error' && item.key.trim());

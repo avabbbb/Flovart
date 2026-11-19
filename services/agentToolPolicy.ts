@@ -10,7 +10,7 @@ import { isWorkflowNodeTool, isWorkflowNodeToolCommand, workflowNodeToolIsPaid }
 export type ToolTier = 'read' | 'write' | 'exec';
 export type ToolPolicy = 'allow' | 'deny' | 'prompt';
 /**
- * Flovart 的硬闸：OMP 在 yolo 下忽略「裸 override」，但付费与删除在这里保持为必问。
+ * Iris 的硬闸：OMP 在 yolo 下忽略「裸 override」，但付费与删除在这里保持为必问。
  * - spend：可能产生费用（付费生成、调用 AI 服务的节点工具），被生效中的付费授权覆盖时放行；
  * - delete：删除内容，永远逐次确认。
  */
@@ -33,7 +33,7 @@ export type ToolApprovalDecision = ToolTier | ToolApprovalObject;
  * 审批模式（OMP 同名）：
  * - always-ask：自动批准 read；write / exec 都询问（旧「手动」）。
  * - write：自动批准 read + write；exec 询问（旧「自动」，默认）。
- * - yolo：全部自动批准；但 Flovart 的硬闸（未被授权覆盖的付费、删除）和显式用户拒绝仍然生效。
+ * - yolo：全部自动批准；但 Iris 的硬闸（未被授权覆盖的付费、删除）和显式用户拒绝仍然生效。
  * OMP 的 always-ask-cached 依赖文件路径授权，画布工具没有文件目标，不提供。
  */
 export type ApprovalMode = 'always-ask' | 'write' | 'yolo';
@@ -98,7 +98,7 @@ const TIER_LABEL: Record<ToolTier, string> = { read: '读取', write: '修改画
 /**
  * 解析一次工具调用，顺序与 OMP 一致：
  * 1. 工具 deny → 拒绝；2. 用户 deny → 拒绝；
- * 3. yolo：[Flovart 偏离] 未被付费授权覆盖的 spend / delete 硬闸仍询问；否则工具显式 allow/prompt → 用户策略 → 放行；
+ * 3. yolo：[Iris 偏离] 未被付费授权覆盖的 spend / delete 硬闸仍询问；否则工具显式 allow/prompt → 用户策略 → 放行；
  * 4. 非 yolo：override 只在工具同时声明 allow 时放行，否则询问（spend 被授权覆盖时放行）；
  * 5. 工具显式 allow / prompt；6. 用户策略；7. 按模式与 tier；按 tier 询问前先看会话授权。
  * headless 时任何 prompt 转为 deny。
@@ -114,7 +114,7 @@ export function resolveToolApproval(input: ApprovalContext & {
     return {
       action: 'deny',
       tier: resolution.tier,
-      reason: `无人值守的委派回合不能确认「${resolution.reason || TIER_LABEL[resolution.tier]}」（${input.tool}），已拒绝。请在 Flovart 面板里直接让 Agent 执行，或调整该工具的审批策略。`,
+      reason: `无人值守的委派回合不能确认「${resolution.reason || TIER_LABEL[resolution.tier]}」（${input.tool}），已拒绝。请在 Iris 面板里直接让 Agent 执行，或调整该工具的审批策略。`,
     };
   }
   return resolution;
@@ -138,7 +138,7 @@ function resolveInteractive(input: ApprovalContext & { tool: string; decision: u
   const spendCovered = decision.hardGate === 'spend' && input.spendCovered === true && input.mode !== 'always-ask';
 
   if (input.mode === 'yolo') {
-    // 偏离 OMP：OMP 的 yolo 忽略裸 override；Flovart 把付费（未被授权覆盖）和删除保留为硬闸，
+    // 偏离 OMP：OMP 的 yolo 忽略裸 override；Iris 把付费（未被授权覆盖）和删除保留为硬闸，
     // 因为它们会花用户的钱或丢用户的作品，且浏览器里没有撤销 provider 计费的手段。
     if (decision.override && decision.hardGate && !spendCovered) return prompt(false);
     if (decision.policy === 'allow') return { action: 'allow', tier };
@@ -164,7 +164,7 @@ function resolveInteractive(input: ApprovalContext & { tool: string; decision: u
 }
 
 // ---------------------------------------------------------------------------
-// Flovart 工具声明：命令 → approval(args)
+// Iris 工具声明：命令 → approval(args)
 // ---------------------------------------------------------------------------
 
 const READ_COMMANDS = new Set([
@@ -180,14 +180,14 @@ const READ_COMMANDS = new Set([
   'workflow.nodes.search',
   'workflow.cost.estimate',
   'workflow.node.tool.list',
-  'flovart_workflow_media_view',
-  'flovart_web_search',
-  'flovart_grep',
-  'flovart_todo',
-  'flovart_ask',
+  'iris_workflow_media_view',
+  'iris_web_search',
+  'iris_grep',
+  'flovart_todo', // 已移除任务清单的弃用无操作别名
+  'iris_ask',
   // 内核自带：读技能只读包内文本；项目记忆只写本机记忆，不触达画布、不计费。
-  'flovart_skill_read',
-  'flovart_memory',
+  'iris_skill_read',
+  'iris_memory',
   // 停止 / 选中 / 视口 / 聚焦不改文档；停止只会减少花费，不在手动模式里拦。
   'workflow.node.stop',
   'workflow.select',
@@ -234,12 +234,12 @@ export function toolApprovalFor(command: string, args: Record<string, unknown> =
 // 持久化：审批模式 + 按工具用户策略（localStorage）
 // ---------------------------------------------------------------------------
 
-const MODE_KEY = 'flovart.agent.approvalMode';
+const MODE_KEY = 'iris.agent.approvalMode';
 /** 旧版面板的模式按钮（手动 / 自动）。 */
-const LEGACY_MODE_KEY = 'flovart.agent.mode';
-const USER_POLICY_KEY = 'flovart.agent.toolApproval';
+const LEGACY_MODE_KEY = 'iris.agent.mode';
+const USER_POLICY_KEY = 'iris.agent.toolApproval';
 /** 旧版「始终允许此类操作」的授权键列表（command[:tool]:risk）。 */
-const LEGACY_ALWAYS_KEY = 'flovart.agent.alwaysAllow';
+const LEGACY_ALWAYS_KEY = 'iris.agent.alwaysAllow';
 
 type RWStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 const defaultStorage = (): RWStorage | undefined => {

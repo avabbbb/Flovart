@@ -21,8 +21,8 @@ type SyncMessage =
   | { type: 'handoff-ready'; to: string }
   | { type: 'handoff-refused'; to: string };
 
-const LOCK_NAME = 'flovart:workflow:writer';
-const CHANNEL_NAME = 'flovart:workflow:sync';
+const LOCK_NAME = 'iris:workflow:writer';
+const CHANNEL_NAME = 'iris:workflow:sync';
 const HANDOFF_TIMEOUT_MS = 3000;
 const tabId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
 

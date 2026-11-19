@@ -12,7 +12,7 @@ describe('summarizeToolCall', () => {
         { type: 'image', data: BASE64 },
       ],
     };
-    const summary = summarizeToolCall({ toolName: 'flovart_workflow_media_view', args: { nodeIds: ['a', 'b', 'c', 'd'] }, result, status: 'success' });
+    const summary = summarizeToolCall({ toolName: 'iris_workflow_media_view', args: { nodeIds: ['a', 'b', 'c', 'd'] }, result, status: 'success' });
     expect(summary.text).toBe('读取了 4 个节点：图片1、图片2、片段、图片3');
     expect(summary.thumbnails).toEqual([
       { src: 'data:image/jpeg;base64,' + BASE64, alt: '图片1' },
@@ -22,33 +22,32 @@ describe('summarizeToolCall', () => {
   });
 
   it('describes pending media view by node count', () => {
-    expect(summarizeToolCall({ toolName: 'flovart_workflow_media_view', args: { nodeIds: ['a', 'b'] }, status: 'pending' }).text).toBe('查看 2 个节点的画面');
-    expect(summarizeToolCall({ toolName: 'flovart_workflow_media_view', args: { nodeIds: ['a'] }, status: 'pending', language: 'en' }).text).toBe('Viewing 1 node');
+    expect(summarizeToolCall({ toolName: 'iris_workflow_media_view', args: { nodeIds: ['a', 'b'] }, status: 'pending' }).text).toBe('查看 2 个节点的画面');
+    expect(summarizeToolCall({ toolName: 'iris_workflow_media_view', args: { nodeIds: ['a'] }, status: 'pending', language: 'en' }).text).toBe('Viewing 1 node');
   });
 
   it('counts nodes and links from an inspect result', () => {
     const text = JSON.stringify({ revision: 3, nodes: [{ id: '1', title: 'A' }, { id: '2', title: 'B' }], edges: [{}] });
-    expect(summarizeToolCall({ toolName: 'flovart_workflow_inspect', result: { content: [{ type: 'text', text }] }, status: 'success' }).text).toBe('读取了画布：2 个节点、1 条连线');
-    expect(summarizeToolCall({ toolName: 'flovart_workflow_selection_get', result: text, status: 'success' }).text).toBe('读取了 2 个选中节点：A、B');
+    expect(summarizeToolCall({ toolName: 'iris_workflow_inspect', result: { content: [{ type: 'text', text }] }, status: 'success' }).text).toBe('读取了画布：2 个节点、1 条连线');
+    expect(summarizeToolCall({ toolName: 'iris_workflow_selection_get', result: text, status: 'success' }).text).toBe('读取了 2 个选中节点：A、B');
   });
 
   it('summarizes ask answers and pending ask', () => {
-    expect(summarizeToolCall({ toolName: 'flovart_ask', status: 'pending' }).text).toBe('请在下方表单里回答');
+    expect(summarizeToolCall({ toolName: 'iris_ask', status: 'pending' }).text).toBe('请在下方表单里回答');
     const result = { content: [{ type: 'text', text: '{"ok":true,"data":{"pair":"5+10","bg":["keep","warm"]}}' }] };
-    expect(summarizeToolCall({ toolName: 'flovart_ask', result, status: 'success' }).text).toBe('你的回答：5+10；keep / warm');
+    expect(summarizeToolCall({ toolName: 'iris_ask', result, status: 'success' }).text).toBe('你的回答：5+10；keep / warm');
   });
 
   it('uses the first error line for failures', () => {
-    const summary = summarizeToolCall({ toolName: 'flovart_workflow_node_run', result: { content: [{ type: 'text', text: '\n生成失败：429\n详情…' }] }, status: 'error' });
+    const summary = summarizeToolCall({ toolName: 'iris_workflow_node_run', result: { content: [{ type: 'text', text: '\n生成失败：429\n详情…' }] }, status: 'error' });
     expect(summary.text).toBe('生成失败：429');
     expect(summarizeToolCall({ toolName: 'x', status: 'denied' }).text).toBe('已拒绝执行');
   });
 
-  it('describes searches, todo and apply from their args', () => {
-    expect(summarizeToolCall({ toolName: 'flovart_web_search', args: { query: '秋天公园 参考' }, status: 'success' }).text).toBe('搜索「秋天公园 参考」');
-    expect(summarizeToolCall({ toolName: 'flovart_grep', args: { pattern: 'TODO' }, status: 'success', language: 'en' }).text).toBe('Searched “TODO”');
-    expect(summarizeToolCall({ toolName: 'flovart_todo', args: { todos: [1, 2, 3] }, status: 'success' }).text).toBe('更新了 3 项任务');
-    expect(summarizeToolCall({ toolName: 'flovart_workflow_apply', args: { operations: [1] }, status: 'success', language: 'en' }).text).toBe('Applied 1 change');
+  it('describes searches and apply from their args', () => {
+    expect(summarizeToolCall({ toolName: 'iris_web_search', args: { query: '秋天公园 参考' }, status: 'success' }).text).toBe('搜索「秋天公园 参考」');
+    expect(summarizeToolCall({ toolName: 'iris_grep', args: { pattern: 'TODO' }, status: 'success', language: 'en' }).text).toBe('Searched “TODO”');
+    expect(summarizeToolCall({ toolName: 'iris_workflow_apply', args: { operations: [1] }, status: 'success', language: 'en' }).text).toBe('Applied 1 change');
   });
 
   it('hides JSON results of unknown tools but keeps plain first lines', () => {

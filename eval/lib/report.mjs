@@ -252,7 +252,7 @@ function renderCrossTable(title, rowLabel, table) {
 
 function defaultExternalGates() {
   return [
-    { gate: 'real Codex agent run', status: 'not-run', reason: 'requires FLOVARTBENCH_ALLOW_CODEX=true and a codex binary' },
+    { gate: 'real Codex agent run', status: 'not-run', reason: 'requires IRISBENCH_ALLOW_CODEX=true and a codex binary' },
     { gate: 'real paid Provider submission', status: 'not-run', reason: 'requires funded provider credentials' },
     { gate: 'host installer / auto-update', status: 'not-run', reason: 'requires a signed build' },
     { gate: 'real account login', status: 'not-run', reason: 'requires hosted account credentials' },

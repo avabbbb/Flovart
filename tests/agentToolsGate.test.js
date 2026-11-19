@@ -14,10 +14,10 @@ let baseUrl;
 let token;
 
 beforeAll(async () => {
-  home = mkdtempSync(join(tmpdir(), 'flovart-tools-gate-'));
+  home = mkdtempSync(join(tmpdir(), 'iris-tools-gate-'));
   child = spawn(process.execPath, [join(ROOT, 'agent', 'index.js')], {
     cwd: ROOT,
-    env: { ...process.env, FLOVART_AGENT_HOME: home, FLOVART_AGENT_CONFIG: join(home, 'agent.json'), FLOVART_AGENT_PORT: '0', FLOVART_WORKSPACE_ONLY: '1' },
+    env: { ...process.env, IRIS_AGENT_HOME: home, IRIS_AGENT_CONFIG: join(home, 'agent.json'), IRIS_AGENT_PORT: '0', IRIS_WORKSPACE_ONLY: '1' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   baseUrl = await new Promise((done, fail) => {

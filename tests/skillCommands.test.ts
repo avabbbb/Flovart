@@ -4,8 +4,8 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { runSkillCommand, buildNativeOpenCommand } from '../tools/flovart/skill-commands.js';
-import { SkillRegistry } from '../tools/flovart/skill-registry.js';
+import { runSkillCommand, buildNativeOpenCommand } from '../tools/iris/skill-commands.js';
+import { SkillRegistry } from '../tools/iris/skill-registry.js';
 
 const MANIFEST_YAML = `schemaVersion: flovart.production-skill/1
 id: community.demo
@@ -35,13 +35,13 @@ function writePackage(root, id) {
   writeFileSync(join(dir, 'references', 'creative-direction.md'), '# D\n', 'utf8');
 }
 
-describe('flovart CLI skill commands', () => {
+describe('iris CLI skill commands', () => {
   let projectDir;
   let packageDir;
 
   beforeEach(() => {
-    projectDir = mkdtempSync(join(tmpdir(), 'flovart-skill-cli-project-'));
-    packageDir = mkdtempSync(join(tmpdir(), 'flovart-skill-cli-pkg-'));
+    projectDir = mkdtempSync(join(tmpdir(), 'iris-skill-cli-project-'));
+    packageDir = mkdtempSync(join(tmpdir(), 'iris-skill-cli-pkg-'));
     mkdirSync(join(projectDir, '.agents', 'skills'), { recursive: true });
     writePackage(packageDir, 'community.demo');
   });
@@ -175,10 +175,10 @@ describe('web.open', () => {
     }
   });
 
-  it('honors FLOVART_WEBUI_PORTS over the default probe order', async () => {
+  it('honors IRIS_WEBUI_PORTS over the default probe order', async () => {
     const opener = vi.fn();
-    const previousPorts = process.env.FLOVART_WEBUI_PORTS;
-    process.env.FLOVART_WEBUI_PORTS = 'http://127.0.0.1:8080,http://127.0.0.1:9000';
+    const previousPorts = process.env.IRIS_WEBUI_PORTS;
+    process.env.IRIS_WEBUI_PORTS = 'http://127.0.0.1:8080,http://127.0.0.1:9000';
     vi.stubGlobal('fetch', vi.fn(async input => {
       return String(input) === 'http://127.0.0.1:8080'
         ? { ok: true, status: 200, text: async () => '<body data-flovart-webui="1"></body>' }
@@ -190,19 +190,19 @@ describe('web.open', () => {
       expect(result.opened).toBe('http://127.0.0.1:8080');
     } finally {
       vi.unstubAllGlobals();
-      if (previousPorts === undefined) delete process.env.FLOVART_WEBUI_PORTS;
-      else process.env.FLOVART_WEBUI_PORTS = previousPorts;
+      if (previousPorts === undefined) delete process.env.IRIS_WEBUI_PORTS;
+      else process.env.IRIS_WEBUI_PORTS = previousPorts;
     }
   });
 
-  it('uses a one-time Agent bootstrap when opening a ready Flovart WebUI', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'flovart-web-open-'));
+  it('uses a one-time Agent bootstrap when opening a ready Iris WebUI', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'iris-web-open-'));
     const configPath = join(dir, 'agent.json');
     const target = 'http://127.0.0.1:6100/';
     const opener = vi.fn();
     writeFileSync(configPath, JSON.stringify({ url: 'http://127.0.0.1:6101', token: 'secret-token' }), 'utf8');
-    const previousConfig = process.env.FLOVART_AGENT_CONFIG;
-    process.env.FLOVART_AGENT_CONFIG = configPath;
+    const previousConfig = process.env.IRIS_AGENT_CONFIG;
+    process.env.IRIS_AGENT_CONFIG = configPath;
     vi.stubGlobal('fetch', vi.fn(async input => {
       const url = String(input);
       if (url === target) return { ok: true, status: 200, text: async () => '<body data-flovart-webui="1"></body>' };
@@ -220,8 +220,8 @@ describe('web.open', () => {
       expect(opener.mock.calls[0][0]).toContain('activateBrowserWriter=1');
     } finally {
       vi.unstubAllGlobals();
-      if (previousConfig === undefined) delete process.env.FLOVART_AGENT_CONFIG;
-      else process.env.FLOVART_AGENT_CONFIG = previousConfig;
+      if (previousConfig === undefined) delete process.env.IRIS_AGENT_CONFIG;
+      else process.env.IRIS_AGENT_CONFIG = previousConfig;
       rmSync(dir, { recursive: true, force: true });
     }
   });

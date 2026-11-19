@@ -11,11 +11,11 @@ const history = [
     role: 'assistant',
     content: [
       { type: 'thinking', thinking: '先 inspect', thinkingSignature: 'reasoning_content' },
-      { type: 'toolCall', id: 'c1', name: 'flovart_workflow_inspect', arguments: {} },
+      { type: 'toolCall', id: 'c1', name: 'iris_workflow_inspect', arguments: {} },
     ],
     timestamp: 4,
   },
-  { role: 'toolResult', toolCallId: 'c1', toolName: 'flovart_workflow_inspect', isError: false, timestamp: 5, content: [{ type: 'text', text: '{}' }] },
+  { role: 'toolResult', toolCallId: 'c1', toolName: 'iris_workflow_inspect', isError: false, timestamp: 5, content: [{ type: 'text', text: '{}' }] },
 ] as unknown as Messages;
 
 describe('reasoning echo in toOpenAIMessages', () => {

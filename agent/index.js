@@ -1,3 +1,4 @@
+import '../tools/iris/legacy-bootstrap.js';
 import http from 'node:http';
 import fs from 'node:fs';
 import { BootstrapCredentialError, BootstrapCredentialStore } from './bootstrap-credentials.js';
@@ -5,25 +6,25 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_AGENT_PORT, loadAgentConfig } from './config.js';
 import { persistAgentConfig } from './persist-config.js';
-import { FlovartAgentService } from './flovart.js';
-import { createFlovartAgentTools, createFlovartPipelineTools } from './tools.js';
+import { IrisAgentService } from './iris.js';
+import { createIrisAgentTools, createIrisPipelineTools } from './tools.js';
 import { SkillRegistry, BUNDLED_SKILL_IDS } from './skill-registry.js';
 import { WorkflowAgentSession, WorkflowAgentSessionError } from './session.js';
 import { prepareAgentHostProjection } from './host-projection.js';
-import { importFlovartModule, importFlovartPipelineModule } from './flovart-modules.js';
+import { importIrisModule, importIrisPipelineModule } from './iris-modules.js';
 import { ReceiptError, ReceiptStore } from './receipts.js';
 import { createFileTaskStore } from './task-store.js';
 import { AgentCredentialStore, CredentialError } from './credentials.js';
 
-const { discoverAgentHosts } = await importFlovartModule('host-discovery');
-const { getAgentIdentity } = await importFlovartModule('host-registry');
-const { getCanonicalRegistry } = await importFlovartModule('registry');
-const { AGENT_PUBLIC_COMMAND_SET } = await importFlovartModule('agent-surface');
-const { readWebDiscovery } = await importFlovartModule('web-discovery');
+const { discoverAgentHosts } = await importIrisModule('host-discovery');
+const { getAgentIdentity } = await importIrisModule('host-registry');
+const { getCanonicalRegistry } = await importIrisModule('registry');
+const { AGENT_PUBLIC_COMMAND_SET } = await importIrisModule('agent-surface');
+const { readWebDiscovery } = await importIrisModule('web-discovery');
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const PROJECT_ROOT = path.resolve(process.env.FLOVART_PROJECT_DIR || REPOSITORY_ROOT);
-const WORKSPACE_ONLY = process.env.FLOVART_WORKSPACE_ONLY === '1';
+const PROJECT_ROOT = path.resolve(process.env.IRIS_PROJECT_DIR || REPOSITORY_ROOT);
+const WORKSPACE_ONLY = process.env.IRIS_WORKSPACE_ONLY === '1';
 
 const json = (response, status, body) => {
   // SSE 等流式端点可能已经写出响应头：二次 writeHead 会抛 ERR_HTTP_HEADERS_SENT
@@ -87,20 +88,21 @@ function isLoopbackOrigin(origin) {
 }
 
 // 可发起 bootstrap 交换的浏览器来源：本机 loopback HTTP，或受信的 https 线上站（默认官方站，
-// 可用 FLOVART_TRUSTED_WEB_HOSTS 逗号分隔追加主机名，须与启动器一致）。bootstrap token 一次性、120s 过期，
+// 可用 IRIS_TRUSTED_WEB_HOSTS 逗号分隔追加主机名，须与启动器一致）。bootstrap token 一次性、120s 过期，
 // 只由本机启动器签发；持久 token 从不离开启动器。
-const DEFAULT_TRUSTED_WEB_HOSTS = ['flovart.avabbbb.com'];
+// flovart.avabbbb.com：2026-11-20 更名过渡期仍受信（旧站继续可用），迁移完成后删除。
+const DEFAULT_TRUSTED_WEB_HOSTS = ['iris.avabbbb.com', 'flovart.avabbbb.com'];
 
 function isTrustedWebOrigin(origin) {
   let url;
   try { url = new URL(origin); } catch { return false; }
   if (url.protocol !== 'https:' || url.port) return false;
-  const extra = String(process.env.FLOVART_TRUSTED_WEB_HOSTS || '').split(',').map(item => item.trim().toLowerCase()).filter(Boolean);
+  const extra = String(process.env.IRIS_TRUSTED_WEB_HOSTS || '').split(',').map(item => item.trim().toLowerCase()).filter(Boolean);
   return [...DEFAULT_TRUSTED_WEB_HOSTS, ...extra].includes(url.hostname.toLowerCase());
 }
 
 // DSH Desktop serves its app from the dsh-app:// custom scheme. The embedded
-// Flovart page exchanges there, and no website can claim that scheme, so it is
+// Iris page exchanges there, and no website can claim that scheme, so it is
 // an app origin rather than a web origin. Local CLI/processes can already send
 // loopback origins; this adds no browser-reachable path.
 function isDshDesktopOrigin(origin) {
@@ -181,15 +183,15 @@ function setCors(request, response, url, config, credentials) {
 
 export function startHttpServer() {
   const config = loadAgentConfig(true);
-  const requestedPort = process.env.FLOVART_AGENT_PORT === '0'
+  const requestedPort = process.env.IRIS_AGENT_PORT === '0'
     ? 0
-    : Number(process.env.FLOVART_AGENT_PORT) || Number(new URL(config.url).port) || DEFAULT_AGENT_PORT;
+    : Number(process.env.IRIS_AGENT_PORT) || Number(new URL(config.url).port) || DEFAULT_AGENT_PORT;
   const bootstrapCredentials = new BootstrapCredentialStore();
-  // webUrl 惰性解析：WebUI 往往晚于 Agent 启动；FLOVART_WEB_URL 可显式覆盖。
+  // webUrl 惰性解析：WebUI 往往晚于 Agent 启动；IRIS_WEB_URL 可显式覆盖。
   const session = new WorkflowAgentSession({
     isKnownAgentIdentity: id => Boolean(getAgentIdentity(id)),
     taskStore: createFileTaskStore(),
-    webUrl: () => process.env.FLOVART_WEB_URL || readWebDiscovery()?.url || null,
+    webUrl: () => process.env.IRIS_WEB_URL || readWebDiscovery()?.url || null,
   });
   const receiptStore = new ReceiptStore();
   // 让会话内的复合命令（如 workflow.batch.pick）能写 decision 回执。
@@ -206,10 +208,10 @@ export function startHttpServer() {
     limits: { maxPayloadBytes: 1024 * 1024, eventRetention: 10000 },
   });
   const skillRegistry = new SkillRegistry({ repoRoot: PROJECT_ROOT });
-  const flovart = WORKSPACE_ONLY ? null : new FlovartAgentService({
+  const iris = WORKSPACE_ONLY ? null : new IrisAgentService({
     tools: [
-      ...createFlovartAgentTools((...args) => session.callCommand(...args)),
-      ...createFlovartPipelineTools((...args) => session.callCommand(...args)),
+      ...createIrisAgentTools((...args) => session.callCommand(...args)),
+      ...createIrisPipelineTools((...args) => session.callCommand(...args)),
     ],
   });
 
@@ -336,7 +338,7 @@ export function startHttpServer() {
       }
       // Agent 视频流水线：抽屉“运行日志”按 run 分组读取 trace；只读，写操作仍只走命令边界。
       if (request.method === 'GET' && url.pathname.startsWith('/pipeline/')) {
-        const { getPipeline } = await importFlovartPipelineModule('index');
+        const { getPipeline } = await importIrisPipelineModule('index');
         const pipeline = getPipeline();
         try {
           if (url.pathname === '/pipeline/runs') {
@@ -430,7 +432,7 @@ export function startHttpServer() {
         return json(response, 200, { ok: true, skills: await skillRegistry.scan() });
       }
       if (request.method === 'GET' && /^\/api\/skills\/[^/]+\/file$/.test(url.pathname)) {
-        // 内置 Agent 的 flovart_skill_read：只读 SKILL.md 与 references/、commands/ 下的文件，越界路径 400。
+        // 内置 Agent 的 iris_skill_read：只读 SKILL.md 与 references/、commands/ 下的文件，越界路径 400。
         const id = decodeURIComponent(url.pathname.split('/').at(-2));
         try {
           const file = await skillRegistry.readFile(id, url.searchParams.get('path') || 'SKILL.md');
@@ -509,7 +511,7 @@ export function startHttpServer() {
         // 画布（当前或历史工程）→ Production Skill：浏览器送来脱敏后的节点与连线，
         // 回执从本机回执库取；验收通过且 install=true 才入库，失败只回验收结果。
         const body = await readBody(request);
-        const { buildSkillDraft, evaluateSkillDraft } = await importFlovartModule('skill-draft');
+        const { buildSkillDraft, evaluateSkillDraft } = await importIrisModule('skill-draft');
         const id = String(body.id || '');
         const projectId = String(body.projectId || body.project?.id || '');
         let draft;
@@ -564,11 +566,11 @@ export function startHttpServer() {
         const result = await session.callCommand(body.command, body.args || {}, body.source || 'agent', body.idempotencyKey, undefined, body.caller);
         return json(response, 200, { ok: true, result });
       }
-      if (flovart && request.method === 'GET' && url.pathname === '/agent/flovart/session') {
+      if (iris && request.method === 'GET' && (url.pathname === '/agent/iris/session' || url.pathname === '/agent/flovart/session')) {
         const projectId = url.searchParams.get('projectId') || 'default';
-        return json(response, 200, { ok: true, ...(await flovart.snapshot(projectId)) });
+        return json(response, 200, { ok: true, ...(await iris.snapshot(projectId)) });
       }
-      if (flovart && request.method === 'POST' && url.pathname === '/agent/flovart/turn') {
+      if (iris && request.method === 'POST' && (url.pathname === '/agent/iris/turn' || url.pathname === '/agent/flovart/turn')) {
         const body = await readBody(request);
         const projectId = String(body.projectId || 'default');
         response.writeHead(200, {
@@ -583,10 +585,10 @@ export function startHttpServer() {
             response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
           } catch (error) {
             if (error?.code === 'EPIPE' || error?.code === 'ERR_STREAM_DESTROYED') return;
-            console.error('[flovart-agent] SSE write failed:', error);
+            console.error('[iris-agent] SSE write failed:', error);
           }
         };
-        const unsubscribe = await flovart.subscribe(projectId, event => {
+        const unsubscribe = await iris.subscribe(projectId, event => {
           const update = event.type === 'message_update' ? event.assistantMessageEvent : undefined;
           if (update?.type === 'text_delta') emit('text-delta', { delta: update.delta });
           if (update?.type === 'thinking_delta') emit('thinking-delta', { delta: update.delta });
@@ -609,7 +611,7 @@ export function startHttpServer() {
           });
         });
         try {
-          const snapshot = await flovart.send(projectId, String(body.prompt || ''), [], body.skillAttachment);
+          const snapshot = await iris.send(projectId, String(body.prompt || ''), [], body.skillAttachment);
           emit('snapshot', snapshot);
         } catch (error) {
           emit('error', { message: error instanceof Error ? error.message : String(error) });
@@ -619,9 +621,9 @@ export function startHttpServer() {
         }
         return;
       }
-      if (flovart && request.method === 'POST' && url.pathname === '/agent/flovart/cancel') {
+      if (iris && request.method === 'POST' && (url.pathname === '/agent/iris/cancel' || url.pathname === '/agent/flovart/cancel')) {
         const body = await readBody(request);
-        await flovart.cancel(String(body.projectId || 'default'));
+        await iris.cancel(String(body.projectId || 'default'));
         return json(response, 200, { ok: true });
       }
       return json(response, 404, { ok: false, error: 'not found' });
@@ -641,25 +643,25 @@ export function startHttpServer() {
 
   const listen = port => {
     server.once('error', error => {
-      if (error?.code === 'EADDRINUSE' && port !== 0 && process.env.FLOVART_AGENT_PORT !== '0') {
+      if (error?.code === 'EADDRINUSE' && port !== 0 && process.env.IRIS_AGENT_PORT !== '0') {
         listen(0);
         return;
       }
-      console.error(`[flovart-agent] unable to listen on localhost:${port}: ${error?.message || error}`);
+      console.error(`[iris-agent] unable to listen on localhost:${port}: ${error?.message || error}`);
       process.exitCode = 1;
     });
     server.listen(port, '127.0.0.1', () => {
       const address = server.address();
       const actualPort = typeof address === 'object' && address ? address.port : port;
       config.url = `http://127.0.0.1:${actualPort}`;
-      if (!persistAgentConfig(config, 'listen url')) console.warn('[flovart-agent] agent.json does not record ' + config.url + '; clients reading it may use a stale URL.');
-      console.log(WORKSPACE_ONLY ? 'Flovart Workspace Operator' : 'Flovart Agent');
+      if (!persistAgentConfig(config, 'listen url')) console.warn('[iris-agent] agent.json does not record ' + config.url + '; clients reading it may use a stale URL.');
+      console.log(WORKSPACE_ONLY ? 'Iris Workspace Operator' : 'Iris Agent');
       console.log(`Local URL: ${config.url}`);
     });
   };
   listen(requestedPort);
   const close = () => {
-    if (flovart) void flovart.close();
+    if (iris) void iris.close();
     for (const res of activeSse) {
       try { res.end(); } catch { /* SSE connection already closed */ }
     }

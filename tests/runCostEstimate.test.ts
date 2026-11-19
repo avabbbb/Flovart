@@ -5,8 +5,8 @@ import { createWorkflowExecutor } from '../services/workflowExecutor';
 import { createWorkflowProject } from '../components/workflow/store';
 import { createWorkflowNode } from '../components/workflow/constants';
 import { toolApprovalFor } from '../services/agentToolPolicy';
-import { agentToolCommand, getAgentToolSpecs } from '../tools/flovart/agent-tools.js';
-import { AGENT_PUBLIC_COMMAND_SET } from '../tools/flovart/agent-surface.js';
+import { agentToolCommand, getAgentToolSpecs } from '../tools/iris/agent-tools.js';
+import { AGENT_PUBLIC_COMMAND_SET } from '../tools/iris/agent-surface.js';
 import { createAgentTaskLayer as createLayer, TASKABLE_COMMANDS } from '../agent/task-layer.js';
 import { describeAgentConfirmation } from '../components/agent/agentConfirmCopy';
 import type { WorkflowNode, WorkflowProject } from '../components/workflow/types';
@@ -106,8 +106,8 @@ describe('workflow.cost.estimate', () => {
 
   it('is a public, read-tier tool on every host', () => {
     expect(AGENT_PUBLIC_COMMAND_SET.has('workflow.cost.estimate')).toBe(true);
-    expect(agentToolCommand('flovart_cost_estimate')).toBe('workflow.cost.estimate');
-    expect(agentToolCommand('flovart_estimate_cost')).toBe('workflow.cost.estimate');
+    expect(agentToolCommand('iris_cost_estimate')).toBe('workflow.cost.estimate');
+    expect(agentToolCommand('iris_estimate_cost')).toBe('workflow.cost.estimate');
     expect(toolApprovalFor('workflow.cost.estimate', { nodeIds: ['s1'] })).toEqual({ tier: 'read' });
     for (const host of ['builtin', 'local', 'mcp', 'dsh']) {
       expect(getAgentToolSpecs(host).some((spec: { command: string }) => spec.command === 'workflow.cost.estimate')).toBe(true);

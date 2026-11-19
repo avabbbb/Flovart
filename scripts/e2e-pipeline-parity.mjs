@@ -13,7 +13,7 @@ const result = spawnSync('cargo', [
   'runtime::pipeline_trace::tests::matches_node_trace_for_real_run', '--', '--ignored', '--exact',
 ], {
   stdio: 'inherit',
-  env: { ...process.env, FLOVART_PIPELINE_PARITY_DB: summary.dbPath, FLOVART_PIPELINE_PARITY_EXPECTED: summary.tracePath },
+  env: { ...process.env, IRIS_PIPELINE_PARITY_DB: summary.dbPath, IRIS_PIPELINE_PARITY_EXPECTED: summary.tracePath },
 });
 if (result.status !== 0) {
   console.error('Rust pipeline trace differs from Node trace');

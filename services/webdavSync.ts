@@ -11,11 +11,11 @@ export interface WebDavConfig {
   lastSyncAt?: number;
 }
 
-export const DEFAULT_WEBDAV_CONFIG: WebDavConfig = { url: '', remoteDir: 'flovart', username: '', password: '' };
-export const WEBDAV_SYNC_FILE = 'flovart-settings.json';
+export const DEFAULT_WEBDAV_CONFIG: WebDavConfig = { url: '', remoteDir: 'iris', username: '', password: '' };
+export const WEBDAV_SYNC_FILE = 'iris-settings.json';
 export const WEBDAV_SYNC_VERSION = 1;
 
-const configStore = localforage.createInstance({ name: 'flovart', storeName: 'webdav_config' });
+const configStore = localforage.createInstance({ name: 'iris', storeName: 'webdav_config' });
 const CONFIG_KEY = 'config';
 
 export async function loadWebDavConfig(): Promise<WebDavConfig> {
@@ -119,7 +119,7 @@ export interface SyncedChannel {
 }
 
 export interface WebDavSyncPayload {
-  app: 'flovart';
+  app: 'iris';
   version: number;
   exportedAt: number;
   channels: SyncedChannel[];
@@ -136,7 +136,7 @@ function stripSecrets(extra: Record<string, string> | undefined): Record<string,
 /** 生成同步快照：去掉 key、runtimeManaged、status 以及 extraConfig 中疑似密钥的字段。 */
 export function buildSyncPayload(keys: UserApiKey[], now: number = Date.now()): WebDavSyncPayload {
   return {
-    app: 'flovart',
+    app: 'iris',
     version: WEBDAV_SYNC_VERSION,
     exportedAt: now,
     channels: keys.filter(item => !item.runtimeManaged).map(item => ({
@@ -163,11 +163,11 @@ export function parseSyncPayload(raw: unknown): WebDavSyncPayload {
   const value = typeof raw === 'string' ? safeJson(raw) : raw;
   if (!value || typeof value !== 'object') throw new WebDavError('INVALID_PAYLOAD', '远程同步文件不是有效 JSON');
   const payload = value as Partial<WebDavSyncPayload>;
-  if (payload.app !== 'flovart' || !Array.isArray(payload.channels)) {
-    throw new WebDavError('INVALID_PAYLOAD', '远程同步文件不是 Flovart 设置');
+  if (payload.app !== 'iris' || !Array.isArray(payload.channels)) {
+    throw new WebDavError('INVALID_PAYLOAD', '远程同步文件不是 Iris 设置');
   }
   if (typeof payload.version !== 'number' || payload.version > WEBDAV_SYNC_VERSION) {
-    throw new WebDavError('INVALID_PAYLOAD', '远程同步文件版本过新，请先升级 Flovart');
+    throw new WebDavError('INVALID_PAYLOAD', '远程同步文件版本过新，请先升级 Iris');
   }
   return payload as WebDavSyncPayload;
 }

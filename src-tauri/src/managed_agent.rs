@@ -109,9 +109,9 @@ pub fn plan_managed_agent_launch(
 }
 
 /// Plan a launch preferring the bundled self-contained sidecar when one is
-/// present next to the running executable (or via `FLOVART_MANAGED_AGENT_BIN`).
+/// present next to the running executable (or via `IRIS_MANAGED_AGENT_BIN`).
 ///
-/// Precedence: explicit `FLOVART_MANAGED_AGENT_ENTRY` → bundled sidecar →
+/// Precedence: explicit `IRIS_MANAGED_AGENT_ENTRY` → bundled sidecar →
 /// installed Toolkit → development entrypoint → error.
 pub fn plan_managed_agent_launch_with_sidecar(
     options: ManagedAgentLaunchOptions,
@@ -176,20 +176,20 @@ fn plan_launch(
 }
 
 pub fn bundled_sidecar_path() -> Option<PathBuf> {
-    if let Some(path) = std::env::var_os("FLOVART_MANAGED_AGENT_BIN").map(PathBuf::from) {
+    if let Some(path) = std::env::var_os("IRIS_MANAGED_AGENT_BIN").map(PathBuf::from) {
         if path.is_file() {
             return Some(path);
         }
     }
     let triple = target_triple();
-    // Tauri externalBin emits `flovart-agent-<triple>[.exe]` next to the app
+    // Tauri externalBin emits `iris-agent-<triple>[.exe]` next to the app
     // executable; the plain name covers repackaged or dev-copied layouts.
     let mut candidates: Vec<String> = Vec::new();
     for suffix in ["", ".exe"] {
-        candidates.push(format!("flovart-agent-{triple}{suffix}"));
+        candidates.push(format!("iris-agent-{triple}{suffix}"));
     }
     for suffix in ["", ".exe"] {
-        candidates.push(format!("flovart-agent{suffix}"));
+        candidates.push(format!("iris-agent{suffix}"));
     }
     let mut roots: Vec<PathBuf> = Vec::new();
     if let Ok(exe) = std::env::current_exe() {
@@ -256,8 +256,46 @@ fn tauri_resource_dir() -> Option<PathBuf> {
     }
 }
 
+/// 2026-11-20 Flovart → Iris：`IRIS_*` 未设置时回退读取旧的 `FLOVART_*`。
+fn env_var_os_compat(name: &str) -> Option<std::ffi::OsString> {
+    std::env::var_os(name).or_else(|| {
+        name.strip_prefix("IRIS_")
+            .and_then(|rest| std::env::var_os(format!("FLOVART_{rest}")))
+    })
+}
+
+/// 2026-11-20 Flovart → Iris：`~/.iris` 不存在而 `~/.flovart` 存在时整目录复制
+/// （先复制到临时目录再改名，与 tools/iris/legacy-home.js 同一规则，谁先启动谁迁移）。旧目录保留不删。
+fn migrate_legacy_home(home_dir: &Path) {
+    let target = home_dir.join(".iris");
+    let legacy = home_dir.join(".flovart");
+    if target.exists() || !legacy.is_dir() {
+        return;
+    }
+    let staging = home_dir.join(format!(".iris.migrating-{}", std::process::id()));
+    if copy_dir_recursive(&legacy, &staging).is_ok() && fs::rename(&staging, &target).is_ok() {
+        return;
+    }
+    let _ = fs::remove_dir_all(&staging);
+}
+
+fn copy_dir_recursive(from: &Path, to: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(to)?;
+    for entry in fs::read_dir(from)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let dest = to.join(entry.file_name());
+        if file_type.is_dir() {
+            copy_dir_recursive(&entry.path(), &dest)?;
+        } else if file_type.is_file() {
+            fs::copy(entry.path(), &dest)?;
+        }
+    }
+    Ok(())
+}
+
 fn toolkit_launch(home_dir: &Path, node: PathBuf) -> Result<Option<ManagedAgentLaunch>, String> {
-    let current_path = home_dir.join(".flovart/toolkit/current.json");
+    let current_path = home_dir.join(".iris/toolkit/current.json");
     if !current_path.is_file() {
         return Ok(None);
     }
@@ -336,17 +374,18 @@ impl ManagedAgentHost {
             .or_else(|| std::env::var_os("HOME"))
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
-        let agent_dir = std::env::var_os("FLOVART_AGENT_CONFIG")
+        migrate_legacy_home(&home_dir);
+        let agent_dir = env_var_os_compat("IRIS_AGENT_CONFIG")
             .map(PathBuf::from)
             .and_then(|path| path.parent().map(Path::to_path_buf))
             .filter(|dir| !dir.as_os_str().is_empty())
-            .unwrap_or_else(|| home_dir.join(".flovart"));
-        let config_path = std::env::var_os("FLOVART_AGENT_CONFIG")
+            .unwrap_or_else(|| home_dir.join(".iris"));
+        let config_path = env_var_os_compat("IRIS_AGENT_CONFIG")
             .map(PathBuf::from)
             .unwrap_or_else(|| agent_dir.join("agent.json"));
         let log_path = agent_dir.join("managed-agent.log");
         let lock_path = agent_dir.join("managed-agent.lock");
-        let project_dir = std::env::var_os("FLOVART_PROJECT_DIR").map(PathBuf::from);
+        let project_dir = env_var_os_compat("IRIS_PROJECT_DIR").map(PathBuf::from);
         // The desktop bundle is also built directly from this source checkout during
         // local release verification. Keep the checked-out Agent as a safe fallback
         // when a versioned Toolkit has not been installed yet; installed builds still
@@ -355,8 +394,8 @@ impl ManagedAgentHost {
         let development_entrypoint = source_entrypoint.is_file().then_some(source_entrypoint);
         let launch = plan_managed_agent_launch_with_sidecar(
             ManagedAgentLaunchOptions {
-                node: std::env::var_os("FLOVART_NODE").map(PathBuf::from),
-                entrypoint: std::env::var_os("FLOVART_MANAGED_AGENT_ENTRY").map(PathBuf::from),
+                node: std::env::var_os("IRIS_NODE").map(PathBuf::from),
+                entrypoint: std::env::var_os("IRIS_MANAGED_AGENT_ENTRY").map(PathBuf::from),
                 home_dir,
                 development_entrypoint,
             },
@@ -452,7 +491,7 @@ impl ManagedAgentHost {
         command
             .args(&launch.args)
             .current_dir(&launch.cwd)
-            .env("FLOVART_AGENT_CONFIG", &self.config_path)
+            .env("IRIS_AGENT_CONFIG", &self.config_path)
             .stdin(Stdio::null());
         // Route the child's output to a per-profile log instead of the void so
         // a failing agent leaves evidence; append so restarts keep history.
@@ -469,7 +508,7 @@ impl ManagedAgentHost {
             }
         }
         if let Some(project_dir) = &self.project_dir {
-            command.env("FLOVART_PROJECT_DIR", project_dir);
+            command.env("IRIS_PROJECT_DIR", project_dir);
         }
         #[cfg(windows)]
         {
@@ -498,7 +537,7 @@ impl ManagedAgentHost {
     }
 
     /// Best-effort cross-process duplicate guard. A marker file records the
-    /// owning pid; a live foreign pid means another Flovart instance already
+    /// owning pid; a live foreign pid means another Iris instance already
     /// runs the agent and we must not spawn a second runtime. Single-instance
     /// already covers the common case — this is the belt for side-channel
     /// launches (second binary, dev exe beside installed exe).
@@ -509,7 +548,7 @@ impl ManagedAgentHost {
                 if let Ok(pid) = raw.trim().parse::<u32>() {
                     if pid != std::process::id() && pid_alive(pid) {
                         return Err(format!(
-                            "Managed Agent is already owned by another Flovart process (pid {pid})."
+                            "Managed Agent is already owned by another Iris process (pid {pid})."
                         ));
                     }
                 }
@@ -630,10 +669,10 @@ mod tests {
     fn launch_precedence_prefers_sidecar_then_toolkit_then_dev() {
         // A temp home with an installed Toolkit stub and a dev entrypoint on
         // disk; the sidecar must still win.
-        let dir = std::env::temp_dir().join(format!("flovart-launch-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("iris-launch-{}", std::process::id()));
         let bundle_dir = dir.join("toolkit-bundle");
         fs::create_dir_all(&bundle_dir).unwrap();
-        let toolkit_state = dir.join(".flovart/toolkit");
+        let toolkit_state = dir.join(".iris/toolkit");
         fs::create_dir_all(&toolkit_state).unwrap();
         let entry_script = bundle_dir.join("agent.js");
         fs::write(&entry_script, "// stub").unwrap();
@@ -652,7 +691,7 @@ mod tests {
 
         let mut opts = options(&dir);
         opts.development_entrypoint = Some(dev_entry.clone());
-        let sidecar = dir.join("flovart-agent.exe");
+        let sidecar = dir.join("iris-agent.exe");
         fs::write(&sidecar, b"MZ").unwrap();
 
         // Sidecar present → BundledSidecar, program=exe, no args.

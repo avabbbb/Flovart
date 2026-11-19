@@ -17,12 +17,12 @@ rmSync(outDir, { recursive: true, force: true });
 const home = join(outDir, 'runtime');
 const authorized = join(outDir, 'authorized-folder');
 mkdirSync(authorized, { recursive: true });
-process.env.FLOVART_PIPELINE_HOME = home;
-process.env.FLOVART_PIPELINE_ALLOWED_ROOTS = authorized;
+process.env.IRIS_PIPELINE_HOME = home;
+process.env.IRIS_PIPELINE_ALLOWED_ROOTS = authorized;
 const shot = join(authorized, 'shot.png');
 spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=s=1080x1920:d=1', '-frames:v', '1', shot]);
 
-const { Pipeline } = await import(pathToFileURL(join(ROOT, 'tools/flovart/pipeline/index.js')).href);
+const { Pipeline } = await import(pathToFileURL(join(ROOT, 'tools/iris/pipeline/index.js')).href);
 const pipeline = new Pipeline({ home });
 const ctx = mutationId => ({ caller: 'cli', mutationId });
 const ok = (response, label) => {

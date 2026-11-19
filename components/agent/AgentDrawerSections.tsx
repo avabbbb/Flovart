@@ -76,7 +76,7 @@ function AgentLogoMenu({ section, onSelect, zh }: { section: AgentDrawerSection;
 interface AgentDrawerSectionsProps {
   projectTitle?: string;
   language?: 'en' | 'zho';
-  /** children 自带顶栏（FlovartAgentPanel）时为 true：Logo 菜单会放进它的顶栏，而不是再叠一行。 */
+  /** children 自带顶栏（IrisAgentPanel）时为 true：Logo 菜单会放进它的顶栏，而不是再叠一行。 */
   chatHasHeader?: boolean;
   /** 内置助手对话区；始终保持挂载，切到其它页面不会中断正在生成的回复。 */
   children: ReactNode;

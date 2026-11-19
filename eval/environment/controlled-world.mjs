@@ -1,4 +1,4 @@
-// FlovartBench controlled environment.
+// IrisBench controlled environment.
 //
 // This module implements the Workflow Authority contract that the real
 // OperationGateway talks to. Production binds that seam to the Browser Workflow
@@ -11,12 +11,12 @@
 
 import { createHash } from 'node:crypto';
 
-import { WorkspaceClientError } from '../../tools/flovart/workspace-client.js';
+import { WorkspaceClientError } from '../../tools/iris/workspace-client.js';
 
 const HEX = '0123456789abcdef';
 
 /**
- * Operations that address the editor view rather than the document. Flovart
+ * Operations that address the editor view rather than the document. Iris
  * models them as WorkflowViewOperation, so they must not create a revision.
  */
 const VIEW_OPERATIONS = new Set(['select_nodes', 'set_viewport', 'focus_node']);
@@ -25,7 +25,7 @@ const VIEW_OPERATIONS = new Set(['select_nodes', 'set_viewport', 'focus_node']);
 const LOCAL_FOLDER_PREFIX = 'local-folder:';
 
 /** Deterministic id factory so two identical runs produce comparable snapshots. */
-export function createIdFactory(seed = 'flovartbench') {
+export function createIdFactory(seed = 'irisbench') {
   let counter = 0;
   return function nextId(prefix) {
     counter += 1;
@@ -46,11 +46,11 @@ function sha256Hex(value) {
  * which is how a real provider can hand back identical content for two
  * different prompts.
  */
-const FIXED_PROVIDER_BYTES = 'flovart-fixed-fixture-media-v1\n';
+const FIXED_PROVIDER_BYTES = 'iris-fixed-fixture-media-v1\n';
 
 function providerBytes(fingerprint, behavior) {
   if (behavior.mode === 'fixed_bytes') return Buffer.from(FIXED_PROVIDER_BYTES, 'utf8');
-  return Buffer.from(`flovart-fake-media\n${fingerprint}\n`, 'utf8');
+  return Buffer.from(`iris-fake-media\n${fingerprint}\n`, 'utf8');
 }
 
 /** Stable checksum over a value; used for artifacts and state hashing. */
@@ -75,7 +75,7 @@ export function stableStringify(value) {
 
 /**
  * The controlled world speaks the same error type as the real workspace client
- * (FlovartWorkspaceClient raises WorkspaceClientError) so createOperationGateway
+ * (IrisWorkspaceClient raises WorkspaceClientError) so createOperationGateway
  * forwards code / retryable / details unchanged instead of collapsing everything
  * into WORKSPACE_COMMAND_FAILED. Same seam, same vocabulary.
  */
@@ -395,7 +395,7 @@ export function createControlledWorld(options = {}) {
   /**
    * A node's generation config lives on the node, not in the run call: the
    * canonical Agent surface only carries projectId / nodeId / expectedRevision,
-   * because a Flovart node already holds its own prompt and mode.
+   * because a Iris node already holds its own prompt and mode.
    */
   function nodeGenerationConfig(node, args) {
     const metadata = node.metadata ?? {};

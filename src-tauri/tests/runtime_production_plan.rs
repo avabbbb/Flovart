@@ -1,4 +1,4 @@
-use flovart_lib::runtime::ProductionRuntime;
+use iris_lib::runtime::ProductionRuntime;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 use std::{
@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 fn test_database_path() -> PathBuf {
     std::env::temp_dir()
-        .join(format!("flovart-production-plan-{}", Uuid::now_v7()))
+        .join(format!("iris-production-plan-{}", Uuid::now_v7()))
         .join("state.db")
 }
 

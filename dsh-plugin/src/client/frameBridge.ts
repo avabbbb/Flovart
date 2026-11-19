@@ -1,9 +1,9 @@
-// DSH side of the Flovart embed contract (mirrors dsh-guizang-design lib/client.js).
+// DSH side of the Iris embed contract (mirrors dsh-guizang-design lib/client.js).
 // Every postMessage pins targetOrigin to location.origin; inbound messages are
 // checked by the frame component (event.source and event.origin).
 
-export const FRAME_SRC = '/flovart-app/?embed=dsh#/app'
-export const BOOTSTRAP_URL = '/flovart-app/api/bootstrap'
+export const FRAME_SRC = '/iris-app/?embed=dsh#/app'
+export const BOOTSTRAP_URL = '/iris-app/api/bootstrap'
 
 export const MESSAGE = Object.freeze({
   ready: 'flovart:dsh-ready',
@@ -16,7 +16,7 @@ export const MESSAGE = Object.freeze({
 
 export type FrameLinkStatus = 'connecting' | 'ready' | 'error'
 
-// Short reasons per Flovart link issue kind (services/agentLinkIssue.ts). The
+// Short reasons per Iris link issue kind (services/agentLinkIssue.ts). The
 // frame only receives the kind, never URLs, tokens or raw error text.
 const LINK_ISSUE_LABEL: Record<string, string> = {
   not_configured: '未拿到连接凭证',
@@ -26,14 +26,14 @@ const LINK_ISSUE_LABEL: Record<string, string> = {
   timeout: 'Workspace Operator 响应超时',
   cors: 'Operator 拒绝了页面来源',
   auth: '连接凭证已失效，正在重新获取',
-  version: 'Flovart 与 Operator 版本不匹配',
-  wrong_service: '端口上不是 Flovart Operator',
+  version: 'Iris 与 Operator 版本不匹配',
+  wrong_service: '端口上不是 Iris Operator',
   stream_lost: '实时通道中断，正在重连',
   sync_failed: '画布同步失败',
 }
 
 /**
- * Map the canvas' real link state (posted by the embedded Flovart page) onto
+ * Map the canvas' real link state (posted by the embedded Iris page) onto
  * the frame header, so DSH never shows "connected" merely because a token
  * was handed over.
  */

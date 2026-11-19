@@ -43,7 +43,7 @@ function mountResolveInspector({
   const root = document.createElement('div');
   document.body.append(root);
   mountedRoots.push(root);
-  const studioUi = (window as unknown as { FlovartStudioUI: { mountInspector: (options: Record<string, unknown>) => { dispose: () => void; refresh: () => Promise<void> } } }).FlovartStudioUI;
+  const studioUi = (window as unknown as { IrisStudioUI: { mountInspector: (options: Record<string, unknown>) => { dispose: () => void; refresh: () => Promise<void> } } }).IrisStudioUI;
   const inspector = studioUi.mountInspector({
     root,
     adapter,
@@ -60,7 +60,7 @@ afterEach(() => {
   localStorage.clear();
 });
 
-describe('Resolve Studio Flovart inspector', () => {
+describe('Resolve Studio Iris inspector', () => {
   it('keeps guidance quiet: hint markers are closed until the user opens one', async () => {
     const { root } = mountResolveInspector();
     await vi.waitFor(() => expect(root.querySelector('.fs-source-info strong')?.textContent).toBe('Interview_A.mov'));
@@ -103,7 +103,7 @@ describe('Resolve Studio Flovart inspector', () => {
   it('lets an Agent prefill the prompt but never starts a paid generation by itself', async () => {
     const { root, prepareCandidate } = mountResolveInspector();
     await vi.waitFor(() => expect(root.querySelector('.fs-source-info strong')?.textContent).toBe('Interview_A.mov'));
-    window.dispatchEvent(new CustomEvent('flovart:agent-request', { detail: { agent: 'Codex', prompt: '雨夜版本，保持时长' } }));
+    window.dispatchEvent(new CustomEvent('iris:agent-request', { detail: { agent: 'Codex', prompt: '雨夜版本，保持时长' } }));
     expect(root.querySelector<HTMLElement>('.fs-agent-banner')?.hidden).toBe(false);
     expect(root.querySelector('.fs-agent-banner')?.textContent).toContain('Codex 准备了 1 个生成');
     root.querySelector<HTMLButtonElement>('.fs-agent-review')!.click();
@@ -134,7 +134,7 @@ describe('Resolve Studio Flovart inspector', () => {
     expect(output!.value).toBe('media-pool');
     expect(root.querySelector('.fs-source-info span.fs-mono')?.textContent).toBe('Media Pool 片段');
     expect(root.querySelector<HTMLElement>('.fs-source-info span.fs-mono')?.hidden).toBe(false);
-    expect(root.textContent).toContain('在 Flovart 中打开');
+    expect(root.textContent).toContain('在 Iris 中打开');
 
     const prompt = root.querySelector<HTMLTextAreaElement>('textarea');
     prompt!.value = '根据当前选中的时间线片段生成一个新的场景版本';
@@ -179,7 +179,7 @@ describe('Resolve Studio Flovart inspector', () => {
     expect(root.textContent).toContain('References');
     expect(root.textContent).toContain('Task');
     expect(root.textContent).toContain('Candidates · 1');
-    expect(root.textContent).toContain('Open in Flovart');
+    expect(root.textContent).toContain('Open in Iris');
     expect(root.querySelector('.fs-setting-static')?.textContent).toBe('ModelAuto');
     expect(root.querySelector('.fs-candidate-add')?.textContent).toBe('Added to Media Pool');
     root.querySelector<HTMLButtonElement>('.fs-locale-toggle button[aria-label="Simplified Chinese"]')!.click();
@@ -188,7 +188,7 @@ describe('Resolve Studio Flovart inspector', () => {
     inspector.dispose();
   });
 
-  it('accepts a frozen Resolve project when its ID differs from the Flovart Workflow project', async () => {
+  it('accepts a frozen Resolve project when its ID differs from the Iris Workflow project', async () => {
     const resolveProjectId = 'resolve-project-7';
     const workflowProjectId = 'iris-workflow-project-42';
     const { root, inspector } = mountResolveInspector({

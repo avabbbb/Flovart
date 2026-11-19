@@ -1,5 +1,5 @@
 {
-  "name": "flovart",
+  "name": "iris",
   "private": true,
   "version": "0.3.0",
   "license": "MIT",
@@ -26,11 +26,13 @@
     "release:dependency-audit": "npm audit --registry=https://registry.npmjs.org --audit-level=high",
     "docs:check": "node scripts/check-docs-contract.mjs",
     "test:watch": "vitest",
-    "flovart:cli": "node tools/flovart/cli.js",
+    "iris:cli": "node tools/iris/cli.js",
+    "iris:agent": "node agent/index.js",
+    "flovart:cli": "node tools/iris/cli.js",
     "flovart:agent": "node agent/index.js",
     "dsh:profile:install": "npm --prefix dsh-plugin run build && npm --prefix dsh-plugin run profile:install",
     "dsh:start": "npm run dsh:profile:install && npm --prefix dsh-plugin run profile:start",
-    "prototype:vox-film": "node tools/flovart/prototypes/vox-film/index.mjs",
+    "prototype:vox-film": "node tools/iris/prototypes/vox-film/index.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build --config src-tauri/tauri.local.conf.json",
@@ -39,9 +41,9 @@
     "studio:build": "node integrations/studio/build.mjs",
     "workbuddy:build": "node integrations/workbuddy/build.mjs",
     "workbuddy:validate": "node scripts/check-workbuddy-connector.mjs",
-    "build:agent-toolkit": "node tools/flovart/scripts/build-agent-toolkit.mjs",
+    "build:agent-toolkit": "node tools/iris/scripts/build-agent-toolkit.mjs",
     "version:check": "node scripts/check-release-version.mjs",
-    "publish:cli": "cd tools/flovart && npm publish",
+    "publish:cli": "cd tools/iris && npm publish",
     "deploy:cf": "vite build && npx wrangler deploy",
     "eval:validate": "node eval/run.mjs validate",
     "eval:oracle": "node eval/run.mjs oracle",
@@ -130,5 +132,5 @@
     "vite": "^6.2.0",
     "vitest": "^4.1.12"
   },
-  "description": "Flovart — an open-source, local-first AI creative layer for professional editing tools."
+  "description": "Iris — an open-source, local-first AI creative layer for professional editing tools."
 }

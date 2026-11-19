@@ -1,4 +1,4 @@
-# FlovartBench Report
+# IrisBench Report
 
 - Run id: `2026-09-15_03-37-45-oracle`
 - Generated: 2026-09-15T03:39:05.794Z
@@ -159,7 +159,7 @@ Failing tasks:
 - Not recorded in this run.
 
 ## Remaining External Gates
-- real Codex agent run: not-run - requires FLOVARTBENCH_ALLOW_CODEX=true and a codex binary
+- real Codex agent run: not-run - requires IRISBENCH_ALLOW_CODEX=true and a codex binary
 - real paid Provider submission: not-run - requires funded provider credentials
 - host installer / auto-update: not-run - requires a signed build
 - real account login: not-run - requires hosted account credentials

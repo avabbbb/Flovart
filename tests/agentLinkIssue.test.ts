@@ -54,7 +54,7 @@ describe('diagnoseAgentLink', () => {
   });
 
   it('reports a hosted HTTPS page as blocked by the browser', async () => {
-    const issue = await run(vi.fn().mockRejectedValue(new TypeError('Failed to fetch')), { pageOrigin: 'https://flovart.avabbbb.com' });
+    const issue = await run(vi.fn().mockRejectedValue(new TypeError('Failed to fetch')), { pageOrigin: 'https://iris.avabbbb.com' });
     expect(issue?.kind).toBe('blocked_by_page');
   });
 
@@ -65,7 +65,7 @@ describe('diagnoseAgentLink', () => {
     expect((await run(fetchImpl as typeof fetch))?.kind).toBe('timeout');
   });
 
-  it('reports something else on the port when /health is not a Flovart answer', async () => {
+  it('reports something else on the port when /health is not a Iris answer', async () => {
     expect((await run(vi.fn().mockResolvedValue(new Response('<html>', { status: 200 }))))?.kind).toBe('wrong_service');
     expect((await run(vi.fn().mockResolvedValue(json({ error: 'nope' }, 500))))).toMatchObject({ kind: 'wrong_service', detail: 'HTTP 500' });
   });

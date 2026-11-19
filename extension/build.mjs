@@ -7,7 +7,7 @@ const workspaceRoot = resolve(extensionRoot, '..');
 const output = resolve(workspaceRoot, 'dist-extension');
 if (!output.startsWith(`${workspaceRoot}${sep}`)) throw new Error('Extension output escaped the workspace');
 
-console.log('Building thin Flovart Browser Import extension…');
+console.log('Building thin Iris Browser Import extension…');
 if (existsSync(output)) rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 

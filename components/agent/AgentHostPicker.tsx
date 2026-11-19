@@ -5,13 +5,13 @@ import { describeAgentLinkIssue } from '../../services/agentLinkIssue';
 import { prepareAgent } from '../../services/link/hostActivation';
 import { toLinkPublicStatus, type LinkPublicStatus } from '../../services/link/publicStatus';
 import { useAgentConnectionStore } from '../../stores/useAgentConnectionStore';
-import registry from '../../tools/flovart/contracts/host-registry.v1.json';
+import registry from '../../tools/iris/contracts/host-registry.v1.json';
 import { AgentHostDiagnostics } from './AgentHostDiagnostics';
 import { AgentLinkBadge } from './AgentLinkStatus';
 import { AgentSetupGuide } from './AgentSetupGuide';
 import '../../styles/agentLink.css';
 
-const SELECTED_HOST_KEY = 'flovart.agent.selectedHost';
+const SELECTED_HOST_KEY = 'iris.agent.selectedHost';
 const PRIMARY_HOSTS = ['codex', 'workbuddy', 'deepseek-harness'];
 // SUPPORT_MATRIX.md Closed Beta freeze: Codex is the promoted host; every other
 // selectable host is experimental and must not render as equally ready.
@@ -52,15 +52,15 @@ interface AgentHostPickerProps {
 export function AgentHostPicker({ projectTitle, language = 'zho' }: AgentHostPickerProps) {
   const zh = language === 'zho';
   const copy = zh ? {
-    aria: '协作 Agent', title: '协作 Agent', description: '选择你习惯的助手，Flovart 会准备当前项目。', refresh: '刷新协作状态', current: '当前协作 Agent', currentAgent: '当前 Agent', selected: '已选择',
+    aria: '协作 Agent', title: '协作 Agent', description: '选择你习惯的助手，Iris 会准备当前项目。', refresh: '刷新协作状态', current: '当前协作 Agent', currentAgent: '当前 Agent', selected: '已选择',
     workflow: '当前 Workflow', preparing: '正在准备…', connecting: '正在连接…', waiting: '等待连接', connectingMessage: '正在连接本机 Agent，连上后即可选择协作助手。', inUse: '当前使用', messageReady: '已选择并准备连接。', others: '其他 Agent', switchHint: '可随时切换', active: '当前协作 Agent', link: '本机连接',
     state: { ready: '已准备', needs_setup: '需安装', needs_login: '需登录', offline: '离线' },
-    message: { ready: '可以操作当前项目。', needs_setup: '按下方接入步骤安装这个助手的 Flovart 入口。', needs_login: '请先登录这个助手，再回来继续。', offline: 'Flovart 本地服务暂时离线。' },
+    message: { ready: '可以操作当前项目。', needs_setup: '按下方接入步骤安装这个助手的 Iris 入口。', needs_login: '请先登录这个助手，再回来继续。', offline: 'Iris 本地服务暂时离线。' },
   } : {
-    aria: 'Collaborating Agent', title: 'Collaborating agent', description: 'Choose the assistant you prefer. Flovart will prepare it for this project.', refresh: 'Refresh connection status', current: 'Current collaborating agent', currentAgent: 'Current agent', selected: 'Selected',
+    aria: 'Collaborating Agent', title: 'Collaborating agent', description: 'Choose the assistant you prefer. Iris will prepare it for this project.', refresh: 'Refresh connection status', current: 'Current collaborating agent', currentAgent: 'Current agent', selected: 'Selected',
     workflow: 'Current Workflow', preparing: 'Preparing…', connecting: 'Connecting…', waiting: 'Waiting for link', connectingMessage: 'Connecting to the local agent; pick an assistant once it is connected.', inUse: 'In use', messageReady: 'is selected and ready to connect.', others: 'Other agents', switchHint: 'Switch at any time', active: 'Current collaborating agent', link: 'Local link',
     state: { ready: 'Ready', needs_setup: 'Setup needed', needs_login: 'Sign in required', offline: 'Offline' },
-    message: { ready: 'Ready to work with the current project.', needs_setup: 'Follow the steps below to install this assistant’s Flovart entry point.', needs_login: 'Sign in to this assistant, then return here.', offline: 'Flovart local service is currently offline.' },
+    message: { ready: 'Ready to work with the current project.', needs_setup: 'Follow the steps below to install this assistant’s Iris entry point.', needs_login: 'Sign in to this assistant, then return here.', offline: 'Iris local service is currently offline.' },
   };
   const [discovery, setDiscovery] = useState<AgentHostDiscovery>({ ok: false, state: 'offline', agents: [] });
   const [selectedId, setSelectedId] = useState(readSelectedHost);

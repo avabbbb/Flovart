@@ -43,13 +43,13 @@ describe('Agent transcript text', () => {
   it('hides model-only context such as node IDs from the user bubble', () => {
     const stored = '[创作模式: 视频创作]\n抽第十秒的帧\n\n引用上下文：\n- @视频 1（工作流节点 nodeId=Aj1Rv7vsBZ9CPa5icN-Li）\n\n已附带画面：\nAj1Rv7vsBZ9CPa5icN-Li：视频「视频 1」首/中/尾帧';
     expect(displayUserTurnText(stored)).toBe('抽第十秒的帧\n\n引用：@视频 1');
-    expect(agentToolLabel('flovart_workflow_inspect', 'zho')).toBe('读取画布');
+    expect(agentToolLabel('iris_workflow_inspect', 'zho')).toBe('读取画布');
     expect(agentToolLabel('plugin_tool', 'zho')).toBe('plugin_tool');
   });
 });
 
 describe('built-in Agent ask tool', () => {
-  it('exposes flovart_ask and returns the submitted form data', async () => {
+  it('exposes iris_ask and returns the submitted form data', async () => {
     const ask = vi.fn(async () => ({ ok: true as const, data: { style: 'fresh' } }));
     const tools = createBrowserAgentTools({ projectId: 'p', confirm: vi.fn(async () => true), ask, activeChangeSetId: 'turn' });
     const tool = tools.find(item => item.name === ASK_TOOL_NAME)!;
@@ -86,7 +86,7 @@ describe('built-in Agent canvas tools', () => {
     expect(tool.description).toContain('video-extract-frame');
     expect(tool.description).not.toContain('audio-stem-split');
     expect(tools.find(item => item.name === NODE_TOOL_TOOL_NAMES.audio)!.description).toContain('audio-stem-split');
-    expect(tools.some(item => item.name === 'flovart_workflow_node_tool')).toBe(false);
+    expect(tools.some(item => item.name === 'iris_workflow_node_tool')).toBe(false);
 
     const result = await tool.execute('call-1', { nodeId: 'video-1', tool: 'video-extract-frame', position: 'current', currentTimeSec: 10 } as never, undefined as never);
     expect(runner).toHaveBeenCalledWith(project.id, 'video-1', 'video-extract-frame', { position: 'current', currentTimeSec: 10 });

@@ -102,7 +102,7 @@ export function promptAssetsFromPromptPack(pack: PromptPack): PromptAsset[] {
 export function promptAssetFromQuickPrompt(input: { id: string; title: string; text: string; tags?: string[]; modality?: PromptAssetModality }): PromptAsset {
   return createPromptAsset({
     ...input,
-    source: { kind: 'bundled', id: input.id, label: 'Flovart 快速提示词' },
+    source: { kind: 'bundled', id: input.id, label: 'Iris 快速提示词' },
   });
 }
 

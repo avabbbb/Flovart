@@ -1,6 +1,6 @@
 // WorldSnapshot capture + canonical normalisation.
 //
-// Flovart's "final database state" is not one database: a finished task has to
+// Iris's "final database state" is not one database: a finished task has to
 // be checked across Workflow, Runtime, Artifacts, Provider ledger, local assets
 // and Safety. This module turns the controlled world into that one structure and
 // then strips everything that differs between two semantically identical runs

@@ -1,6 +1,6 @@
-# 2026-11-16 会议室照片实测（Flovart 托管站 + RunningHub 国内站）
+# 2026-11-16 会议室照片实测（Iris 托管站 + RunningHub 国内站）
 
-> 实测记录，未提交。执行时间 2026-11-16 12:18–12:33（UTC+8）。环境：https://flovart.avabbbb.com/#/app，headless session browser（Remotion headless_shell，`--auto-approve`、`--disable-web-security`），本地 agent `http://127.0.0.1:17373`。模型：Seedream 5.0 Flash（RunningHub 国内站，`seedream-v5-flash/image-to-image`）。
+> 实测记录，未提交。执行时间 2026-11-16 12:18–12:33（UTC+8）。环境：https://iris.avabbbb.com/#/app，headless session browser（Remotion headless_shell，`--auto-approve`、`--disable-web-security`），本地 agent `http://127.0.0.1:17373`。模型：Seedream 5.0 Flash（RunningHub 国内站，`seedream-v5-flash/image-to-image`）。
 
 ## 1. 目标
 
@@ -27,7 +27,7 @@
 | 2 | 把 2 张参考图拖进首页「What do you want to make?」输入框 | UI | — | ❌ 毫无反应（没上传，也没建画布） |
 | 3 | 在首页输入框写下 6 张图的完整需求，点 Start | UI | 7.2 s | ❌ 只建了 1 个工作流和 **1 个空 Image 节点**；需求没写进节点；工作流标题就是截断的需求原文 |
 | 4 | 打开画布右侧 Agent 面板，把 2 张参考图拖进输入框 | UI | <1 s | ⚠️ 只变成对话附件缩略图，**没有放到画布上** |
-| 5 | 在 Agent 面板发送需求（中文，指定 Seedream 5.0 Flash） | UI | 8.5 s | ❌ 报错「Flovart needs a running collaborator such as Codex, Claude, or OpenCode… or add an AI service」。发完后输入框里的文字没有清空，再发一次是同样的错误 |
+| 5 | 在 Agent 面板发送需求（中文，指定 Seedream 5.0 Flash） | UI | 8.5 s | ❌ 报错「Iris needs a running collaborator such as Codex, Claude, or OpenCode… or add an AI service」。发完后输入框里的文字没有清空，再发一次是同样的错误 |
 | 6 | 把 2 张参考图拖到画布空白处 | UI | 5.2 s | ✅ 生成「图片 2 / 图片 3」两个节点（原尺寸 1080×1440、1440×1080），版本 rev 1→7；但「图片 3」压在了已有的空 Image 节点上 |
 | 7 | 从参考图（会场全景那张）连出 empty-1 节点，并写好 prompt、modelId、16:9、2K | CLI `create-connected` | 2.3 s | ✅ |
 | 8 | 运行 empty-1 | CLI `node.run` | 19.8 s | ✅ 自动走 `seedream-v5-flash/image-to-image`，输出 2048×1152，计费回填 `actual 0.11` |
@@ -71,14 +71,14 @@
 
 ## 6. 和 RHTV 对比（按用户描述）
 
-| | RHTV | Flovart（本次实测） |
+| | RHTV | Iris（本次实测） |
 |---|---|---|
 | 把图拖进输入框 | 直接上传并**放到画布上** | 首页输入框：没反应。Agent 输入框：只变成对话附件，不上画布 |
 | 把图拖到画布 | — | ✅ 约 5 s 就建好图片节点，按原尺寸显示；但会压住已有节点 |
 | 参考图怎么用 | 输入框里的图直接当参考 | 需要从图片节点**连线**到生成节点（`create-connected`，或者在 UI 里拉线 / 用 @ 引用），连好后会自动切到图生图 |
 | 用一句话要多张图 | — | 首页输入框只建 1 个空节点；Agent 面板需要另配文本 LLM 或外部协作方 |
 
-感受：用户最自然的动作就是「把图拖进输入框」，在 Flovart 里这一步行不通，得知道要拖到画布上，这是这次最明显的落差。另外附件留在对话里，Agent 又用不了，图就卡在那儿了。
+感受：用户最自然的动作就是「把图拖进输入框」，在 Iris 里这一步行不通，得知道要拖到画布上，这是这次最明显的落差。另外附件留在对话里，Agent 又用不了，图就卡在那儿了。
 
 ## 7. REVISION_CONFLICT（「草稿版本已变化」）
 
@@ -96,7 +96,7 @@
 | 严重度 | 问题 |
 |---|---|
 | **高** | 画布内 Agent 对话面板只认文本 LLM 服务或外部协作方。只配 RunningHub 时一发消息就报错，顶栏却显示「Ready · Agent」（状态矛盾）；本地 agent 已连接也不算协作方。要测的主流程因此走不通 |
-| **高** | 首页「What do you want to make? / Flovart wires the nodes」提交需求后只建了 1 个空 Image 节点，没拆成多个节点、prompt 也没写进去，和文案承诺不符 |
+| **高** | 首页「What do you want to make? / Iris wires the nodes」提交需求后只建了 1 个空 Image 节点，没拆成多个节点、prompt 也没写进去，和文案承诺不符 |
 | **中** | 拖图进输入框不上画布（首页没反应；Agent 输入框只变成附件），和 RHTV 的习惯不一样，用户找不到上传参考图的入口 |
 | **中** | 节点运行后标题被改回「图片生成」，6 个结果同名，图层面板里分不清 |
 | **中** | PromptBar 默认模型是 GPT（GPT Image 2，RunningHub 国内站返回 40310 不可用），用户不改模型就会失败 |

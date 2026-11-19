@@ -4,7 +4,7 @@ import { isAllowedWebOrigin } from './web-origins.js';
 import { PAIRINGS_KEY, pairingTransition, readPairings, setPairingStatus } from './web-pairings.js';
 import { DIRECT_FETCH_CAPABILITY, DIRECT_FETCH_PORT_NAME, createDirectFetchHandler } from './direct-fetch.js';
 
-export const WEB_PORT_NAME = 'flovart-web';
+export const WEB_PORT_NAME = 'iris-web';
 export const WEB_PROTOCOL_VERSION = '1';
 const WEB_CAPABILITIES = ['browser.import.image', 'browser.import.video', 'keys.sync', DIRECT_FETCH_CAPABILITY];
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
@@ -91,7 +91,7 @@ export function startWebBridge() {
     port.onDisconnect.addListener(() => forgetPort(origin, port));
     port.onMessage.addListener(message => {
       void handleWebMessage(port, origin, message).catch(error => {
-        console.error('[Flovart Web Bridge]', error);
+        console.error('[Iris Web Bridge]', error);
       });
     });
   });

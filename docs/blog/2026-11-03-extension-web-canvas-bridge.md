@@ -6,12 +6,12 @@
 
 ## 一、背景
 
-Flovart 有两种形态：Tauri 桌面端（Desktop）和网页画布。浏览器插件此前是 Desktop-first 的薄伴侣：用户在网页图片或视频上右键，插件通过 Native Messaging 分块传给 Desktop 的收件箱。
+Iris 有两种形态：Tauri 桌面端（Desktop）和网页画布。浏览器插件此前是 Desktop-first 的薄伴侣：用户在网页图片或视频上右键，插件通过 Native Messaging 分块传给 Desktop 的收件箱。
 
 这带来两个缺口：
 
 1. 只用网页画布的用户没有任何通道，右键菜单对他们无效。
-2. 更早的版本里，网页与插件之间有一条基于 chrome.storage 的 API Key 双向桥（键名 flovart_api_keys_v2），密钥以可读形式存在插件存储里，也没有“谁可以读”的概念。
+2. 更早的版本里，网页与插件之间有一条基于 chrome.storage 的 API Key 双向桥（键名 iris_api_keys_v2），密钥以可读形式存在插件存储里，也没有“谁可以读”的概念。
 
 本周目标：把插件和网页画布之间的通道打通，覆盖配对、右键导入到画布、BYOK 密钥同步、插件内反推四件事，并把旧桥拆掉。
 
@@ -73,7 +73,7 @@ Flovart 有两种形态：Tauri 桌面端（Desktop）和网页画布。浏览�
 ## 四、决策与取舍
 
 1. 配对只能在 popup 批准。未批准前不收发任何业务消息；拒绝和撤销都会删除条目，用户可以重新申请。取舍：多一步操作，换来信任根不在网页里。
-2. 扩展 ID 由网页端环境变量 VITE_FLOVART_EXTENSION_IDS 配置，允许同时写商店 ID 和旁加载 ID，格式强制 32 位 a-p。允许的网页 origin 由 web-origins.js 生成并写入 manifest，已核对白名单与 manifest 一致。
+2. 扩展 ID 由网页端环境变量 VITE_IRIS_EXTENSION_IDS 配置，允许同时写商店 ID 和旁加载 ID，格式强制 32 位 a-p。允许的网页 origin 由 web-origins.js 生成并写入 manifest，已核对白名单与 manifest 一致。
 3. 网页导入不经过 Desktop 收件箱，直接落到当前 Workflow；没有打开的项目时只保存媒体。Desktop 路径保持原样。
 4. Key 只在插件侧加密落盘，按网页 origin 分区；撤销或拒绝即清空该 origin；启动时清理未批准 origin 的残留。画布开启“退出时清除”时不向插件发送 Key（发送空列表）。取舍：加密不能抵抗扩展进程内的攻击，这一点在遗留里如实列出。
 5. 同步用“全量快照 + 增量”，每条记录带 revision；revision 对不上就回退全量。每次重新进入 approved 都从全量开始，宁可多传一次也不要状态分叉。
@@ -84,7 +84,7 @@ Flovart 有两种形态：Tauri 桌面端（Desktop）和网页画布。浏览�
 
 ### 5.1 协议
 
-Port 名 flovart-web，协议版本 1。hello 携带 requestPairing，插件返回配对状态与能力列表（browser.import.image、browser.import.video、keys.sync）。
+Port 名 iris-web，协议版本 1。hello 携带 requestPairing，插件返回配对状态与能力列表（browser.import.image、browser.import.video、keys.sync）。
 
 | 消息 | 方向 | 用途 |
 | --- | --- | --- |
@@ -110,7 +110,7 @@ Port 名 flovart-web，协议版本 1。hello 携带 requestPairing，插件返�
 - web-origins.js：生成允许的网页 origin。
 - web-bridge.js、web-pairings.js：Port 服务、origin 白名单、配对状态；popup 显示允许、拒绝、断开。
 - media-transfer.js：begin / chunk / commit，Desktop 与网页共用；service-worker 按目标分流，右键新增“发送图片 / 视频到网页画布”。
-- web-keys.js：按 origin 分区的加密 Key 存储（密文在 chrome.storage.local 的 flovartWebKeys，AES-GCM 密钥在 IndexedDB 库 flovart-extension），对外提供 allKeys() 给反推使用。
+- web-keys.js：按 origin 分区的加密 Key 存储（密文在 chrome.storage.local 的 irisWebKeys，AES-GCM 密钥在 IndexedDB 库 iris-extension），对外提供 allKeys() 给反推使用。
 - reverse-prompt-core.js：反推纯模块，网页与插件共用。
 - reverse-prompt.js：插件侧选 Key（顺序 Google、OpenAI、Anthropic、OpenRouter，都没有时退到带 Base URL 与默认模型的 OpenAI 兼容 Key）、拼鉴权头、发请求。Anthropic 直连需要 anthropic-dangerous-direct-browser-access 头。
 - service-worker.js：右键“反推图片提示词”复用导入的读取逻辑（临时权限、格式校验、尺寸），结果写入 session 存储；popup 可复制或发送到画布。
@@ -125,7 +125,7 @@ Port 名 flovart-web，协议版本 1。hello 携带 requestPairing，插件返�
 - components/extension/BrowserImportBridge.tsx：网页端注册两个接收器。这里一度怀疑它只在 Desktop 挂载；核实后发现组件在 App 中始终挂载，只是网页端不渲染界面，所以 effect 在网页端会执行。
 - services/aiGateway.ts：非流式反推改为调用 reverse-prompt-core.js。
 
-清理：删除旧的 chrome.storage Key 桥（插件侧已确认无引用），删除已无引用的 utils/keyCodec.ts 与其测试；重写 extension/README.md，去掉“不保存 Provider Secret、不直连 Provider”这类已不成立的表述；popup 提示和中英文扩展描述同步更新。已安装扩展里的旧键 flovart_api_keys_v2 由 storage-migration.js 的 purgeLegacyExtensionStorage 在启动时删除（已核实在清理列表中）。
+清理：删除旧的 chrome.storage Key 桥（插件侧已确认无引用），删除已无引用的 utils/keyCodec.ts 与其测试；重写 extension/README.md，去掉“不保存 Provider Secret、不直连 Provider”这类已不成立的表述；popup 提示和中英文扩展描述同步更新。已安装扩展里的旧键 iris_api_keys_v2 由 storage-migration.js 的 purgeLegacyExtensionStorage 在启动时删除（已核实在清理列表中）。
 
 ## 六、验证
 
@@ -146,7 +146,7 @@ Port 名 flovart-web，协议版本 1。hello 携带 requestPairing，插件返�
 全量测试的两个失败：
 
 - tests/extensionSecurityBoundary.test.ts：它写死了“薄插件”时代的边界（不允许 externally_connectable、断点续传代码在 service-worker.js 里）。这是本次有意改变的边界，所以按新设计改写而不是删除：externally_connectable 只允许三个画布 origin、不允许其他扩展连接；service worker 与 popup 仍不出现厂商名和 Key；reverse-prompt.js 不读写存储；reverse-prompt-core.js 不发网络、不碰 chrome API；续传检查指向 media-transfer.js。改写后通过。
-- tests/cliPackageManifest.test.js：工作区里另一项尚未入库的 CLI 凭据改动新增了 tools/flovart/provider-vault.js，但未加入 CLI 发布清单。与本次通道工作无关，未处理，留给那项工作收尾。
+- tests/cliPackageManifest.test.js：工作区里另一项尚未入库的 CLI 凭据改动新增了 tools/iris/provider-vault.js，但未加入 CLI 发布清单。与本次通道工作无关，未处理，留给那项工作收尾。
 
 新增测试文件：tests/webBrowserImportReceiver.test.ts、tests/extensionWebKeys.test.js、tests/extensionKeySync.test.ts、tests/reversePromptCore.test.js、tests/extensionReversePrompt.test.js、tests/webPromptInsertReceiver.test.ts。
 

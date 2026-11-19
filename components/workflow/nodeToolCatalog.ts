@@ -163,9 +163,9 @@ export const WORKFLOW_NODE_TOOL_FAMILY_COMMANDS: Readonly<Record<string, Workflo
 });
 
 const FAMILY_TOOL_NAMES: Readonly<Record<WorkflowNodeToolFamily, string>> = Object.freeze({
-  image: 'flovart_image_tool',
-  video: 'flovart_video_tool',
-  audio: 'flovart_audio_tool',
+  image: 'iris_image_tool',
+  video: 'iris_video_tool',
+  audio: 'iris_audio_tool',
 });
 
 /** workflow.node.tool 或任一媒体工具命令。 */

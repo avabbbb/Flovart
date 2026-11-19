@@ -40,7 +40,7 @@
   },
   "constraints": {
     "durationSec": 2,
-    "textToSpeak": "欢迎来到 Flovart。",
+    "textToSpeak": "欢迎来到 Iris。",
     "durationToleranceSec": 0.5
   },
   "checks": [

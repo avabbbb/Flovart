@@ -1,4 +1,4 @@
-use flovart_lib::runtime::{ControlServer, ProductionRuntime};
+use iris_lib::runtime::{ControlServer, ProductionRuntime};
 use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 fn test_discovery_path() -> PathBuf {
     std::env::temp_dir()
-        .join(format!("flovart-runtime-test-{}", Uuid::now_v7()))
+        .join(format!("iris-runtime-test-{}", Uuid::now_v7()))
         .join("control-v1.json")
 }
 
@@ -32,8 +32,8 @@ fn native_host_status_matches_the_same_production_runtime() {
     let mut input = Vec::with_capacity(request.len() + 4);
     input.extend_from_slice(&(request.len() as u32).to_le_bytes());
     input.extend_from_slice(&request);
-    let mut child = Command::new(env!("CARGO_BIN_EXE_flovart-host"))
-        .env("FLOVART_RUNTIME_DISCOVERY", &discovery_path)
+    let mut child = Command::new(env!("CARGO_BIN_EXE_iris-host"))
+        .env("IRIS_RUNTIME_DISCOVERY", &discovery_path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

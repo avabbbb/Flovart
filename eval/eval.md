@@ -1,4 +1,4 @@
-# Flovart 评测体系（FlovartBench + Judge）
+# Iris 评测体系（IrisBench + Judge）
 
 本文是 `eval/` 的总说明：评什么、怎么评、评完怎么办、怎么上线。规则层的跑法细节见 [README.md](README.md)；每次评测的过程和修复记录写进 `docs/quality/<日期>-*.md`，不写在这里。
 
@@ -6,15 +6,15 @@
 
 ## 1. 要解决的问题
 
-Flovart 的 Agent 不是答题型 Agent。它驱动画布去生成图和视频，输出和「策略」一样：
+Iris 的 Agent 不是答题型 Agent。它驱动画布去生成图和视频，输出和「策略」一样：
 
-| 难题 | 在 Flovart 里的样子 | 对策 |
+| 难题 | 在 Iris 里的样子 | 对策 |
 | --- | --- | --- |
 | 反馈信号稀缺且滞后 | 一张图好不好，只有用户留下或丢掉它时才知道；每次生成都要花钱 | 从备选（`metadata.alternates`）里「设为首图」收集偏好对，不额外花钱 |
 | 评估是多维权衡 | 人物像不像、动作顺不顺、文字乱不乱、花了多少钱，没有单一分数 | 分层漏斗 + 逐项 Rubric，失败落到具体子项 |
 | 离线合理不等于线上有效 | 离线 Judge 给高分的图，用户仍可能重抽 | 以采纳率为 L4 的最终信号，Judge 用偏好对校准，并做灰度 |
 
-原则沿用 FlovartBench：**看终态，不看自述；看重复成功，不看一次成功；安全硬门禁不参与平均。**
+原则沿用 IrisBench：**看终态，不看自述；看重复成功，不看一次成功；安全硬门禁不参与平均。**
 
 ## 2. 五层评测对象（评什么）
 
@@ -22,9 +22,9 @@ Flovart 的 Agent 不是答题型 Agent。它驱动画布去生成图和视频�
 | --- | --- | --- | --- | --- |
 | **L1 Prompt / Skill 约束** | Agent 系统提示词、`SKILL.md`、Rubric 本身是否清晰、自洽、完整 | 矛盾数；Skill 与命令注册表不一致的数量 | Rule：`agentSkillPackage` 测试、`docs:check`<br>LLM：`prompt-static` Rubric | 规则层已有；Judge 新增 |
 | **L2 知识与经验（SOP）** | 制作经验有没有被召回和用对（镜头衔接、首尾帧选型、换脸顺序、倒放接片） | SOP 召回覆盖率、引用正确率 | Rule：方案中的 SOP 引用统计<br>LLM：`sop-recall` Rubric | Judge 新增 |
-| **L3 任务执行** | CLI / MCP 调用和画布终态是否正确、稳定 | pass@1、pass^5、参数正确率、费用确认与幂等通过率 | Rule：FlovartBench（predicates、exact hash、硬门禁）<br>LLM：`agent-run` Rubric（规划与表述） | 规则层已有；Judge 新增 |
+| **L3 任务执行** | CLI / MCP 调用和画布终态是否正确、稳定 | pass@1、pass^5、参数正确率、费用确认与幂等通过率 | Rule：IrisBench（predicates、exact hash、硬门禁）<br>LLM：`agent-run` Rubric（规划与表述） | 规则层已有；Judge 新增 |
 | **L4 创作效果** | 生成的图和视频有没有被采纳、值不值这个钱 | 采纳率、重抽次数、每个可用镜头的成本与耗时 | LLM / VLM：`image-output`、`video-shot`、`digital-human` 单项打分 + 备选成对比较<br>实验：Skill / 模型版本 A/B | Judge 与偏好对比较已实现；AIGC 题库与客观轨 MVP（§4.1）；「设为首图」偏好事件已采集 |
-| **L5 自动化 Benchmark** | 各版本能否持续回归、对比、准入 | 版本间退化率、bad case 回归 | nightly FlovartBench + Judge 回归集 + 准入门禁 | 规则层 CI 已有；Judge 门禁已实现，未接入 CI |
+| **L5 自动化 Benchmark** | 各版本能否持续回归、对比、准入 | 版本间退化率、bad case 回归 | nightly IrisBench + Judge 回归集 + 准入门禁 | 规则层 CI 已有；Judge 门禁已实现，未接入 CI |
 
 层与层之间是级联的：
 
@@ -34,7 +34,7 @@ Flovart 的 Agent 不是答题型 Agent。它驱动画布去生成图和视频�
 
 ### 2.1 执行成功率（北极星指标）
 
-购物助手的执行成功率是「路由准确率 × 回复正确率」。Flovart 的链路更长：一个请求要选对能力、调对命令，还要真的生成出可用的分镜或镜头，最后如实告诉用户。所以拆成四段：
+购物助手的执行成功率是「路由准确率 × 回复正确率」。Iris 的链路更长：一个请求要选对能力、调对命令，还要真的生成出可用的分镜或镜头，最后如实告诉用户。所以拆成四段：
 
 ```
 执行成功率 = 路由准确率 × 调用正确率 × 产出可用率 × 回复正确率
@@ -57,7 +57,7 @@ Flovart 的 Agent 不是答题型 Agent。它驱动画布去生成图和视频�
 
 | 方法 | 用在哪里 | 实现 |
 | --- | --- | --- |
-| **规则** | 有明确对错：终态、参数、比例、幂等、费用确认、密钥 | `eval/run.mjs`（FlovartBench），100% 自动化 |
+| **规则** | 有明确对错：终态、参数、比例、幂等、费用确认、密钥 | `eval/run.mjs`（IrisBench），100% 自动化 |
 | **LLM / VLM Judge** | 要推理判断：方案是否合理、回复是否诚实、画面是否符合要求 | `eval/judge/`（本文第 5–6 节） |
 | **实验** | 只有用户行为能回答：采纳率、重抽次数 | 备选偏好对、Skill 版本灰度（第 8 节） |
 
@@ -128,7 +128,7 @@ L4 的生成效果用一个独立题库评，代码在 `eval/aigc/`，设计取�
 | 层 | 含义 | 规则 |
 | --- | --- | --- |
 | `CTX` | 证据门控：样本有没有足够的证据可评 | **唯一能出 NA 的层**。NA 的样本不进通过率分母：宁可诚实跳过，也不让 Judge 猜 |
-| `SCOPE` | 越界：请求是否超出 Flovart 的职责，Agent 是否该拒绝或交回 | 串行 |
+| `SCOPE` | 越界：请求是否超出 Iris 的职责，Agent 是否该拒绝或交回 | 串行 |
 | `HONEST` | 能力边界诚实：报错时是否如实说明，声称的结果与终态是否一致 | 串行 |
 | `TOOL` | 工具链路：先看后改、幂等、参数匹配意图；镜头衔接与首尾帧 | 串行 |
 | `CONTENT` | 内容：画布结果、画面质量、回复是否可行动 | 串行 |
@@ -252,14 +252,14 @@ Judge 温度默认 0.1。
 
 | 阶段 | 做什么 | 通过条件 | 红线 |
 | --- | --- | --- | --- |
-| **准入** | 变更绑定回归跑批：FlovartBench（规则层）+ 相关 Rubric 在同一批样本上对比基线 | 规则层 100% 通过；RED 失败为 0；Judge 通过率下降不超过 2pp；Judge 与人工 kappa ≥ 0.6；位置交换一致率 ≥ 0.8；没有解析失败（`lib/gate.mjs` `admissionGate`） | 任何一条不满足就阻断 |
+| **准入** | 变更绑定回归跑批：IrisBench（规则层）+ 相关 Rubric 在同一批样本上对比基线 | 规则层 100% 通过；RED 失败为 0；Judge 通过率下降不超过 2pp；Judge 与人工 kappa ≥ 0.6；位置交换一致率 ≥ 0.8；没有解析失败（`lib/gate.mjs` `admissionGate`） | 任何一条不满足就阻断 |
 | **灰度** | 新旧版本同时运行，例如新 Skill 只用在部分项目，或同一请求生成新旧两版放进备选，比较采纳率 | 连续 N 天采纳率不低于对照 | 实验组连续 2 天低于对照就暂停放量并触发归因（`grayGate`） |
 | **监控** | 定期按 Rubric 抽样评测；用户丢弃的结果回流成 Bad Case | 通过率留在基线的 Wilson 区间内 | 超出区间判为漂移，走第 7 节的归因流程（`driftCheck`），而不是直接改 Prompt |
 
 ## 9. 怎么跑
 
 ```bash
-# 规则层（FlovartBench）
+# 规则层（IrisBench）
 npm run eval:validate
 npm run eval:core
 npm run eval:report
@@ -283,7 +283,7 @@ npm run eval:aigc:report                                     # 生成 eval/aigc/
 npm run eval:aigc -- prefs-export --events <events.jsonl>    # 偏好事件 → pairs.jsonl + truth.json
 ```
 
-Judge 模型通过环境变量配置，可以接任何兼容 Chat Completions 的服务：`FLOVART_JUDGE_BASE_URL`、`FLOVART_JUDGE_MODEL`、`FLOVART_JUDGE_API_KEY`（不写进任何结果文件）。图像和视频 Rubric 需要支持图像输入的模型；视频按时间均匀抽关键帧（`ffmpeg -vf fps=…`），作为图像附带，帧的时间点写在 `frames_meta` 里。`--replay <file.jsonl>` 用录下来的输出重评，CI、改解析器后重评都不花钱。
+Judge 模型通过环境变量配置，可以接任何兼容 Chat Completions 的服务：`IRIS_JUDGE_BASE_URL`、`IRIS_JUDGE_MODEL`、`IRIS_JUDGE_API_KEY`（不写进任何结果文件）。图像和视频 Rubric 需要支持图像输入的模型；视频按时间均匀抽关键帧（`ffmpeg -vf fps=…`），作为图像附带，帧的时间点写在 `frames_meta` 里。`--replay <file.jsonl>` 用录下来的输出重评，CI、改解析器后重评都不花钱。
 
 结果写在 `eval/judge/results/<时间>-<rubric>/`（不进 git）：`results.jsonl`（逐样本、逐子项）、`summary.json`、`report.md`（漏斗、主因、子项失败、一致性、归因）。
 
@@ -291,12 +291,12 @@ Judge 模型通过环境变量配置，可以接任何兼容 Chat Completions �
 
 基础功能评测（见 `docs/quality/2026-11-15-basic-function-eval.md`）用的是这条链路，可以照着把真实会话变成 `agent-run` 样本：
 
-1. 起服务：`node tools/flovart/cli.js start --source --json --no-open`。访问本机 Agent 时要去掉 HTTP(S)_PROXY。
-2. 起一个无头浏览器会话连上 WebUI：`FLOVART_CHROME_PATH` 指向 headless shell，并加上 `--disable-web-security`。界面操作通过 Playwright 片段注入。
+1. 起服务：`node tools/iris/cli.js start --source --json --no-open`。访问本机 Agent 时要去掉 HTTP(S)_PROXY。
+2. 起一个无头浏览器会话连上 WebUI：`IRIS_CHROME_PATH` 指向 headless shell，并加上 `--disable-web-security`。界面操作通过 Playwright 片段注入。
 3. 所有 CLI 调用都经过一个包装脚本，把命令、参数、返回码、关键返回字段追加写进 `trace.jsonl`。
 4. 每个用户请求结束后执行一次 `workflow.inspect`，作为 `final_state`，并记下 Agent 的最终回复。
 5. 把一个请求的 trace 组装成一行样本 `{id, turnId, evalTime, slice, inputs: {user_request, tool_calls, final_state, agent_reply, cost_plan}}`。清洗层会负责脱敏和跨轮隔离。
-6. 偏好事件：在同一个浏览器会话里执行 `await window.__flovartPreferenceEvents.exportJsonl()`，存成 JSONL 后交给 `prefs-export`。
+6. 偏好事件：在同一个浏览器会话里执行 `await window.__irisPreferenceEvents.exportJsonl()`，存成 JSONL 后交给 `prefs-export`。
 
 付费生成先用 price-preview 估价；预算和实际花费记在当次的 `docs/quality` 记录里。
 
@@ -305,7 +305,7 @@ Judge 模型通过环境变量配置，可以接任何兼容 Chat Completions �
 ```
 eval/
   eval.md                  本文：评测体系总说明
-  README.md                规则层（FlovartBench）跑法
+  README.md                规则层（IrisBench）跑法
   references/              参考文章（HTML 只在本地）
   run.mjs lib/ tasks/ ...  规则层
   judge/
@@ -351,7 +351,7 @@ L2 和 L4 的 Rubric 条目，来自团队三份真实项目的复盘（数字�
 
 ## 12. 外部参照
 
-- **τ-bench**：比对环境终态，报 pass^k。对应 FlovartBench 的终态断言和 pass^5。
+- **τ-bench**：比对环境终态，报 pass^k。对应 IrisBench 的终态断言和 pass^5。
 - **SWE-bench Verified**：题目先经人审，删掉描述含糊的题。对应任务准入要求的 Oracle ×5 和 NOP 失败。
 - **MT-Bench / Chatbot Arena**：指出了位置偏差、冗长偏差和自我偏好。对应成对比较的顺序交换，以及「不因长而加分」这条纪律。
 - **HealthBench、PaperBench**：每个任务配一份专属的加权 rubric，并对 Judge 本身做元评测。对应按领域划分的 Rubric 和 Judge 验证集。

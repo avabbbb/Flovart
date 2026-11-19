@@ -43,7 +43,7 @@ export function terminalStatusForCode(code: string | undefined): WorkflowRunTerm
 const NEXT: Record<WorkflowRunTerminalStatus, string | undefined> = {
   succeeded: undefined,
   failed: '按 failedReason 修正后可以重跑同一节点。',
-  timeout: '运行可能仍在进行：先 flovart_workflow_inspect 看节点状态，确认没有结果再用同一个 idempotencyKey 重试。',
+  timeout: '运行可能仍在进行：先 iris_workflow_inspect 看节点状态，确认没有结果再用同一个 idempotencyKey 重试。',
   unknown_after_submit: '上游可能已经创建并计费：不要重试、不要换线路，如实告诉用户并等待结果回填。',
 };
 

@@ -56,7 +56,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createControlledWorld } from '../environment/controlled-world.mjs';
-import { createOperationGateway } from '../../tools/flovart/operation-gateway.js';
+import { createOperationGateway } from '../../tools/iris/operation-gateway.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, '..', '..');
@@ -74,7 +74,7 @@ const REMOTE_URL = 'https://cdn.runninghub.invalid/tmp/rh_task_resume_probe.png'
 // Duplicated from controlled-world.mjs on purpose: the driver verifies the
 // re-read checksum against the world's recorded contentChecksum, so any drift
 // between the two fails loudly instead of silently producing false evidence.
-const REMOTE_BYTES = Buffer.from('flovart-fixed-fixture-media-v1\n', 'utf8');
+const REMOTE_BYTES = Buffer.from('iris-fixed-fixture-media-v1\n', 'utf8');
 
 const FIXTURE = {
   project: {

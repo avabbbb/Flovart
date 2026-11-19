@@ -1,4 +1,4 @@
-// Builds the Flovart web app into dsh-plugin/webui, served by src/webui.ts at /flovart-app/.
+// Builds the Iris web app into dsh-plugin/webui, served by src/webui.ts at /iris-app/.
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -12,7 +12,7 @@ if (!existsSync(viteBin)) {
   process.exit(1)
 }
 const outDir = join(pluginDir, 'webui')
-const result = spawnSync(process.execPath, [viteBin, 'build', '--base', '/flovart-app/', '--outDir', outDir, '--emptyOutDir'], {
+const result = spawnSync(process.execPath, [viteBin, 'build', '--base', '/iris-app/', '--outDir', outDir, '--emptyOutDir'], {
   cwd: repoRoot,
   stdio: 'inherit',
 })
@@ -21,4 +21,4 @@ if (!existsSync(join(outDir, 'index.html'))) {
   console.error('[dsh-plugin] webui build produced no index.html')
   process.exit(1)
 }
-console.log('[dsh-plugin] ok webui/ (base /flovart-app/)')
+console.log('[dsh-plugin] ok webui/ (base /iris-app/)')

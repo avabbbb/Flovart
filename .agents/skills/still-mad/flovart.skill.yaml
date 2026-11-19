@@ -22,8 +22,8 @@ evals:
   entry: evals/cases.json
 license: MIT
 provenance:
-  source: https://github.com/avabbbb/Flovart
-  adaptation: flovart-original
+  source: https://github.com/avabbbb/Iris
+  adaptation: iris-original
 trustTier: bundled-example
 inputs:
   - id: music

@@ -22,14 +22,14 @@ export interface LinkHealth {
   revision: number | null
 }
 
-export class FlovartLinkError extends Error {
+export class IrisLinkError extends Error {
   readonly code: string | null
   readonly status: number
   readonly details: Record<string, unknown> | null
 
   constructor(message: string, options: { code?: string | null; status: number; details?: Record<string, unknown> | null }) {
     super(message)
-    this.name = 'FlovartLinkError'
+    this.name = 'IrisLinkError'
     this.code = options.code || null
     this.status = options.status
     this.details = options.details || null
@@ -55,8 +55,8 @@ function unwrapResult(value: unknown): unknown {
   if (!source) return value
   if (source.ok === false) {
     const error = record(source.error)
-    throw new FlovartLinkError(
-      text(error?.message || source.message, 'Flovart Workflow 命令失败。'),
+    throw new IrisLinkError(
+      text(error?.message || source.message, 'Iris Workflow 命令失败。'),
       { code: typeof error?.code === 'string' ? error.code : null, status: 400, details: record(error?.details) },
     )
   }
@@ -100,12 +100,12 @@ function normalizeProject(value: unknown): LinkWorkflowProject | null {
   }
 }
 
-export class FlovartLinkClient {
+export class IrisLinkClient {
   private readonly baseUrl: string
   private readonly fetchImpl: typeof globalThis.fetch
 
   constructor(options: { url?: string; fetch?: typeof globalThis.fetch } = {}) {
-    this.baseUrl = (options.url || new URL('/flovart-workspace', globalThis.location.origin).toString()).replace(/\/+$/, '')
+    this.baseUrl = (options.url || new URL('/iris-workspace', globalThis.location.origin).toString()).replace(/\/+$/, '')
     this.fetchImpl = options.fetch || globalThis.fetch.bind(globalThis)
   }
 
@@ -117,12 +117,12 @@ export class FlovartLinkClient {
         headers: { ...(init.body ? { 'content-type': 'application/json' } : {}), ...(init.headers || {}) },
       })
     } catch {
-      throw new FlovartLinkError('Flovart 本地服务暂时不可用。', { code: 'LINK_OFFLINE', status: 0 })
+      throw new IrisLinkError('Iris 本地服务暂时不可用。', { code: 'LINK_OFFLINE', status: 0 })
     }
     const body = await response.json().catch(() => null)
     if (!response.ok || record(body)?.ok === false) {
       const error = record(record(body)?.error)
-      throw new FlovartLinkError(text(error?.message || record(body)?.message, `Flovart Link 返回 HTTP ${response.status}`), {
+      throw new IrisLinkError(text(error?.message || record(body)?.message, `Iris Link 返回 HTTP ${response.status}`), {
         code: typeof error?.code === 'string' ? error.code : null,
         status: response.status,
         details: record(error?.details),
@@ -152,7 +152,7 @@ export class FlovartLinkClient {
 
   async inspect(projectId?: string): Promise<LinkWorkflowProject> {
     const project = normalizeProject(await this.command('workflow.inspect', projectId ? { projectId } : {}))
-    if (!project) throw new FlovartLinkError('当前 Workflow 返回的数据格式无效。', { code: 'WORKSPACE_UNAVAILABLE', status: 503 })
+    if (!project) throw new IrisLinkError('当前 Workflow 返回的数据格式无效。', { code: 'WORKSPACE_UNAVAILABLE', status: 503 })
     return project
   }
 

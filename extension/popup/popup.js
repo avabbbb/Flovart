@@ -11,13 +11,13 @@ const history = document.getElementById('history');
 const historyList = document.getElementById('historyList');
 const clearHistoryButton = document.getElementById('clearHistory');
 
-const HISTORY_KEY = 'flovartImportHistory';
-// 在线版 Flovart 网页画布；按钮直接新开标签页（chrome.tabs.create 不需要 tabs 权限）。
-export const FLOVART_WEB_URL = 'https://flovart.avabbbb.com/';
+const HISTORY_KEY = 'irisImportHistory';
+// 在线版 Iris 网页画布；按钮直接新开标签页（chrome.tabs.create 不需要 tabs 权限）。
+export const IRIS_WEB_URL = 'https://iris.avabbbb.com/';
 
 document.getElementById('extensionVersion').textContent = 'Browser Import ' + chrome.runtime.getManifest().version;
-document.getElementById('openFlovart').addEventListener('click', () => {
-  void chrome.tabs.create({ url: FLOVART_WEB_URL });
+document.getElementById('openIris').addEventListener('click', () => {
+  void chrome.tabs.create({ url: IRIS_WEB_URL });
   window.close();
 });
 
@@ -32,7 +32,7 @@ function render(status) {
     error: '连接或导入失败',
   }[state] || '尚未连接';
   statusMessage.textContent = status?.message || '连接 Desktop 后即可右键导入图片';
-  connectButton.textContent = state === 'error' ? '重新连接' : '连接 / 打开 Flovart Desktop';
+  connectButton.textContent = state === 'error' ? '重新连接' : '连接 / 打开 Iris Desktop';
   const lastReceipt = status?.receipt;
   receipt.hidden = !lastReceipt;
   if (lastReceipt) {
@@ -59,12 +59,12 @@ function escapeHtml(value) {
   }[char]));
 }
 
-chrome.storage.local.get(['flovartBridgeStatus', HISTORY_KEY]).then(result => {
-  render(result.flovartBridgeStatus);
+chrome.storage.local.get(['irisBridgeStatus', HISTORY_KEY]).then(result => {
+  render(result.irisBridgeStatus);
   renderHistory(result[HISTORY_KEY]);
 });
 chrome.storage.onChanged.addListener(changes => {
-  if (changes.flovartBridgeStatus) render(changes.flovartBridgeStatus.newValue);
+  if (changes.irisBridgeStatus) render(changes.irisBridgeStatus.newValue);
   if (changes[HISTORY_KEY]) renderHistory(changes[HISTORY_KEY].newValue);
 });
 const webPairings = document.getElementById('webPairings');
@@ -94,7 +94,7 @@ function renderPairings(pairings) {
     label.textContent = origin;
     const state = document.createElement('small');
     const approved = entry?.status === 'approved';
-    state.textContent = approved ? '已连接：可导入媒体、同步配置' : '请求连接：确认是你自己打开的 Flovart 画布再允许';
+    state.textContent = approved ? '已连接：可导入媒体、同步配置' : '请求连接：确认是你自己打开的 Iris 画布再允许';
     item.append(label, state);
     if (approved) {
       item.append(pairingButton('断开', () => removePairing(origin)));
@@ -116,7 +116,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 connectButton.addEventListener('click', async () => {
   connectButton.disabled = true;
   try {
-    const response = await chrome.runtime.sendMessage({ type: 'FLOVART_DESKTOP_CONNECT' });
+    const response = await chrome.runtime.sendMessage({ type: 'IRIS_DESKTOP_CONNECT' });
     if (!response?.ok) throw new Error(response?.error || '连接失败');
   } catch (error) {
     render({ state: 'error', message: error instanceof Error ? error.message : String(error) });
@@ -131,7 +131,7 @@ clearHistoryButton.addEventListener('click', async () => {
 });
 
 // 插件内反推结果：只在 chrome.storage.session（浏览器关闭即清空），可复制或发送到已配对的网页画布。
-const REVERSE_RESULT_KEY = 'flovartReversePrompt';
+const REVERSE_RESULT_KEY = 'irisReversePrompt';
 const reverseSection = document.getElementById('reverse');
 const reversePrompt = document.getElementById('reversePrompt');
 const reverseMeta = document.getElementById('reverseMeta');
@@ -160,7 +160,7 @@ copyReverseButton.addEventListener('click', async () => {
 sendReverseButton.addEventListener('click', async () => {
   sendReverseButton.disabled = true;
   try {
-    const response = await chrome.runtime.sendMessage({ type: 'FLOVART_REVERSE_TO_CANVAS' });
+    const response = await chrome.runtime.sendMessage({ type: 'IRIS_REVERSE_TO_CANVAS' });
     sendReverseButton.textContent = response?.ok ? '已发送' : '发送失败';
     if (!response?.ok) reverseMeta.textContent = response?.error || '发送失败';
   } finally {

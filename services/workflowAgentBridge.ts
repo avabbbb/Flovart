@@ -1,9 +1,9 @@
 import { requestUiConfirm } from './uiConfirm';
-import { executeFlovartCommand } from '../tools/flovart/core.js';
+import { executeIrisCommand } from '../tools/iris/core.js';
 import { canonicalize } from 'json-canonicalize';
 import { useWorkflowStore } from '../components/workflow/store';
 import type { WorkflowNode, WorkflowProject } from '../components/workflow/types';
-import { getFlovartRuntimeApi, type RuntimeCommandEnvelope } from './flovartRuntime';
+import { getIrisRuntimeApi, type RuntimeCommandEnvelope } from './irisRuntime';
 import { createBrowserWorkflowContract, type BrowserWorkflowContract } from './browserWorkflowContract';
 import { AgentRuntimeError, getBrowserAgentRuntime } from './browserAgentRuntime';
 import { redactWorkflowAgentValue, withWorkflowHumanApproval, WORKFLOW_READ_COMMANDS as WORKFLOW_DISPATCHER_READ_COMMANDS, type WorkflowCommandEnvelope, type WorkflowCommandResult } from './workflowDispatcher';
@@ -374,7 +374,7 @@ export class WorkflowAgentBridge {
         if (requiresRuntimeAgentConfirmation(envelope.command) && !await this.confirm(runtimeAgentConfirmationSummary(envelope))) {
           result = { ok: false, error: { code: 'DENIED', message: '用户拒绝了 Production Runtime 命令。' } };
         } else {
-          const runtime = getFlovartRuntimeApi();
+          const runtime = getIrisRuntimeApi();
           if (!runtime) {
             result = { ok: false, error: { code: 'RUNTIME_UNAVAILABLE', message: 'Production Runtime 仅可通过 Tauri 桌面端调用。' } };
           } else if (envelope.command === 'runtime.status') {
@@ -428,7 +428,7 @@ export class WorkflowAgentBridge {
         if (!READ_COMMANDS.has(envelope.command) && !await this.confirm(envelope.command)) {
           result = { ok: false, error: { code: 'DENIED', message: '用户拒绝了命令。' } };
         } else {
-          result = await executeFlovartCommand(envelope.command, envelope.args, {});
+          result = await executeIrisCommand(envelope.command, envelope.args, {});
         }
       }
       await this.post('/workflow/result', { requestId, clientId: this.clientId, result });

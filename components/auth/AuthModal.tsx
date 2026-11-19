@@ -22,7 +22,7 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
         open={open}
         onCancel={onClose}
         footer={null}
-        title="Flovart 账号"
+        title="Iris 账号"
         width={380}
         centered
         styles={{
@@ -37,7 +37,7 @@ export function AuthModal({ open, onClose }: AuthModalProps) {
           <p style={{ color: 'var(--isl-ink-soft)' }}>
             如果觉得好用，可以先到我的{' '}
             <a
-              href="https://github.com/avabbbb/Flovart"
+              href="https://github.com/avabbbb/Iris"
               target="_blank"
               rel="noreferrer"
               style={{ color: 'var(--isl-mint-deep, #12a89b)', fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: 2 }}

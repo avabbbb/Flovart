@@ -4,8 +4,8 @@ import { createWorkflowProject } from '../components/workflow/store';
 import { createWorkflowNode } from '../components/workflow/constants';
 import { createWorkflowExecutor } from '../services/workflowExecutor';
 import { toolApprovalFor } from '../services/agentToolPolicy';
-import { AGENT_PUBLIC_COMMAND_SET } from '../tools/flovart/agent-surface.js';
-import { agentToolCommand } from '../tools/flovart/agent-tools.js';
+import { AGENT_PUBLIC_COMMAND_SET } from '../tools/iris/agent-surface.js';
+import { agentToolCommand } from '../tools/iris/agent-tools.js';
 import { isGroupFrame } from '../components/workflow/canvasGroups';
 import type { WorkflowProject } from '../components/workflow/types';
 
@@ -85,7 +85,7 @@ describe('workflow.group.*', () => {
 
   it('is registered for every host with write / spend approval', () => {
     expect(AGENT_PUBLIC_COMMAND_SET.has('workflow.group.create')).toBe(true);
-    expect(agentToolCommand('flovart_group_run')).toBe('workflow.group.run');
+    expect(agentToolCommand('iris_group_run')).toBe('workflow.group.run');
     expect(toolApprovalFor('workflow.group.create').tier).toBe('write');
     expect(toolApprovalFor('workflow.group.run', {}).hardGate).toBe('spend');
     expect(toolApprovalFor('workflow.group.run', { dryRun: true }).tier).toBe('read');

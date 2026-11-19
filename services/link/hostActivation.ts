@@ -6,13 +6,13 @@ import {
   type AgentHostActivation,
 } from '../agentHostDiscovery';
 import { useAgentConnectionStore } from '../../stores/useAgentConnectionStore';
-import { getFlovartHostDefinition } from './hostRegistry';
+import { getIrisHostDefinition } from './hostRegistry';
 import { toLinkPublicStatus } from './publicStatus';
 import { displayError } from '../displayError';
 
 /**
  * Public result of preparing one agent host. The UI renders `state`/`action`
- * verbatim and never sees how the host delivers its Flovart entry.
+ * verbatim and never sees how the host delivers its Iris entry.
  */
 export type AgentPreparationResult =
   | { state: 'ready'; label: string; message: string; notice: string }
@@ -39,13 +39,13 @@ export async function ensureHostReady(
   agentIdentity: string,
   options: HostActivationOptions = {},
 ): Promise<AgentHostActivation | { state: 'needs_setup'; hostId: string }> {
-  const definition = getFlovartHostDefinition(agentIdentity);
+  const definition = getIrisHostDefinition(agentIdentity);
   if (!definition) throw new LinkActivationError('HOST_NOT_FOUND', '这个协作助手暂不可用。');
 
   const current = useAgentConnectionStore.getState();
-  if (!current.projectId) throw new LinkActivationError('WORKSPACE_REQUIRED', '请先打开一个 Flovart 项目。');
+  if (!current.projectId) throw new LinkActivationError('WORKSPACE_REQUIRED', '请先打开一个 Iris 项目。');
   if (current.status !== 'ready' || !current.clientId) {
-    throw new LinkActivationError('LINK_OFFLINE', 'Flovart 本地服务暂时不可用。');
+    throw new LinkActivationError('LINK_OFFLINE', 'Iris 本地服务暂时不可用。');
   }
   const targetProjectId = current.projectId;
   const assertTarget = () => {
@@ -64,7 +64,7 @@ export async function ensureHostReady(
   assertTarget();
   if (!discovery.ok || discovery.state !== 'ready') {
     const error = 'error' in discovery ? discovery.error : undefined;
-    throw new LinkActivationError('LINK_OFFLINE', error || 'Flovart 本地服务暂时不可用。');
+    throw new LinkActivationError('LINK_OFFLINE', error || 'Iris 本地服务暂时不可用。');
   }
   const detected = discovery.agents.find(host => host.id === agentIdentity);
   if (definition.kind !== 'coding-agent' || detected?.status === 'manual-import' || !detected?.available) {
@@ -107,7 +107,7 @@ export async function ensureHostReady(
  * returns only the public state the picker should render.
  */
 export async function prepareAgent(hostId: string): Promise<AgentPreparationResult> {
-  const definition = getFlovartHostDefinition(hostId);
+  const definition = getIrisHostDefinition(hostId);
   if (!definition) {
     return { state: 'error', label: '出错', message: '这个协作助手暂不可用。' };
   }
@@ -125,7 +125,7 @@ export async function prepareAgent(hostId: string): Promise<AgentPreparationResu
     if (status.state !== 'needs_setup') {
       return { state: status.state, label: status.label, message: status.message };
     }
-    // The host needs its Flovart entry set up. The definition owns how that
+    // The host needs its Iris entry set up. The definition owns how that
     // happens — a local CLI projection, or an external Skill/Plugin hand-off —
     // so dispatch to it rather than branching on the host id here.
     try {

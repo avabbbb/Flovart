@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { containsCjk, fontconfigCjkFont, resolveFontInfo, specNeedsCjk } from '../tools/flovart/pipeline/media.js';
+import { containsCjk, fontconfigCjkFont, resolveFontInfo, specNeedsCjk } from '../tools/iris/pipeline/media.js';
 
-const original = process.env.FLOVART_FONT_FILE;
+const original = process.env.IRIS_FONT_FILE;
 afterEach(() => {
-  if (original === undefined) delete process.env.FLOVART_FONT_FILE;
-  else process.env.FLOVART_FONT_FILE = original;
+  if (original === undefined) delete process.env.IRIS_FONT_FILE;
+  else process.env.IRIS_FONT_FILE = original;
 });
 const only = (...paths) => path => paths.includes(path);
 
@@ -20,7 +20,7 @@ describe('pipeline CJK font resolution', () => {
   });
 
   it('prefers the user font, then known CJK fonts, then fontconfig, and never silently falls back for Chinese', () => {
-    delete process.env.FLOVART_FONT_FILE;
+    delete process.env.IRIS_FONT_FILE;
     const noFc = () => null;
     expect(resolveFontInfo({ requireCjk: true, exists: only('C:/Windows/Fonts/msyh.ttc', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'), fontconfig: noFc }))
       .toEqual({ path: 'C:/Windows/Fonts/msyh.ttc', cjk: true, source: 'system' });
@@ -30,9 +30,9 @@ describe('pipeline CJK font resolution', () => {
       .toEqual({ path: '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', cjk: false, source: 'fallback' });
     expect(() => resolveFontInfo({ requireCjk: true, exists: only('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'), fontconfig: noFc }))
       .toThrow(expect.objectContaining({ code: 'CAPABILITY_UNAVAILABLE', details: expect.objectContaining({ capability: 'font' }) }));
-    process.env.FLOVART_FONT_FILE = '/home/me/MyFont.otf';
+    process.env.IRIS_FONT_FILE = '/home/me/MyFont.otf';
     expect(resolveFontInfo({ requireCjk: true, exists: only('/home/me/MyFont.otf'), fontconfig: noFc })).toEqual({ path: '/home/me/MyFont.otf', cjk: true, source: 'env' });
-    expect(() => resolveFontInfo({ exists: () => false, fontconfig: noFc })).toThrow(/FLOVART_FONT_FILE/);
+    expect(() => resolveFontInfo({ exists: () => false, fontconfig: noFc })).toThrow(/IRIS_FONT_FILE/);
   });
 
   it('picks a regular sans CJK face from fc-list output', () => {

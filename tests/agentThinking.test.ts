@@ -53,7 +53,7 @@ describe('agent thinking settings', () => {
 
   it('survives corrupt storage', () => {
     const storage = memoryStorage();
-    storage.setItem('flovart.agent.thinking', '{not json');
+    storage.setItem('iris.agent.thinking', '{not json');
     expect(readAgentThinkingLevel('m', storage)).toBe('off');
     expect(normalizeThinkingLevel('xhigh')).toBe('high');
     expect(normalizeThinkingLevel(undefined)).toBe('off');
@@ -109,7 +109,7 @@ async function runStream(model: string, reasoning?: string) {
 }
 
 describe('browser agent stream with thinking', () => {
-  beforeEach(() => localStorage.removeItem('flovart.agent.thinking'));
+  beforeEach(() => localStorage.removeItem('iris.agent.thinking'));
   afterEach(() => vi.unstubAllGlobals());
 
   it('posts reasoning_effort and surfaces reasoning_content as a thinking block', async () => {

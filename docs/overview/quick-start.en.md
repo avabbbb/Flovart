@@ -2,20 +2,20 @@
 
 Five deployment options — pick the one that fits you:
 
-> Prefer not to install? The official WebUI is at [flovart.avabbbb.com](https://flovart.avabbbb.com). It is served by a Cloudflare Worker named `flovart` (Workers + static assets, entry `worker/index.ts`). Besides the static app it runs only a same-origin LLM proxy at `/api/llm-proxy/*`, which forwards requests for a short allowlist of gateways that reject browser CORS and never stores or logs keys or prompts. Project data still lives in your browser.
+> Prefer not to install? The official WebUI is at [iris.avabbbb.com](https://iris.avabbbb.com). It is served by a Cloudflare Worker named `iris` (Workers + static assets, entry `worker/index.ts`). Besides the static app it runs only a same-origin LLM proxy at `/api/llm-proxy/*`, which forwards requests for a short allowlist of gateways that reject browser CORS and never stores or logs keys or prompts. Project data still lives in your browser.
 
 ## Option 1: Run Locally
 
 ```bash
-git clone https://github.com/avabbbb/Flovart.git
-cd Flovart
+git clone https://github.com/avabbbb/Iris.git
+cd Iris
 npm install
-npm run flovart:cli -- start --source --web --open
+npm run iris:cli -- start --source --web --open
 ```
 
 The launcher prepares the WebUI and local Browser Agent together, then opens the main Workflow route `#/app` with a one-time bootstrap handoff. Do not paste `37522` into the address bar and expect Agent binding; the direct URL is only the ordinary WebUI. On first run you land on an empty new Canvas that you can edit without any AI service; add an AI service in Settings when you are ready to generate.
 
-In source mode, `37522` is only the preferred port. If it is occupied, Flovart automatically selects an available loopback port and reports the actual URL. For an isolated test run, use `npm run flovart:cli -- start --source --web --web-port=0 --agent-port=0 --no-open --json`.
+In source mode, `37522` is only the preferred port. If it is occupied, Iris automatically selects an available loopback port and reports the actual URL. For an isolated test run, use `npm run iris:cli -- start --source --web --web-port=0 --agent-port=0 --no-open --json`.
 
 Do not use `--open` for automated browser acceptance because it delegates to the Windows default browser. Run `npm run test:browser:chrome` instead; it uses Playwright's Chrome for Testing executable, an isolated profile, dynamic ports, and a one-time bootstrap URL, then cleans up the test processes.
 
@@ -26,9 +26,9 @@ Do not use `--open` for automated browser acceptance because it delegates to the
 Use the current Skill/CLI integrations for Codex, Claude Code and OpenCode, or the WorkBuddy CLI Connector. An experimental local stdio MCP server shares the existing operations. Check the [Support Matrix](../../SUPPORT_MATRIX.md) for each client's actual certification status; the TeleAgent preparation package is not a verified client integration.
 
 ```bash
-npm run flovart:cli -- status --json
-npm run flovart:cli -- start --open --json  # only when status is not ready
-npm run flovart:cli -- workflow.inspect --json
+npm run iris:cli -- status --json
+npm run iris:cli -- start --open --json  # only when status is not ready
+npm run iris:cli -- workflow.inspect --json
 ```
 
 Normal work uses status, workflow.inspect, workflow.selection.get, workflow.apply and workflow.node.run. Use ensure for connection setup and command.list/schema for discovery or diagnostics. Check the target and revision before writes, then inspect the result. Deterministic commands do not require a second internal AI.
@@ -36,7 +36,7 @@ Normal work uses status, workflow.inspect, workflow.selection.get, workflow.appl
 Start the MCP server from the source checkout:
 
 ```bash
-node tools/flovart/mcp-server.js
+node tools/iris/mcp-server.js
 ```
 
 Configure that process in a client supporting local stdio, with this repository as its working directory; verify the client's own configuration format and version. The five MCP tools still operate on the bound, visible Browser Workflow. They are not headless native-effect tools. See the [Agent Integration](../design/12-agent.md).
@@ -47,11 +47,11 @@ The [main design](../design/00-overview.md) defines future native effects and in
 
 ## Option 3: Third-Party Service Adaptation
 
-Flovart is continuously advancing **OpenAI-compatible** third-party endpoint adaptation (e.g., relay stations, enterprise intranet gateways). You can select **Custom Provider** in Settings and connect it as follows:
+Iris is continuously advancing **OpenAI-compatible** third-party endpoint adaptation (e.g., relay stations, enterprise intranet gateways). You can select **Custom Provider** in Settings and connect it as follows:
 
-1. **Service address** — Enter your endpoint address (for example, `https://api.example.com/v1`; Flovart normalizes compatible paths automatically).
+1. **Service address** — Enter your endpoint address (for example, `https://api.example.com/v1`; Iris normalizes compatible paths automatically).
 2. **API Key** — Enter the credential for this AI service.
-3. **Model** — Flovart discovers models automatically when the service exposes `/models`; if discovery is unavailable, enter a model manually.
+3. **Model** — Iris discovers models automatically when the service exposes `/models`; if discovery is unavailable, enter a model manually.
 4. **Capability declaration** — Configure capabilities only in Advanced settings when automatic inference is not enough.
 
 > **Note on adaptation**: Third-party compatibility rules are still iterating. You are welcome to help improve the adaptation rules and samples so more model services can integrate reliably.
@@ -66,8 +66,8 @@ Flovart is continuously advancing **OpenAI-compatible** third-party endpoint ada
 ## Option 4: Docker Local Integration
 
 ```bash
-git clone https://github.com/avabbbb/Flovart.git
-cd Flovart
+git clone https://github.com/avabbbb/Iris.git
+cd Iris
 docker compose up --build -d
 ```
 

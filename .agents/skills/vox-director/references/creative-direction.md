@@ -1,6 +1,6 @@
 # VOX editorial collage direction
 
-This Flovart adaptation preserves the creative method of the MIT-licensed
+This Iris adaptation preserves the creative method of the MIT-licensed
 [`avabbbb/vox-director`](https://github.com/avabbbb/vox-director) project while
 removing its Provider, credential, polling, download, retry, and local rendering
 implementation.

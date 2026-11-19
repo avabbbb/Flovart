@@ -8,9 +8,9 @@ const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const testTempRoot = resolveTestTempRoot(projectDir, 'vitest');
 mkdirSync(testTempRoot, { recursive: true });
 
-const repeat = Number(process.env.FLOVART_CRITICAL_REPEATS || process.argv[2] || 10);
+const repeat = Number(process.env.IRIS_CRITICAL_REPEATS || process.argv[2] || 10);
 if (!Number.isInteger(repeat) || repeat < 1 || repeat > 20) {
-  throw new Error('FLOVART_CRITICAL_REPEATS must be an integer from 1 to 20.');
+  throw new Error('IRIS_CRITICAL_REPEATS must be an integer from 1 to 20.');
 }
 
 const files = [

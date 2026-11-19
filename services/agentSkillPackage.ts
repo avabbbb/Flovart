@@ -1,8 +1,8 @@
-import workbuddySkill from '../integrations/workbuddy/flovart/skills/flovart/SKILL.md?raw';
-import workflowReference from '../integrations/workbuddy/flovart/skills/flovart/references/workflow.md?raw';
-import connectorMeta from '../integrations/workbuddy/flovart/connector-meta.json?raw';
-import cliConfig from '../integrations/workbuddy/flovart/cli.json?raw';
-import icon from '../integrations/workbuddy/flovart/icon.svg?raw';
+import workbuddySkill from '../integrations/workbuddy/iris/skills/iris/SKILL.md?raw';
+import workflowReference from '../integrations/workbuddy/iris/skills/iris/references/workflow.md?raw';
+import connectorMeta from '../integrations/workbuddy/iris/connector-meta.json?raw';
+import cliConfig from '../integrations/workbuddy/iris/cli.json?raw';
+import icon from '../integrations/workbuddy/iris/icon.svg?raw';
 
 export async function createWorkBuddySkillPackage(): Promise<Blob> {
   const { BlobWriter, TextReader, ZipWriter } = await import('@zip.js/zip.js');
@@ -11,11 +11,11 @@ export async function createWorkBuddySkillPackage(): Promise<Blob> {
     'connector-meta.json': connectorMeta,
     'cli.json': cliConfig,
     'icon.svg': icon,
-    'skills/flovart/SKILL.md': workbuddySkill,
-    'skills/flovart/references/workflow.md': workflowReference,
+    'skills/iris/SKILL.md': workbuddySkill,
+    'skills/iris/references/workflow.md': workflowReference,
   };
   for (const [path, content] of Object.entries(files)) {
-    await archive.add(`flovart-workbuddy/${path}`, new TextReader(content));
+    await archive.add(`iris-workbuddy/${path}`, new TextReader(content));
   }
   return archive.close();
 }

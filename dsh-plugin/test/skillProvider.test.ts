@@ -3,10 +3,10 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createFlovartSkillProvider, parseSkillFile, readBundledSkills } from '../src/skillProvider.ts'
+import { createIrisSkillProvider, parseSkillFile, readBundledSkills } from '../src/skillProvider.ts'
 
 function skillDir(name: string, frontmatter: string, body = 'body text\n') {
-  const root = mkdtempSync(join(tmpdir(), 'flovart-skill-'))
+  const root = mkdtempSync(join(tmpdir(), 'iris-skill-'))
   const dir = join(root, name)
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'SKILL.md'), `---\n${frontmatter}\n---\n\n${body}`)
@@ -14,9 +14,9 @@ function skillDir(name: string, frontmatter: string, body = 'body text\n') {
 }
 
 test('parses name, description, and strips the frontmatter from the body', () => {
-  const { root, dir } = skillDir('flovart', 'name: flovart\ndescription: Work the visible canvas', '# Title\n')
+  const { root, dir } = skillDir('iris', 'name: iris\ndescription: Work the visible canvas', '# Title\n')
   const parsed = parseSkillFile(join(dir, 'SKILL.md'), dir)
-  assert.equal(parsed?.name, 'flovart')
+  assert.equal(parsed?.name, 'iris')
   assert.equal(parsed?.description, 'Work the visible canvas')
   assert.equal(parsed?.content.trim(), '# Title')
   assert.equal(readBundledSkills(root).length, 1)
@@ -24,7 +24,7 @@ test('parses name, description, and strips the frontmatter from the body', () =>
 })
 
 test('skips directories without a usable SKILL.md and hidden directories', () => {
-  const root = mkdtempSync(join(tmpdir(), 'flovart-skill-'))
+  const root = mkdtempSync(join(tmpdir(), 'iris-skill-'))
   mkdirSync(join(root, 'empty'), { recursive: true })
   mkdirSync(join(root, '.hidden'), { recursive: true })
   writeFileSync(join(root, '.hidden', 'SKILL.md'), '---\nname: hidden\ndescription: no\n---\n')
@@ -35,30 +35,30 @@ test('skips directories without a usable SKILL.md and hidden directories', () =>
 })
 
 test('lists with rank 600 and a directory resource base, then loads the body', async () => {
-  const { root } = skillDir('flovart', 'name: flovart\ndescription: Canvas work')
-  const provider = createFlovartSkillProvider(root)
+  const { root } = skillDir('iris', 'name: iris\ndescription: Canvas work')
+  const provider = createIrisSkillProvider(root)
   const list = await provider.list({})
   assert.equal(list.length, 1)
   assert.deepEqual(list[0], {
-    name: 'flovart',
+    name: 'iris',
     description: 'Canvas work',
-    path: join(root, 'flovart', 'SKILL.md'),
+    path: join(root, 'iris', 'SKILL.md'),
     invocation: { modelInvocable: true, userInvocable: true },
     source: 'bundled',
-    provider: 'flovart',
+    provider: 'iris',
     rank: 600,
-    locator: join(root, 'flovart'),
-    resourceBase: { kind: 'directory', path: join(root, 'flovart') },
+    locator: join(root, 'iris'),
+    resourceBase: { kind: 'directory', path: join(root, 'iris') },
   })
 
   const loaded = await provider.get(list[0], {})
   assert.equal(loaded?.content.trim(), 'body text')
-  assert.equal(loaded?.name, 'flovart')
+  assert.equal(loaded?.name, 'iris')
   rmSync(root, { recursive: true, force: true })
 })
 
 test('returns undefined when the candidate locator no longer resolves', async () => {
-  const provider = createFlovartSkillProvider(join(tmpdir(), 'flovart-skill-missing'))
+  const provider = createIrisSkillProvider(join(tmpdir(), 'iris-skill-missing'))
   assert.deepEqual(await provider.list({}), [])
-  assert.equal(await provider.get({ name: 'flovart', description: 'x', invocation: { modelInvocable: true, userInvocable: true }, source: 'bundled', provider: 'flovart', rank: 600, locator: join(tmpdir(), 'nope') }, {}), undefined)
+  assert.equal(await provider.get({ name: 'iris', description: 'x', invocation: { modelInvocable: true, userInvocable: true }, source: 'bundled', provider: 'iris', rank: 600, locator: join(tmpdir(), 'nope') }, {}), undefined)
 })

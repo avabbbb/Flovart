@@ -49,7 +49,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
       ...createUISlice(a[0]),
     }),
     {
-      name: 'flovart-workspace',
+      name: 'iris-workspace',
       version: 3,
       migrate: (persisted) => {
         // v1 把 'table' 存为顶层视图；v3 删除 Table surface，原 'table' 一律映射为 'reverse'。

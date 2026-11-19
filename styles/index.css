@@ -30,15 +30,15 @@
     --accent-text: #12a89b;
     --ui-bg-color: rgba(250, 249, 246, 0.92);
     --button-bg-color: #19c8b9;
-    --flovart-panel-bg: rgba(244, 245, 248, 0.92);
-    --flovart-panel-border: rgba(212, 212, 216, 0.84);
-    --flovart-text-primary: #18181b;
-    --flovart-text-muted: #71717a;
-    --flovart-text-ghost: #a1a1aa;
-    --flovart-input-bg: rgba(255, 255, 255, 0.7);
-    --flovart-chip-bg: #f4f4f5;
-    --flovart-chip-border: #d4d4d8;
-    --flovart-shadow: 0 12px 32px rgba(24, 24, 27, 0.08), 0 0 1px rgba(0, 0, 0, 0.05) inset;
+    --iris-panel-bg: rgba(244, 245, 248, 0.92);
+    --iris-panel-border: rgba(212, 212, 216, 0.84);
+    --iris-text-primary: #18181b;
+    --iris-text-muted: #71717a;
+    --iris-text-ghost: #a1a1aa;
+    --iris-input-bg: rgba(255, 255, 255, 0.7);
+    --iris-chip-bg: #f4f4f5;
+    --iris-chip-border: #d4d4d8;
+    --iris-shadow: 0 12px 32px rgba(24, 24, 27, 0.08), 0 0 1px rgba(0, 0, 0, 0.05) inset;
 }
 
 :root[data-theme='light'] {
@@ -68,15 +68,15 @@
     --accent-text: #12a89b;
     --ui-bg-color: rgba(250, 249, 246, 0.94);
     --button-bg-color: #19c8b9;
-    --flovart-panel-bg: rgba(244, 245, 248, 0.94);
-    --flovart-panel-border: rgba(212, 212, 216, 0.8);
-    --flovart-text-primary: #18181b;
-    --flovart-text-muted: #52525b;
-    --flovart-text-ghost: #94949e;
-    --flovart-input-bg: rgba(255, 255, 255, 0.75);
-    --flovart-chip-bg: rgba(228, 228, 231, 0.6);
-    --flovart-chip-border: #d4d4d8;
-    --flovart-shadow: 0 12px 32px rgba(24, 24, 27, 0.06), 0 0 1px rgba(0, 0, 0, 0.05) inset;
+    --iris-panel-bg: rgba(244, 245, 248, 0.94);
+    --iris-panel-border: rgba(212, 212, 216, 0.8);
+    --iris-text-primary: #18181b;
+    --iris-text-muted: #52525b;
+    --iris-text-ghost: #94949e;
+    --iris-input-bg: rgba(255, 255, 255, 0.75);
+    --iris-chip-bg: rgba(228, 228, 231, 0.6);
+    --iris-chip-border: #d4d4d8;
+    --iris-shadow: 0 12px 32px rgba(24, 24, 27, 0.06), 0 0 1px rgba(0, 0, 0, 0.05) inset;
 }
 
 :root[data-theme='dark'] {
@@ -108,15 +108,15 @@
     --accent-text: #3ad9c9;
     --ui-bg-color: rgba(32, 31, 29, 0.94);
     --button-bg-color: #3ad9c9;
-    --flovart-panel-bg: rgba(18, 20, 26, 0.92);
-    --flovart-panel-border: rgba(39, 39, 42, 0.8);
-    --flovart-text-primary: #f4f4f5;
-    --flovart-text-muted: #a1a1aa;
-    --flovart-text-ghost: #52525b;
-    --flovart-input-bg: rgba(0, 0, 0, 0.3);
-    --flovart-chip-bg: #09090b;
-    --flovart-chip-border: #27272a;
-    --flovart-shadow: 0 12px 32px rgba(0, 0, 0, 0.7), 0 0 1px rgba(255, 255, 255, 0.05) inset;
+    --iris-panel-bg: rgba(18, 20, 26, 0.92);
+    --iris-panel-border: rgba(39, 39, 42, 0.8);
+    --iris-text-primary: #f4f4f5;
+    --iris-text-muted: #a1a1aa;
+    --iris-text-ghost: #52525b;
+    --iris-input-bg: rgba(0, 0, 0, 0.3);
+    --iris-chip-bg: #09090b;
+    --iris-chip-border: #27272a;
+    --iris-shadow: 0 12px 32px rgba(0, 0, 0, 0.7), 0 0 1px rgba(255, 255, 255, 0.05) inset;
 }
 
 html,
@@ -458,7 +458,7 @@ body {
 .inline-prompt-bar {
     box-sizing: border-box;
     overflow: visible;
-    color: var(--flovart-text-muted);
+    color: var(--iris-text-muted);
     font-family: "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
     transition: left 100ms ease-out, top 100ms ease-out;
 }
@@ -525,7 +525,7 @@ body {
 .inline-prompt-bar__model {
     min-width: 0;
     overflow: hidden;
-    color: var(--flovart-text-muted);
+    color: var(--iris-text-muted);
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.04em;
@@ -540,7 +540,7 @@ body {
     border: 1px solid rgba(148, 163, 184, 0.14);
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.42);
-    color: var(--flovart-text-ghost);
+    color: var(--iris-text-ghost);
     font-size: 9px;
     font-weight: 700;
     padding: 0 8px;
@@ -557,7 +557,7 @@ body {
     width: 4px;
     height: 4px;
     border-radius: 50%;
-    background: var(--flovart-panel-border);
+    background: var(--iris-panel-border);
 }
 
 .inline-prompt-bar__status-dot--running,
@@ -595,7 +595,7 @@ body {
     outline: none;
     border: none;
     background: transparent;
-    color: var(--flovart-text-primary);
+    color: var(--iris-text-primary);
     font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: 13px;
     line-height: 1.45;
@@ -607,7 +607,7 @@ body {
     content: attr(data-placeholder);
     float: left;
     height: 0;
-    color: var(--flovart-text-ghost);
+    color: var(--iris-text-ghost);
     pointer-events: none;
 }
 
@@ -626,7 +626,7 @@ body {
     border: 1px solid rgba(148, 163, 184, 0.16);
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.42);
-    color: var(--flovart-text-muted);
+    color: var(--iris-text-muted);
     font-size: 10px;
     padding: 4px 8px;
 }
@@ -661,7 +661,7 @@ body {
 
 .inline-prompt-bar__schema {
     min-width: 0;
-    color: var(--flovart-text-muted);
+    color: var(--iris-text-muted);
     font-size: 10px;
     font-weight: 600;
     overflow: hidden;
@@ -1048,7 +1048,7 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
     filter: brightness(1.08);
 }
 
-/* Flovart card neon flow animation */
+/* Iris card neon flow animation */
 
 @keyframes card-neon-flow-animation {
     0% { clip-path: inset(0 0 98% 0); }
@@ -1123,7 +1123,7 @@ input[type='range'].toolbar-range::-moz-range-thumb:hover {
 }
 
 
-/* Flovart tactile UI system: Lovart-like glass + LibTV-like elastic motion */
+/* Iris tactile UI system: Lovart-like glass + LibTV-like elastic motion */
 :root {
   --flv-rose: #e8453c;
   --flv-coral: #ff7a5c;

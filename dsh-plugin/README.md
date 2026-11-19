@@ -1,4 +1,4 @@
-# @flovart/dsh-plugin — DeepSeek Harness Flovart Plugin
+# @flovart/dsh-plugin — DeepSeek Harness Iris Plugin
 
 > 当前兼容范围：DeepSeek Harness `>=0.2.2-rc.1 <0.3.0-0`（已验证 `0.2.2-rc.1`、`0.2.2-rc.2`）、Node `^22.19.0 || >=24.0.0`。
 >
@@ -8,17 +8,17 @@
 ## 用户路径
 
 1. 在仓库根目录运行 `npm run dsh:start`。
-2. 启动器准备 Workspace Operator，并通过 Flovart Link 确保可见 Browser Workflow，再启动 `flovart` Harness Profile。
-3. 在 DeepSeek 主会话中切换到 `Flovart` 页签。
-4. 查看当前可见 Workflow；修改和生成由 `ctx.flovart` tools 继续走同一条 Flovart Core 链路。
+2. 启动器准备 Workspace Operator，并通过 Iris Link 确保可见 Browser Workflow，再启动 `iris` Harness Profile。
+3. 在 DeepSeek 主会话中切换到 `Iris` 页签。
+4. 查看当前可见 Workflow；修改和生成由 `ctx.iris` tools 继续走同一条 Iris Core 链路。
 
-用户不需要填写 Runtime 地址或 Token，也不需要理解 Browser binding。DeepSeek 主对话是指挥入口，Flovart 页签只承载当前可见 Workflow、制作状态和产物摘要；没有可见 Browser Workflow 时会明确提示，不创建隐藏副本。
+用户不需要填写 Runtime 地址或 Token，也不需要理解 Browser binding。DeepSeek 主对话是指挥入口，Iris 页签只承载当前可见 Workflow、制作状态和产物摘要；没有可见 Browser Workflow 时会明确提示，不创建隐藏副本。
 
 ## 组成
 
 | 部分 | 职责 |
 | --- | --- |
-| `cordis.patch.yml` | 向专用 Profile 插入一个 `flovart` Host/Client 行 |
+| `cordis.patch.yml` | 向专用 Profile 插入一个 `iris` Host/Client 行 |
 | `src/index.ts` | 提供 CLI 工具派生与受限 Workspace 同源代理 |
 | `src/client/` | 注册上下文 `conversation.view` 与 `shell.overlay` |
 | `scripts/build.mjs` | 构建 Host ESM 与 RC8 `__ModuleLoader__` Client bundle |
@@ -38,8 +38,8 @@ DSH Desktop 的页面从 `dsh-app://app` 加载，它的协议代理在转发到
 
 
 - 不占用根 `sidebar`、`conversation` 或 `conversation.session`；只注册 `conversation.view`、`sidebar.panellist`、`main`、`shell.overlay` 四个增量槽位。
-- 侧栏「Flovart」入口的主区域是同源 iframe（`/flovart-app/`）嵌入的可见画布；不复制第二套 Agent 会话，也不在 iframe 外重建聊天页。
-- 浏览器只访问 Harness 同源的 `/flovart-workspace`；Host 仅代理 `health` 与受限的 Workflow tools 路由。
+- 侧栏「Iris」入口的主区域是同源 iframe（`/iris-app/`）嵌入的可见画布；不复制第二套 Agent 会话，也不在 iframe 外重建聊天页。
+- 浏览器只访问 Harness 同源的 `/iris-workspace`；Host 仅代理 `health` 与受限的 Workflow tools 路由。
 - Workspace Token 只存在于启动器环境和 Harness Host，不序列化到浏览器，不进入节点、Draft、回执或 Provider 参数。
 - Provider、付费 Production Gate、Task/Event 与 Artifact 权威边界保持不变。
 
@@ -62,10 +62,10 @@ npm run profile:start
 npm run profile:uninstall -- --home <temporary-or-user-dsh-home>
 ```
 
-`profile:install` 会生成 `$DSH_HOME/profiles/flovart`，按
+`profile:install` 会生成 `$DSH_HOME/profiles/iris`，按
 `@deepseek-ai/dsh-base → @deepseek-ai/dsh-web-app → @flovart/dsh-plugin`
 组合 Profile，并通过 `--dump-config` 校验安装结果。`profile:start` 先通过同一个
-`flovart ensure --json` 复用/启动可见 Web Workflow，再使用随机可用端口启动
+`iris ensure --json` 复用/启动可见 Web Workflow，再使用随机可用端口启动
 Harness；Harness 退出时一并停止由本次启动创建的 Workspace Operator。若没有可见
 Browser Workflow，DSH view 会 fail closed，不创建隐藏副本。
 
@@ -76,10 +76,10 @@ Browser Workflow，DSH view 会 fail closed，不创建隐藏副本。
 - 当前 view 只读显示可见 Browser Workflow；不会预造空项目、保存 Native Draft 或绑定第二份 Workflow。
 - 真实浏览器已完成 RC8 Profile 页面 smoke，无页面异常或控制台错误；完整 Production Brief 对话仍受本机 DeepSeek 登录态限制，未用付费凭据冒充通过。
 - DSH service 的 Workflow API 总是把 `workspaceMode` 固定为 `browser`；没有可见 Browser Workflow 时返回 `WORKSPACE_REQUIRED`/`WORKSPACE_UNAVAILABLE`，没有 silent fallback 或假执行。
-- 插件随包携带 canonical Skill（`skill/flovart`），通过 `ctx.skills.registerProvider` 注册进 DSH（rank 600；用户自己的 `~/.dsh/skills` 或项目内同名 skill 优先）。旧兼容集没有 skills 服务时自动跳过，不影响启动。
-- 插件工具另受一层 Flovart 策略约束（DSH 自家的 sandbox/approval 不管插件工具）：`FLOVART_SANDBOX=read-only|workspace-write`、`FLOVART_APPROVAL=never|on-request|untrusted`。`ask` 走 Harness approval seam，未组合 ApprovalService 时按拒绝处理；`workspace/app/workspace.node.run` 的删除与付费确认仍由 Flovart 命令面负责，不重复弹窗。
+- 插件随包携带 canonical Skill（`skill/iris`），通过 `ctx.skills.registerProvider` 注册进 DSH（rank 600；用户自己的 `~/.dsh/skills` 或项目内同名 skill 优先）。旧兼容集没有 skills 服务时自动跳过，不影响启动。
+- 插件工具另受一层 Iris 策略约束（DSH 自家的 sandbox/approval 不管插件工具）：`IRIS_SANDBOX=read-only|workspace-write`、`IRIS_APPROVAL=never|on-request|untrusted`。`ask` 走 Harness approval seam，未组合 ApprovalService 时按拒绝处理；`workspace/app/workspace.node.run` 的删除与付费确认仍由 Iris 命令面负责，不重复弹窗。
 - Workspace Operator 被精确终止后，Supervisor 已真实以相同 loopback 会话重新拉起；Cordis service 的临时 CLI lifecycle test 已证明依赖 disposer 会卸载，服务恢复后重新注入。
-- `profile:uninstall` 已真实验证只移除 `$DSH_HOME/profiles/flovart`，保留 DSH_HOME 其余内容、Workspace 数据和其他 Harness Profile。
+- `profile:uninstall` 已真实验证只移除 `$DSH_HOME/profiles/iris`，保留 DSH_HOME 其余内容、Workspace 数据和其他 Harness Profile。
 - Host/Client TypeScript、bundle loader 契约、同源代理白名单、稳定五工具派生和定向 UI/Store 测试均通过。
 
 ## 仍需放行验证

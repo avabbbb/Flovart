@@ -13,7 +13,7 @@ export interface PromptHistoryEntry {
 const MAX_ENTRIES = 500;
 
 const historyStore = localforage.createInstance({
-    name: 'flovart',
+    name: 'iris',
     storeName: 'prompt-history',
 });
 

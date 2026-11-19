@@ -93,13 +93,13 @@ ${GROUP_KEYS.map(key => `<h3>按${escapeHtml(GROUP_LABEL[key])}</h3>${table([GRO
   const counts = model.counts;
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Flovart AIGC 评测看板</title>
+<title>Iris AIGC 评测看板</title>
 <style>
 body{font:14px/1.5 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;margin:24px;max-width:1100px;color:CanvasText;background:Canvas}
 table{border-collapse:collapse;margin:8px 0 16px;width:100%}th,td{border:1px solid GrayText;padding:4px 8px;text-align:left;vertical-align:top}
 th{font-weight:600}.ci{color:GrayText;font-size:12px}section{margin-bottom:28px}code{font-size:12px}
 </style></head><body>
-<h1>Flovart AIGC 评测看板</h1>
+<h1>Iris AIGC 评测看板</h1>
 <p>生成于 ${escapeHtml(model.generatedAt)}；评测运行 ${escapeHtml(model.gradeRun?.runId ?? '—')}。条目 ${counts.items}（有效 ${counts.activeItems}；dev ${counts.bySplit.dev} / test ${counts.bySplit.test} / holdout ${counts.bySplit.holdout}），take ${counts.takes}，评分 ${counts.ratings}。</p>
 <p class="ci">客观轨与主观轨分开报告，不合成一个分数。区间是 95% Wilson；样本少时区间很宽，结论只看区间。</p>
 ${sections.join('\n')}

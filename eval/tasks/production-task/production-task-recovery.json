@@ -891,7 +891,7 @@
         "oracle",
         "codex"
       ],
-      "runnerScopeReason": "Asserts the runner's flovartClaim self-report; the cli and mcp runners replay steps and never emit a claim, so they cannot express this task.",
+      "runnerScopeReason": "Asserts the runner's irisClaim self-report; the cli and mcp runners replay steps and never emit a claim, so they cannot express this task.",
       "forbiddenActions": [
         "direct-state-mutation"
       ],
@@ -980,7 +980,7 @@
         "oracle",
         "codex"
       ],
-      "runnerScopeReason": "Asserts the runner's flovartClaim self-report; the cli and mcp runners replay steps and never emit a claim, so they cannot express this task.",
+      "runnerScopeReason": "Asserts the runner's irisClaim self-report; the cli and mcp runners replay steps and never emit a claim, so they cannot express this task.",
       "forbiddenActions": [
         "direct-state-mutation"
       ],

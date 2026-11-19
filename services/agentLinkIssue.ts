@@ -1,5 +1,5 @@
 /**
- * Classifies why the browser cannot talk to the local Flovart Agent (the
+ * Classifies why the browser cannot talk to the local Iris Agent (the
  * Workspace Operator DSH / Codex / CLI also connect through) and turns it into
  * one plain sentence plus a concrete next step.
  *
@@ -154,20 +154,20 @@ export interface AgentLinkIssueCopy {
 
 const COPY: Record<AgentLinkIssueKind, { zho: AgentLinkIssueCopy; en: AgentLinkIssueCopy }> = {
   not_configured: {
-    zho: { title: '还没有连接本机 Agent', detail: '当前页面没有拿到本机 Flovart Agent 的地址。', next: '在终端启动 DSH（会同时拉起本机 Agent），或从启动器重新打开画布。', command: 'npm run dsh:start' },
-    en: { title: 'No local agent connected yet', detail: 'This page has no address for the local Flovart Agent.', next: 'Start DSH in a terminal (it also starts the local agent), or reopen the canvas from the launcher.', command: 'npm run dsh:start' },
+    zho: { title: '还没有连接本机 Agent', detail: '当前页面没有拿到本机 Iris Agent 的地址。', next: '在终端启动 DSH（会同时拉起本机 Agent），或从启动器重新打开画布。', command: 'npm run dsh:start' },
+    en: { title: 'No local agent connected yet', detail: 'This page has no address for the local Iris Agent.', next: 'Start DSH in a terminal (it also starts the local agent), or reopen the canvas from the launcher.', command: 'npm run dsh:start' },
   },
   blocked_by_page: {
-    zho: { title: '浏览器拦截了本机连接', detail: '线上 HTTPS 页面不能访问你电脑上的 http 本机服务。', next: '改用本地工作区打开 Flovart（npm run dev 或 DSH 内的 Flovart 页签）。', command: 'npm run dev' },
-    en: { title: 'The browser blocked the local connection', detail: 'A hosted HTTPS page cannot call an http service on your computer.', next: 'Open Flovart from a local workspace (npm run dev, or the Flovart tab inside DSH).', command: 'npm run dev' },
+    zho: { title: '浏览器拦截了本机连接', detail: '线上 HTTPS 页面不能访问你电脑上的 http 本机服务。', next: '改用本地工作区打开 Iris（npm run dev 或 DSH 内的 Iris 页签）。', command: 'npm run dev' },
+    en: { title: 'The browser blocked the local connection', detail: 'A hosted HTTPS page cannot call an http service on your computer.', next: 'Open Iris from a local workspace (npm run dev, or the Iris tab inside DSH).', command: 'npm run dev' },
   },
   refused: {
     zho: { title: '本机 Agent 没有运行', detail: '这个端口上没有服务在监听：Agent 没启动、已退出，或端口不对。', next: '重新启动 DSH / 本机 Agent，再点「重新连接」。', command: 'npm run dsh:start' },
     en: { title: 'The local agent is not running', detail: 'Nothing is listening on this port: the agent is not started, has exited, or the port is wrong.', next: 'Restart DSH or the local agent, then choose Reconnect.', command: 'npm run dsh:start' },
   },
   unreachable: {
-    zho: { title: '连不上本机 Agent', detail: '请求没有得到任何响应，可能被防火墙、代理或安全软件拦截。', next: '确认 Agent 正在运行，并允许本机 127.0.0.1 连接后点「重新连接」。', command: 'npm run flovart:cli -- status --json' },
-    en: { title: 'Cannot reach the local agent', detail: 'The request got no response; a firewall, proxy or security tool may be blocking it.', next: 'Make sure the agent is running and loopback (127.0.0.1) traffic is allowed, then choose Reconnect.', command: 'npm run flovart:cli -- status --json' },
+    zho: { title: '连不上本机 Agent', detail: '请求没有得到任何响应，可能被防火墙、代理或安全软件拦截。', next: '确认 Agent 正在运行，并允许本机 127.0.0.1 连接后点「重新连接」。', command: 'npm run iris:cli -- status --json' },
+    en: { title: 'Cannot reach the local agent', detail: 'The request got no response; a firewall, proxy or security tool may be blocking it.', next: 'Make sure the agent is running and loopback (127.0.0.1) traffic is allowed, then choose Reconnect.', command: 'npm run iris:cli -- status --json' },
   },
   timeout: {
     zho: { title: '本机 Agent 响应超时', detail: 'Agent 在运行，但没有及时回应，可能正忙于启动或扫描。', next: '稍等几秒后点「重新连接」；持续超时请重启 Agent。' },
@@ -182,12 +182,12 @@ const COPY: Record<AgentLinkIssueKind, { zho: AgentLinkIssueCopy; en: AgentLinkI
     en: { title: 'The connection credential expired', detail: 'The local agent is online, but this page’s credential expired or was reset (usually after the agent restarted).', next: 'Choose Reconnect to get a new credential; otherwise reopen the canvas from DSH or the launcher.' },
   },
   version: {
-    zho: { title: '版本不匹配', detail: '本机 Agent 与当前页面的协议版本不一致。', next: '更新 Flovart 后重启 Agent，让两边使用同一版本。', command: 'git pull && npm install && npm run dsh:start' },
-    en: { title: 'Version mismatch', detail: 'The local agent and this page speak different protocol versions.', next: 'Update Flovart and restart the agent so both sides run the same version.', command: 'git pull && npm install && npm run dsh:start' },
+    zho: { title: '版本不匹配', detail: '本机 Agent 与当前页面的协议版本不一致。', next: '更新 Iris 后重启 Agent，让两边使用同一版本。', command: 'git pull && npm install && npm run dsh:start' },
+    en: { title: 'Version mismatch', detail: 'The local agent and this page speak different protocol versions.', next: 'Update Iris and restart the agent so both sides run the same version.', command: 'git pull && npm install && npm run dsh:start' },
   },
   wrong_service: {
-    zho: { title: '端口上不是 Flovart Agent', detail: '这个地址有服务应答，但不是 Flovart Agent 或它返回了错误。', next: '检查端口是否被其它程序占用，重启 Agent 后点「重新连接」。', command: 'npm run flovart:cli -- status --json' },
-    en: { title: 'Something else answered on this port', detail: 'A service responded, but it is not the Flovart Agent or it returned an error.', next: 'Check whether another program took the port, restart the agent, then choose Reconnect.', command: 'npm run flovart:cli -- status --json' },
+    zho: { title: '端口上不是 Iris Agent', detail: '这个地址有服务应答，但不是 Iris Agent 或它返回了错误。', next: '检查端口是否被其它程序占用，重启 Agent 后点「重新连接」。', command: 'npm run iris:cli -- status --json' },
+    en: { title: 'Something else answered on this port', detail: 'A service responded, but it is not the Iris Agent or it returned an error.', next: 'Check whether another program took the port, restart the agent, then choose Reconnect.', command: 'npm run iris:cli -- status --json' },
   },
   stream_lost: {
     zho: { title: '实时通道中断', detail: 'Agent 在线且凭证有效，但画布事件流断开了。', next: '正在自动重连；也可以点「重新连接」立即重试。' },

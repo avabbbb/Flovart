@@ -50,7 +50,7 @@ const MAX_SAMPLES = 2000;
 const PERSIST_DELAY_MS = 2000;
 const STORE_KEY = 'samples';
 const MARKS: LatencyMark[] = ['ttfb', 'firstChunk', 'submitted', 'generated'];
-const store = localforage.createInstance({ name: 'flovart-latency-v1', storeName: 'samples' });
+const store = localforage.createInstance({ name: 'iris-latency-v1', storeName: 'samples' });
 
 let samples: LatencySample[] = [];
 let loaded: Promise<void> | undefined;
@@ -168,10 +168,10 @@ export async function clearLatencySamples(): Promise<void> {
   await store.removeItem(STORE_KEY).catch(() => undefined);
 }
 
-// DevTools 入口：await flovartLatency.summary()
+// DevTools 入口：await irisLatency.summary()
 if (typeof window !== 'undefined') {
   Object.assign(window, {
-    flovartLatency: {
+    irisLatency: {
       summary: async () => summarizeLatency(await getLatencySamples()),
       samples: getLatencySamples,
       clear: clearLatencySamples,

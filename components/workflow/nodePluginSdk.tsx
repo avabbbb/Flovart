@@ -72,7 +72,7 @@ export interface WorkflowNodePluginInfo {
   enabled: boolean;
 }
 
-const pluginStorage = localforage.createInstance({ name: 'flovart', storeName: 'workflow_node_plugins' });
+const pluginStorage = localforage.createInstance({ name: 'iris', storeName: 'workflow_node_plugins' });
 const eventChannels = new Map<string, Map<string, Set<(payload: unknown) => void>>>();
 
 function clone<T>(value: T): T {

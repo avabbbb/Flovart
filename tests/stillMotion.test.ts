@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { beatGridCuts, STILL_MOTION_TYPES, stillMotionFrame } from '../services/reverse/stillMotion';
-import { MOTION_TYPES, validateSpec } from '../tools/flovart/pipeline/spec.js';
-import { toProductionSpecV1 } from '../tools/flovart/pipeline/render.js';
+import { MOTION_TYPES, validateSpec } from '../tools/iris/pipeline/spec.js';
+import { toProductionSpecV1 } from '../tools/iris/pipeline/render.js';
 
 const noEdge = (state: ReturnType<typeof stillMotionFrame>) => {
   const room = ((state.scale - 1) / 2) * 100 + 1e-9;
@@ -75,7 +75,7 @@ describe('still-mad skill package', () => {
   });
 
   it('passes skill.validate', async () => {
-    const { runSkillCommand } = await import('../tools/flovart/skill-commands.js');
+    const { runSkillCommand } = await import('../tools/iris/skill-commands.js');
     const result = await runSkillCommand('skill.validate', { fromDir: '.agents/skills/still-mad' });
     expect(result).toMatchObject({ ok: true, manifest: { id: 'community.still-mad' } });
   });

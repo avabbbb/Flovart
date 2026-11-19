@@ -17,11 +17,11 @@
 
 ## 2. 环境与配置
 
-- **被测版本**：托管站 https://flovart.avabbbb.com 的主包 `index-jcBS0Wuo.js`。把它和所有按需加载的分包下载下来搜索，都找不到 d3c51b9 新加的中止文案正则（`signal is aborted without reason` 等），说明 **CF 还没部署今天的提交**。所以改为在 main 上 `vite build` + `vite preview --port 5199`，测试地址是 `http://127.0.0.1:5199/#/app`（HEAD 是 d6aa722，工作区除一个 tauri schema 外没有改动）。
-- **浏览器**：复制了一份 `.tmp/eval/sim-session-browser.mjs`，和原脚本相比只改了帧目录（改为 `frames-sim/`）。用 Remotion headless_shell 启动，参数 `--auto-approve --disable-web-security`，`FLOVART_WEB_DISCOVERY=/tmp/web-preview.json`。
+- **被测版本**：托管站 https://iris.avabbbb.com 的主包 `index-jcBS0Wuo.js`。把它和所有按需加载的分包下载下来搜索，都找不到 d3c51b9 新加的中止文案正则（`signal is aborted without reason` 等），说明 **CF 还没部署今天的提交**。所以改为在 main 上 `vite build` + `vite preview --port 5199`，测试地址是 `http://127.0.0.1:5199/#/app`（HEAD 是 d6aa722，工作区除一个 tauri schema 外没有改动）。
+- **浏览器**：复制了一份 `.tmp/eval/sim-session-browser.mjs`，和原脚本相比只改了帧目录（改为 `frames-sim/`）。用 Remotion headless_shell 启动，参数 `--auto-approve --disable-web-security`，`IRIS_WEB_DISCOVERY=/tmp/web-preview.json`。
 - **CJK 字体**：把 `/workspace/.fonts/NotoSansCJK-Regular.ttc` 复制到 `~/.fonts/` 并执行 `fc-cache -f`，然后重启了 session browser。中文显示正常（见各截图），只剩 🔑 这类 emoji 还是方块（没有 emoji 字体）。
 - **文本线路（按用户要求换线，有两次回退）**：
-  1. **CPA**（`https://api.avabbbb.com/v1`，模型 `devin/swe-2-flash`，思考强度「中」，Key 栏填占位符 `CPA_API_KEY`）。13:22 用 curl 流式测试是通的：首包 1.39 s，首个正文 1.60 s，delta 里有 `reasoning_content`，CORS 也放行 `*`。但 13:25 起应用内第 1 次请求等了 7.2 s 后返回 **502**，之后全部是 **403 `public_model_policy`「Select an explicit model from the public model catalog」**。同时 `/v1/models` 只剩一个模型 `hark`，用 curl 去掉 tools 和 system 后同样 403。所以是 **CPA 端在 13:22–13:25 之间把这个模型下线了**，不是 Flovart 的问题。因为没拿到过一次 200，**应用怎么处理 `reasoning_content` 以及「content:null + tool_calls」的响应，在 CPA 上没测到**（Command Code 线路上的思考内容显示正常，见下）。
+  1. **CPA**（`https://api.avabbbb.com/v1`，模型 `devin/swe-2-flash`，思考强度「中」，Key 栏填占位符 `CPA_API_KEY`）。13:22 用 curl 流式测试是通的：首包 1.39 s，首个正文 1.60 s，delta 里有 `reasoning_content`，CORS 也放行 `*`。但 13:25 起应用内第 1 次请求等了 7.2 s 后返回 **502**，之后全部是 **403 `public_model_policy`「Select an explicit model from the public model catalog」**。同时 `/v1/models` 只剩一个模型 `hark`，用 curl 去掉 tools 和 system 后同样 403。所以是 **CPA 端在 13:22–13:25 之间把这个模型下线了**，不是 Iris 的问题。因为没拿到过一次 200，**应用怎么处理 `reasoning_content` 以及「content:null + tool_calls」的响应，在 CPA 上没测到**（Command Code 线路上的思考内容显示正常，见下）。
   2. 回退到 **Command Code `stealth/glyph-cluster:free`**：模型不支持图片输入（400），并且**每个工具参数里的字符串都被多包了一层引号**（`"nodeIds":["\"abc123\""]`）。我用最小 curl 请求复现了，是**服务商 / 模型的问题**。结果 Agent 的 `workflow_apply` 被 schema 拒了 2 次，`media_view` 也报「节点不存在」。
   3. 最终使用 **Command Code `thinkingmachines/inkling-2-small:free`**（同一个服务，同一个占位 Key `CMD_API_KEY`）。curl 测试参数干净；应用里思考块显示为「已思考 Ns」，可以展开看思考内容，说明这条线路的 reasoning 字段解析正常。
   - 设置路径：设置 → AI 服务 → + 添加 AI 服务 → OpenAI 兼容 → 取消勾选「图像」→ 填模型 → 验证并保存（2.4–2.5 s）；然后 模型映射 → 文本与 Agent → Agent 文本 → 选主线路。面板里「思考强度」选「中」，请求体里确实带了 `reasoning_effort:"medium"`。
@@ -83,7 +83,7 @@
 
 | 级别 | 问题 | 复现 / 证据 | 状态（2026-11-16 修复后） |
 |---|---|---|---|
-| **P0-1** | **Agent 建出无 id 节点 → 白屏 → 刷新后整个 Workflow 永远加载不出来**。`flovart_workflow_apply` 收到 `create_connected_node` 且 `node` 不带 `id`（inkling 给的是 `{type:"config", title, position, metadata}`）时，`components/workflow/ops.ts:234` 的 `normalizeDocumentNode` 不会生成 id，于是写入了一个 id 为 undefined 的节点，以及一条 `toNodeId` 为 undefined 的连线。`WorkflowSidebar.tsx:235` 的 `dropHint?.id === node.id`（两边都是 undefined）随后去读 `null.zone` → React 崩溃。坏数据已经持久化，刷新时 `migrations.ts:39 nodeOf` 抛「节点缺少 id」→ zustand merge 失败 → `hydrated` 永远是 false →「正在加载 Workflow...」，工作流菜单显示「还没有工作流」，**用户所有工作流都打不开** | 2/2 次稳定复现（A8、A12）。原始坏数据：`.tmp/eval/sim-bricked-project.json`；截图 `sim-A8-state.png`、`sim-A9-after-reload.png`；控制台 `sim-console.log`。建议：apply 时缺 id 就生成 id，或者在 schema 里设为必填；ops 层拒绝 `toNodeId` 为空的连线；Sidebar 改成 `dropHint && dropHint.id === node.id`；水合时跳过坏节点，不要让整个 store 失败 | ✅ 已修复：apply 缺 id 时系统生成、缺 type 报错；ops 不留悬空连线；水合补修复 id、坏项目单独隔离；Sidebar 判空 |
+| **P0-1** | **Agent 建出无 id 节点 → 白屏 → 刷新后整个 Workflow 永远加载不出来**。`iris_workflow_apply` 收到 `create_connected_node` 且 `node` 不带 `id`（inkling 给的是 `{type:"config", title, position, metadata}`）时，`components/workflow/ops.ts:234` 的 `normalizeDocumentNode` 不会生成 id，于是写入了一个 id 为 undefined 的节点，以及一条 `toNodeId` 为 undefined 的连线。`WorkflowSidebar.tsx:235` 的 `dropHint?.id === node.id`（两边都是 undefined）随后去读 `null.zone` → React 崩溃。坏数据已经持久化，刷新时 `migrations.ts:39 nodeOf` 抛「节点缺少 id」→ zustand merge 失败 → `hydrated` 永远是 false →「正在加载 Workflow...」，工作流菜单显示「还没有工作流」，**用户所有工作流都打不开** | 2/2 次稳定复现（A8、A12）。原始坏数据：`.tmp/eval/sim-bricked-project.json`；截图 `sim-A8-state.png`、`sim-A9-after-reload.png`；控制台 `sim-console.log`。建议：apply 时缺 id 就生成 id，或者在 schema 里设为必填；ops 层拒绝 `toNodeId` 为空的连线；Sidebar 改成 `dropHint && dropHint.id === node.id`；水合时跳过坏节点，不要让整个 store 失败 | ✅ 已修复：apply 缺 id 时系统生成、缺 type 报错；ops 不留悬空连线；水合补修复 id、坏项目单独隔离；Sidebar 判空 |
 | **P1-1** | Agent 不知道产品模型 id：写入 `modelId:"seedream-5.0-flash"`，apply 不校验就接受了，要到确认卡才报「仅支持平台预设产品模型」。追问时 Agent 给的选项全是编的，用户只能自己填 `flovart:seedream-5-flash` | A13–A15，截图 `sim-B4-confirm.png`、`sim-B5-ask-model.png`。建议：系统提示或 inspect 里给出当前可用的产品模型 id；apply 时校验 modelId | ✅ 已修复：inspect 返回 availableModels（标出已配线路）；apply 把别名归一成规范 id，编造的 id 直接拒绝并列出可用 id；系统提示说明 |
 | **P1-2** | 拖进 Agent 输入框的图只作为图片内容发给文本模型：遇到纯文本模型直接 400，也不会放到画布上 | A1/A6，`sim-A1-drop-input.png`、`sim-A6-error.png`。建议：拖入的图同时建成画布图片节点；模型不支持图片时降级为引用节点 id | ✅ 已修复：拖进输入框的图先建成画布图片节点并作为 @节点 引用；服务商拒收图片时记住该线路为纯文本，去掉图片重试一次 |
 | **P1-3** | 服务商错误被泛化成误导性的文案：403 `public_model_policy`（模型已下线）显示成「当前 API Key 没有执行此任务的权限」；「模型不支持图片输入」显示成「不接受这组生成参数」 | `sim-errbodies.log`、`sim-A3-error.png`。建议：在错误卡里附上服务商原文 | ✅ 已修复：模型下线 / 不在目录、不支持图片输入有单独文案，不再显示成 Key 权限或参数错误；生成结果被清理时提示「重新生成」而非「重新选择文件」 |
@@ -94,7 +94,7 @@
 | **P2-4** | 重跑后多出一个隐藏的旧版节点，新节点显示 2 张画布参考（待确认是否把旧结果当成了参考） | `sim-C2-done.png` | ⏳ 待确认 |
 | **P2-5** | 图生图照搬了参考图里可读的人名桌牌（「吴梅飞」），这是隐私风险；Agent 写提示词时没有主动要求去掉桌牌、名字 | 结果图、`sim-C4-stack-open.png` | ⏳ 未处理（提示词层面） |
 | **P3** | 被中止的请求在下一轮被 Agent 顺手执行了；刷新后，被拒绝的运行显示为「执行失败」（刷新前是「用户拒绝了该操作」）；运行后节点标题被改回「图片生成」（上午已记录，仍然存在）；emoji 显示方块 | — | ⏳ 未处理 |
-| 服务商 | glyph-cluster:free 工具参数里的字符串被多包一层引号；CPA 的 `devin/swe-2-flash` 在 13:22–13:25 之间下线（`/v1/models` 只剩 `hark`） | curl 复现脚本：`/tmp/cmd_stream.py`、`/tmp/cpa_stream.py`（临时文件） | ➖ 服务商问题，非 Flovart |
+| 服务商 | glyph-cluster:free 工具参数里的字符串被多包一层引号；CPA 的 `devin/swe-2-flash` 在 13:22–13:25 之间下线（`/v1/models` 只剩 `hark`） | curl 复现脚本：`/tmp/cmd_stream.py`、`/tmp/cpa_stream.py`（临时文件） | ➖ 服务商问题，非 Iris |
 
 同批顺带修复（实测中 Agent 绕路时暴露）：
 

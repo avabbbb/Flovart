@@ -47,7 +47,7 @@ export function AgentEmptyState({ language, onAction, onStoryText }: {
     <section className="agent-empty" data-testid="agent-empty-state" aria-label={ui(language, '开始创作', 'Get started')}>
       <div className="agent-empty__hero">
         <span className="agent-empty__logo" aria-hidden="true" />
-        <h2>{ui(language, '让 Flovart Agent 辅助你的无限创意', 'Let Flovart Agent amplify your ideas')}</h2>
+        <h2>{ui(language, '让 Iris Agent 辅助你的无限创意', 'Let Iris Agent amplify your ideas')}</h2>
       </div>
       <div className="agent-empty__actions">
         {rows.map(row => {

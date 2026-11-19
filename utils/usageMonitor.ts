@@ -4,7 +4,7 @@ import type { ApiPricingRule, UserApiKey } from '../types';
 
 // Keep the billing ledger in its own IndexedDB database so opening it cannot
 // block the workflow/media stores while a fresh browser context upgrades them.
-const usageStore = localforage.createInstance({ name: 'flovart_usage_v2', storeName: 'records' });
+const usageStore = localforage.createInstance({ name: 'iris_usage_v2', storeName: 'records' });
 const RECORDS_KEY = 'records';
 
 export type UsageStatus = 'reserved' | 'submission_unknown' | 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled' | 'polling_unknown';

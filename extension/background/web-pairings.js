@@ -1,7 +1,9 @@
 // 网页画布配对状态：background 与 popup 共用。
 // 结构：{ [origin]: { status: 'pending' | 'approved', updatedAt } }。拒绝或撤销直接删除条目，
 // 这样用户之后还能重新发起配对，不会被一次误点永久锁死。
-export const PAIRINGS_KEY = 'flovartWebPairings';
+import { ensureRenamedExtensionStorage } from './storage-migration.js';
+
+export const PAIRINGS_KEY = 'irisWebPairings';
 
 let writeChain = Promise.resolve();
 
@@ -12,7 +14,9 @@ function storageOf(storage) {
 }
 
 export async function readPairings(storage) {
-  const stored = await storageOf(storage).get(PAIRINGS_KEY);
+  const area = storageOf(storage);
+  await ensureRenamedExtensionStorage(area);
+  const stored = await area.get(PAIRINGS_KEY);
   const value = stored?.[PAIRINGS_KEY];
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }

@@ -26,13 +26,13 @@ describe('browser business persistence', () => {
   });
 
   it('writes v2 ciphertext that does not depend on the user agent', async () => {
-    const vault = localforage.createInstance({ name: 'flovart', storeName: 'provider_secret_vault' });
+    const vault = localforage.createInstance({ name: 'iris', storeName: 'provider_secret_vault' });
     await saveKeysEncrypted([{ id: 'key-v2', provider: 'custom', key: 'v2-secret' }]);
     expect(await vault.getItem<string>('api_keys')).toMatch(/^v2:/);
   });
 
   it('keeps undecryptable ciphertext as a backup so a later save cannot destroy it', async () => {
-    const vault = localforage.createInstance({ name: 'flovart', storeName: 'provider_secret_vault' });
+    const vault = localforage.createInstance({ name: 'iris', storeName: 'provider_secret_vault' });
     await vault.setItem('api_keys', 'not-a-valid-ciphertext');
 
     expect(await loadKeysDecrypted()).toBeNull();

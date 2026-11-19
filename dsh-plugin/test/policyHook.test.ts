@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { registerFlovartTools, STABLE_TOOL_COMMANDS } from '../src/tools.ts'
+import { registerIrisTools, STABLE_TOOL_COMMANDS } from '../src/tools.ts'
 
 function fakeCtx() {
   const listeners: Array<{ event: string, listener: (exec: { name: string, arguments?: unknown }, next: () => Promise<{ kind: string }>) => Promise<unknown> }> = []
@@ -23,7 +23,7 @@ function fakeCtx() {
 function fakeService(approval: 'never' | 'on-request' | 'untrusted') {
   const commands: Record<string, { summary: string, args: Record<string, string> }> = {}
   for (const command of STABLE_TOOL_COMMANDS) commands[command] = { summary: 's', args: { projectId: 'string?' } }
-  return { state: { commands }, probe() {}, config: { cli: 'flovart', sandbox: 'workspace-write', approval } }
+  return { state: { commands }, probe() {}, config: { cli: 'iris', sandbox: 'workspace-write', approval } }
 }
 
 const allow = async () => ({ kind: 'allow' })
@@ -31,7 +31,7 @@ const applyWrite = { operations: [{ type: 'update_node', id: 'n', patch: { title
 
 test('registers one pre-execute gate and disposes it', async () => {
   const { ctx, listeners } = fakeCtx()
-  const dispose = await registerFlovartTools(ctx as never, fakeService('untrusted') as never)
+  const dispose = await registerIrisTools(ctx as never, fakeService('untrusted') as never)
   assert.equal(listeners.filter(item => item.event === 'tools/pre-execute').length, 1)
   dispose()
   assert.equal(listeners.length, 0)
@@ -39,18 +39,18 @@ test('registers one pre-execute gate and disposes it', async () => {
 
 test('gate ignores other tools, allows reads, and asks for writes under untrusted', async () => {
   const { ctx, listeners } = fakeCtx()
-  await registerFlovartTools(ctx as never, fakeService('untrusted') as never)
+  await registerIrisTools(ctx as never, fakeService('untrusted') as never)
   const gate = listeners[0].listener
 
   assert.deepEqual(await gate({ name: 'some_other_tool' }, allow), { kind: 'allow' })
-  assert.deepEqual(await gate({ name: 'flovart_inspect', arguments: {} }, allow), { kind: 'allow' })
-  assert.equal((await gate({ name: 'flovart_apply', arguments: applyWrite }, allow) as { kind: string }).kind, 'ask')
+  assert.deepEqual(await gate({ name: 'iris_inspect', arguments: {} }, allow), { kind: 'allow' })
+  assert.equal((await gate({ name: 'iris_apply', arguments: applyWrite }, allow) as { kind: string }).kind, 'ask')
 })
 
 test('gate denies writes when the plugin config is read-only', async () => {
   const { ctx, listeners } = fakeCtx()
-  const service = { ...fakeService('never'), config: { cli: 'flovart', sandbox: 'read-only', approval: 'never' } }
-  await registerFlovartTools(ctx as never, service as never)
-  const decision = await listeners[0].listener({ name: 'flovart_apply', arguments: applyWrite }, allow) as { kind: string }
+  const service = { ...fakeService('never'), config: { cli: 'iris', sandbox: 'read-only', approval: 'never' } }
+  await registerIrisTools(ctx as never, service as never)
+  const decision = await listeners[0].listener({ name: 'iris_apply', arguments: applyWrite }, allow) as { kind: string }
   assert.equal(decision.kind, 'deny')
 })

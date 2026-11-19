@@ -5,7 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useUpdaterStore } from '../../stores/useUpdaterStore';
 import { useAgentConnectionStore } from '../../stores/useAgentConnectionStore';
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
-import { toLocalLinkPublicStatus } from '../../tools/flovart/public-status';
+import { toLocalLinkPublicStatus } from '../../tools/iris/public-status';
 import { AuthModal } from '../auth/AuthModal';
 import type { ThemeMode } from '../../types';
 import '../../styles/studio.css';
@@ -188,7 +188,7 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
           }}
         >
           <img src={import.meta.env.BASE_URL + 'favicon.png'} alt='' className='h-7 w-7 rounded-lg' />
-          <span className='hidden text-sm font-black tracking-[-0.03em] sm:inline' style={{ color: 'var(--isl-ink)' }}>Flovart</span>
+          <span className='hidden text-sm font-black tracking-[-0.03em] sm:inline' style={{ color: 'var(--isl-ink)' }}>Iris</span>
         </button>
         <span className='hidden h-4 w-px sm:block' style={{ background: 'var(--isl-border)' }} />
         {canManageProjects ? (
@@ -329,8 +329,8 @@ export const StudioTopMenu: React.FC<StudioTopMenuProps> = ({ model }) => {
       <nav className="studio-top-menu__modes flex min-w-0 items-center justify-center gap-0.5" aria-label={isChinese ? '画布视图' : 'Canvas view'} role="tablist">
         {(['spatial', 'reverse', 'agent'] as const).map(view => {
           const isActive = canvasView === view;
-          // 'reverse' 是内部视图 id（持久化值不改）；对外名称是 Iris（2026-11-17 由“逆向”改名）。
-          const label = view === 'spatial' ? (isChinese ? '画布' : 'Canvas') : view === 'reverse' ? 'Iris' : 'Agent';
+          // 'reverse' 是内部视图 id（持久化值不改）；对外名称是 Cut（2026-11-17 由“逆向”改名为 Iris，2026-11-20 产品更名 Iris 后改为 Cut）。
+          const label = view === 'spatial' ? (isChinese ? '画布' : 'Canvas') : view === 'reverse' ? 'Cut' : 'Agent';
           return (
             <button
               key={view}

@@ -7,10 +7,10 @@ const AGENT_URL_PARAM = 'agentUrl';
 const AGENT_TOKEN_PARAM = 'agentToken';
 const BOOTSTRAP_TOKEN_PARAM = 'bootstrapToken';
 const AUTO_ACTIVATE_PARAM = 'activateBrowserWriter';
-const SESSION_URL_KEY = 'flovart.agent.bootstrap.url';
-const SESSION_TOKEN_KEY = 'flovart.agent.bootstrap.token';
-const SESSION_EXPIRES_KEY = 'flovart.agent.bootstrap.expires';
-const SESSION_AUTO_ACTIVATE_KEY = 'flovart.agent.bootstrap.activate';
+const SESSION_URL_KEY = 'iris.agent.bootstrap.url';
+const SESSION_TOKEN_KEY = 'iris.agent.bootstrap.token';
+const SESSION_EXPIRES_KEY = 'iris.agent.bootstrap.expires';
+const SESSION_AUTO_ACTIVATE_KEY = 'iris.agent.bootstrap.activate';
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 
 type BootstrapLocation = Pick<Location, 'href' | 'search' | 'hash' | 'pathname'>;
@@ -91,16 +91,16 @@ function readSessionConnection(storage: StorageLike | null) {
 function normalizeUrl(value: string) {
   let url;
   try { url = new URL(value); }
-  catch { throw new Error('Flovart Agent 地址无效。'); }
+  catch { throw new Error('Iris Agent 地址无效。'); }
   if (url.protocol !== 'http:' || !LOOPBACK_HOSTS.has(url.hostname)) {
-    throw new Error('Flovart Agent 只能使用本机 loopback HTTP 地址。');
+    throw new Error('Iris Agent 只能使用本机 loopback HTTP 地址。');
   }
   return url.origin;
 }
 
 function normalizeConnection(url: string, token: string): ManagedAgentConnection {
   const normalizedUrl = normalizeUrl(url.trim());
-  if (!token.trim()) throw new Error('Flovart Agent bootstrap 缺少连接 Token。');
+  if (!token.trim()) throw new Error('Iris Agent bootstrap 缺少连接 Token。');
   return { state: 'ready', url: normalizedUrl, token: token.trim(), managed: false };
 }
 
@@ -176,7 +176,7 @@ async function requestJson(url: URL, options: AgentConnectionBootstrapOptions, t
     const body = await response.json().catch(() => ({}));
     return { response, body };
   } catch (cause) {
-    if (controller.signal.aborted) throw new Error('连接本机 Flovart Agent 超时。');
+    if (controller.signal.aborted) throw new Error('连接本机 Iris Agent 超时。');
     throw cause;
   } finally {
     clearTimeout(timer);
@@ -184,7 +184,7 @@ async function requestJson(url: URL, options: AgentConnectionBootstrapOptions, t
 }
 
 async function exchangeBootstrapCredential(url: string, bootstrapToken: string, options: AgentConnectionBootstrapOptions) {
-  if (!url) throw new Error('缺少 Flovart Agent 地址，无法完成 bootstrap。');
+  if (!url) throw new Error('缺少 Iris Agent 地址，无法完成 bootstrap。');
   const result = await requestJson(
     new URL('/bootstrap/exchange', url),
     options,
@@ -217,7 +217,7 @@ async function authenticate(connection: ManagedAgentConnection, options: AgentCo
   const hostsOptions = { ...options, timeoutMs: Math.max(Number(options.timeoutMs) || 0, HOSTS_PROBE_TIMEOUT_MS) };
   const hosts = await requestJson(new URL('/hosts?includeVersion=false', connection.url), hostsOptions, connection.token);
   if (hosts.response.status === 401 || /invalid token/i.test(String(hosts.body?.error || ''))) {
-    const error = new Error('Flovart Agent Token 无效。');
+    const error = new Error('Iris Agent Token 无效。');
     (error as Error & { code?: string }).code = 'AUTH_FAILED';
     throw error;
   }
@@ -295,7 +295,7 @@ async function runBootstrap(options: AgentConnectionBootstrapOptions, runId: num
   saveSessionExpiry(storage, sessionExpiresAt);
 
   const maxAttempts = Math.max(1, options.maxAttempts || 8);
-  let lastError = 'Flovart Agent 暂时不可用。';
+  let lastError = 'Iris Agent 暂时不可用。';
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (!isCurrent()) return { state: 'offline', connection, error: 'superseded' };
     try {

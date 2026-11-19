@@ -51,7 +51,7 @@
 }
 
 /* In-app confirmation (replaces window.confirm; never blocks the canvas). */
-.flovart-confirm {
+.iris-confirm {
   position: fixed;
   top: 64px;
   left: 50%;
@@ -66,27 +66,27 @@
   font-family: var(--isl-font);
   font-size: 13px;
 }
-.flovart-confirm strong { display: block; font-size: 14px; }
-.flovart-confirm p { margin: 6px 0 0; color: var(--isl-ink-soft); white-space: pre-line; line-height: 1.5; }
-.flovart-confirm__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
-.flovart-confirm__actions button {
+.iris-confirm strong { display: block; font-size: 14px; }
+.iris-confirm p { margin: 6px 0 0; color: var(--isl-ink-soft); white-space: pre-line; line-height: 1.5; }
+.iris-confirm__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.iris-confirm__actions button {
   height: 30px; padding: 0 14px; border-radius: var(--isl-r-pill);
   border: 1px solid var(--isl-border); background: transparent; color: var(--isl-ink); font-weight: 600; cursor: pointer;
 }
-.flovart-confirm__actions button[data-tone] { background: var(--isl-mint); border-color: var(--isl-mint); color: #fff; }
-.flovart-confirm__actions button[data-tone='danger'] { background: var(--isl-coral); border-color: var(--isl-coral); }
-.flovart-confirm__actions button:focus-visible { outline: 2px solid var(--isl-mint-deep); outline-offset: 2px; }
-.flovart-confirm button:disabled { opacity: 0.45; cursor: not-allowed; }
-.flovart-confirm--plan { width: min(440px, calc(100vw - 32px)); }
-.flovart-plan { margin-top: 8px; display: grid; gap: 10px; max-height: 60vh; overflow: auto; font-size: 12px; line-height: 1.5; }
-.flovart-planitem { display: grid; gap: 4px; }
-.flovart-planitem + .flovart-planitem { padding-top: 8px; border-top: 1px solid var(--isl-border); }
-.flovart-plantitle { font-weight: 600; }
-.flovart-planmuted { color: var(--isl-ink-soft); }
-.flovart-planrefs, .flovart-plannotices { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
-.flovart-planrefs li[data-status='warn'], .flovart-plannotices[data-kind='warning'] li { color: var(--isl-ink-soft); }
-.flovart-planrefs li[data-status='block'], .flovart-plannotices[data-kind='blocker'] li, .flovart-planrow[data-exceed] { color: var(--isl-coral); }
-.flovart-plansummary, .flovart-planmandate { padding-top: 8px; border-top: 1px solid var(--isl-border); font-weight: 600; }
+.iris-confirm__actions button[data-tone] { background: var(--isl-mint); border-color: var(--isl-mint); color: #fff; }
+.iris-confirm__actions button[data-tone='danger'] { background: var(--isl-coral); border-color: var(--isl-coral); }
+.iris-confirm__actions button:focus-visible { outline: 2px solid var(--isl-mint-deep); outline-offset: 2px; }
+.iris-confirm button:disabled { opacity: 0.45; cursor: not-allowed; }
+.iris-confirm--plan { width: min(440px, calc(100vw - 32px)); }
+.iris-plan { margin-top: 8px; display: grid; gap: 10px; max-height: 60vh; overflow: auto; font-size: 12px; line-height: 1.5; }
+.iris-planitem { display: grid; gap: 4px; }
+.iris-planitem + .iris-planitem { padding-top: 8px; border-top: 1px solid var(--isl-border); }
+.iris-plantitle { font-weight: 600; }
+.iris-planmuted { color: var(--isl-ink-soft); }
+.iris-planrefs, .iris-plannotices { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.iris-planrefs li[data-status='warn'], .iris-plannotices[data-kind='warning'] li { color: var(--isl-ink-soft); }
+.iris-planrefs li[data-status='block'], .iris-plannotices[data-kind='blocker'] li, .iris-planrow[data-exceed] { color: var(--isl-coral); }
+.iris-plansummary, .iris-planmandate { padding-top: 8px; border-top: 1px solid var(--isl-border); font-weight: 600; }
 
 /* —— 节点生成加载态（DESIGN / 01 §19.6）——
  * 网格参考 Inspora「Grid Reveal animation」（posts/1-46），进度线参考 Inspora「Agent Handoff」（posts/1-48），按节点尺寸缩小。

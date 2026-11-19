@@ -1,4 +1,4 @@
-// Cloudflare Workers entry for flovart.avabbbb.com (Workers + static assets, see wrangler.jsonc).
+// Cloudflare Workers entry for iris.avabbbb.com (Workers + static assets, see wrangler.jsonc).
 // Only /api/* reaches this Worker (assets.run_worker_first = ["/api/*"]); every other path is
 // served straight from the asset layer with the COOP/COEP headers from public/_headers, so
 // static traffic costs no Worker invocations.

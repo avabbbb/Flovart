@@ -4,7 +4,7 @@ import type { WorkflowProject } from '../workflow/types';
 import { COMMUNITY_WORKFLOWS as BUILTIN_COMMUNITY_WORKFLOWS, COMMUNITY_CATEGORIES, type CommunityCategory, type CommunityWorkflow } from '../landing/communityTypes';
 
 const communityStore = localforage.createInstance({
-  name: 'flovart',
+  name: 'iris',
   storeName: 'community_workflows_v1',
 });
 

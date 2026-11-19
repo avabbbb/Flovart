@@ -158,7 +158,7 @@ export function arrangeNodePositions(nodes: WorkflowNodeData[], ids: readonly st
 
 /** prefix_01, prefix_02 … (padding widens past 99). Unsafe filename characters become '_'. */
 export function sequencedFileNames(prefix: string, count: number, start = 1): string[] {
-  const safe = prefix.trim().replace(/[\\/:*?"<>|\s]+/g, '_') || 'flovart';
+  const safe = prefix.trim().replace(/[\\/:*?"<>|\s]+/g, '_') || 'iris';
   const width = Math.max(2, String(start + count - 1).length);
   return Array.from({ length: Math.max(0, count) }, (_, index) => `${safe}_${String(start + index).padStart(width, '0')}`);
 }

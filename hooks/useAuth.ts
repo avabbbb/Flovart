@@ -10,7 +10,7 @@ export interface LocalUser {
 }
 
 // 旧版本 Go Hub 写入过的 JWT，一次性清理。
-const LEGACY_HUB_TOKEN_KEY = 'flovart.hub.token';
+const LEGACY_HUB_TOKEN_KEY = 'iris.hub.token';
 
 function clearLegacyHubToken(): void {
   try { sessionStorage.removeItem(LEGACY_HUB_TOKEN_KEY); } catch {}

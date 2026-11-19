@@ -1,7 +1,7 @@
 import localforage from 'localforage';
 
 const coldMediaStorage = localforage.createInstance({
-    name: 'FlovartMediaColdStorage',
+    name: 'IrisMediaColdStorage',
     storeName: 'media_blobs',
 });
 

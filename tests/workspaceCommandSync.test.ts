@@ -3,7 +3,7 @@ import { createWorkflowProject } from '../components/workflow/store';
 import type { WorkflowProject } from '../components/workflow/types';
 import { WorkflowAgentSession } from '../agent/session.js';
 import { createWorkflowDispatcher, type WorkflowCommandEnvelope } from '../services/workflowDispatcher';
-import { executeFlovartCommand } from '../tools/flovart/core.js';
+import { executeIrisCommand } from '../tools/iris/core.js';
 
 describe('workspace command synchronization', () => {
   it('keeps external Host identity in the transport envelope instead of Workflow args', async () => {
@@ -13,7 +13,7 @@ describe('workspace command synchronization', () => {
       result: envelope,
     }));
 
-    await executeFlovartCommand('workflow.inspect', {
+    await executeIrisCommand('workflow.inspect', {
       projectId: 'project-1',
       'agent-identity': 'codex',
       'host-session-id': 'session-1',
@@ -34,18 +34,18 @@ describe('workspace command synchronization', () => {
     }));
     const runtime = { workflow: { dispatch } };
 
-    await executeFlovartCommand('workflow.node.create', {
+    await executeIrisCommand('workflow.node.create', {
       id: 'research-1',
       type: 'text',
       metadata: '{"content":"Reddit evidence","coverage":{"reddit":"ready"}}',
       idempotencyKey: 'create-research-1',
     }, runtime);
-    await executeFlovartCommand('workflow.node.update', {
+    await executeIrisCommand('workflow.node.update', {
       nodeId: 'research-1',
       patch: '{"title":"已细修"}',
       idempotencyKey: 'update-research-1',
     }, runtime);
-    await executeFlovartCommand('workflow.select', {
+    await executeIrisCommand('workflow.select', {
       ids: '["research-1"]',
       idempotencyKey: 'select-research-1',
     }, runtime);

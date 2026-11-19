@@ -17,8 +17,8 @@ export interface AgentConfirmCopy {
 }
 
 const TOOL_COPY: Record<string, { zho: string; en: string }> = {
-  flovart_web_search: { zho: '联网搜索', en: 'Search the web' },
-  flovart_grep: { zho: '读取本地文件夹', en: 'Read your local folder' },
+  iris_web_search: { zho: '联网搜索', en: 'Search the web' },
+  iris_grep: { zho: '读取本地文件夹', en: 'Read your local folder' },
 };
 
 const TIER_COPY: Record<string, { zho: string; en: string }> = {

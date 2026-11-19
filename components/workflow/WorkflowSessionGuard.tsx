@@ -57,7 +57,7 @@ export function WorkflowSessionGuard({ language }: { language: string }) {
     setBusy('export');
     setExportFailed(false);
     try {
-      await downloadWorkflowProjects(useWorkflowStore.getState().projects, 'Flovart-Workflow-backup');
+      await downloadWorkflowProjects(useWorkflowStore.getState().projects, 'Iris-Workflow-backup');
     } catch (exportError) {
       console.error('[Workflow] Backup export failed.', exportError);
       setExportFailed(true);
@@ -75,7 +75,7 @@ export function WorkflowSessionGuard({ language }: { language: string }) {
       {writerState === 'reader' && (
         <div className="fixed inset-0 z-[80] grid place-items-center bg-black/30 px-4 backdrop-blur-[2px]" role="dialog" aria-modal="true" data-testid="workflow-readonly-guard">
           <div className="w-full max-w-sm rounded-xl px-5 py-4 text-center shadow-xl" style={{ background: 'var(--isl-surface, #fff)', color: 'var(--isl-ink)' }}>
-            <div className="text-sm font-bold">{zh ? 'Flovart 已在另一个标签页打开' : 'Flovart is open in another tab'}</div>
+            <div className="text-sm font-bold">{zh ? 'Iris 已在另一个标签页打开' : 'Iris is open in another tab'}</div>
             <p className="mt-2 text-xs leading-5" style={{ color: 'var(--isl-ink-soft)' }}>
               {zh ? '为避免两个标签页互相覆盖项目和媒体，同一时间只有一个标签页可以编辑。' : 'Only one tab can edit at a time, so tabs never overwrite each other\'s projects or media.'}
             </p>

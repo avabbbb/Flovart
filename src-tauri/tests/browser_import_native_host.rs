@@ -1,5 +1,5 @@
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use flovart_lib::runtime::{ControlServer, ProductionRuntime};
+use iris_lib::runtime::{ControlServer, ProductionRuntime};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
@@ -14,7 +14,7 @@ use uuid::Uuid;
 const EXTENSION_ORIGIN: &str = "chrome-extension://abcdefghijklmnopabcdefghijklmnop/";
 
 fn test_root() -> PathBuf {
-    std::env::temp_dir().join(format!("flovart-browser-native-test-{}", Uuid::now_v7()))
+    std::env::temp_dir().join(format!("iris-browser-native-test-{}", Uuid::now_v7()))
 }
 
 fn send(stdin: &mut ChildStdin, value: &Value) {
@@ -35,9 +35,9 @@ fn receive(stdout: &mut ChildStdout) -> Value {
 }
 
 fn spawn_host(discovery_path: &PathBuf) -> (Child, ChildStdin, ChildStdout) {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_flovart-host"))
-        .env("FLOVART_RUNTIME_DISCOVERY", discovery_path)
-        .env("FLOVART_NATIVE_CALLER_ORIGIN", EXTENSION_ORIGIN)
+    let mut child = Command::new(env!("CARGO_BIN_EXE_iris-host"))
+        .env("IRIS_RUNTIME_DISCOVERY", discovery_path)
+        .env("IRIS_NATIVE_CALLER_ORIGIN", EXTENSION_ORIGIN)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

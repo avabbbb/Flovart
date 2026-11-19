@@ -23,7 +23,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
 const here = dirname(fileURLToPath(import.meta.url));
-export const APP_URL = process.env.FLOVART_APP_URL || 'http://localhost:37522/#/app';
+export const APP_URL = process.env.IRIS_APP_URL || 'http://localhost:37522/#/app';
 
 export const VIEWPORTS = {
   desktop: { width: 1440, height: 900 },
@@ -45,7 +45,7 @@ export async function openSession({ viewport = VIEWPORTS.desktop, outDir, name =
     headless,
     // Prefer the bundled browser; fall back to system Chrome when the Playwright
     // browser cache doesn't match this playwright version.
-    channel: process.env.FLOVART_NO_SYSTEM_CHROME ? undefined : 'chrome',
+    channel: process.env.IRIS_NO_SYSTEM_CHROME ? undefined : 'chrome',
   });
   const context = await browser.newContext({
     viewport,

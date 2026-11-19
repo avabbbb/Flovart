@@ -1,21 +1,21 @@
 import { saveBlob } from '../desktopNetwork';
-import registry from '../../tools/flovart/contracts/host-registry.v1.json';
+import registry from '../../tools/iris/contracts/host-registry.v1.json';
 import { createWorkBuddySkillPackage } from '../agentSkillPackage';
 import {
   activateAgentHost,
   discoverAgentHosts,
   prepareAgentHostProjection,
 } from '../agentHostDiscovery';
-import { defineFlovartHost, type FlovartHostDefinition, type FlovartHostKind, type FlovartHostLifecycleAdapter } from './hostDefinition';
+import { defineIrisHost, type IrisHostDefinition, type IrisHostKind, type IrisHostLifecycleAdapter } from './hostDefinition';
 import { displayError } from '../displayError';
 
-const kindOf = (category: string): FlovartHostKind => {
+const kindOf = (category: string): IrisHostKind => {
   if (category === 'harness') return 'native-plugin';
   if (category === 'mainstream-host') return 'assistant';
   return 'coding-agent';
 };
 
-const capabilities = (kind: FlovartHostKind) => ({
+const capabilities = (kind: IrisHostKind) => ({
   inspect: true,
   mutate: true,
   run: true,
@@ -23,7 +23,7 @@ const capabilities = (kind: FlovartHostKind) => ({
   ...(kind === 'native-plugin' ? { plugin: true } : {}),
 });
 
-function defaultLifecycle(id: string): Partial<FlovartHostLifecycleAdapter> {
+function defaultLifecycle(id: string): Partial<IrisHostLifecycleAdapter> {
   return {
     detect: async () => {
       const result = await discoverAgentHosts();
@@ -60,14 +60,14 @@ function defaultLifecycle(id: string): Partial<FlovartHostLifecycleAdapter> {
 }
 
 /**
- * Hosts whose Flovart entry ships as an external Skill/Plugin package rather
+ * Hosts whose Iris entry ships as an external Skill/Plugin package rather
  * than a local CLI install. The definition hides the delivery mechanism — the
  * UI only sees `prepareAgent(id)` and the returned public state.
  */
 const EXTERNAL_PACKAGE_HOSTS: Record<string, { fileName: string; installed: string }> = {
   workbuddy: {
-    fileName: 'flovart-workbuddy.zip',
-    installed: '安装包已下载，在 WorkBuddy 的技能页导入后即可使用 Flovart。',
+    fileName: 'iris-workbuddy.zip',
+    installed: '安装包已下载，在 WorkBuddy 的技能页导入后即可使用 Iris。',
   },
   'deepseek-harness': {
     fileName: '',
@@ -75,7 +75,7 @@ const EXTERNAL_PACKAGE_HOSTS: Record<string, { fileName: string; installed: stri
   },
 };
 
-const externalPackageAdapters = (id: string): Partial<FlovartHostLifecycleAdapter> => {
+const externalPackageAdapters = (id: string): Partial<IrisHostLifecycleAdapter> => {
   const entry = EXTERNAL_PACKAGE_HOSTS[id];
   if (!entry) return {};
   return {
@@ -88,10 +88,10 @@ const externalPackageAdapters = (id: string): Partial<FlovartHostLifecycleAdapte
   };
 };
 
-export function createFlovartHostRegistry(adapters: Record<string, Partial<FlovartHostLifecycleAdapter>> = {}): FlovartHostDefinition[] {
+export function createIrisHostRegistry(adapters: Record<string, Partial<IrisHostLifecycleAdapter>> = {}): IrisHostDefinition[] {
   return registry.agentIdentities.map(identity => {
     const kind = kindOf(identity.category);
-    return defineFlovartHost({
+    return defineIrisHost({
       id: identity.id,
       label: identity.label,
       kind,
@@ -103,8 +103,8 @@ export function createFlovartHostRegistry(adapters: Record<string, Partial<Flova
   });
 }
 
-export const flovartHostRegistry = createFlovartHostRegistry();
+export const irisHostRegistry = createIrisHostRegistry();
 
-export function getFlovartHostDefinition(id: string): FlovartHostDefinition | null {
-  return flovartHostRegistry.find(host => host.id === id) || null;
+export function getIrisHostDefinition(id: string): IrisHostDefinition | null {
+  return irisHostRegistry.find(host => host.id === id) || null;
 }

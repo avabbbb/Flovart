@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchModelsWithCache, runningHubDocsModelUrl } from '../services/modelFetcher';
 
 // 2026-11-15 评测：「获取模型」必须读取与用户 Base URL 同一站点的模型目录（国内站 / 国际站）。
-const cache = localforage.createInstance({ name: 'flovart', storeName: 'provider_model_cache' });
+const cache = localforage.createInstance({ name: 'iris', storeName: 'provider_model_cache' });
 const originalFetch = globalThis.fetch;
 
 function jsonResponse(body: unknown): Response {

@@ -1,5 +1,5 @@
 /**
- * Model-tool derivation from the canonical Flovart CLI registry.
+ * Model-tool derivation from the canonical Iris CLI registry.
  *
  * The model tool face exposes inspection plus bounded graph mutations. Paid
  * generation, Production approval/run, media tools, and Crew submission stay
@@ -10,13 +10,13 @@
  *
  * The dsh-tools API is loaded dynamically: an incompatible Harness install
  * without a compatible `@deepseek-ai/dsh-tools` must degrade to CLI-only
- * (Operation Skill + Flovart CLI) instead of failing the whole profile boot.
+ * (Operation Skill + Iris CLI) instead of failing the whole profile boot.
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { AgentToolSpec, CommandMeta, FlovartService } from './service.ts'
+import type { AgentToolSpec, CommandMeta, IrisService } from './service.ts'
 import { runCli } from './cli.ts'
-import { decideFlovartToolCall } from './policy.ts'
+import { decideIrisToolCall } from './policy.ts'
 // Type-only: erased at build; runtime access is dynamic (see ensureToolsApi).
 import type { defineTool as DefineTool } from '@deepseek-ai/dsh-tools'
 import type { ParameterPropertySpec, ParameterSchemaSpec } from '@deepseek-ai/dsh-tools'
@@ -56,8 +56,8 @@ async function ensureToolsApi(): Promise<DefineToolFn | undefined> {
   } catch (error) {
     toolsApiFailed = true
     console.warn(
-      `[flovart] 未找到兼容的 @deepseek-ai/dsh-tools（${error instanceof Error ? error.message : String(error)}）。`
-      + '模型工具注册跳过，Host 退回 Operation Skill + Flovart CLI 路径；请按兼容集安装 DeepSeek Harness 0.1.0-rc.8。',
+      `[iris] 未找到兼容的 @deepseek-ai/dsh-tools（${error instanceof Error ? error.message : String(error)}）。`
+      + '模型工具注册跳过，Host 退回 Operation Skill + Iris CLI 路径；请按兼容集安装 DeepSeek Harness 0.1.0-rc.8。',
     )
     return undefined
   }
@@ -65,12 +65,12 @@ async function ensureToolsApi(): Promise<DefineToolFn | undefined> {
 
 function toolNameOf(command: string): string {
   return ({
-    status: 'flovart_status',
-    'workflow.inspect': 'flovart_inspect',
-    'workflow.selection.get': 'flovart_selection',
-    'workflow.apply': 'flovart_apply',
-    'workflow.node.run': 'flovart_run',
-  } as Record<string, string>)[command] ?? `flovart_${command.replaceAll('.', '_')}`
+    status: 'iris_status',
+    'workflow.inspect': 'iris_inspect',
+    'workflow.selection.get': 'iris_selection',
+    'workflow.apply': 'iris_apply',
+    'workflow.node.run': 'iris_run',
+  } as Record<string, string>)[command] ?? `iris_${command.replaceAll('.', '_')}`
 }
 
 /** Map a registry arg type tag (`string?`/`number`/...) to a tool parameter spec. */
@@ -126,7 +126,7 @@ export function specParameter(schema: Record<string, unknown>, required: boolean
 /** Register one tool from the unified Agent tool spec (same name and schema as every other host). */
 function registerSpecTool(
   ctx: Context,
-  service: FlovartService,
+  service: IrisService,
   defineTool: DefineToolFn,
   spec: AgentToolSpec,
 ): () => void {
@@ -137,7 +137,7 @@ function registerSpecTool(
   if (spec.write) parameters.idempotencyKey = { type: 'string', required: true, description: '重试时保持不变的幂等键' }
   return ctx.tools.register(defineTool({
     name: spec.name,
-    description: spec.description + '（执行真实 `flovart ' + spec.command + ' --json`；删除与付费运行由 Flovart 确认）',
+    description: spec.description + '（执行真实 `iris ' + spec.command + ' --json`；删除与付费运行由 Iris 确认）',
     parameters,
     output: {
       schema: { type: 'json' },
@@ -157,7 +157,7 @@ function registerSpecTool(
 /** Register one derived tool for a canonical CLI command. */
 function registerDerivedTool(
   ctx: Context,
-  service: FlovartService,
+  service: IrisService,
   defineTool: DefineToolFn,
   command: ToolCommand,
   meta: CommandMeta,
@@ -171,9 +171,9 @@ function registerDerivedTool(
   return ctx.tools.register(defineTool({
     name: toolNameOf(command),
     description:
-      `Flovart CLI 命令 ${command} 的模型工具封装：${meta.summary}。`
-      + '执行真实 `flovart ... --json`，返回结构化 JSON；失败时返回可复制的错误码。'
-      + '不绕过 Flovart 权限边界，付费与审批命令不在本工具面。',
+      `Iris CLI 命令 ${command} 的模型工具封装：${meta.summary}。`
+      + '执行真实 `iris ... --json`，返回结构化 JSON；失败时返回可复制的错误码。'
+      + '不绕过 Iris 权限边界，付费与审批命令不在本工具面。',
     parameters,
     output: {
       schema: { type: 'json' },
@@ -197,19 +197,19 @@ function registerDerivedTool(
  * and are not model tools. Skipping registration on dsh-tools absence is the
  * documented degradation path — the profile must keep booting.
  */
-export async function registerFlovartTools(ctx: Context, service: FlovartService): Promise<() => void> {
+export async function registerIrisTools(ctx: Context, service: IrisService): Promise<() => void> {
   const defineTool = await ensureToolsApi()
   if (service.state.commands === null) service.probe()
   if (defineTool === undefined) return () => {}
   const commands = service.state.commands ?? {}
   const disposers: Array<() => void> = []
-  // Flovart tools bypass DSH's own sandbox because they write the Browser Workflow
+  // Iris tools bypass DSH's own sandbox because they write the Browser Workflow
   // through the CLI; gate them here with the same sandbox/approval policy.
   if (typeof ctx.on === 'function') {
     disposers.push(ctx.on('tools/pre-execute', async (exec, next) => {
       const name = String(exec.name || '')
-      if (!name.startsWith('flovart_')) return next()
-      const decision = decideFlovartToolCall({
+      if (!name.startsWith('iris_') && !name.startsWith('flovart_')) return next()
+      const decision = decideIrisToolCall({
         name,
         args: (exec.arguments && typeof exec.arguments === 'object' ? exec.arguments : {}) as Record<string, unknown>,
         policy: { sandbox: service.config.sandbox, approval: service.config.approval },
@@ -220,12 +220,12 @@ export async function registerFlovartTools(ctx: Context, service: FlovartService
   let derived = 0
   const specs = service.state.agentTools?.filter(spec => commands[spec.command]) ?? []
   if (specs.length) {
-    // 新 CLI：工具名、说明、参数 Schema 与内置 / 本机 Agent、MCP 同一份（tools/flovart/agent-tools.js）。
+    // 新 CLI：工具名、说明、参数 Schema 与内置 / 本机 Agent、MCP 同一份（tools/iris/agent-tools.js）。
     for (const spec of specs) {
       disposers.push(registerSpecTool(ctx, service, defineTool, spec))
       derived += 1
     }
-    console.log(`[flovart] 模型工具已注册：unified ${derived}（CLI ${service.config.cli}）`)
+    console.log(`[iris] 模型工具已注册：unified ${derived}（CLI ${service.config.cli}）`)
   } else {
     for (const command of STABLE_TOOL_COMMANDS) {
       const meta = commands[command]
@@ -234,7 +234,7 @@ export async function registerFlovartTools(ctx: Context, service: FlovartService
         derived += 1
       }
     }
-    console.log(`[flovart] 模型工具已注册：stable ${derived}/${STABLE_TOOL_COMMANDS.length}（CLI ${service.config.cli}）`)
+    console.log(`[iris] 模型工具已注册：stable ${derived}/${STABLE_TOOL_COMMANDS.length}（CLI ${service.config.cli}）`)
   }
   return () => {
     for (const dispose of disposers.splice(0).reverse()) dispose()

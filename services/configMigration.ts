@@ -9,7 +9,7 @@ import { listStoredUserScriptProviders, parseUserScriptDefinition } from './user
  * 这样 Key 上的 `extraConfig.providerScriptId` 在新设备能直接解析。
  * 兼容旧版裸数组导出（只有 Key，没有脚本）。
  */
-export const CONFIG_BUNDLE_KIND = 'flovart-config';
+export const CONFIG_BUNDLE_KIND = 'iris-config';
 export const CONFIG_BUNDLE_VERSION = 1;
 
 export interface ConfigBundleV1 {
@@ -90,11 +90,11 @@ export function parseConfigBundle(text: string): ParsedConfigBundle {
   }
 
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error('不是 Flovart 配置迁移文件。');
+    throw new Error('不是 Iris 配置迁移文件。');
   }
   const bundle = parsed as { kind?: unknown; schemaVersion?: unknown; apiKeys?: unknown; providerScripts?: unknown };
   if (bundle.kind !== CONFIG_BUNDLE_KIND || bundle.schemaVersion !== CONFIG_BUNDLE_VERSION) {
-    throw new Error('不是 Flovart 配置迁移文件。');
+    throw new Error('不是 Iris 配置迁移文件。');
   }
   const apiKeys = Array.isArray(bundle.apiKeys) ? bundle.apiKeys : [];
   const rawScripts = Array.isArray(bundle.providerScripts) ? bundle.providerScripts : [];

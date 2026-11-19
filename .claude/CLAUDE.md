@@ -2,9 +2,9 @@
 
 ## Claude Code
 
-Use [docs/index.md](../docs/index.md) as the document map and the canonical Flovart Skill under `.claude/skills/flovart` for operation details. Do not infer current architecture from archived reports, old ADRs, one-off plans, or historical evidence.
+Use [docs/index.md](../docs/index.md) as the document map and the canonical Iris Skill under `.claude/skills/iris` for operation details. Do not infer current architecture from archived reports, old ADRs, one-off plans, or historical evidence.
 
-When operating Flovart from outside the app, prefer:
+When operating Iris from outside the app, prefer:
 
 - `ensure` for preparation;
 - `status`;
@@ -13,6 +13,6 @@ When operating Flovart from outside the app, prefer:
 - `workflow.apply`;
 - `workflow.node.run`.
 
-The visible Browser Workflow remains the current authority for these stable operations. The top-level surfaces are Canvas | Iris | Agent. The Agent page is connection/control only; the built-in Assistant drawer stays beside Canvas. Iris is the second surface (personal agent / all-in-one post-production assistant), not a product name: never use Iris to mean Flovart.
+The visible Browser Workflow remains the current authority for these stable operations. The top-level surfaces are Canvas | Cut | Agent. The Agent page is connection/control only; the built-in Assistant drawer stays beside Canvas. Iris is the product name (renamed from Flovart on 2026-11-20); the second surface is Cut (formerly Reverse, briefly named Iris).
 
-Do not bypass Flovart by writing React/Zustand state, browser storage, Runtime databases or Provider private APIs directly. Use the same idempotency/revision rules documented by the canonical Skill.
+Do not bypass Iris by writing React/Zustand state, browser storage, Runtime databases or Provider private APIs directly. Use the same idempotency/revision rules documented by the canonical Skill.

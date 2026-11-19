@@ -3,7 +3,7 @@
 use serde::{Serialize, Serializer};
 
 #[derive(Debug, thiserror::Error)]
-pub enum FlovartError {
+pub enum IrisError {
     #[error("keyring error: {0}")]
     Keyring(String),
     #[error("sqlite error: {0}")]
@@ -20,7 +20,7 @@ pub enum FlovartError {
     Other(String),
 }
 
-impl FlovartError {
+impl IrisError {
     pub fn code(&self) -> &'static str {
         match self {
             Self::Keyring(_) => "KEYRING",
@@ -34,32 +34,32 @@ impl FlovartError {
     }
 }
 
-impl Serialize for FlovartError {
+impl Serialize for IrisError {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeStruct;
-        let mut st = s.serialize_struct("FlovartError", 2)?;
+        let mut st = s.serialize_struct("IrisError", 2)?;
         st.serialize_field("code", self.code())?;
         st.serialize_field("message", &self.to_string())?;
         st.end()
     }
 }
 
-impl From<keyring::Error> for FlovartError {
+impl From<keyring::Error> for IrisError {
     fn from(e: keyring::Error) -> Self {
-        FlovartError::Keyring(e.to_string())
+        IrisError::Keyring(e.to_string())
     }
 }
 
-impl From<rusqlite::Error> for FlovartError {
+impl From<rusqlite::Error> for IrisError {
     fn from(e: rusqlite::Error) -> Self {
-        FlovartError::Sqlite(e.to_string())
+        IrisError::Sqlite(e.to_string())
     }
 }
 
-impl From<std::io::Error> for FlovartError {
+impl From<std::io::Error> for IrisError {
     fn from(e: std::io::Error) -> Self {
-        FlovartError::Io(e.to_string())
+        IrisError::Io(e.to_string())
     }
 }
 
-pub type FlovartResult<T> = Result<T, FlovartError>;
+pub type IrisResult<T> = Result<T, IrisError>;

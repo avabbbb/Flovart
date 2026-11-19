@@ -20,7 +20,7 @@ import { fetchModelsWithCache, type FetchedModel } from '../services/modelFetche
 import { normalizeProviderBaseUrl } from '../services/baseUrl';
 import { getProductModel, getProductModels, suggestProductRouteMappings } from '../services/productModelCatalog';
 import { getKeyModelIds } from '../utils/modelRefs';
-import { getFlovartRuntimeApi } from '../services/flovartRuntime';
+import { getIrisRuntimeApi } from '../services/irisRuntime';
 import { UserScriptAdapterSection } from './settings/UserScriptAdapterSection';
 import { buildConfigBundle, parseConfigBundle } from '../services/configMigration';
 import { importUserScriptProviders } from '../services/userScriptAuthoring';
@@ -578,7 +578,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
     React.useEffect(() => {
         if (!isOpen) return;
-        const runtime = getFlovartRuntimeApi();
+        const runtime = getIrisRuntimeApi();
         if (!runtime) {
             setRuntimeProviders(null);
             return;
@@ -1003,7 +1003,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         if (includeSecrets && !confirm(t('settingsExtra.transfer.exportSecretsConfirm'))) return;
         const bundle = buildConfigBundle(userApiKeys, includeSecrets);
         const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
-        const stem = includeSecrets ? 'flovart-config-full' : 'flovart-config';
+        const stem = includeSecrets ? 'iris-config-full' : 'iris-config';
         void saveBlob(blob, `${stem}-${new Date().toISOString().slice(0, 10)}.json`).catch(error => console.warn('[Settings] Export failed.', error));
     };
 

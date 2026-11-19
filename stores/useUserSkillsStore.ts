@@ -5,9 +5,9 @@ import { createUserSkill, normalizeSkillSlug, type UserSkillRecord } from '../se
 
 // 用户自建 Skill（我的）与 Skill 启用状态的唯一权威，持久化在 localforage。
 // 画布分组「保存为 Skill」、Skill Hub 面板的创建 / 编辑 / 删除、Agent 内核解析指令都读这里。
-export const MINE_SKILLS_KEY = 'flovart.skill.mine.v1';
-export const DISABLED_SKILLS_KEY = 'flovart.skill.disabled.v1';
-export const FAVORITE_SKILLS_KEY = 'flovart.skill.favorites.v1';
+export const MINE_SKILLS_KEY = 'iris.skill.mine.v1';
+export const DISABLED_SKILLS_KEY = 'iris.skill.disabled.v1';
+export const FAVORITE_SKILLS_KEY = 'iris.skill.favorites.v1';
 
 function isUserSkill(value: unknown): value is UserSkillRecord {
   const item = value as Partial<UserSkillRecord> | null;

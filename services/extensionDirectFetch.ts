@@ -1,5 +1,5 @@
 /**
- * 网页画布经已配对的 Flovart 浏览器插件直连模型上游，不经过 Cloudflare Worker `/api/llm-proxy`
+ * 网页画布经已配对的 Iris 浏览器插件直连模型上游，不经过 Cloudflare Worker `/api/llm-proxy`
  * （省 Workers 每日配额）。协议见 extension/background/direct-fetch.js：每个请求一条 Port。
  *
  * - 只有插件已批准此画布且 hello 能力里声明了 `llm.fetch` 才会走直连；
@@ -8,7 +8,7 @@
  */
 import type { ChromePortLike, ExtensionBridge, ExtensionBridgeMessage } from './extensionBridge';
 
-export const DIRECT_FETCH_PORT_NAME = 'flovart-fetch';
+export const DIRECT_FETCH_PORT_NAME = 'iris-fetch';
 export const DIRECT_FETCH_CAPABILITY = 'llm.fetch';
 /** 插件必须在这段时间内确认收到请求（校验通过），否则回退代理。 */
 const ACCEPT_TIMEOUT_MS = 4000;

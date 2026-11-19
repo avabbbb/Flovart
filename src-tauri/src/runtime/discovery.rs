@@ -42,7 +42,7 @@ impl DiscoveryRecord {
 }
 
 pub fn default_discovery_path() -> Result<PathBuf, RuntimeContractError> {
-    if let Some(path) = std::env::var_os("FLOVART_RUNTIME_DISCOVERY") {
+    if let Some(path) = std::env::var_os("IRIS_RUNTIME_DISCOVERY") {
         return Ok(PathBuf::from(path));
     }
     #[cfg(windows)]
@@ -65,7 +65,7 @@ pub fn default_discovery_path() -> Result<PathBuf, RuntimeContractError> {
         .ok_or_else(|| {
             RuntimeContractError::Security("XDG_RUNTIME_DIR and HOME are not set".to_owned())
         })?;
-    Ok(base.join("Flovart").join("runtime").join("control-v1.json"))
+    Ok(base.join("Iris").join("runtime").join("control-v1.json"))
 }
 
 pub(super) fn write_discovery(

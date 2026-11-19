@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { createFlovartHostRegistry, getFlovartHostDefinition } from '../services/link/hostRegistry';
+import { createIrisHostRegistry, getIrisHostDefinition } from '../services/link/hostRegistry';
 import { toLinkPublicStatus } from '../services/link/publicStatus';
 
-describe('Flovart Link contracts', () => {
+describe('Iris Link contracts', () => {
   it('keeps host definitions declarative and gives every host the same capabilities', () => {
-    const hosts = createFlovartHostRegistry();
+    const hosts = createIrisHostRegistry();
     expect(hosts.map(host => host.id)).toEqual(expect.arrayContaining(['codex', 'workbuddy', 'deepseek-harness']));
-    expect(getFlovartHostDefinition('codex')?.capabilities).toMatchObject({ inspect: true, mutate: true, run: true, selection: true });
-    expect(getFlovartHostDefinition('deepseek-harness')?.capabilities.plugin).toBe(true);
-    expect(getFlovartHostDefinition('missing')).toBeNull();
+    expect(getIrisHostDefinition('codex')?.capabilities).toMatchObject({ inspect: true, mutate: true, run: true, selection: true });
+    expect(getIrisHostDefinition('deepseek-harness')?.capabilities.plugin).toBe(true);
+    expect(getIrisHostDefinition('missing')).toBeNull();
   });
 
   it.each([

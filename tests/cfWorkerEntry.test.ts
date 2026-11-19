@@ -10,7 +10,7 @@ function makeEnv() {
 describe('Cloudflare Worker entry (Workers + static assets)', () => {
   it('serves non-API paths from the asset binding', async () => {
     const { env, assets } = makeEnv();
-    const res = await worker.fetch(new Request('https://flovart.avabbbb.com/canvas/abc'), env);
+    const res = await worker.fetch(new Request('https://iris.avabbbb.com/canvas/abc'), env);
     expect(res.status).toBe(200);
     expect(assets).toHaveBeenCalledTimes(1);
   });
@@ -18,7 +18,7 @@ describe('Cloudflare Worker entry (Workers + static assets)', () => {
   it('answers unknown /api/* with JSON 404 instead of the SPA shell', async () => {
     const { env, assets } = makeEnv();
     for (const path of ['/api/v1/auth/login', '/api/v1/prompts', '/api/v1/uploads/presign', '/api']) {
-      const res = await worker.fetch(new Request(`https://flovart.avabbbb.com${path}`), env);
+      const res = await worker.fetch(new Request(`https://iris.avabbbb.com${path}`), env);
       expect(res.status).toBe(404);
       expect(res.headers.get('content-type')).toContain('application/json');
     }
@@ -27,7 +27,7 @@ describe('Cloudflare Worker entry (Workers + static assets)', () => {
 
   it('routes /api/llm-proxy/* to the guarded proxy (cross-origin callers are refused)', async () => {
     const { env, assets } = makeEnv();
-    const res = await worker.fetch(new Request('https://flovart.avabbbb.com/api/llm-proxy/https/opencode.ai/zen/v1/models', {
+    const res = await worker.fetch(new Request('https://iris.avabbbb.com/api/llm-proxy/https/opencode.ai/zen/v1/models', {
       headers: { origin: 'https://evil.example' },
     }), env);
     expect(res.status).toBeGreaterThanOrEqual(400);

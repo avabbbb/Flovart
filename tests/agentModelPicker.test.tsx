@@ -145,7 +145,7 @@ describe('AgentModelPicker', () => {
   });
 
   it('cascades a thinking submenu per model: hover / → opens it, ← closes it, picking a level sets model and level', () => {
-    localStorage.removeItem('flovart.agent.thinking');
+    localStorage.removeItem('iris.agent.thinking');
     const keys: UserApiKey[] = [
       { id: 'k1', provider: 'openai_compatible', capabilities: ['text'], key: 'a', baseUrl: 'https://one.example.com/v1', models: [
         { id: 'chat-think', name: 'chat-think', capability: 'text' },
@@ -193,7 +193,7 @@ describe('AgentModelPicker', () => {
   });
 
   it('lists 极简 only for providers that accept it and nothing for models that rejected the parameter', () => {
-    localStorage.removeItem('flovart.agent.thinking');
+    localStorage.removeItem('iris.agent.thinking');
     expect(supportedThinkingLevels('gpt', { provider: 'openai', baseUrl: '' })).toEqual(['off', 'minimal', 'low', 'medium', 'high']);
     expect(supportedThinkingLevels('x', { provider: 'openai_compatible', baseUrl: 'https://openrouter.ai/api/v1' })).toContain('minimal');
     expect(supportedThinkingLevels('ds', { provider: 'openai_compatible', baseUrl: 'https://api.deepseek.com/v1' })).not.toContain('minimal');

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchModelsWithCache, MODEL_DISCOVERY_TIMEOUT_MS } from '../services/modelFetcher';
 
 // GitHub #43：模型发现的截止时间必须覆盖读取响应体，而不只是等响应头。
-const cache = localforage.createInstance({ name: 'flovart', storeName: 'provider_model_cache' });
+const cache = localforage.createInstance({ name: 'iris', storeName: 'provider_model_cache' });
 const originalFetch = globalThis.fetch;
 
 function headersOnlyResponse(text: () => Promise<string>, status = 200): Response {

@@ -20,7 +20,7 @@ describe('AgentCredentialStore', () => {
   let store;
 
   beforeEach(async () => {
-    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'flovart-cred-'));
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'iris-cred-'));
     keyring = fakeKeyring();
     store = new AgentCredentialStore({ dir, backend: keyring, now: () => 1000 });
   });

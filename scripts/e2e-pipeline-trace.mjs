@@ -34,7 +34,7 @@ function expectError(response, code, label) {
 function makeFixtures(dir) {
   mkdirSync(dir, { recursive: true });
   const run = args => {
-    const result = spawnSync(process.env.FLOVART_FFMPEG || 'ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', ...args]);
+    const result = spawnSync(process.env.IRIS_FFMPEG || 'ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', ...args]);
     assert(result.status === 0, `生成 fixture 失败：${args.join(' ')}`, String(result.stderr));
   };
   // 两张“产品截图”（竖屏 UI 尺寸）+ 一段音乐床。
@@ -52,11 +52,11 @@ export async function runPipelineTraceScenario({ outDir = join(ROOT, '.tmp', 'pi
   const home = join(outDir, 'runtime');
   const authorized = join(outDir, 'authorized-folder');
   const archiveDir = join(outDir, 'archive');
-  process.env.FLOVART_PIPELINE_HOME = home;
-  process.env.FLOVART_PIPELINE_ALLOWED_ROOTS = authorized;
+  process.env.IRIS_PIPELINE_HOME = home;
+  process.env.IRIS_PIPELINE_ALLOWED_ROOTS = authorized;
   const fixtures = makeFixtures(authorized);
-  const { Pipeline } = await import(pathToFileURL(join(ROOT, 'tools/flovart/pipeline/index.js')).href);
-  const { lockedClipsUnchanged } = await import(pathToFileURL(join(ROOT, 'tools/flovart/pipeline/spec.js')).href);
+  const { Pipeline } = await import(pathToFileURL(join(ROOT, 'tools/iris/pipeline/index.js')).href);
+  const { lockedClipsUnchanged } = await import(pathToFileURL(join(ROOT, 'tools/iris/pipeline/spec.js')).href);
   const pipeline = new Pipeline({ home });
   const agent = { caller: 'built-in' };
   let counter = 0;
@@ -95,11 +95,11 @@ export async function runPipelineTraceScenario({ outDir = join(ROOT, '.tmp', 'pi
   // 三栏脚本：口播稿（送 TTS，品牌名用谐音）/ 屏幕短字（字幕，原拼写）/ 画面操作。
   const script = [
     { id: 'L1', speechText: '做完一个 App，最难的是让别人三秒看懂它', displayText: '做完 App，最难的是让人 3 秒看懂', visual: '首页截图慢推', actions: ['看懂'] },
-    { id: 'L2', speechText: '把截图丢给弗洛瓦特，提问一句，它就开始剪', displayText: '截图丢给 Flovart，提问一句就开剪', visual: '首页截图，提问时刻切近景', actions: ['提问'] },
+    { id: 'L2', speechText: '把截图丢给弗洛瓦特，提问一句，它就开始剪', displayText: '截图丢给 Iris，提问一句就开剪', visual: '首页截图，提问时刻切近景', actions: ['提问'] },
     { id: 'L3', speechText: '点开结果，配音字幕和节奏都已经对好', displayText: '点开结果：配音、字幕、节奏都对好', visual: '结果卡片弹出', actions: ['点开'] },
     { id: 'L4', speechText: '截图进去，宣传片出来', displayText: '截图进去，宣传片出来', visual: '结果页 + 标语' },
   ];
-  check('显示稿与口播稿分离（品牌名谐音只进 TTS）', script[1].speechText.includes('弗洛瓦特') && script[1].displayText.includes('Flovart'));
+  check('显示稿与口播稿分离（品牌名谐音只进 TTS）', script[1].speechText.includes('弗洛瓦特') && script[1].displayText.includes('Iris'));
   const tts = ok(await call('audio.tts', {
     runId, lines: script.map(({ id, speechText, displayText }) => ({ id, speechText, displayText })),
     voice: { route: 'fake', voiceId: 'female-calm', speed: 1, pitch: 0 }, variant: 'A',
@@ -182,7 +182,7 @@ export async function runPipelineTraceScenario({ outDir = join(ROOT, '.tmp', 'pi
   log('6. 渲染 v2 → 与 v1 对比 → review(pass) → final');
   // 恢复：模拟“渲染进行中刷新页面”——Step 已写为 running，进程中断；同一 mutationId 重放应在原 Step 上继续。
   const renderArgs = { runId, version: 2, preset: 'draft' };
-  const { canonicalJson, sha256Text } = await import(pathToFileURL(join(ROOT, 'tools/flovart/pipeline/store.js')).href);
+  const { canonicalJson, sha256Text } = await import(pathToFileURL(join(ROOT, 'tools/iris/pipeline/store.js')).href);
   const crashed = pipeline.store.startStep({ runId, tool: 'composition.render', caller: 'built-in', mutationId: 'draft-v2', argsDigest: sha256Text(canonicalJson({ command: 'composition.render', args: renderArgs })), args: renderArgs, paid: false });
   const resumedTrace = ok(await call('pipeline.run.get', { runId }), 'run.get after crash');
   check('刷新后 trace 指出从未完成的 Step 继续', resumedTrace.resumeFrom?.stepId === crashed.id, resumedTrace.resumeFrom);
@@ -206,7 +206,7 @@ export async function runPipelineTraceScenario({ outDir = join(ROOT, '.tmp', 'pi
   // ---------- 7. 外部调用方（CLI）写同一条 trace ----------
   log('7. CLI 作为外部调用方读 trace、提交用户评审');
   const cli = (args) => {
-    const result = spawnSync(process.execPath, [join(ROOT, 'tools/flovart/cli.js'), ...args], { env: { ...process.env }, encoding: 'utf8' });
+    const result = spawnSync(process.execPath, [join(ROOT, 'tools/iris/cli.js'), ...args], { env: { ...process.env }, encoding: 'utf8' });
     return JSON.parse(result.stdout);
   };
   const cliGet = cli(['pipeline.run.get', '--runId', runId]);
@@ -244,13 +244,13 @@ export async function runPipelineTraceScenario({ outDir = join(ROOT, '.tmp', 'pi
   const edge = ok(await call('pipeline.run.start', { projectId: 'proj-demo', brief: { ...brief, keyLine: '边界测试' }, budget: { maxTasks: 1, maxRounds: 1 }, budgetConfirmed: true }, { ...agent, mutationId: 'start-edge' }), 'edge run');
   const edgeShot = ok(await call('asset.import', { runId: edge.runId, path: fixtures.shotA }, { ...agent, mutationId: 'edge-import' }), 'edge import').artifacts[0];
   ok(await call('composition.patch', { runId: edge.runId, baseVersion: 0, ops: [{ op: 'add', track: 'visual', clip: { id: 'only', kind: 'image', artifactId: edgeShot.artifactId, startMs: 0, durationMs: 1500 } }] }, { ...agent, mutationId: 'edge-v1' }), 'edge v1');
-  const savedFfmpeg = process.env.FLOVART_FFMPEG;
-  process.env.FLOVART_FFMPEG = join(outDir, 'missing', 'ffmpeg');
+  const savedFfmpeg = process.env.IRIS_FFMPEG;
+  process.env.IRIS_FFMPEG = join(outDir, 'missing', 'ffmpeg');
   const missing = expectError(await call('composition.render', { runId: edge.runId, version: 1, preset: 'draft' }, { ...agent, mutationId: 'edge-draft' }), 'CAPABILITY_UNAVAILABLE', '缺 ffmpeg');
   const blocked = ok(await call('pipeline.run.get', { runId: edge.runId }), 'edge trace');
   check('缺依赖时 run 进入 blocked 并带诊断', blocked.run.status === 'blocked' && blocked.blocker?.diagnose && missing.details?.capability === 'ffmpeg', blocked.blocker);
   expectError(await call('composition.patch', { runId: edge.runId, baseVersion: 1, ops: [{ op: 'remove', id: 'only' }] }, { ...agent, mutationId: mid('blocked') }), 'RUN_BLOCKED', 'blocked 时拒绝写入');
-  if (savedFfmpeg === undefined) delete process.env.FLOVART_FFMPEG; else process.env.FLOVART_FFMPEG = savedFfmpeg;
+  if (savedFfmpeg === undefined) delete process.env.IRIS_FFMPEG; else process.env.IRIS_FFMPEG = savedFfmpeg;
   ok(await call('composition.render', { runId: edge.runId, version: 1, preset: 'draft' }, { ...agent, mutationId: 'edge-draft' }), 'edge draft retry');
   check('依赖恢复后同一 Step 重试成功并解除 blocked', ok(await call('pipeline.run.get', { runId: edge.runId }), 'edge trace 2').run.status === 'active');
   ok(await call('media.frames', { runId: edge.runId, version: 1, times: [0.5] }), 'edge frames');

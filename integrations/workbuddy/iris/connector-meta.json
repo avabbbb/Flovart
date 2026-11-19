@@ -1,0 +1,14 @@
+{
+  "name": "Iris",
+  "name_zh": "Iris",
+  "name_en": "Iris",
+  "description": "Use Iris to create and edit visual Workflow projects from natural language.",
+  "description_zh": "通过自然语言在 Iris 中创建和编辑可见的 Workflow。",
+  "description_en": "Create and edit visible Iris Workflow projects with natural language.",
+  "source": "iris",
+  "type": "cli",
+  "version": "0.3.2",
+  "minWorkbuddyVersion": "5.0.0",
+  "examples_zh": ["打开 Iris", "查看当前 Workflow", "用这些图片做一条产品广告"],
+  "examples_en": ["Open Iris", "Inspect the current Workflow", "Make a product ad from these images"]
+}

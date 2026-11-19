@@ -5,8 +5,8 @@ import { createWorkflowNode } from '../components/workflow/constants';
 import { createWorkflowExecutor } from '../services/workflowExecutor';
 import { toolApprovalFor } from '../services/agentToolPolicy';
 import { paidUnits } from '../agent/session-budget.js';
-import { AGENT_TOOL_SPEC_BY_COMMAND, agentToolCommand } from '../tools/flovart/agent-tools.js';
-import { AGENT_PUBLIC_COMMAND_SET } from '../tools/flovart/agent-surface.js';
+import { AGENT_TOOL_SPEC_BY_COMMAND, agentToolCommand } from '../tools/iris/agent-tools.js';
+import { AGENT_PUBLIC_COMMAND_SET } from '../tools/iris/agent-surface.js';
 import type { WorkflowProject } from '../components/workflow/types';
 
 const setup = (runNode = vi.fn()) => {
@@ -82,7 +82,7 @@ describe('workflow.shortcut.*', () => {
   it('is registered once for every host with the same approval and budget rules as generate', () => {
     expect(AGENT_PUBLIC_COMMAND_SET.has('workflow.shortcut.apply')).toBe(true);
     expect(AGENT_PUBLIC_COMMAND_SET.has('workflow.shortcut.list')).toBe(true);
-    expect(agentToolCommand('flovart_shortcut_apply')).toBe('workflow.shortcut.apply');
+    expect(agentToolCommand('iris_shortcut_apply')).toBe('workflow.shortcut.apply');
     expect(AGENT_TOOL_SPEC_BY_COMMAND['workflow.shortcut.apply'].inputSchema.required).toEqual(['scene']);
     expect(toolApprovalFor('workflow.shortcut.list')).toEqual({ tier: 'read' });
     expect(toolApprovalFor('workflow.shortcut.apply', {}).tier).toBe('write');

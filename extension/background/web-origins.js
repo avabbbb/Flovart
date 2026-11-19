@@ -1,6 +1,8 @@
 // 网页画布允许连接插件的来源。
 // 必须与 manifest.json 的 externally_connectable.matches 一一对应，tests/extensionWebBridge.test.js 会校验。
 const WEB_HOSTS = [
+  ['https', 'iris.avabbbb.com'],
+  // 更名过渡期（2026-11-20 Flovart → Iris）：旧站仍可配对，迁移完成后删除。
   ['https', 'flovart.avabbbb.com'],
   // 本地开发：vite.config.ts 默认端口 37522（strictPort）。动态端口模式不在白名单内。
   ['http', '127.0.0.1:37522'],

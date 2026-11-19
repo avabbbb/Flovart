@@ -4,23 +4,23 @@ import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { probeWebUi } from '../tools/flovart/local-agent.js';
+import { probeWebUi } from '../tools/iris/local-agent.js';
 import { assertTestPath, resolveTestTempRoot } from './test-temp-root.mjs';
 
 const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const externalTargetUrl = process.env.FLOVART_TEST_URL?.trim() || null;
-const chromeExecutable = process.env.FLOVART_CHROME_PATH || chromium.executablePath();
+const externalTargetUrl = process.env.IRIS_TEST_URL?.trim() || null;
+const chromeExecutable = process.env.IRIS_CHROME_PATH || chromium.executablePath();
 if (!existsSync(chromeExecutable)) throw new Error(`Chrome for Testing executable was not found: ${chromeExecutable}`);
 
 const testTempRoot = resolveTestTempRoot(projectDir);
 const outputDir = assertTestPath(
-  process.env.FLOVART_RESPONSIVE_ARTIFACT_DIR || resolve(testTempRoot, 'responsive-agent-link-artifacts'),
+  process.env.IRIS_RESPONSIVE_ARTIFACT_DIR || resolve(testTempRoot, 'responsive-agent-link-artifacts'),
   'Responsive Agent artifacts',
 );
 await mkdir(testTempRoot, { recursive: true });
 await mkdir(outputDir, { recursive: true });
-const profileDir = await mkdtemp(resolve(testTempRoot, 'flovart-responsive-agent-link-'));
-const serviceDir = externalTargetUrl ? null : await mkdtemp(resolve(testTempRoot, 'flovart-responsive-agent-link-service-'));
+const profileDir = await mkdtemp(resolve(testTempRoot, 'iris-responsive-agent-link-'));
+const serviceDir = externalTargetUrl ? null : await mkdtemp(resolve(testTempRoot, 'iris-responsive-agent-link-service-'));
 process.env.TEMP = profileDir;
 process.env.TMP = profileDir;
 process.env.TMPDIR = profileDir;
@@ -69,9 +69,9 @@ async function waitFor(stage, check, timeoutMs = 60_000, intervalMs = 250) {
   const detail = `stage=${stage} attempts=${attempts} last=${describeWaitValue(lastValue)}`;
   if (lastError) {
     const message = lastError instanceof Error ? lastError.message : String(lastError);
-    throw new Error(`等待 Flovart WebUI 超时 (${detail}): ${message}`);
+    throw new Error(`等待 Iris WebUI 超时 (${detail}): ${message}`);
   }
-  throw new Error(`等待 Flovart WebUI 超时 (${detail})。`);
+  throw new Error(`等待 Iris WebUI 超时 (${detail})。`);
 }
 
 function readJson(file) {
@@ -142,13 +142,13 @@ try {
       TEMP: serviceDir,
       TMP: serviceDir,
       TMPDIR: serviceDir,
-      FLOVART_PROJECT_DIR: projectDir,
-      FLOVART_AGENT_CONFIG: join(serviceDir, 'agent.json'),
-      FLOVART_WEB_DISCOVERY: join(serviceDir, 'web.json'),
-      FLOVART_BROWSER_LAUNCH_STATE: join(serviceDir, 'browser-launch.json'),
+      IRIS_PROJECT_DIR: projectDir,
+      IRIS_AGENT_CONFIG: join(serviceDir, 'agent.json'),
+      IRIS_WEB_DISCOVERY: join(serviceDir, 'web.json'),
+      IRIS_BROWSER_LAUNCH_STATE: join(serviceDir, 'browser-launch.json'),
     };
     managedCli = spawn(process.execPath, [
-      'tools/flovart/cli.js',
+      'tools/iris/cli.js',
       'start', '--source', '--web',
       '--web-port=0', '--agent-port=0', '--no-open',
     ], {
@@ -164,9 +164,9 @@ try {
     try {
       targetUrl = await waitFor('web-discovery', async () => {
         if (managedCli.exitCode !== null) {
-          throw new Error(`托管 Flovart 启动失败: ${managedCliOutput.slice(-2000)}`);
+          throw new Error(`托管 Iris 启动失败: ${managedCliOutput.slice(-2000)}`);
         }
-        const discoveryFile = serviceEnv.FLOVART_WEB_DISCOVERY;
+        const discoveryFile = serviceEnv.IRIS_WEB_DISCOVERY;
         if (!existsSync(discoveryFile)) {
           lastWebObservation = 'discovery-file-missing';
           return null;

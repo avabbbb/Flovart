@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createTrajectoryRecorder, serializeEvidence } from '../eval/recorders/trajectory.mjs';
 
-describe('FlovartBench evidence redaction', () => {
+describe('IrisBench evidence redaction', () => {
   it('redacts credential-shaped values without erasing ordinary SHA-256 hashes or safety metrics', () => {
     const checksum = 'b'.repeat(64);
     const evidence = JSON.parse(serializeEvidence({

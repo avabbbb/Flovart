@@ -13,7 +13,7 @@ import {
   SKILL_PACKAGE_MAX_FILE_BYTES,
   SKILL_PACKAGE_MAX_TOTAL_BYTES,
   validateSkillPackageEntries,
-} from '../tools/flovart/skill-package.js';
+} from '../tools/iris/skill-package.js';
 import { hashProductionSkillSnapshot } from '../services/productionSkillSnapshot.js';
 
 describe('skillPackage shared helpers', () => {

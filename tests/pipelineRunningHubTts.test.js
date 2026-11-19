@@ -2,18 +2,18 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { synthesizeLine, ttsRoutes } from '../tools/flovart/pipeline/voice.js';
+import { synthesizeLine, ttsRoutes } from '../tools/iris/pipeline/voice.js';
 
 let dir;
-const saved = { key: process.env.RUNNINGHUB_API_KEY, base: process.env.FLOVART_RUNNINGHUB_BASE_URL };
+const saved = { key: process.env.RUNNINGHUB_API_KEY, base: process.env.IRIS_RUNNINGHUB_BASE_URL };
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'rh-tts-'));
   process.env.RUNNINGHUB_API_KEY = 'test-key';
-  process.env.FLOVART_RUNNINGHUB_BASE_URL = 'https://rh.test/';
+  process.env.IRIS_RUNNINGHUB_BASE_URL = 'https://rh.test/';
 });
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
-  for (const [k, env] of [['key', 'RUNNINGHUB_API_KEY'], ['base', 'FLOVART_RUNNINGHUB_BASE_URL']]) {
+  for (const [k, env] of [['key', 'RUNNINGHUB_API_KEY'], ['base', 'IRIS_RUNNINGHUB_BASE_URL']]) {
     if (saved[k] === undefined) delete process.env[env]; else process.env[env] = saved[k];
   }
 });

@@ -4,7 +4,7 @@
 //
 // What it does, in order:
 //   1. Launches a real, windowed Chrome-for-Testing against the already-running
-//      local Flovart Agent + Web (same bootstrap as codex-session-browser.mjs),
+//      local Iris Agent + Web (same bootstrap as codex-session-browser.mjs),
 //      with Playwright recordVideo on.
 //   2. Creates a fresh project named "Hero Demo" so the canvas starts empty
 //      (idempotent via a stable idempotency key).
@@ -34,7 +34,7 @@ import {
   buildBrowserBootstrapUrl,
   issueBrowserBootstrapToken,
   probeWebUi,
-} from '../tools/flovart/local-agent.js';
+} from '../tools/iris/local-agent.js';
 import { resolveTestTempRoot } from './test-temp-root.mjs';
 
 // ---------------------------------------------------------------------------
@@ -48,7 +48,7 @@ if (!['codebuddy', 'codex'].includes(agentKind)) {
   console.error(`[hero] unknown --agent "${agentKind}" (expected codebuddy|codex)`);
   process.exit(2);
 }
-// The Flovart writer identity each agent uses for workflow writes.
+// The Iris writer identity each agent uses for workflow writes.
 const agentIdentity = agentKind === 'codebuddy' ? 'workbuddy' : 'codex';
 
 // WorkBuddy's embedded Node + codebuddy CLI entry point.
@@ -80,14 +80,14 @@ async function waitFor(check, timeoutMs = 90_000, intervalMs = 300) {
     }
     await sleep(intervalMs);
   }
-  throw lastError || new Error('Timed out waiting for Flovart services.');
+  throw lastError || new Error('Timed out waiting for Iris services.');
 }
 
 // ---------------------------------------------------------------------------
-// 1. Resolve the running Agent + Web from ~/.flovart (same as session browser).
+// 1. Resolve the running Agent + Web from ~/.iris (same as session browser).
 // ---------------------------------------------------------------------------
-const agentConfigPath = process.env.FLOVART_AGENT_CONFIG || join(homedir(), '.flovart', 'agent.json');
-const webDiscoveryPath = process.env.FLOVART_WEB_DISCOVERY || join(homedir(), '.flovart', 'web.json');
+const agentConfigPath = process.env.IRIS_AGENT_CONFIG || join(homedir(), '.iris', 'agent.json');
+const webDiscoveryPath = process.env.IRIS_WEB_DISCOVERY || join(homedir(), '.iris', 'web.json');
 
 const agent = await waitFor(() => {
   if (!existsSync(agentConfigPath)) return null;
@@ -100,7 +100,7 @@ const web = await waitFor(async () => {
   // candidate — discovery file, explicit env override, and the stable vite-dev
   // port — and probe each; use the first that actually serves the Web UI.
   const candidates = new Set();
-  if (process.env.FLOVART_WEB_URL) candidates.add(process.env.FLOVART_WEB_URL);
+  if (process.env.IRIS_WEB_URL) candidates.add(process.env.IRIS_WEB_URL);
   if (existsSync(webDiscoveryPath)) {
     try { candidates.add(JSON.parse(readFileSync(webDiscoveryPath, 'utf8')).url); } catch { /* malformed */ }
   }
@@ -120,12 +120,12 @@ console.log(`[hero] agent ${agent.url}  web ${webDiscovery.url}`);
 // ---------------------------------------------------------------------------
 const tempRoot = resolveTestTempRoot(projectDir);
 await mkdir(tempRoot, { recursive: true });
-const testRoot = await mkdtemp(join(tempRoot, 'flovart-hero-'));
+const testRoot = await mkdtemp(join(tempRoot, 'iris-hero-'));
 process.env.TEMP = testRoot;
 process.env.TMP = testRoot;
 process.env.TMPDIR = testRoot;
 
-const chromeExecutable = process.env.FLOVART_CHROME_PATH || chromium.executablePath();
+const chromeExecutable = process.env.IRIS_CHROME_PATH || chromium.executablePath();
 if (!existsSync(chromeExecutable)) {
   throw new Error(`Chrome for Testing executable not found: ${chromeExecutable}`);
 }
@@ -157,12 +157,12 @@ const health = await waitFor(async () => {
 }, 45_000);
 console.log(`[hero] browser connected, clients=${health.clients}`);
 
-// Helper: drive the flovart CLI synchronously and return parsed JSON.
+// Helper: drive the iris CLI synchronously and return parsed JSON.
 // The CLI wraps every op in { ok, command, data: { ok, result } }; for
 // workflow.inspect the `result` IS the project { id, title, nodes, connections }.
 function cli(args) {
   return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn('npm', ['run', 'flovart:cli', '--', ...args, '--json'], {
+    const child = spawn('npm', ['run', 'iris:cli', '--', ...args, '--json'], {
       cwd: projectDir,
       env: process.env,
       shell: process.platform === 'win32',
@@ -281,15 +281,15 @@ await sleep(1500);
 const projectPin = projectId ? `--project-id ${projectId}` : '--project-id <the-active-project-id>';
 const prompt = agentKind === 'codebuddy'
   ? [
-      `Create a three-shot product video workflow in the ACTIVE Flovart project (id ${projectId || 'the-active-one'}): three video nodes connected in sequence (Shot 1 -> Shot 2 -> Shot 3).`,
-      'Read the Flovart skill at .agents/skills/flovart/SKILL.md first, then use the Flovart CLI via Bash (npm run flovart:cli -- ...).',
+      `Create a three-shot product video workflow in the ACTIVE Iris project (id ${projectId || 'the-active-one'}): three video nodes connected in sequence (Shot 1 -> Shot 2 -> Shot 3).`,
+      'Read the Iris skill at .agents/skills/iris/SKILL.md first, then use the Iris CLI via Bash (npm run iris:cli -- ...).',
       `IMPORTANT: pass --agent-identity workbuddy AND a unique --idempotency-key on every workflow write command, and scope every write/inspect with ${projectPin}.`,
       'Do not modify any source files.',
     ].join(' ')
   : [
-      'Create a three-shot product video workflow: three video nodes connected in sequence (Shot 1 -> Shot 2 -> Shot 3). Read the Flovart skill at .agents/skills/flovart/SKILL.md first, then use the Flovart CLI operations (npm run flovart:cli -- ...). Do not modify any source files; only operate the live Workflow through the CLI.',
-      'Use the Flovart CLI (npm run flovart:cli -- …) to drive the visible Workflow.',
-      'Read .agents/skills/flovart/SKILL.md first. Do not modify any source files.',
+      'Create a three-shot product video workflow: three video nodes connected in sequence (Shot 1 -> Shot 2 -> Shot 3). Read the Iris skill at .agents/skills/iris/SKILL.md first, then use the Iris CLI operations (npm run iris:cli -- ...). Do not modify any source files; only operate the live Workflow through the CLI.',
+      'Use the Iris CLI (npm run iris:cli -- …) to drive the visible Workflow.',
+      'Read .agents/skills/iris/SKILL.md first. Do not modify any source files.',
     ].join(' ');
 
 const transcriptPath = join(tmpDir, `hero-${agentKind}-trial.jsonl`);
@@ -392,7 +392,7 @@ console.log(`[hero] final graph: inspect=${inspectNodes.length} dom=${domNodes} 
 // ---------------------------------------------------------------------------
 if (!noDrag && visibleNodeCount >= 3) {
   try {
-    // Flovart nodes render as .workflow-node with data-workflow-node-id; the
+    // Iris nodes render as .workflow-node with data-workflow-node-id; the
     // draggable surface is the node body. Prefer the first node element.
     const nodeSel = [
       '[data-workflow-node-id]',

@@ -1,0 +1,25 @@
+{
+  "runtime": { "type": "node", "version": "22" },
+  "init": {
+    "darwin": "npm install -g @flovart/cli@latest",
+    "linux": "npm install -g @flovart/cli@latest",
+    "win32": "npm install -g @flovart/cli@latest"
+  },
+  "auth": {
+    "darwin": "iris-cli workbuddy.auth --json",
+    "linux": "iris-cli workbuddy.auth --json",
+    "win32": "iris-cli.cmd workbuddy.auth --json"
+  },
+  "unAuth": {
+    "darwin": "iris-cli workbuddy.unAuth --json",
+    "linux": "iris-cli workbuddy.unAuth --json",
+    "win32": "iris-cli.cmd workbuddy.unAuth --json"
+  },
+  "status": {
+    "darwin": "iris-cli workbuddy.status --json",
+    "linux": "iris-cli workbuddy.status --json",
+    "win32": "iris-cli.cmd workbuddy.status --json"
+  },
+  "statusMatch": "\"state\"\\s*:\\s*\"local-ready\"",
+  "authSuppressBrowser": true
+}

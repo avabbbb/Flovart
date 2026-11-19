@@ -66,7 +66,7 @@ export function buildPreferenceEvent(owner: WorkflowNode, alternateId: string, o
   };
 }
 
-const store = localforage.createInstance({ name: 'flovart-eval-v1', storeName: 'preference_events' });
+const store = localforage.createInstance({ name: 'iris-eval-v1', storeName: 'preference_events' });
 let queue: Promise<unknown> = Promise.resolve();
 
 /** 追加一条事件（串行写，失败不影响画布操作）。 */
@@ -94,10 +94,10 @@ export async function clearPreferenceEvents(): Promise<void> {
   await store.removeItem(STORE_KEY);
 }
 
-// 采集链路（eval/eval.md §9.1）用：无头浏览器里 `await window.__flovartPreferenceEvents.exportJsonl()` 取出事件。
+// 采集链路（eval/eval.md §9.1）用：无头浏览器里 `await window.__irisPreferenceEvents.exportJsonl()` 取出事件。
 // 只读，不提供清空或写入。
 if (typeof window !== 'undefined') {
-  Object.defineProperty(window, '__flovartPreferenceEvents', {
+  Object.defineProperty(window, '__irisPreferenceEvents', {
     value: Object.freeze({ list: listPreferenceEvents, exportJsonl: exportPreferenceEventsJsonl }),
     configurable: true,
   });

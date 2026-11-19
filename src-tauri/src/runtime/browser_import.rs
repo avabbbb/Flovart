@@ -173,7 +173,7 @@ pub struct BrowserImportStore {
 impl BrowserImportStore {
     pub fn in_memory() -> Result<Self, RuntimeContractError> {
         let artifact_root =
-            std::env::temp_dir().join(format!("flovart-browser-import-runtime-{}", Uuid::now_v7()));
+            std::env::temp_dir().join(format!("iris-browser-import-runtime-{}", Uuid::now_v7()));
         fs::create_dir_all(artifact_root.join("browser-import").join(".staging"))?;
         let connection = Connection::open_in_memory()?;
         connection.execute_batch("PRAGMA foreign_keys=ON;")?;
@@ -788,7 +788,7 @@ impl BrowserImportStore {
             )),
             _ => Err(RuntimeError::new(
                 "PAIRING_REQUIRED",
-                "Approve this browser extension in Flovart Desktop",
+                "Approve this browser extension in Iris Desktop",
             )),
         }
     }

@@ -21,7 +21,7 @@ export function RouterHost() {
     // In the DSH embed the bridge owns bootstrap: the host posts a one-time token.
     if (isDshEmbed()) return;
     void bootstrapLocalAgentConnection().catch(error => {
-      console.warn('Flovart Agent auto-bootstrap unavailable.', error);
+      console.warn('Iris Agent auto-bootstrap unavailable.', error);
     });
   }, []);
 

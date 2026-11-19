@@ -1,7 +1,7 @@
 // @vitest-environment node
 // 浏览器插件安全边界（网页画布通道上线后）：
 // - 不注入 content script、不常驻页面权限、不暴露 web_accessible_resources、不内嵌 WebUI；
-// - externally_connectable 只放行 Flovart 网页画布的几个 origin，不允许其他扩展连接；
+// - externally_connectable 只放行 Iris 网页画布的几个 origin，不允许其他扩展连接；
 // - Provider 请求只在 reverse-prompt.js，Key 只由 web-keys.js 处理；service worker 与 popup 不直接碰 Key 或厂商。
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -11,10 +11,10 @@ const read = (path: string) => readFileSync(path, 'utf8');
 const STAR = String.fromCharCode(42);
 const scheme = (name: string) => name + ':' + '//';
 const PROVIDER_PATTERN = /api.?key|openai|anthropic|gemini|openrouter/i;
-const ALLOWED_WEB_HOSTS = ['flovart.avabbbb.com', '127.0.0.1:37522', 'localhost:37522'];
+const ALLOWED_WEB_HOSTS = ['iris.avabbbb.com', 'flovart.avabbbb.com', '127.0.0.1:37522', 'localhost:37522'];
 
 describe('browser extension security boundary', () => {
-  it('keeps page access opt-in and lets only the Flovart web canvas connect', () => {
+  it('keeps page access opt-in and lets only the Iris web canvas connect', () => {
     expect(manifest.permissions).toContain('nativeMessaging');
     expect(manifest).not.toHaveProperty('content_scripts');
     // 常驻 host 权限只给直连白名单里的几个模型网关/文档主机（见 upstream-allowlist.js），不含通配主机。

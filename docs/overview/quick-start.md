@@ -2,20 +2,20 @@
 
 五种部署方式，选择适合你的：
 
-> 不想安装？官方在线版在 [flovart.avabbbb.com](https://flovart.avabbbb.com)。它由名为 `flovart` 的 Cloudflare Worker 提供（Workers + 静态资源，入口 `worker/index.ts`）：除静态页面外只运行一个同源 LLM 代理 `/api/llm-proxy/*`，给少数不支持浏览器 CORS 的白名单网关转发请求，不保存、不记录 Key 与提示词。项目数据仍保存在你的浏览器本地。
+> 不想安装？官方在线版在 [iris.avabbbb.com](https://iris.avabbbb.com)。它由名为 `iris` 的 Cloudflare Worker 提供（Workers + 静态资源，入口 `worker/index.ts`）：除静态页面外只运行一个同源 LLM 代理 `/api/llm-proxy/*`，给少数不支持浏览器 CORS 的白名单网关转发请求，不保存、不记录 Key 与提示词。项目数据仍保存在你的浏览器本地。
 
 ## 方式一：本地运行
 
 ```bash
-git clone https://github.com/avabbbb/Flovart.git
-cd Flovart
+git clone https://github.com/avabbbb/Iris.git
+cd Iris
 npm install
-npm run flovart:cli -- start --source --web --open
+npm run iris:cli -- start --source --web --open
 ```
 
 启动器会同时准备 WebUI 和本机 Browser Agent，并通过一次性启动握手打开主 Workflow 路由 `#/app`。不要直接把 `37522` 粘贴到地址栏来期待 Agent binding；直接地址只代表普通 WebUI 页面。首次进入会看到空白的新建 Canvas，没有配置 AI 服务也可以直接编辑；需要生成时，再在设置中添加 AI 服务。
 
-源码启动时 `37522` 只是首选端口：如果被占用，Flovart 会自动选择可用的本机端口并把实际地址写入启动结果。需要隔离测试时可运行 `npm run flovart:cli -- start --source --web --web-port=0 --agent-port=0 --no-open --json`。
+源码启动时 `37522` 只是首选端口：如果被占用，Iris 会自动选择可用的本机端口并把实际地址写入启动结果。需要隔离测试时可运行 `npm run iris:cli -- start --source --web --web-port=0 --agent-port=0 --no-open --json`。
 
 自动化浏览器验收不要使用 `--open`，因为它会调用 Windows 默认浏览器；运行 `npm run test:browser:chrome`，脚本会使用 Playwright 的 Chrome for Testing、隔离 profile、随机端口和一次性 bootstrap URL，结束后自动清理测试进程。
 
@@ -26,9 +26,9 @@ npm run flovart:cli -- start --source --web --open
 当前可沿用 Codex、Claude Code、OpenCode 的 Skill/CLI，以及 WorkBuddy 的 CLI Connector。另有实验性本地 stdio MCP，共用现有操作入口；每个助手的实际安装、登录和调用状态见[支持矩阵](../../SUPPORT_MATRIX.md)。TeleAgent 接入准备包不等于真实客户端已认证。
 
 ```bash
-npm run flovart:cli -- status --json
-npm run flovart:cli -- start --open --json  # 仅在 status 未就绪时执行
-npm run flovart:cli -- workflow.inspect --json
+npm run iris:cli -- status --json
+npm run iris:cli -- start --open --json  # 仅在 status 未就绪时执行
+npm run iris:cli -- workflow.inspect --json
 ```
 
 日常操作使用 status、workflow.inspect、workflow.selection.get、workflow.apply、workflow.node.run；ensure 准备连接，command.list/schema 仅作 discovery 和诊断。写入前核对目标与版本，写入后回读；确定性命令不需要额外内部 AI 重新解释。
@@ -36,7 +36,7 @@ npm run flovart:cli -- workflow.inspect --json
 从源码启动 MCP：
 
 ```bash
-node tools/flovart/mcp-server.js
+node tools/iris/mcp-server.js
 ```
 
 在支持本地 stdio 的客户端配置上述进程入口，工作目录指向本仓库；具体配置按该客户端文档和实际版本核验。MCP 的五个工具仍操作已绑定的可见 Browser Workflow，不提供无 UI 原生效果能力。详见[Agent Integration](../design/12-agent.md)。
@@ -47,9 +47,9 @@ node tools/flovart/mcp-server.js
 
 ## 方式三：第三方服务适配
 
-Flovart 正在持续推进 **OpenAI-compatible** 第三方端点（如中转站、企业内网网关）适配。你可以在设置中选择 **自定义 Provider**，按以下方式接入：
+Iris 正在持续推进 **OpenAI-compatible** 第三方端点（如中转站、企业内网网关）适配。你可以在设置中选择 **自定义 Provider**，按以下方式接入：
 
-1. **服务地址** — 填入你的端点地址（如 `https://api.example.com/v1/chat/completions`，Flovart 会自动裁剪到 `/v1`）
+1. **服务地址** — 填入你的端点地址（如 `https://api.example.com/v1/chat/completions`，Iris 会自动裁剪到 `/v1`）
 2. **API Key** — 填入你的访问凭据
 3. **模型名** — 模型列表正常返回时会自动发现；没有模型列表时再手动输入（如 `gemini-3.1-flash-image`、`gpt-image-2`）
 4. **能力声明** — 仅在高级配置中补充该服务支持的能力（图片 / 视频 / 文本），自定义模型会按此归类到下拉菜单
@@ -66,8 +66,8 @@ Flovart 正在持续推进 **OpenAI-compatible** 第三方端点（如中转站�
 ## 方式四：Docker 本地联调
 
 ```bash
-git clone https://github.com/avabbbb/Flovart.git
-cd Flovart
+git clone https://github.com/avabbbb/Iris.git
+cd Iris
 docker compose up --build -d
 ```
 

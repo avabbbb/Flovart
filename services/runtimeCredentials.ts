@@ -28,7 +28,7 @@ export async function invokeAgentCredentials<T>(command: string, args: Record<st
   const route = AGENT_CREDENTIAL_ROUTES[command];
   if (!route) throw new Error(`Unsupported Agent credential command: ${command}`);
   const connection = await getManagedAgentConnection();
-  if (!connection) throw new Error('Flovart Agent is not connected.');
+  if (!connection) throw new Error('Iris Agent is not connected.');
   const response = await fetch(new URL(route, connection.url), {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-flovart-agent-token': connection.token },

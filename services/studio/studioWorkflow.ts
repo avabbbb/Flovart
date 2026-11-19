@@ -3,7 +3,7 @@ import type { WorkflowDocumentOperation, WorkflowHostSendRequest, WorkflowProjec
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { nanoid } from 'nanoid';
-import { hostSelectionReference, hostSelectionResource, StudioContractError, type CreativeHostAdapter, type FlovartArtifact, type FlovartStudioCore, type HostArtifactPersistence, type HostContext, type HostImportResult, type HostImportTarget, type HostSelection, type MaterializedHostSelection, type StudioApplyRequest, type StudioExecutionTarget, type StudioGenerationCandidate, type WorkflowResource } from './studioContract';
+import { hostSelectionReference, hostSelectionResource, StudioContractError, type CreativeHostAdapter, type IrisArtifact, type IrisStudioCore, type HostArtifactPersistence, type HostContext, type HostImportResult, type HostImportTarget, type HostSelection, type MaterializedHostSelection, type StudioApplyRequest, type StudioExecutionTarget, type StudioGenerationCandidate, type WorkflowResource } from './studioContract';
 import { workflowResultArtifactId, workflowResultRevision, workflowResultTaskId } from './studioClient';
 
 export type { StudioExecutionTarget } from './studioContract';
@@ -53,10 +53,10 @@ export interface StudioGenerationResult {
 }
 
 interface PreparedStudioGeneration extends Omit<StudioGenerationResult, 'import'> {
-  artifact: FlovartArtifact;
+  artifact: IrisArtifact;
 }
 
-type FlovartArtifactWithIntegrity = FlovartArtifact & {
+type IrisArtifactWithIntegrity = IrisArtifact & {
   artifactId: string;
   blob: Blob;
   sha256: string;
@@ -88,7 +88,7 @@ function normalizeMimeType(value: string): string {
   return value.split(';', 1)[0].trim().toLowerCase();
 }
 
-function freezePersistenceReceipt(receipt: HostArtifactPersistence, artifact: FlovartArtifactWithIntegrity): HostArtifactPersistence {
+function freezePersistenceReceipt(receipt: HostArtifactPersistence, artifact: IrisArtifactWithIntegrity): HostArtifactPersistence {
   const mimeType = normalizeMimeType(receipt.mimeType || '');
   if (receipt.status !== 'persisted'
       || !receipt.artifactId
@@ -123,7 +123,7 @@ function freezeSelection(selection: HostSelection): HostSelection {
 }
 
 function requireProject(project: WorkflowProject | null | undefined): WorkflowProject {
-  if (!project) throw new StudioContractError('WORKSPACE_UNAVAILABLE', 'Flovart 当前没有可用的 Workflow。', true);
+  if (!project) throw new StudioContractError('WORKSPACE_UNAVAILABLE', 'Iris 当前没有可用的 Workflow。', true);
   return project;
 }
 
@@ -161,7 +161,7 @@ export function buildStudioReferenceOperations(
     prompt: prompt.trim(),
     config: { mode: 'image', submode: 'image-to-image' },
   });
-  target.title = 'Flovart 结果';
+  target.title = 'Iris 结果';
   return {
     sourceNodeId,
     targetNodeId,
@@ -177,7 +177,7 @@ export class StudioWorkflowController {
 
   constructor(
     private readonly adapter: CreativeHostAdapter,
-    private readonly core: FlovartStudioCore,
+    private readonly core: IrisStudioCore,
     private readonly createId: () => string = () => nanoid(),
   ) {}
 
@@ -238,9 +238,9 @@ export class StudioWorkflowController {
     });
     const taskId = workflowResultTaskId(run);
     const artifactId = workflowResultArtifactId(run);
-    if (!taskId && !artifactId) throw new StudioContractError('HOST_IMPORT_FAILED', 'Flovart 没有返回可回写的制作产物。', true);
+    if (!taskId && !artifactId) throw new StudioContractError('HOST_IMPORT_FAILED', 'Iris 没有返回可回写的制作产物。', true);
     const artifact = await this.core.artifactGet({ ...(taskId ? { taskId } : {}), ...(artifactId ? { artifactId } : {}) });
-    if (!artifact) throw new StudioContractError('HOST_IMPORT_FAILED', 'Flovart 已运行，但暂时没有可回写的产物。', true);
+    if (!artifact) throw new StudioContractError('HOST_IMPORT_FAILED', 'Iris 已运行，但暂时没有可回写的产物。', true);
     return {
       projectId: executionTarget.projectId,
       sourceNodeId: graph.sourceNodeId,
@@ -263,7 +263,7 @@ export class StudioWorkflowController {
     const artifact = prepared.artifact;
     if (prepared.executionTarget.hostTarget === 'after-effects') {
       if (!artifact.blob) throw new StudioContractError('HOST_IMPORT_FAILED', 'After Effects 固定素材需要可读取的本地产物字节。', true);
-      if (artifact.blob.size === 0) throw new StudioContractError('HOST_IMPORT_FAILED', 'Flovart 返回了空素材，无法固定为版本。', true);
+      if (artifact.blob.size === 0) throw new StudioContractError('HOST_IMPORT_FAILED', 'Iris 返回了空素材，无法固定为版本。', true);
       artifact.sha256 = await hashArtifactBlob(artifact.blob);
       artifact.byteSize = artifact.blob.size;
     }
@@ -293,7 +293,7 @@ export class StudioWorkflowController {
 
   /** 校验字节 / SHA-256 / 格式并 durable 持久化，登记为待导入候选（生成候选与 Canvas 发送共用）。 */
   private async persistCandidate(
-    artifact: FlovartArtifact,
+    artifact: IrisArtifact,
     executionTarget: StudioExecutionTarget,
     run: unknown,
     materialized: MaterializedHostSelection,
@@ -309,7 +309,7 @@ export class StudioWorkflowController {
     if (artifact.sha256 && artifact.sha256.toLowerCase() !== digest) {
       throw new StudioContractError('HOST_IMPORT_FAILED', 'Resolve 候选 SHA-256 与素材不一致。', true);
     }
-    const normalizedArtifact: FlovartArtifactWithIntegrity = {
+    const normalizedArtifact: IrisArtifactWithIntegrity = {
       ...artifact,
       artifactId: artifact.artifactId || this.createId(),
       ...(artifact.taskId ? { taskId: artifact.taskId } : {}),
@@ -372,7 +372,7 @@ export class StudioWorkflowController {
       throw new StudioContractError('HOST_IMPORT_FAILED', '这个结果还没有可交接的运行产物；请在画布中重新运行后再发送。', true);
     }
     const artifact = await this.core.artifactGet({ ...(ref.taskId ? { taskId: ref.taskId } : {}), ...(ref.artifactId ? { artifactId: ref.artifactId } : {}) });
-    if (!artifact) throw new StudioContractError('HOST_IMPORT_FAILED', 'Flovart 暂时取不到这个结果的产物，请稍后重试。', true);
+    if (!artifact) throw new StudioContractError('HOST_IMPORT_FAILED', 'Iris 暂时取不到这个结果的产物，请稍后重试。', true);
     const selection: HostSelection = freezeSelection({
       host: this.adapter.id,
       selectionId: request.sourceNodeId,

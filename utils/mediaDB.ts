@@ -2,7 +2,7 @@ import localforage from 'localforage';
 
 /** Video Blob bodies live separately from project JSON in localforage/IndexedDB. */
 const videoStorage = localforage.createInstance({
-  name: 'flovart-media',
+  name: 'iris-media',
   storeName: 'videos',
 });
 

@@ -1,4 +1,4 @@
-// Same-origin host route for the embedded Flovart canvas.
+// Same-origin host route for the embedded Iris canvas.
 // GET/HEAD only. Static files come from the packaged webui directory with
 // traversal-safe resolution and an index.html SPA fallback; the single
 // /api/bootstrap endpoint asks the Workspace Operator for a one-time browser
@@ -11,11 +11,11 @@ import { stat } from 'node:fs/promises'
 import { extname, isAbsolute, resolve, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
-import type { FlovartPluginConfig } from './config.ts'
+import type { IrisPluginConfig } from './config.ts'
 import { sameOriginRequest } from './workspaceProxy.ts'
 import { connectionErrorCode, logWorkspaceTargetFailure, resolveWorkspaceTarget, type WorkspaceTargetOptions } from './workspaceTarget.ts'
 
-export const WEBUI_PATH = '/flovart-app'
+export const WEBUI_PATH = '/iris-app'
 const BOOTSTRAP_SEGMENT = 'api/bootstrap'
 const REQUEST_BASE = 'http' + '://dsh.local'
 const ISSUE_TIMEOUT_MS = 5000
@@ -72,7 +72,7 @@ export interface BootstrapResult {
 
 export interface WebuiHandlerOptions {
   root: string
-  config: Pick<FlovartPluginConfig, 'workspaceUrl' | 'workspaceToken'>
+  config: Pick<IrisPluginConfig, 'workspaceUrl' | 'workspaceToken'>
   gate?: () => ConnectionGate | undefined
   fetchImpl?: typeof globalThis.fetch
   target?: WorkspaceTargetOptions
@@ -113,7 +113,7 @@ export function resolveWebuiTarget(root: string, requestUrl: string): WebuiTarge
 }
 
 export async function issueBootstrap(
-  config: Pick<FlovartPluginConfig, 'workspaceUrl' | 'workspaceToken'>,
+  config: Pick<IrisPluginConfig, 'workspaceUrl' | 'workspaceToken'>,
   fetchImpl: typeof globalThis.fetch = globalThis.fetch,
   targetOptions: WorkspaceTargetOptions = {},
 ): Promise<BootstrapResult> {
@@ -145,7 +145,7 @@ export async function issueBootstrap(
     }
   } catch (error) {
     const code = connectionErrorCode(error)
-    console.warn('[flovart] bootstrap 签发失败: ' + (code ?? (error instanceof Error ? error.name : 'UNKNOWN')) + ' ' + agentUrl)
+    console.warn('[iris] bootstrap 签发失败: ' + (code ?? (error instanceof Error ? error.name : 'UNKNOWN')) + ' ' + agentUrl)
     if (code === 'ECONNREFUSED') {
       return { status: 503, body: { ok: false, agentUrl, error: { code: 'WORKSPACE_UNREACHABLE', message: '无法连接 Workspace Operator：' + agentUrl + ' 拒绝连接。' } } }
     }
@@ -210,17 +210,17 @@ export function createWebuiHandler(options: WebuiHandlerOptions): (request: Inco
     const head = method === 'HEAD'
     if (method !== 'GET' && !head) {
       response.setHeader('allow', 'GET, HEAD')
-      sendJson(response, 405, { ok: false, error: { message: 'Flovart 页面只接受 GET/HEAD。' } })
+      sendJson(response, 405, { ok: false, error: { message: 'Iris 页面只接受 GET/HEAD。' } })
       return
     }
     const rejected = requestRejection(request, options.gate)
     if (rejected) {
-      sendJson(response, rejected, { ok: false, error: { message: 'Flovart 页面仅对已认证的同源 DSH 会话开放。' } }, head)
+      sendJson(response, rejected, { ok: false, error: { message: 'Iris 页面仅对已认证的同源 DSH 会话开放。' } }, head)
       return
     }
     const target = resolveWebuiTarget(options.root, request.url || '/')
     if (target.kind === 'reject') {
-      sendJson(response, target.status, { ok: false, error: { message: target.status === 404 ? 'Flovart 页面路由不存在。' : 'Flovart 页面路径无效。' } }, head)
+      sendJson(response, target.status, { ok: false, error: { message: target.status === 404 ? 'Iris 页面路由不存在。' : 'Iris 页面路径无效。' } }, head)
       return
     }
     if (target.kind === 'redirect') {
@@ -250,11 +250,11 @@ export function createWebuiHandler(options: WebuiHandlerOptions): (request: Inco
     const indexFile = resolve(options.root, 'index.html')
     if (target.kind === 'file' && await serveFile(request, response, target.file, target.index)) return
     if (target.kind === 'file' && !target.spaFallback) {
-      sendJson(response, 404, { ok: false, error: { message: 'Flovart 静态资源不存在。' } }, head)
+      sendJson(response, 404, { ok: false, error: { message: 'Iris 静态资源不存在。' } }, head)
       return
     }
     if (await serveFile(request, response, indexFile, true)) return
-    sendJson(response, 503, { ok: false, error: { message: 'Flovart 页面尚未构建（缺少 webui/index.html）。' } }, head)
+    sendJson(response, 503, { ok: false, error: { message: 'Iris 页面尚未构建（缺少 webui/index.html）。' } }, head)
   }
 }
 
@@ -269,12 +269,12 @@ function connectionGate(ctx: Context): ConnectionGate | undefined {
   return { requestRejection: request => reject.call(value, request) }
 }
 
-export function registerWebui(ctx: Context, config: FlovartPluginConfig, root: string): void {
+export function registerWebui(ctx: Context, config: IrisPluginConfig, root: string): void {
   const gate = () => connectionGate(ctx)
   const handler = createWebuiHandler({ root, config, gate })
   ctx.effect(() => ctx.webServer.register({
     kind: 'prefix',
     path: WEBUI_PATH,
     handler,
-  }), 'flovart: embedded canvas route')
+  }), 'iris: embedded canvas route')
 }

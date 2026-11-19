@@ -12,7 +12,7 @@ export const DSH_EMBED_MESSAGE = Object.freeze({
   locale: 'flovart:dsh-locale',
   bootstrap: 'flovart:dsh-bootstrap',
   startSession: 'flovart:start-session',
-  /** Flovart → host: the real link state, so the DSH frame never shows "connected" while the canvas is not. */
+  /** Iris → host: the real link state, so the DSH frame never shows "connected" while the canvas is not. */
   link: 'flovart:dsh-link',
 });
 
@@ -152,7 +152,7 @@ export function installDshEmbedBridge(win: EmbedWindow = window): () => void {
     if (data.type === DSH_EMBED_MESSAGE.theme) applyDshTheme(root, data, appliedTokens);
     else if (data.type === DSH_EMBED_MESSAGE.locale) applyDshLocale(root, data);
     else if (data.type === DSH_EMBED_MESSAGE.bootstrap) {
-      void startDshBootstrap(win, data)?.catch(error => console.warn('Flovart DSH embed bootstrap unavailable.', safeErrorLabel(error)));
+      void startDshBootstrap(win, data)?.catch(error => console.warn('Iris DSH embed bootstrap unavailable.', safeErrorLabel(error)));
     }
   };
   win.addEventListener('message', onMessage);

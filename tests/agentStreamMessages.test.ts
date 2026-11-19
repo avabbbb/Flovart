@@ -29,11 +29,11 @@ describe('agentStreamMessages', () => {
 
   it('carries live tool args, results and timings onto the end-of-turn snapshot', () => {
     const live: WorkflowAgentDisplayMessage[] = [
-      { id: 'tool-c1', role: 'tool', text: 'ok', toolName: 'flovart_workflow_media_view', args: { nodeIds: ['n1'] }, detail: { content: [{ type: 'image', data: 'AAAA' }] }, startedAt: 10, endedAt: 830, status: 'success' },
+      { id: 'tool-c1', role: 'tool', text: 'ok', toolName: 'iris_workflow_media_view', args: { nodeIds: ['n1'] }, detail: { content: [{ type: 'image', data: 'AAAA' }] }, startedAt: 10, endedAt: 830, status: 'success' },
       { id: 's1', role: 'assistant', text: '好', thinking: '想', thinkingDone: true, thinkingMs: 1200 },
     ];
     const snapshot: WorkflowAgentDisplayMessage[] = [
-      { id: 'e2', role: 'tool', text: 'ok', toolName: 'flovart_workflow_media_view', toolCallId: 'c1', status: 'success' },
+      { id: 'e2', role: 'tool', text: 'ok', toolName: 'iris_workflow_media_view', toolCallId: 'c1', status: 'success' },
       { id: 'e3', role: 'assistant', text: '好', thinking: '想', thinkingDone: true },
       { id: 'e4', role: 'tool', text: 'x', toolCallId: 'unknown', status: 'success' },
     ];

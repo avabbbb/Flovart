@@ -38,7 +38,7 @@ const letterOf = (index: number) => String.fromCharCode(65 + index);
 const isChoice = (field: AgentAskField): field is Extract<AgentAskField, { kind: 'radio' | 'checkbox' }> => field.kind === 'radio' || field.kind === 'checkbox';
 
 /**
- * 提问卡（flovart_ask）。版式参照 Inspora 1-37「AI Agent Approval Cards」@Kevin 的 Questions 卡（登记见 docs/design/references.md）：
+ * 提问卡（iris_ask）。版式参照 Inspora 1-37「AI Agent Approval Cards」@Kevin 的 Questions 卡（登记见 docs/design/references.md）：
  * 一页一题，「^ n/N v」翻页；选项行带 A/B/C 字母键帽，最后一行「其他…」是输入框；选中的键帽反色，悬停高光跟随指针。
  * 键盘：字母选择（多选为勾 / 取消），↑/↓ 移动，Enter 继续，Esc 取消。尾部「跳过」与「继续 ⏎」（没有答案时变暗）。
  * 表单契约不变：与 omp ask 相同的受控字段，答案仍由 collectAgentAskAnswers 收集。

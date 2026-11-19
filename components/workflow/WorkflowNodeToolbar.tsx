@@ -217,7 +217,7 @@ export function WorkflowNodeToolbar({ nodes, onCopy, onDelete, onExport, onRun, 
           style={{ position: 'absolute', top: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 12, color: 'var(--isl-ink)', whiteSpace: 'nowrap', zIndex: 2 }}
           onSubmit={event => { event.preventDefault(); onSequencedExport(ids, namePrefix); setNamingOpen(false); }}
         >
-          <input aria-label={L('文件名前缀', 'File name prefix')} autoFocus value={namePrefix} placeholder="flovart" onChange={event => setNamePrefix(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setNamingOpen(false); event.stopPropagation(); }} style={{ width: 140 }} />
+          <input aria-label={L('文件名前缀', 'File name prefix')} autoFocus value={namePrefix} placeholder="iris" onChange={event => setNamePrefix(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setNamingOpen(false); event.stopPropagation(); }} style={{ width: 140 }} />
           <small>{sequencedFileNames(namePrefix, selectedMedia.length)[0]} … {L('共 ' + selectedMedia.length + ' 个', selectedMedia.length + ' total')}</small>
           <button type="submit">{L('下载', 'Download')}</button>
         </form>

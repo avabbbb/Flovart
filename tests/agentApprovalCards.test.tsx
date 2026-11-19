@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { AgentAskCard } from '../components/agent/AgentAskCard';
 import { AgentConfirmCard } from '../components/agent/AgentConfirmCard';
 import { AGENT_ASK_SKIPPED, buildAgentAskForm, type AgentAskForm } from '../components/agent/agentAskForm';
-import { blockedTodoAction } from '../components/agent/agentTodo';
 import { planWindow } from '../components/agent/plan/PlanSteps';
 import { clampDrawerWidth } from '../components/studio/StudioRightDrawer';
 
@@ -20,7 +19,7 @@ function form(): AgentAskForm {
   return result.form;
 }
 
-describe('Questions card (flovart_ask)', () => {
+describe('Questions card (iris_ask)', () => {
   it('one question per page, letter badges, letter keys pick, Enter continues, pager and submit through collectAgentAskAnswers', () => {
     const onSubmit = vi.fn();
     render(<AgentAskCard form={form()} language="zho" onSubmit={onSubmit} onCancel={vi.fn()} />);
@@ -118,21 +117,6 @@ describe('Approval card (AgentConfirmCard)', () => {
   });
 });
 
-describe('blocked todo wiring', () => {
-  const messages = { confirm: '确认，继续执行第 8 步：付费生成', skip: '不用，跳过第 8 步' };
-  it('approves / rejects a pending tool confirmation', () => {
-    expect(blockedTodoAction({ isRunPlan: false }, true, messages)).toEqual({ kind: 'confirm', approved: true });
-    expect(blockedTodoAction({ isRunPlan: false }, false, messages)).toEqual({ kind: 'confirm', approved: false });
-  });
-  it('maps a pending run plan to auto / adjust', () => {
-    expect(blockedTodoAction({ isRunPlan: true }, true, messages)).toEqual({ kind: 'run-plan', decision: 'auto' });
-    expect(blockedTodoAction({ isRunPlan: true }, false, messages)).toEqual({ kind: 'run-plan', decision: 'adjust' });
-  });
-  it('sends a reply when nothing is pending', () => {
-    expect(blockedTodoAction(null, true, messages)).toEqual({ kind: 'send', text: messages.confirm });
-    expect(blockedTodoAction(undefined, false, messages)).toEqual({ kind: 'send', text: messages.skip });
-  });
-});
 
 describe('layout helpers', () => {
   it('plan window keeps the focus row visible and shows everything when only one would hide', () => {

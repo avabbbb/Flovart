@@ -1,9 +1,9 @@
 // Runner layer.
 //
-// Every runner drives a real Flovart surface. None of them mutate Workflow
+// Every runner drives a real Iris surface. None of them mutate Workflow
 // state directly, write a second copy of the graph, or bypass the Provider gate:
-//   - cli  -> tools/flovart/core.js executeFlovartCommand with the real gateway
-//   - mcp  -> tools/flovart/mcp-server.js over a real in-memory MCP transport
+//   - cli  -> tools/iris/core.js executeIrisCommand with the real gateway
+//   - mcp  -> tools/iris/mcp-server.js over a real in-memory MCP transport
 //   - oracle -> the reference solution, expressed only as real operations
 //   - nop  -> does nothing, used to prove a task's grader actually discriminates
 //   - codex -> external adapter; blocked unless a real binary and credentials exist
@@ -13,20 +13,20 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { executeFlovartCommand } from '../../tools/flovart/core.js';
-import { createMcpServer } from '../../tools/flovart/mcp-server.js';
-import { createOperationGateway } from '../../tools/flovart/operation-gateway.js';
+import { executeIrisCommand } from '../../tools/iris/core.js';
+import { createMcpServer } from '../../tools/iris/mcp-server.js';
+import { createOperationGateway } from '../../tools/iris/operation-gateway.js';
 import { createEnvironmentRunner } from './environment.mjs';
 import { createRealProviderRunner } from './real-provider.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const MCP_TOOL_BY_COMMAND = {
-  status: 'flovart_status',
-  'workflow.inspect': 'flovart_workflow_inspect',
-  'workflow.selection.get': 'flovart_workflow_selection',
-  'workflow.apply': 'flovart_workflow_apply',
-  'workflow.node.run': 'flovart_workflow_run',
+  status: 'iris_status',
+  'workflow.inspect': 'iris_workflow_inspect',
+  'workflow.selection.get': 'iris_workflow_selection',
+  'workflow.apply': 'iris_workflow_apply',
+  'workflow.node.run': 'iris_workflow_run',
 };
 
 const CLAIM_STATUSES = new Set(['succeeded', 'failed', 'unsupported']);
@@ -48,7 +48,7 @@ export function createCliRunner(controlled, { trajectory } = {}) {
       for (const step of task.solution?.steps ?? []) {
         const { command, args, idempotencyKey } = stepToGatewayCall(step);
         try {
-          const result = await executeFlovartCommand(
+          const result = await executeIrisCommand(
             command,
             { ...args, ...(idempotencyKey ? { idempotencyKey } : {}) },
             { operation: (cmd, cmdArgs, context) => gateway(cmd, cmdArgs, { ...context, source: 'cli' }) },
@@ -79,7 +79,7 @@ export function createMcpRunner(controlled, { trajectory } = {}) {
     async run(task) {
       const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
       const server = createMcpServer({ gateway, source: 'mcp' });
-      const client = new Client({ name: 'flovartbench', version: '0.1.0' });
+      const client = new Client({ name: 'irisbench', version: '0.1.0' });
       await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
 
       try {
@@ -176,13 +176,13 @@ export function createNopRunner() {
 
 /**
  * Codex runner: real external agent.
- * Spawned only when FLOVARTBENCH_ALLOW_CODEX=true and a `codex` binary is on
+ * Spawned only when IRISBENCH_ALLOW_CODEX=true and a `codex` binary is on
  * PATH; otherwise it reports itself as blocked rather than faking a result.
  *
  * The agent receives task.instruction and a real shell; it drives the live
- * Workflow through `npm run flovart:cli -- …` exactly as the manual Golden
+ * Workflow through `npm run iris:cli -- …` exactly as the manual Golden
  * Task trials did. After the process exits the runner parses the `codex exec`
- * JSONL transcript, extracts every `flovart:cli` write the agent issued, and
+ * JSONL transcript, extracts every `iris:cli` write the agent issued, and
  * replays those writes through the same OperationGateway into the controlled
  * world being graded - so outcome predicates judge what the agent actually
  * did, not what it claimed.
@@ -243,7 +243,7 @@ export function createCodexRunner(controlled, { trajectory } = {}) {
 }
 
 /**
- * Translate one recorded `flovart:cli` write into the gateway call that
+ * Translate one recorded `iris:cli` write into the gateway call that
  * produces the same final world. The granular CLI commands the agent used are
  * folded into `workflow.apply` operations so the controlled world sees the
  * same document mutation the live workspace applied.
@@ -325,8 +325,8 @@ async function replayCodexWrites(writes, gateway, trajectory) {
 }
 
 async function isCodexAvailable() {
-  if (process.env.FLOVARTBENCH_ALLOW_CODEX !== 'true') {
-    return { ok: false, reason: 'FLOVARTBENCH_ALLOW_CODEX is not set to true' };
+  if (process.env.IRISBENCH_ALLOW_CODEX !== 'true') {
+    return { ok: false, reason: 'IRISBENCH_ALLOW_CODEX is not set to true' };
   }
   const { spawn } = await import('node:child_process');
   return new Promise(resolve => {
@@ -350,9 +350,9 @@ async function runCodexExec(task, controlled) {
   }
   const prompt = [
     instruction,
-    'Use the Flovart CLI (npm run flovart:cli -- …) to drive the visible Workflow.',
-    'Read .agents/skills/flovart/SKILL.md first. Do not modify any source files.',
-    'End your final message with one line holding only {"flovartClaim":{"status":"succeeded|failed|unsupported","code":"<error code>"}} as the Skill defines.',
+    'Use the Iris CLI (npm run iris:cli -- …) to drive the visible Workflow.',
+    'Read .agents/skills/iris/SKILL.md first. Do not modify any source files.',
+    'End your final message with one line holding only {"irisClaim":{"status":"succeeded|failed|unsupported","code":"<error code>"}} as the Skill defines.',
   ].join(' ');
   return new Promise(resolve => {
     let stdout = '';
@@ -406,9 +406,9 @@ function parseCodexJsonl(transcript) {
     const raw = event.item.command ?? '';
     const exitCode = event.item.exit_code;
     const output = event.item.aggregated_output ?? '';
-    // Every `npm run flovart:cli -- <cmd> …` inside a (possibly compound) shell
-    // command is one Flovart tool call.
-    for (const match of raw.matchAll(/flovart:cli\s+--\s+([^\n]+?)(?=['\"]|$)/g)) {
+    // Every `npm run iris:cli -- <cmd> …` inside a (possibly compound) shell
+    // command is one Iris tool call.
+    for (const match of raw.matchAll(/iris:cli\s+--\s+([^\n]+?)(?=['\"]|$)/g)) {
       const segment = match[1].trim();
       const parts = segment.split(/\s+/);
       const command = parts[0];
@@ -419,21 +419,21 @@ function parseCodexJsonl(transcript) {
       if (isWrite && exitCode === 0) writes.push({ command, args, idempotencyKey: args.idempotencyKey ?? args['idempotency-key'] });
     }
   }
-  return { toolCalls, writes, usage, claim: parseFlovartClaim(lastAgentMessage) };
+  return { toolCalls, writes, usage, claim: parseIrisClaim(lastAgentMessage) };
 }
 
 /**
  * Read an agent's self-report: the last non-empty line of its final message
- * must be {"flovartClaim":{"status":…,"code":…}}. Anything else is no claim;
+ * must be {"irisClaim":{"status":…,"code":…}}. Anything else is no claim;
  * the harness never guesses one. A claim can only make a result worse.
  */
-export function parseFlovartClaim(message) {
+export function parseIrisClaim(message) {
   const lines = String(message ?? '').split('\n').map(line => line.trim()).filter(line => line && !/^`{3,}/.test(line));
   const last = lines.at(-1);
   if (!last) return null;
   let parsed;
   try { parsed = JSON.parse(last); } catch { return null; }
-  const claim = parsed?.flovartClaim;
+  const claim = parsed?.irisClaim;
   if (!claim || !CLAIM_STATUSES.has(claim.status)) return null;
   return typeof claim.code === 'string' && claim.code ? { status: claim.status, code: claim.code } : { status: claim.status };
 }
@@ -450,7 +450,7 @@ function parseCliFlags(text) {
   return args;
 }
 
-/** Extract the JSON body of a `flovart:cli --json` invocation, or a truncated marker. */
+/** Extract the JSON body of a `iris:cli --json` invocation, or a truncated marker. */
 function parseCliOutput(output) {
   const start = output.indexOf('{');
   if (start < 0) return { ok: true, note: 'no-json-output' };

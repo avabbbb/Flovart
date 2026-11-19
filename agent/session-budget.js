@@ -1,7 +1,7 @@
 // 会话预算 + 暂停 + dry-run 计划卡（P1）。
 // 预算是「硬上限」而不是「免确认」：浏览器里的人工确认门保持不变，预算只决定会话还能发起多少次付费生成；
 // 暂停后新的付费命令一律拒绝，已在跑的任务不受影响（取消用 task.cancel）。
-import { AGENT_SESSION_CONTROL_COMMANDS } from '../tools/flovart/agent-surface.js';
+import { AGENT_SESSION_CONTROL_COMMANDS } from '../tools/iris/agent-surface.js';
 
 export const PAID_COMMANDS = new Set(['workflow.node.run', 'workflow.generate', 'workflow.shortcut.apply', 'workflow.group.run', 'production.run', 'generate.image', 'generate.video']);
 // 命令名单定义在 agent-surface（CLI 与 Agent 共用），这里只转成 Set。

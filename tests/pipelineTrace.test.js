@@ -6,9 +6,9 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { runPipelineTraceScenario } from '../scripts/e2e-pipeline-trace.mjs';
 
-const hasFfmpeg = spawnSync(process.env.FLOVART_FFMPEG || 'ffmpeg', ['-version']).status === 0
-  && spawnSync(process.env.FLOVART_FFPROBE || 'ffprobe', ['-version']).status === 0;
-const outDir = mkdtempSync(join(tmpdir(), 'flovart-pipeline-trace-'));
+const hasFfmpeg = spawnSync(process.env.IRIS_FFMPEG || 'ffmpeg', ['-version']).status === 0
+  && spawnSync(process.env.IRIS_FFPROBE || 'ffprobe', ['-version']).status === 0;
+const outDir = mkdtempSync(join(tmpdir(), 'iris-pipeline-trace-'));
 
 afterAll(() => rmSync(outDir, { recursive: true, force: true }));
 

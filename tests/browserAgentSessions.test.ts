@@ -21,8 +21,8 @@ describe('browser agent multi-session history', () => {
   beforeEach(async () => {
     await workflowMediaStorage.clear();
     // localforage 在测试环境走 fake-indexeddb；清掉会话列表避免串扰
-    await localforage.removeItem('flovart.agent.sessions.project-hist');
-    await localforage.removeItem('flovart.agent.session.project-hist');
+    await localforage.removeItem('iris.agent.sessions.project-hist');
+    await localforage.removeItem('iris.agent.session.project-hist');
     kernel = new BrowserAgentKernel({
       projectId: 'project-hist',
       route: resolveBrowserAgentTextRoute([textKey])!,
@@ -33,8 +33,8 @@ describe('browser agent multi-session history', () => {
 
   afterEach(async () => {
     await kernel.close();
-    await localforage.removeItem('flovart.agent.sessions.project-hist');
-    await localforage.removeItem('flovart.agent.session.project-hist');
+    await localforage.removeItem('iris.agent.sessions.project-hist');
+    await localforage.removeItem('iris.agent.session.project-hist');
   });
 
   it('publishes the inspect/apply/run Canvas contract to the browser Agent', () => {
@@ -45,10 +45,10 @@ describe('browser agent multi-session history', () => {
     }).map(tool => tool.name);
 
     expect(names).toEqual(expect.arrayContaining([
-      'flovart_workflow_inspect',
-      'flovart_workflow_selection_get',
-      'flovart_workflow_apply',
-      'flovart_workflow_node_run',
+      'iris_workflow_inspect',
+      'iris_workflow_selection_get',
+      'iris_workflow_apply',
+      'iris_workflow_node_run',
     ]));
   });
 
@@ -121,7 +121,7 @@ describe('browser agent multi-session history', () => {
   });
 
   it('migrates a legacy single-session record into the history list once', async () => {
-    await localforage.setItem('flovart.agent.session.project-hist', {
+    await localforage.setItem('iris.agent.session.project-hist', {
       metadata: { id: 'legacy-session-1', createdAt: '2026-08-01T00:00:00.000Z' },
       entries: [
         { type: 'message', id: 'e1', message: { role: 'user', content: [{ type: 'text', text: '旧版对话标题来源' }] } },
@@ -133,7 +133,7 @@ describe('browser agent multi-session history', () => {
     const snapshot = (await kernel.snapshot()) as { sessionId: string; messages: Array<{ text: string }> };
     expect(snapshot.sessionId).toBe('legacy-session-1');
     expect(snapshot.messages.map(message => message.text)).toContain('旧版对话标题来源');
-    expect(await localforage.getItem('flovart.agent.session.project-hist')).toBeNull();
+    expect(await localforage.getItem('iris.agent.session.project-hist')).toBeNull();
 
     const list = await kernel.listSessions();
     expect(list).toHaveLength(1);

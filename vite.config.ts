@@ -5,17 +5,17 @@ import tailwindcss from '@tailwindcss/vite';
 import { configDefaults } from 'vitest/config';
 import { llmProxyPlugin } from './server/viteLlmProxyPlugin';
 
-// Tauri 期望固定端口；CLI source bootstrap 通过 FLOVART_DYNAMIC_WEB_PORT
+// Tauri 期望固定端口；CLI source bootstrap 通过 IRIS_DYNAMIC_WEB_PORT
 // 显式启用动态端口，避免把用户带到无关的 localhost 服务。
 const host = process.env.TAURI_DEV_HOST;
-const dynamicPort = process.env.FLOVART_DYNAMIC_WEB_PORT === '1';
-const configuredPort = Number(process.env.FLOVART_WEB_PORT);
+const dynamicPort = process.env.IRIS_DYNAMIC_WEB_PORT === '1';
+const configuredPort = Number(process.env.IRIS_WEB_PORT);
 
 export default defineConfig(() => {
     return {
       // Cloudflare Pages / GitHub Pages 用绝对路径，Tauri 用相对路径。
       // 允许 VITE_BASE_PATH / CF_PAGES_BASEPATH / CLI --base 覆盖，
-      // 不再把 base 写死成 "./"——否则部署到 /Flovart/ 子路径会白屏。
+      // 不再把 base 写死成 "./"——否则部署到 /Iris/ 子路径会白屏。
       base:
         process.env.VITE_BASE_PATH ||
         process.env.CF_PAGES_BASEPATH ||
@@ -30,9 +30,9 @@ export default defineConfig(() => {
           'Cache-Control': 'no-store',
         },
         // 冷启动时浏览器首次请求才触发整张模块图编译（实测 26–48s），启动即预热入口，
-        // 避免 flovart start --open 打开的页面在绑定等待内挂载不完。
-        warmup: { clientFiles: ['./index.tsx', './RouterHost.tsx'] },
-        // src-tauri/target is Rust build output; cargo locks flovart.exe while
+        // 避免 iris start --open 打开的页面在绑定等待内挂载不完。
+        warmup: { clientFiles: ['./index.tsx', './appMain.tsx', './RouterHost.tsx'] },
+        // src-tauri/target is Rust build output; cargo locks iris.exe while
         // compiling and chokidar crashes on EBUSY watching it. Exclude build dirs.
         watch: {
           ignored: (p: string) => p.replaceAll(path.sep, '/').split('/').some((s) => s === 'target' || s === '.git' || s === '.tmp'),

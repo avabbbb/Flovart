@@ -1,5 +1,5 @@
 import { loadWorkflowMediaBlob } from '../../components/workflow/media';
-import type { FlovartArtifact } from './studioContract';
+import type { IrisArtifact } from './studioContract';
 import type { WorkflowArtifactOutput } from '../workflowExecutor';
 
 const ARTIFACT_TTL_MS = 30 * 60 * 1000;
@@ -7,7 +7,7 @@ const MAX_ARTIFACTS = 64;
 
 interface Entry {
   artifact: WorkflowArtifactOutput;
-  metadata: Pick<FlovartArtifact, 'taskId' | 'prompt' | 'modelId' | 'byteSize' | 'width' | 'height' | 'durationMs'>;
+  metadata: Pick<IrisArtifact, 'taskId' | 'prompt' | 'modelId' | 'byteSize' | 'width' | 'height' | 'durationMs'>;
   storageKey: string;
   expiresAt: number;
 }
@@ -59,7 +59,7 @@ export function registerWorkflowArtifact(input: {
   return artifact;
 }
 
-export async function loadWorkflowArtifact(artifactId: string, now = Date.now()): Promise<FlovartArtifact | null> {
+export async function loadWorkflowArtifact(artifactId: string, now = Date.now()): Promise<IrisArtifact | null> {
   prune(now);
   const entry = entries.get(artifactId);
   if (!entry) return null;

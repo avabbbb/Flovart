@@ -19,7 +19,7 @@ const spec = {
   ],
 };
 
-describe('structured flovart_ask', () => {
+describe('structured iris_ask', () => {
   it('builds radio / checkbox / textarea fields with full-plan labels and recommended defaults', () => {
     const result = buildAgentAskForm(spec);
     if (!result.ok) throw new Error('error' in result ? result.error : 'failed');

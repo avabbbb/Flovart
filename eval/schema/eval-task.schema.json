@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://flovart.dev/schema/eval-task.schema.json",
   "title": "EvalTask",
-  "description": "One FlovartBench task: instruction + environment + verifier. Never a mandatory reference trajectory.",
+  "description": "One IrisBench task: instruction + environment + verifier. Never a mandatory reference trajectory.",
   "type": "object",
   "required": ["id", "version", "suite", "instruction", "expected"],
   "additionalProperties": true,

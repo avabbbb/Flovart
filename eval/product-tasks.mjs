@@ -33,7 +33,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, '..');
 const sharedDir = join(repoRoot, 'integrations', 'studio', 'shared');
 
-const chromeExecutable = process.env.FLOVART_CHROME_PATH || chromium.executablePath();
+const chromeExecutable = process.env.IRIS_CHROME_PATH || chromium.executablePath();
 if (!existsSync(chromeExecutable)) {
   throw new Error(`Chrome for Testing executable was not found: ${chromeExecutable}`);
 }
@@ -53,7 +53,7 @@ const jsonOut = flag('json', join('.tmp', 'product-tasks.json'));
 const onlyTask = flag('task');
 
 // Technical connection/infra jargon a first-time user should never need to
-// decode. Host names (Photoshop/Premiere) and "Flovart 已连接/等待 Flovart"
+// decode. Host names (Photoshop/Premiere) and "Iris 已连接/等待 Iris"
 // (a plain status, not an instruction) are allowed; jargon means terms like
 // provider wiring, bridges, links, adapters, host APIs, UXP/CEP, endpoints.
 const JARGON_PATTERNS = [
@@ -163,7 +163,7 @@ const ADAPTER_EVAL = `(plan) => {
   if (plan.useRealAdapter === 'photoshop') {
     // REAL shared host-contract adapter with an injected fake UXP module.
     let doc = { id: 42, name: '海报.psd', title: '海报.psd', activeLayers: [{ id: 7, name: '背景图层', bounds: { left: 0, top: 0, right: 1920, bottom: 1080 } }] };
-    adapter = window.FlovartStudioHosts.createPhotoshopAdapter({
+    adapter = window.IrisStudioHosts.createPhotoshopAdapter({
       photoshop: { app: { get activeDocument() { return doc; } } },
       exportLayer: async () => ({ kind: 'image', mimeType: 'image/png' }),
       importArtifact: async () => ({ ok: true, message: '已添加为新图层。' }),
@@ -171,7 +171,7 @@ const ADAPTER_EVAL = `(plan) => {
     adapter.subscribeContext = () => ({ dispose() {} }); // no polling in eval
   } else if (plan.useRealAdapter === 'premiere') {
     let proj = { guid: 'g-1', name: '客户访谈成片.prproj' };
-    adapter = window.FlovartStudioHosts.createPremiereAdapter({
+    adapter = window.IrisStudioHosts.createPremiereAdapter({
       premiere: {
         Project: { getActiveProject: async () => proj },
         ProjectUtils: { getSelection: async () => ({ getItems: async () => [{ getId: () => 'clip-1', name: '访谈主镜头 · A 机位.mov' }] }) },
@@ -235,8 +235,8 @@ const CONTROLLER_EVAL = `(plan) => {
       if (outcome === 'slow') { await new Promise(r => setTimeout(r, 400)); return { import: { ok: true, message: '已添加新结果' } }; }
       if (outcome === 'failed') throw new Error(plan.outcomeMessage || '制作失败，请重试。');
       if (outcome === 'cancelled') throw new Error(plan.outcomeMessage || '任务已取消。');
-      if (outcome === 'provider-missing') throw new Error(plan.outcomeMessage || '尚未配置生成用的 AI 服务，请在 Flovart 画布中完成设置。');
-      if (outcome === 'needs-login') throw new Error(plan.outcomeMessage || '请先登录 Flovart 账号。');
+      if (outcome === 'provider-missing') throw new Error(plan.outcomeMessage || '尚未配置生成用的 AI 服务，请在 Iris 画布中完成设置。');
+      if (outcome === 'needs-login') throw new Error(plan.outcomeMessage || '请先登录 Iris 账号。');
       if (outcome === 'offline') throw new Error(plan.outcomeMessage || '网络连接不可用，请检查网络后重试。');
       if (outcome === 'import-failed') return { import: { ok: false, message: plan.outcomeMessage || '结果添加失败，请重试。' } };
       return { import: { ok: true, message: plan.outcomeMessage || (plan.host === 'premiere' ? '已导入 Premiere 项目素材箱。' : '已添加为新图层。') } };
@@ -286,8 +286,8 @@ const TASKS = [
     },
   },
   {
-    name: 'unsure-flovart-online',
-    title: '不确定 Flovart 是否在线',
+    name: 'unsure-iris-online',
+    title: '不确定 Iris 是否在线',
     host: 'premiere',
     plan: makePlan({ controller: false }), // link down
     async user(u) {
@@ -298,7 +298,7 @@ const TASKS = [
       const status = u.status().textContent;
       const gen = u.generateBtn();
       const canvasBtn = u.q('.fs-header .fs-icon-button');
-      // The only recovery affordance is the header canvas/open-Flovart button.
+      // The only recovery affordance is the header canvas/open-Iris button.
       let recovered = false;
       if (canvasBtn && u.visible(canvasBtn)) {
         u.click(canvasBtn);
@@ -306,7 +306,7 @@ const TASKS = [
         recovered = window.__cell.counters.openCanvas === 1;
       }
       return {
-        success: /等待 Flovart|连接 Flovart/.test(text) && recovered,
+        success: /等待 Iris|连接 Iris/.test(text) && recovered,
         note: `footer="${footer.trim()}" status="${status}" openCanvas=${window.__cell.counters.openCanvas || 0} generateDisabled=${gen.disabled}`,
       };
     },
@@ -325,7 +325,7 @@ const TASKS = [
       await u.sleep(150);
       const status = u.status().textContent;
       // Recovery requires a visible next action. Panel shows text only;
-      // the header canvas button is the only route to Flovart settings.
+      // the header canvas button is the only route to Iris settings.
       const canvasBtn = u.q('.fs-header .fs-icon-button');
       const hasRecoveryAction = u.visible(canvasBtn);
       if (hasRecoveryAction) u.click(canvasBtn);
@@ -462,7 +462,7 @@ const TASKS = [
       const status = u.status().textContent;
       const canvasBtn = u.q('.fs-header .fs-icon-button');
       // What does the panel tell a brand-new user to do?
-      const guidance = /等待 Flovart|连接 Flovart|选择|素材/.test(text);
+      const guidance = /等待 Iris|连接 Iris|选择|素材/.test(text);
       const ctaCount = u.enabledButtons().length;
       // The single offered route out is the canvas button → click it.
       let routed = false;
@@ -488,7 +488,7 @@ async function mount(page, plan) {
     eval(helpersSrc);
     const adapter = eval(adapterSrc)(plan);
     const controller = eval(controllerSrc)(plan);
-    window.__cell.panel = window.FlovartStudioUI.mountInspector({
+    window.__cell.panel = window.IrisStudioUI.mountInspector({
       root: app,
       adapter,
       getController: () => (plan.controller ? controller : null),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { imagesBatchInvocations, legacyForward } from '../tools/flovart/legacy-forward.js';
+import { imagesBatchInvocations, legacyForward } from '../tools/iris/legacy-forward.js';
 
 describe('legacy command forwarding', () => {
   it('maps video.status to task.get and export.project to workflow.inspect', () => {

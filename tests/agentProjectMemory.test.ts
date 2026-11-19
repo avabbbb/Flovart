@@ -79,7 +79,7 @@ describe('memory list rules', () => {
   });
 });
 
-describe('flovart_memory tool', () => {
+describe('iris_memory tool', () => {
   it('adds, lists, searches and deletes within one project only', async () => {
     const backend = createInMemoryMemoryBackend();
     const tool = createMemoryTool({ projectId: 'p1', backend });
@@ -104,7 +104,7 @@ describe('memory store persistence', () => {
     await useAgentMemoryStore.getState().clear('mem-test');
     const result = await agentMemoryStoreBackend.add('mem-test', { text: '记住：片尾统一用品牌色' });
     expect(result.ok).toBe(true);
-    const stored = await localforage.createInstance({ name: 'flovart', storeName: 'agent-memory' }).getItem<AgentMemoryEntry[]>('project.mem-test');
+    const stored = await localforage.createInstance({ name: 'iris', storeName: 'agent-memory' }).getItem<AgentMemoryEntry[]>('project.mem-test');
     expect(stored?.map(entry => entry.text)).toEqual(['记住：片尾统一用品牌色']);
     expect((await agentMemoryStoreBackend.list('mem-test')).map(entry => entry.text)).toEqual(['记住：片尾统一用品牌色']);
     if (result.ok) await agentMemoryStoreBackend.remove('mem-test', result.entry.id);

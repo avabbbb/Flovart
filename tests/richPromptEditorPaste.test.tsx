@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import RichPromptEditor from '../components/RichPromptEditor';
-import { encodePromptClipboard, FLOVART_PROMPT_CLIPBOARD_MIME } from '../utils/promptReferenceClipboard';
+import { encodePromptClipboard, IRIS_PROMPT_CLIPBOARD_MIME } from '../utils/promptReferenceClipboard';
 
 describe('RichPromptEditor reference paste', () => {
   it('turns a uniquely matched plain @ alias into a bound mention without requiring whitespace', async () => {
@@ -45,7 +45,7 @@ describe('RichPromptEditor reference paste', () => {
     });
   });
 
-  it('restores the hidden source identity from Flovart clipboard data and rebinds it for the target node', async () => {
+  it('restores the hidden source identity from Iris clipboard data and rebinds it for the target node', async () => {
     const onTextChange = vi.fn();
     const sourceDocument = {
       type: 'doc',
@@ -74,7 +74,7 @@ describe('RichPromptEditor reference paste', () => {
 
     fireEvent.paste(screen.getByRole('textbox'), {
       clipboardData: {
-        getData: (type: string) => type === FLOVART_PROMPT_CLIPBOARD_MIME
+        getData: (type: string) => type === IRIS_PROMPT_CLIPBOARD_MIME
           ? encodePromptClipboard(sourceDocument)
           : type === 'text/plain' ? '@角色1' : '',
       },
@@ -109,7 +109,7 @@ describe('RichPromptEditor reference paste', () => {
 
     fireEvent.paste(screen.getByRole('textbox'), {
       clipboardData: {
-        getData: (type: string) => type === FLOVART_PROMPT_CLIPBOARD_MIME
+        getData: (type: string) => type === IRIS_PROMPT_CLIPBOARD_MIME
           ? JSON.stringify({
               version: 1,
               plainText: '@角色1',

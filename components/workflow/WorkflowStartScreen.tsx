@@ -31,7 +31,7 @@ export function WorkflowStartScreen({ language, onStart, onBlank, onSample }: {
   return (
     <div className={'workflow-start'} data-testid={'workflow-start'}>
       <h1>{zh ? '想做点什么？' : 'What do you want to make?'}</h1>
-      <p>{zh ? '一句话描述，Flovart 会搭好节点和连线，你确认后再生成。' : 'Describe it in one sentence. Flovart wires the nodes; you run them when ready.'}</p>
+      <p>{zh ? '一句话描述，Iris 会搭好节点和连线，你确认后再生成。' : 'Describe it in one sentence. Iris wires the nodes; you run them when ready.'}</p>
       <div className={'workflow-start-composer'}>
         <textarea
           value={prompt}

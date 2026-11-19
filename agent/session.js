@@ -3,11 +3,11 @@ import { WorkspaceLeaseError, WorkspaceLeaseManager } from './workspace-lease.js
 import { buildDelivery, collectNodeIds } from './delivery.js';
 import { buildPlanCard, PAID_COMMANDS, SESSION_CONTROL_COMMANDS, SessionBudget } from './session-budget.js';
 import { planBatchPick } from './batch-pick.js';
-import { importFlovartPipelineModule } from './flovart-modules.js';
+import { importIrisPipelineModule } from './iris-modules.js';
 import { appendRunArtifactReceipts } from './receipts.js';
 import { AGENT_TASK_COMMAND_SET, createAgentTaskLayer } from './task-layer.js';
 
-const { PIPELINE_COMMANDS } = await importFlovartPipelineModule('commands');
+const { PIPELINE_COMMANDS } = await importIrisPipelineModule('commands');
 
 const sendEvent = (response, type, payload) => response.write(`event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`);
 
@@ -159,7 +159,7 @@ export class WorkflowAgentSession {
       this.pending.forEach((pending, requestId) => {
         if (pending.clientId !== clientId) return;
         this.pending.delete(requestId);
-        pending.reject(sessionError('WORKSPACE_UNAVAILABLE', 'Flovart 浏览器连接已断开，当前 Workflow 不可用。', { clientId }));
+        pending.reject(sessionError('WORKSPACE_UNAVAILABLE', 'Iris 浏览器连接已断开，当前 Workflow 不可用。', { clientId }));
       });
     });
   }
@@ -369,7 +369,7 @@ export class WorkflowAgentSession {
     }
     if (active.agentIdentity !== identity) throw sessionError(
       'AGENT_WRITER_INACTIVE',
-      `${identity} 不是当前 Workflow 的 Active Host；请先在 Flovart Host Picker 显式切换。`,
+      `${identity} 不是当前 Workflow 的 Active Host；请先在 Iris Host Picker 显式切换。`,
       { activeHostWriter: hostWriterView(active), requestedAgentIdentity: identity },
     );
     if (active.hostSessionId && active.hostSessionId !== requestedSession) {
@@ -377,7 +377,7 @@ export class WorkflowAgentSession {
     }
     if (active.projectId && requestedProject && active.projectId !== requestedProject) throw sessionError(
       'AGENT_PROJECT_INACTIVE',
-      '当前 Agent Host 没有激活这个 Workflow 项目；请在 Flovart 中显式激活当前项目。',
+      '当前 Agent Host 没有激活这个 Workflow 项目；请在 Iris 中显式激活当前项目。',
       { activeHostWriter: hostWriterView(active), requestedProjectId: requestedProject },
     );
   }
@@ -483,12 +483,12 @@ export class WorkflowAgentSession {
     }
   }
 
-  // Agent 视频流水线：run 有自己的持久 trace 与预算（tools/flovart/pipeline/），不经浏览器租约；会话只记活动并保存 runId 引用。
+  // Agent 视频流水线：run 有自己的持久 trace 与预算（tools/iris/pipeline/），不经浏览器租约；会话只记活动并保存 runId 引用。
   async callPipeline(command, args = {}, source = 'mcp', idempotencyKey, signal, caller) {
     const entry = this.recordActivity({ command, source, caller, args });
     const pipelineCaller = source === 'agent' ? 'built-in' : (caller?.agentIdentity || source);
     try {
-      const { executePipelineCommand } = await importFlovartPipelineModule('index');
+      const { executePipelineCommand } = await importIrisPipelineModule('index');
       const result = await executePipelineCommand(command, args, { caller: pipelineCaller, mutationId: idempotencyKey, signal });
       this.finishActivity(entry, result.ok ? { ok: true } : { ok: false, error: result.error });
       return result;
@@ -531,7 +531,7 @@ export class WorkflowAgentSession {
       const { added } = await appendRunArtifactReceipts(this.receiptStore, result, args, caller || {});
       added.forEach(receipt => this.emit('receipt', receipt));
     } catch (error) {
-      console.warn('[flovart-agent] auto artifact receipt failed:', error instanceof Error ? error.message : String(error));
+      console.warn('[iris-agent] auto artifact receipt failed:', error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -571,17 +571,17 @@ export class WorkflowAgentSession {
     const requestedClientId = typeof args?.clientId === 'string' && args.clientId ? args.clientId : null;
     const boundSnapshot = requestedClientId ? this.snapshots.get(requestedClientId) : this.snapshot;
     if (command.startsWith('workflow.') && requestedClientId && !this.clients.has(requestedClientId)) {
-      throw sessionError('WORKSPACE_UNAVAILABLE', '指定的 Flovart Workflow 页面已经不可用。', { clientId: requestedClientId });
+      throw sessionError('WORKSPACE_UNAVAILABLE', '指定的 Iris Workflow 页面已经不可用。', { clientId: requestedClientId });
     }
     if (command.startsWith('workflow.') && requestedClientId && requestedClientId !== this.activeClientId) {
-      throw sessionError('LEASE_TARGET_CHANGED', '指定的 Flovart Workflow 不是当前可写页面。', { clientId: requestedClientId, activeClientId: this.activeClientId });
+      throw sessionError('LEASE_TARGET_CHANGED', '指定的 Iris Workflow 不是当前可写页面。', { clientId: requestedClientId, activeClientId: this.activeClientId });
     }
     const clientId = this.clients.has(boundSnapshot?.clientId) ? boundSnapshot.clientId : null;
     if (args?.projectId && boundSnapshot?.id && args.projectId !== boundSnapshot.id) {
       const readOnlyInspect = command === 'workflow.inspect' || command === 'workflow.selection.get';
       const hint = readOnlyInspect
-        ? 'inspect reads only the active visible Browser Workflow; pass that projectId or activate the target project in Flovart first'
-        : 'commands run only on the active visible Browser Workflow; activate the target project in Flovart first';
+        ? 'inspect reads only the active visible Browser Workflow; pass that projectId or activate the target project in Iris first'
+        : 'commands run only on the active visible Browser Workflow; activate the target project in Iris first';
       throw sessionError(
         'LEASE_TARGET_CHANGED',
         `Workflow 目标不匹配：请求的项目 ${args.projectId} 不是当前 Active Browser Workflow（${boundSnapshot.id}）。`,
@@ -589,7 +589,7 @@ export class WorkflowAgentSession {
       );
     }
     const client = this.clients.get(clientId);
-    if (!client) throw sessionError('WORKSPACE_UNAVAILABLE', '当前没有已连接并同步项目的 Flovart Workflow。');
+    if (!client) throw sessionError('WORKSPACE_UNAVAILABLE', '当前没有已连接并同步项目的 Iris Workflow。');
     if (command.startsWith('workflow.') && (source === 'cli' || (source === 'mcp' && caller))) {
       this.authorizeExternalHost(caller, args);
     }

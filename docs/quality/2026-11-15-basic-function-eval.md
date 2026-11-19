@@ -1,10 +1,10 @@
 # 2026-11-15 基础功能评测：Agent 经 CLI 驱动画布
 
-本记录收 2026-11-15 的一轮基础功能评测：外部 Agent 只通过 `flovart` CLI 操作可见 Workflow，用真实 RunningHub 账号生成。上一轮记录见 [2026-11-12 第二份](../archive/2026-11-16-eval-distill/2026-11-12-agent-tool-eval-2.md)。评测中发现的问题在同日修复，提交为 `2d95e46`、`4ef7349`（Fixes #43）、`a8706cc`、`511c723`。
+本记录收 2026-11-15 的一轮基础功能评测：外部 Agent 只通过 `iris` CLI 操作可见 Workflow，用真实 RunningHub 账号生成。上一轮记录见 [2026-11-12 第二份](../archive/2026-11-16-eval-distill/2026-11-12-agent-tool-eval-2.md)。评测中发现的问题在同日修复，提交为 `2d95e46`、`4ef7349`（Fixes #43）、`a8706cc`、`511c723`。
 
 ## 范围与方法
 
-- **入口**：`node tools/flovart/cli.js`，经本地 Agent 服务转发到浏览器 Workflow（Browser Workflow 是可见权威）。
+- **入口**：`node tools/iris/cli.js`，经本地 Agent 服务转发到浏览器 Workflow（Browser Workflow 是可见权威）。
 - **覆盖的命令**：`workflow.project.create`、`workflow.node.create`、`workflow.node.create-connected`、`workflow.node.run`（单节点与 `--node-ids` 批量）、`workflow.focus.nodes`、`skill.list`、`skill.draft --from-project`、`receipts.list`。
 - **模型**：图片用 Seedream 5 Flash（RunningHub 国内站线路，0.11 CNY / 张）；视频用 Seedance 2 Fast 480p 5s 图生视频 1 次（2.5 CNY）。
 - **预算**：20 CNY 上限。
@@ -62,8 +62,8 @@
 
 - **现象**：误用不存在的 `skill.run` 时返回 `Unknown Iris command: skill.run`，也不提示该用哪个命令。
 - **根因**：未知命令的报错文案沿用旧代号，且不看命名空间。
-- **修复**：未知命令报 `Unknown Flovart command: <name>`，列出同一命名空间下真实可用的命令（如 `skill.*`），并带 `availableCommands`；CLI 返回码改为 `UNKNOWN_COMMAND`。Agent 系统提示词（`agent/kernel.js`）、TUI、DSH 帮助文案（实际页签名就是 Flovart）、宿主投影提示、CLI 文案与法律文档中的 Iris 统一改为 Flovart。README 中更名前录制的概念片说明与 AGENTS.md 的品牌规则保持不动。
-- **测试**：`tests/flovartBranding.test.ts`；`tests/flovartLibtvCompat.test.ts` 的断言同步更新。
+- **修复**：未知命令报 `Unknown Iris command: <name>`，列出同一命名空间下真实可用的命令（如 `skill.*`），并带 `availableCommands`；CLI 返回码改为 `UNKNOWN_COMMAND`。Agent 系统提示词（`agent/kernel.js`）、TUI、DSH 帮助文案（实际页签名就是 Iris）、宿主投影提示、CLI 文案与法律文档中的 Iris 统一改为 Iris。README 中更名前录制的概念片说明与 AGENTS.md 的品牌规则保持不动。
+- **测试**：`tests/irisBranding.test.ts`；`tests/irisLibtvCompat.test.ts` 的断言同步更新。
 
 ### 6. 验证 Key 时网络 / CORS 失败被报成「Key 无效」
 
@@ -75,7 +75,7 @@
 ### 7. Workflow 命令文档与实际不符
 
 - **现象**：Agent 按文档 `--type config` 建节点被拒；不知道要传 `config.modelId`；把提示词放在上游文本节点里，生成时没有用上；不清楚视频要等多久、超时后能不能重试。
-- **修复**：重写 `skills/flovart/commands/workflow.md`（及 `.agents` 投影）：删掉不存在的 `config` 节点类型，说明生成设置放在 `metadata.config`，`modelId` 必填；文本节点不作为生成输入；`--idempotency-key` 的重放语义；视频等待时长（CLI 16 分钟、Agent 会话 15 分钟、RunningHub 轮询 10 分钟后取消上游）、不自动重试、`SEEDANCE_SUBMISSION_UNKNOWN` 不得重试、刷新后续接同一上游任务。
+- **修复**：重写 `skills/iris/commands/workflow.md`（及 `.agents` 投影）：删掉不存在的 `config` 节点类型，说明生成设置放在 `metadata.config`，`modelId` 必填；文本节点不作为生成输入；`--idempotency-key` 的重放语义；视频等待时长（CLI 16 分钟、Agent 会话 15 分钟、RunningHub 轮询 10 分钟后取消上游）、不自动重试、`SEEDANCE_SUBMISSION_UNKNOWN` 不得重试、刷新后续接同一上游任务。
 - **验证**：`npm run docs:check` 通过。
 
 ### 8. 导出是否包含脚本、服务地址与模型映射说不清
@@ -118,20 +118,20 @@
 - **修复**：`patchConfig` 只发增量（`update_node` 本来就把 config 合并一层）；节点尚无 config 时才带上默认 `mode`。PromptBar 的比例改为「`config.aspectRatio` → Operation recipe 的 `aspectRatio` → 默认值」。`2d95e46` 的防循环约束保持不变：空比例不回写、模型族 effect 仍以字符串为依赖。
 - **测试**：`tests/workflowPromptBarAspectRatio.test.tsx`（经真实 `applyWorkflowOps` 的 `update_node` 写回）：Seedream 节点 16:9 显示正确且不回写比例；挂载后 CLI 改为 16:9 能跟随，PromptBar 先前算出的补丁晚到也不会改回 1:1，再改分辨率比例仍为 16:9；PromptBar 里选 21:9 能落到节点配置；只有 recipe 带比例的 Operation 显示 16:9。改动前这 4 个用例全部失败。`tests/workflowNodeOverlays.test.tsx` 的默认模型断言改为增量补丁。
 
-### 14. 前端已在运行时 `flovart ensure --web` 起不来 Agent
+### 14. 前端已在运行时 `iris ensure --web` 起不来 Agent
 
 - **现象**：WebUI 已经在跑，`ensure --web` 返回 `frontend: ready`、`agent: offline`；只能改用 `start --source` 绕过。
-- **根因**：`tools/flovart/ensure.js` 只看**当前目录**是不是源码仓库来决定启动参数，`--web` 参数根本没传进去。在仓库外执行 `node <repo>/tools/flovart/cli.js ensure --web` 时拼出的是 `start --json --no-open`，`start` 因而走 toolkit（Desktop Runtime）模式，源码 Agent 不会启动；前端已在线又让人误以为链路就绪。另外前端在非默认端口时，`start` 找不到它，会另起一个前端。本地复现：仓库外启动一个带 `data-flovart-webui="1"` 标记的假 WebUI，旧代码返回 `agent: offline`。
+- **根因**：`tools/iris/ensure.js` 只看**当前目录**是不是源码仓库来决定启动参数，`--web` 参数根本没传进去。在仓库外执行 `node <repo>/tools/iris/cli.js ensure --web` 时拼出的是 `start --json --no-open`，`start` 因而走 toolkit（Desktop Runtime）模式，源码 Agent 不会启动；前端已在线又让人误以为链路就绪。另外前端在非默认端口时，`start` 找不到它，会另起一个前端。本地复现：仓库外启动一个带 `data-flovart-webui="1"` 标记的假 WebUI，旧代码返回 `agent: offline`。
 - **修复**：源码目录改为「当前目录是源码仓库 → 用当前目录；否则用 CLI 自身所在的仓库」，`start` 在该目录下执行；`ensure` 接收 `--web` / `--source`，找不到源码仓库时也按源码模式启动；前端已就绪且在 loopback 上时把端口作为 `--web-port=<port>` 交给 `start`，复用现有 WebUI、只补起 Agent。CLI 帮助补上 `--web`。
-- **测试**：`tests/flovartEnsure.test.js` 新增 4 个用例：仓库外解析到 CLI 所在仓库；前端已在 40123 端口时，仓库外 `ensure --web` 发出 `start --source --web --web-port=40123 --json --no-open` 且在仓库目录执行；找不到仓库时 `--web` 仍走源码模式；非 loopback 地址不传端口。真实复现（沙箱）：修复后在 `/tmp` 执行同一命令返回 `agent: ready`（`browser: offline` 是因为沙箱没有真实浏览器连接，属预期）。
+- **测试**：`tests/irisEnsure.test.js` 新增 4 个用例：仓库外解析到 CLI 所在仓库；前端已在 40123 端口时，仓库外 `ensure --web` 发出 `start --source --web --web-port=40123 --json --no-open` 且在仓库目录执行；找不到仓库时 `--web` 仍走源码模式；非 loopback 地址不传端口。真实复现（沙箱）：修复后在 `/tmp` 执行同一命令返回 `agent: ready`（`browser: offline` 是因为沙箱没有真实浏览器连接，属预期）。
 
 ### 15. 自动产物回执（第 4 项）补端到端验证
 
 - **现象**：第 4 项的修复只有 `agentRunReceipts` 单元测试，没有经过真实 Agent / CLI / 画布链路确认。
 - **根因**：不是缺陷，是验证缺口：单元测试直接调用 `appendRunArtifactReceipts`，没有覆盖「CLI → Agent HTTP → 浏览器 Workflow 执行 → 结果回传 → 会话写回执 → CLI `receipts.list`」整条路径。
 - **修复（验证）**：
-  - 集成测试 `tests/agentRunReceiptsIntegration.test.ts`：真实启动 `agent/index.js`（隔离的 `FLOVART_AGENT_HOME`、随机端口），浏览器侧经 SSE `/events` 与 `/workflow/result` 接入，并用页面同一份 `services/workflowDispatcher.ts` 执行 `tool_call`（生成执行器为不联网的 fake）；真实的 `flovart` CLI 进程发 `workflow.node.run` 与 `receipts.list`。断言单节点运行后有一条 `artifact` 回执（`externalRef = run:<runId>`、`nodeIds`、`artifactId`），同一幂等键重放不重复执行也不重复写回执，批量两节点各一条。临时去掉 `session.js` 里的写回执调用，两个用例都会失败。
-  - 真实浏览器画布：`scripts/e2e-provider-trace.mjs success` 增加回执检查（并把浏览器 locale 固定为 `zh-CN`，脚本按中文界面定位按钮）。2026-11-15 在沙箱用 Playwright Chromium headless shell（`FLOVART_CHROME_PATH` 指向 headless_shell；完整版 Chrome 在该沙箱启动即 SIGTRAP）+ 本地 fake provider 跑通：Settings 界面添加服务 → CLI 建节点 → `workflow.node.run` → 画布确认计划卡 → 提交 1 次、节点成功并持久化 → `receipts.list` 返回 1 条 `kind: artifact`、`externalRef: run:<runId>`、`nodeIds` 为该节点的回执 → 刷新后结果仍在。全部 expectations 为真。
+  - 集成测试 `tests/agentRunReceiptsIntegration.test.ts`：真实启动 `agent/index.js`（隔离的 `IRIS_AGENT_HOME`、随机端口），浏览器侧经 SSE `/events` 与 `/workflow/result` 接入，并用页面同一份 `services/workflowDispatcher.ts` 执行 `tool_call`（生成执行器为不联网的 fake）；真实的 `iris` CLI 进程发 `workflow.node.run` 与 `receipts.list`。断言单节点运行后有一条 `artifact` 回执（`externalRef = run:<runId>`、`nodeIds`、`artifactId`），同一幂等键重放不重复执行也不重复写回执，批量两节点各一条。临时去掉 `session.js` 里的写回执调用，两个用例都会失败。
+  - 真实浏览器画布：`scripts/e2e-provider-trace.mjs success` 增加回执检查（并把浏览器 locale 固定为 `zh-CN`，脚本按中文界面定位按钮）。2026-11-15 在沙箱用 Playwright Chromium headless shell（`IRIS_CHROME_PATH` 指向 headless_shell；完整版 Chrome 在该沙箱启动即 SIGTRAP）+ 本地 fake provider 跑通：Settings 界面添加服务 → CLI 建节点 → `workflow.node.run` → 画布确认计划卡 → 提交 1 次、节点成功并持久化 → `receipts.list` 返回 1 条 `kind: artifact`、`externalRef: run:<runId>`、`nodeIds` 为该节点的回执 → 刷新后结果仍在。全部 expectations 为真。
 - **仍需 owner 手动确认**：真实 RunningHub 账号（扣费）下的回执，以及桌面版 Chrome 有界面模式下的同一流程；沙箱里没有真实 Provider 账号，也没有可见桌面。
 
 ## 仍未修复

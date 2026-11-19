@@ -76,7 +76,7 @@ jobs:
         shell: pwsh
         run: |
           node scripts/build-agent-sidecar.mjs --target x86_64-pc-windows-msvc
-          $agent = 'src-tauri/binaries/flovart-agent-x86_64-pc-windows-msvc.exe'
+          $agent = 'src-tauri/binaries/iris-agent-x86_64-pc-windows-msvc.exe'
           if (-not (Test-Path -LiteralPath $agent -PathType Leaf)) {
             throw "Agent sidecar was not produced: $agent"
           }

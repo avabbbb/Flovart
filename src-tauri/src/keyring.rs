@@ -14,8 +14,8 @@
 // `keyring::Error` 解析不到外部 crate。
 pub use ::keyring::{Credential, CredentialBuilder, Entry, Error, Result};
 
-use crate::errors::{FlovartError, FlovartResult};
-use crate::FlovartContext;
+use crate::errors::{IrisError, IrisResult};
+use crate::IrisContext;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -43,30 +43,30 @@ pub fn entry_account(provider: &str, key_id: &str) -> String {
 /// Validate provider and key_id before constructing a keyring entry.
 /// Prevents ':' injection (which would break the `provider:keyId` account
 /// format) and enforces reasonable length limits.
-fn validate_keyring_inputs(provider: &str, key_id: &str, label: Option<&str>) -> FlovartResult<()> {
+fn validate_keyring_inputs(provider: &str, key_id: &str, label: Option<&str>) -> IrisResult<()> {
     if provider.is_empty() || provider.len() > 128 {
-        return Err(FlovartError::InvalidInput(
+        return Err(IrisError::InvalidInput(
             "provider must be 1-128 characters".to_owned(),
         ));
     }
     if provider.contains(':') {
-        return Err(FlovartError::InvalidInput(
+        return Err(IrisError::InvalidInput(
             "provider must not contain ':'".to_owned(),
         ));
     }
     if key_id.is_empty() || key_id.len() > 256 {
-        return Err(FlovartError::InvalidInput(
+        return Err(IrisError::InvalidInput(
             "keyId must be 1-256 characters".to_owned(),
         ));
     }
     if key_id.contains(':') {
-        return Err(FlovartError::InvalidInput(
+        return Err(IrisError::InvalidInput(
             "keyId must not contain ':'".to_owned(),
         ));
     }
     if let Some(label) = label {
         if label.len() > 256 {
-            return Err(FlovartError::InvalidInput(
+            return Err(IrisError::InvalidInput(
                 "label must not exceed 256 characters".to_owned(),
             ));
         }
@@ -81,24 +81,24 @@ pub fn parse_account(account: &str) -> Option<(String, String)> {
     Some((provider, key_id))
 }
 
-fn build_entry(account: &str) -> FlovartResult<keyring::Entry> {
-    keyring::Entry::new(KEYRING_SERVICE, account).map_err(|e| FlovartError::Keyring(e.to_string()))
+fn build_entry(account: &str) -> IrisResult<keyring::Entry> {
+    keyring::Entry::new(KEYRING_SERVICE, account).map_err(|e| IrisError::Keyring(e.to_string()))
 }
 
 #[tauri::command]
 pub fn keyring_set(
-    ctx: State<'_, std::sync::Arc<FlovartContext>>,
+    ctx: State<'_, std::sync::Arc<IrisContext>>,
     provider: String,
     key_id: String,
     secret: String,
     label: Option<String>,
-) -> FlovartResult<KeyringEntry> {
+) -> IrisResult<KeyringEntry> {
     validate_keyring_inputs(&provider, &key_id, label.as_deref())?;
     let account = entry_account(&provider, &key_id);
     let entry = build_entry(&account)?;
     entry
         .set_password(&secret)
-        .map_err(|e| FlovartError::Keyring(e.to_string()))?;
+        .map_err(|e| IrisError::Keyring(e.to_string()))?;
 
     let now = chrono::Utc::now().timestamp_millis();
     let json = serde_json::json!({
@@ -118,22 +118,22 @@ pub fn keyring_set(
 }
 
 #[allow(dead_code)]
-pub(crate) fn read_secret(provider: &str, key_id: &str) -> FlovartResult<Option<String>> {
+pub(crate) fn read_secret(provider: &str, key_id: &str) -> IrisResult<Option<String>> {
     let account = entry_account(&provider, &key_id);
     let entry = build_entry(&account)?;
     match entry.get_password() {
         Ok(secret) => Ok(Some(secret)),
         Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(FlovartError::Keyring(e.to_string())),
+        Err(e) => Err(IrisError::Keyring(e.to_string())),
     }
 }
 
 #[tauri::command]
 pub fn keyring_delete(
-    ctx: State<'_, std::sync::Arc<FlovartContext>>,
+    ctx: State<'_, std::sync::Arc<IrisContext>>,
     provider: String,
     key_id: String,
-) -> FlovartResult<bool> {
+) -> IrisResult<bool> {
     let account = entry_account(&provider, &key_id);
     let entry = build_entry(&account)?;
     match entry.delete_credential() {
@@ -143,14 +143,14 @@ pub fn keyring_delete(
             Ok(true)
         }
         Err(keyring::Error::NoEntry) => Ok(false),
-        Err(e) => Err(FlovartError::Keyring(e.to_string())),
+        Err(e) => Err(IrisError::Keyring(e.to_string())),
     }
 }
 
 #[tauri::command]
 pub fn keyring_list(
-    ctx: State<'_, std::sync::Arc<FlovartContext>>,
-) -> FlovartResult<Vec<KeyringEntry>> {
+    ctx: State<'_, std::sync::Arc<IrisContext>>,
+) -> IrisResult<Vec<KeyringEntry>> {
     let prefix = "keyring:meta:";
     let raw = ctx.state_db.kv_list_prefix(prefix)?;
     let mut entries = Vec::with_capacity(raw.len());
@@ -176,10 +176,10 @@ pub fn keyring_list(
 
 #[tauri::command]
 pub fn keyring_report_sync(
-    ctx: State<'_, std::sync::Arc<FlovartContext>>,
+    ctx: State<'_, std::sync::Arc<IrisContext>>,
     credential_count: usize,
     persistence_enabled: bool,
-) -> FlovartResult<KeyringSyncStatus> {
+) -> IrisResult<KeyringSyncStatus> {
     let status = KeyringSyncStatus {
         credential_count,
         persistence_enabled,
@@ -187,7 +187,7 @@ pub fn keyring_report_sync(
     };
     ctx.state_db.kv_set(
         "keyring:sync:last",
-        &serde_json::to_string(&status).map_err(|error| FlovartError::Other(error.to_string()))?,
+        &serde_json::to_string(&status).map_err(|error| IrisError::Other(error.to_string()))?,
     )?;
     Ok(status)
 }

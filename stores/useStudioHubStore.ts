@@ -9,7 +9,7 @@ import type { LocalFolderEntry } from '../services/localFolderSource';
 // 窗口只调用，不复制业务。
 export type StudioHubKind = 'skills' | 'history' | 'timeline' | 'library';
 
-export const HISTORY_FAVORITES_KEY = 'flovart.history.favorites.v1';
+export const HISTORY_FAVORITES_KEY = 'iris.history.favorites.v1';
 
 export interface StudioHubHandlers {
   /** 生成历史 → 插入当前画布（InfiniteWorkflow 注册）。 */

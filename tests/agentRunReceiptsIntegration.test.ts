@@ -10,7 +10,7 @@ import { createWorkflowDispatcher } from '../services/workflowDispatcher';
 import { createWorkflowExecutor } from '../services/workflowExecutor';
 
 /**
- * 2026-11-15 评测第 4 项的集成验证：真实 Agent 进程 + 真实 flovart CLI 进程 + 真实浏览器侧 Workflow Dispatcher。
+ * 2026-11-15 评测第 4 项的集成验证：真实 Agent 进程 + 真实 iris CLI 进程 + 真实浏览器侧 Workflow Dispatcher。
  * 只有「浏览器页面」与「Provider」是替身：浏览器侧经 SSE / HTTP 与 Agent 通信，收到的 tool_call 交给
  * services/workflowDispatcher.ts 执行（与页面同一份代码），生成执行器是不联网的 fake。
  * 断言 node.run 成功后经 CLI 的 receipts.list 能读到 run:<runId> 的 artifact 回执。
@@ -41,7 +41,7 @@ function request(method: string, path: string, body?: unknown): Promise<{ status
 
 function cli(args: string[]): Promise<any> {
   return new Promise(resolve => {
-    execFile(process.execPath, ['tools/flovart/cli.js', ...args, '--json'], { cwd: repoRoot, env, maxBuffer: 8 * 1024 * 1024 }, (_error, stdout) => {
+    execFile(process.execPath, ['tools/iris/cli.js', ...args, '--json'], { cwd: repoRoot, env, maxBuffer: 8 * 1024 * 1024 }, (_error, stdout) => {
       const text = String(stdout).trim();
       try { resolve(JSON.parse(text)); } catch { resolve({ raw: text }); }
     });
@@ -84,21 +84,21 @@ describe('auto artifact receipts through the real Agent + CLI path', () => {
   const project = createWorkflowProject('回执集成');
 
   beforeAll(async () => {
-    home = mkdtempSync(join(tmpdir(), 'flovart-receipts-'));
+    home = mkdtempSync(join(tmpdir(), 'iris-receipts-'));
     env = {
       ...process.env,
       HOME: home,
-      FLOVART_AGENT_HOME: home,
-      FLOVART_AGENT_CONFIG: join(home, 'agent.json'),
-      FLOVART_AGENT_PORT: '0',
-      FLOVART_WORKSPACE_ONLY: '1',
-      FLOVART_WEB_DISCOVERY: join(home, 'web.json'),
-      FLOVART_BROWSER_LAUNCH_STATE: join(home, 'browser-launch.json'),
+      IRIS_AGENT_HOME: home,
+      IRIS_AGENT_CONFIG: join(home, 'agent.json'),
+      IRIS_AGENT_PORT: '0',
+      IRIS_WORKSPACE_ONLY: '1',
+      IRIS_WEB_DISCOVERY: join(home, 'web.json'),
+      IRIS_BROWSER_LAUNCH_STATE: join(home, 'browser-launch.json'),
     };
     agent = spawn(process.execPath, ['agent/index.js'], { cwd: repoRoot, env, stdio: 'ignore' });
     const config = await waitFor(() => {
-      if (!existsSync(env.FLOVART_AGENT_CONFIG!)) return null;
-      const parsed = JSON.parse(readFileSync(env.FLOVART_AGENT_CONFIG!, 'utf8'));
+      if (!existsSync(env.IRIS_AGENT_CONFIG!)) return null;
+      const parsed = JSON.parse(readFileSync(env.IRIS_AGENT_CONFIG!, 'utf8'));
       return parsed.token && parsed.url && !/:17373\b/.test(parsed.url) ? parsed : null;
     });
     agentUrl = config.url;

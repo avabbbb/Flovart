@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { nanoid } from 'nanoid';
-import { getFlovartRuntimeApi } from '../../services/flovartRuntime';
+import { getIrisRuntimeApi } from '../../services/irisRuntime';
 import { ProductionProjectionAdapter } from '../../services/productionProjectionAdapter';
 import { applyWorkflowMutation, workflowDocumentOperationsFromFrames } from './draftAuthority';
 import { useWorkflowStore } from './store';
@@ -11,7 +11,7 @@ export function useProductionProjectionAdapter(projectId: string | null) {
   const adapter = useRef<ProductionProjectionAdapter | null>(null);
   if (!adapter.current) {
     adapter.current = new ProductionProjectionAdapter({
-      runtime: getFlovartRuntimeApi(),
+      runtime: getIrisRuntimeApi(),
       getProject: id => (
         useWorkflowStore.getState().projects.find(project => project.id === id) || null
       ),

@@ -12,7 +12,7 @@ const EMPTY_USAGE = {
 function assertLoopbackEndpoint(endpoint) {
   const url = new URL(endpoint);
   if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) {
-    throw new Error('Flovart Runtime endpoint must use loopback HTTP');
+    throw new Error('Iris Runtime endpoint must use loopback HTTP');
   }
   return url.origin;
 }
@@ -78,7 +78,7 @@ function parseSseBlock(block) {
 
 async function* readSse(response) {
   const reader = response.body?.getReader();
-  if (!reader) throw new Error('Flovart Runtime returned an empty agent-text stream');
+  if (!reader) throw new Error('Iris Runtime returned an empty agent-text stream');
   const decoder = new TextDecoder();
   let buffer = '';
   while (true) {
@@ -112,7 +112,7 @@ function finishWithError(stream, model, error, aborted = false) {
 function parseToolArguments(value) {
   if (!value) return {};
   const parsed = JSON.parse(value);
-  if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') throw new Error('Flovart Runtime returned invalid tool arguments');
+  if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') throw new Error('Iris Runtime returned invalid tool arguments');
   return parsed;
 }
 
@@ -125,13 +125,13 @@ export function createRuntimeAgentTextStream({
   const staticConnection = endpoint || token
     ? { endpoint: assertLoopbackEndpoint(endpoint), token }
     : undefined;
-  if (staticConnection && !staticConnection.token) throw new Error('Flovart Runtime token is required');
+  if (staticConnection && !staticConnection.token) throw new Error('Iris Runtime token is required');
   if (!staticConnection && typeof connection !== 'function') {
-    throw new Error('Flovart Runtime connection is required');
+    throw new Error('Iris Runtime connection is required');
   }
 
   return (model, context, options = {}) => {
-    if (options.apiKey) throw new Error('API Key must never pass through the Flovart Agent');
+    if (options.apiKey) throw new Error('API Key must never pass through the Iris Agent');
     const stream = createAssistantMessageEventStream();
     queueMicrotask(async () => {
       let partial = initialMessage(model);
@@ -163,7 +163,7 @@ export function createRuntimeAgentTextStream({
       try {
         const resolved = staticConnection || await connection();
         const origin = assertLoopbackEndpoint(resolved.endpoint);
-        if (!resolved.token) throw new Error('Flovart Runtime token is required');
+        if (!resolved.token) throw new Error('Iris Runtime token is required');
         const response = await fetchFn(`${origin}/v1/agent-text/stream`, {
           method: 'POST',
           signal: options.signal,
@@ -176,10 +176,10 @@ export function createRuntimeAgentTextStream({
         });
         if (!response.ok) {
           const body = await response.json().catch(() => ({}));
-          throw new Error(body?.error?.message || `Flovart Runtime agent-text failed with HTTP ${response.status}`);
+          throw new Error(body?.error?.message || `Iris Runtime agent-text failed with HTTP ${response.status}`);
         }
         if (!response.headers.get('content-type')?.toLowerCase().startsWith('text/event-stream')) {
-          throw new Error('Flovart Runtime returned a non-SSE agent-text response');
+          throw new Error('Iris Runtime returned a non-SSE agent-text response');
         }
         for await (const item of readSse(response)) {
           if (item.event === 'start') {
@@ -222,7 +222,7 @@ export function createRuntimeAgentTextStream({
             const state = ensureToolCall(item.data);
             state.argumentsText = String(item.data?.arguments ?? state.argumentsText);
             state.block.arguments = parseToolArguments(state.argumentsText);
-            if (!state.block.id || !state.block.name) throw new Error('Flovart Runtime returned an incomplete tool call');
+            if (!state.block.id || !state.block.name) throw new Error('Iris Runtime returned an incomplete tool call');
             updatePartial();
             stream.push({
               type: 'toolcall_end',
@@ -232,7 +232,7 @@ export function createRuntimeAgentTextStream({
             });
             continue;
           }
-          if (item.event === 'error') throw new Error(item.data?.message || 'Flovart Runtime agent-text failed');
+          if (item.event === 'error') throw new Error(item.data?.message || 'Iris Runtime agent-text failed');
           if (item.event === 'done') {
             if (textStarted) {
               const textIndex = content.findIndex(block => block.type === 'text');
@@ -241,14 +241,14 @@ export function createRuntimeAgentTextStream({
             const reason = ['stop', 'length', 'toolUse'].includes(item.data?.finishReason)
               ? item.data.finishReason
               : 'stop';
-            if (reason === 'toolUse' && toolCalls.size === 0) throw new Error('Flovart Runtime ended with toolUse but returned no tool call');
+            if (reason === 'toolUse' && toolCalls.size === 0) throw new Error('Iris Runtime ended with toolUse but returned no tool call');
             const message = { ...partial, stopReason: reason };
             stream.push({ type: 'done', reason, message });
             stream.end(message);
             return;
           }
         }
-        throw new Error('Flovart Runtime agent-text stream ended before done');
+        throw new Error('Iris Runtime agent-text stream ended before done');
       } catch (error) {
         finishWithError(stream, model, error, options.signal?.aborted);
       }

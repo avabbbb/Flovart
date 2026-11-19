@@ -1,4 +1,4 @@
-// 异步任务层（libtv-vs-flovart-agent-tools §G：task_start / get(afterSeq) / cancel）。
+// 异步任务层（libtv-vs-iris-agent-tools §G：task_start / get(afterSeq) / cancel）。
 // 外部 Agent 的长命令（agent.turn、生成、导出…）在本机 Agent 会话里后台执行：
 // start 立即返回 taskId，get 轮询状态与增量事件，cancel 协作式取消。
 //
@@ -434,7 +434,7 @@ export function createAgentTaskLayer({
       ...view(task),
       replayed: true,
       resubmitRequiresConfirmation: true,
-      message: '同样参数的任务（' + task.taskId + '）在刷新 / 重启前已经开始，可能已提交并扣费，没有重新提交。请先让用户核对画布；用户确认要重跑时，先 flovart_task_cancel 这个任务再重新启动。',
+      message: '同样参数的任务（' + task.taskId + '）在刷新 / 重启前已经开始，可能已提交并扣费，没有重新提交。请先让用户核对画布；用户确认要重跑时，先 iris_task_cancel 这个任务再重新启动。',
     };
   }
 

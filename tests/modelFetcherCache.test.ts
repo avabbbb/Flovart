@@ -2,7 +2,7 @@ import localforage from 'localforage';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchModelsWithCache } from '../services/modelFetcher';
 
-const cache = localforage.createInstance({ name: 'flovart', storeName: 'provider_model_cache' });
+const cache = localforage.createInstance({ name: 'iris', storeName: 'provider_model_cache' });
 const originalFetch = globalThis.fetch;
 
 function jsonResponse(body: unknown, status = 200): Response {

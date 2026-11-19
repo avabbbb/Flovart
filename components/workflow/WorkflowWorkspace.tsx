@@ -282,7 +282,7 @@ export function commitWorkflowProjectPatch(projectId: string, patch: Partial<Wor
 }
 
 /**
- * Open in Flovart 交接：宿主面板带着片段 locator 打开 Canvas。
+ * Open in Iris 交接：宿主面板带着片段 locator 打开 Canvas。
  * 同一片段已在画布上就选中并居中它；否则在图的右侧新建一个宿主片段节点。经 draft-authority 提交，可撤销。
  */
 export function applyWorkflowHostHandoff(projectId: string, handoff: WorkflowHostHandoff, viewportSize = { width: 960, height: 640 }): WorkflowPatchResult & { nodeId?: string } {
@@ -376,7 +376,7 @@ export function WorkflowWorkspace({
   const updateActiveProject = useCallback((patch: Partial<WorkflowProject>) => {
     if (activeProjectId) updateProject(activeProjectId, patch);
   }, [activeProjectId, updateProject]);
-  // Open in Flovart：读取 URL hash 中的宿主交接参数，处理后从地址栏移除，避免刷新重复执行。
+  // Open in Iris：读取 URL hash 中的宿主交接参数，处理后从地址栏移除，避免刷新重复执行。
   useEffect(() => {
     if (!activeProjectId || typeof window === 'undefined') return;
     const consume = () => {
@@ -439,9 +439,9 @@ export function WorkflowWorkspace({
     setWriterRecoveryPending(true);
     try {
       await activateBrowserWorkflowWriter();
-      setWorkspaceNotice('Flovart 画布已重新激活。');
+      setWorkspaceNotice('Iris 画布已重新激活。');
     } catch (error) {
-      setWorkspaceNotice(displayError(error, 'Flovart 画布暂不可用。'));
+      setWorkspaceNotice(displayError(error, 'Iris 画布暂不可用。'));
     } finally {
       setWriterRecoveryPending(false);
     }
@@ -582,9 +582,9 @@ assetLibrary={assetLibrary}
         {workspaceNotice && <div className="workflow-workspace__notice" role="status">{workspaceNotice}</div>}
         {writerStatus === 'revoked' && (
           <div className="workflow-workspace__notice flex items-center justify-between gap-3" role="status" data-testid="workflow-writer-recovery">
-            <span>{language === 'zho' ? 'Flovart 画布已关闭，当前页面需要重新激活。' : 'The Flovart canvas was closed. Reactivate this page to continue.'}</span>
+            <span>{language === 'zho' ? 'Iris 画布已关闭，当前页面需要重新激活。' : 'The Iris canvas was closed. Reactivate this page to continue.'}</span>
             <button type="button" onClick={() => void recoverWriter()} disabled={writerRecoveryPending || agentConnectionStatus !== 'ready'} className="shrink-0" style={{ color: 'var(--wf-accent, var(--isl-accent))' }}>
-              {writerRecoveryPending ? (language === 'zho' ? '恢复中…' : 'Recovering…') : (language === 'zho' ? '重新打开 Flovart' : 'Reopen Flovart')}
+              {writerRecoveryPending ? (language === 'zho' ? '恢复中…' : 'Recovering…') : (language === 'zho' ? '重新打开 Iris' : 'Reopen Iris')}
             </button>
           </div>
         )}

@@ -9,7 +9,7 @@ import {
   clusterTopicCandidates,
   collectTopicResearch,
   parseRedditAtom,
-} from '../tools/flovart/topic-research.js';
+} from '../tools/iris/topic-research.js';
 
 const FEED = `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
@@ -31,7 +31,7 @@ const FEED = `<?xml version="1.0" encoding="UTF-8"?>
   </entry>
 </feed>`;
 
-describe('Flovart topic research adapter', () => {
+describe('Iris topic research adapter', () => {
   it('parses Reddit Atom entries without treating RSS rank as vote count', () => {
     const items = parseRedditAtom(FEED);
 
@@ -56,7 +56,7 @@ describe('Flovart topic research adapter', () => {
   });
 
   it('persists and replays one idempotent research artifact', async () => {
-    const outputDir = await mkdtemp(join(tmpdir(), 'flovart-research-'));
+    const outputDir = await mkdtemp(join(tmpdir(), 'iris-research-'));
     const fetchImpl = vi.fn(async () => new Response(FEED, {
       status: 200,
       headers: { 'content-type': 'application/atom+xml' },
@@ -86,7 +86,7 @@ describe('Flovart topic research adapter', () => {
   });
 
   it('marks missing X coverage as degraded instead of pretending success', async () => {
-    const outputDir = await mkdtemp(join(tmpdir(), 'flovart-research-'));
+    const outputDir = await mkdtemp(join(tmpdir(), 'iris-research-'));
     const result = await collectTopicResearch({
       topic: 'US politics',
       sources: ['reddit', 'x'],
@@ -103,7 +103,7 @@ describe('Flovart topic research adapter', () => {
   });
 
   it('bounds and sanitizes untrusted artifact keys without regex backtracking', async () => {
-    const outputDir = await mkdtemp(join(tmpdir(), 'flovart-research-'));
+    const outputDir = await mkdtemp(join(tmpdir(), 'iris-research-'));
     const result = await collectTopicResearch({
       topic: 'bounded key',
       sources: ['reddit'],

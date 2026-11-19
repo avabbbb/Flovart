@@ -19,7 +19,7 @@ export const THINKING_BUDGET_TOKENS: Record<Exclude<AgentThinkingLevel, 'off'>, 
   high: 12288,
 };
 
-const STORAGE_KEY = 'flovart.agent.thinking';
+const STORAGE_KEY = 'iris.agent.thinking';
 
 interface ThinkingState {
   default: AgentThinkingLevel;

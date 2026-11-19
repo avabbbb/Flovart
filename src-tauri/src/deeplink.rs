@@ -24,7 +24,7 @@ const DEEPLINK_COMMAND_WHITELIST: &[&str] = &[
 ];
 
 pub fn handle_deeplink_url(app: &AppHandle, raw: &str) {
-    log::info!("flovart deeplink: {raw}");
+    log::info!("iris deeplink: {raw}");
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.set_focus();
@@ -55,13 +55,13 @@ pub fn handle_deeplink_url(app: &AppHandle, raw: &str) {
     // R6-L07: Only whitelisted commands are enqueued from deeplink.
     if let Some(cmd) = params.get("command") {
         if !DEEPLINK_COMMAND_WHITELIST.contains(&cmd.as_str()) {
-            log::warn!("flovart deeplink rejected non-whitelisted command: {cmd}");
+            log::warn!("iris deeplink rejected non-whitelisted command: {cmd}");
             return;
         }
         let args_str = params.get("args").cloned().unwrap_or_else(|| "{}".into());
         let args: serde_json::Value =
             serde_json::from_str(&args_str).unwrap_or_else(|_| serde_json::json!({}));
-        if let Some(ctx) = app.try_state::<std::sync::Arc<crate::FlovartContext>>() {
+        if let Some(ctx) = app.try_state::<std::sync::Arc<crate::IrisContext>>() {
             let entry: BridgeEntry = ctx
                 .bridge_queue
                 .enqueue(cmd.clone(), args, "deeplink".into());

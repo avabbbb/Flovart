@@ -113,7 +113,7 @@ function answerSummary(result: unknown, language: Lang): string {
   return pick(language, '你的回答：', 'Answered: ') + values.map(value => value.length > 40 ? value.slice(0, 39) + '…' : value).join(pick(language, '；', '; '));
 }
 
-/** flovart_skill_read 结果首行「【技能 <id> · <file>…】」（与 services/agentSkills.skillReadHeader 同构）。 */
+/** iris_skill_read 结果首行「【技能 <id> · <file>…】」（与 services/agentSkills.skillReadHeader 同构）。 */
 function skillReadHeaderOf(text: string): { id: string; file: string } | null {
   const match = /^【技能 (\S+) · ([^，】]+)/.exec(String(text || '').trim());
   return match ? { id: match[1], file: match[2] } : null;
@@ -121,7 +121,7 @@ function skillReadHeaderOf(text: string): { id: string; file: string } | null {
 
 /** 技能读取卡片「查看技能内容」里展示的原文（去掉首行标题）；不是成功读取原文时返回空串。 */
 export function skillReadContent(toolName: string | undefined, result: unknown): string {
-  if (toolName !== 'flovart_skill_read') return '';
+  if (toolName !== 'iris_skill_read') return '';
   const text = toolResultText(result);
   if (!skillReadHeaderOf(text) || /^[^\n]*\n已读过/.test(text)) return '';
   return text.slice(text.indexOf('\n') + 1);
@@ -141,12 +141,12 @@ export function summarizeToolCall(input: AgentToolSummaryInput): AgentToolSummar
     return { text: line || (status === 'denied' ? pick(language, '已拒绝执行', 'Denied') : pick(language, '执行失败', 'Failed')), thumbnails: [] };
   }
 
-  if (name === 'flovart_ask') {
+  if (name === 'iris_ask') {
     if (status === 'pending') return { text: pick(language, '请在下方表单里回答', 'Answer in the form below'), thumbnails: [] };
     return { text: answerSummary(input.result, language), thumbnails: [] };
   }
 
-  if (name === 'flovart_workflow_media_view') {
+  if (name === 'iris_workflow_media_view') {
     const ids = Array.isArray(args?.nodeIds) ? args!.nodeIds.length : 0;
     if (status === 'pending') return { text: ids ? pick(language, `查看 ${ids} 个节点的画面`, `Viewing ${ids} node${ids === 1 ? '' : 's'}`) : '', thumbnails: [] };
     const names = mediaViewNames(text);
@@ -159,7 +159,7 @@ export function summarizeToolCall(input: AgentToolSummaryInput): AgentToolSummar
     };
   }
 
-  if (name === 'flovart_skill_read') {
+  if (name === 'iris_skill_read') {
     const header = skillReadHeaderOf(text);
     const id = header?.id || String(args?.id || '').trim();
     if (!id) return none;
@@ -174,19 +174,19 @@ export function summarizeToolCall(input: AgentToolSummaryInput): AgentToolSummar
 
   if (status === 'pending') return none;
 
-  if (name === 'flovart_memory') {
+  if (name === 'iris_memory') {
     const action = String(args?.action || '');
     if (action === 'add' || action === 'delete') return { text: firstLine(text), thumbnails: [] };
     const count = (text.match(/^- \[/gm) || []).length;
     if (action === 'list' || action === 'search') return { text: count ? pick(language, `找到 ${count} 条记忆`, `${count} memor${count === 1 ? 'y' : 'ies'}`) : firstLine(text), thumbnails: [] };
   }
 
-  if (name === 'flovart_workflow_inspect' || name === 'flovart_workflow_selection_get') {
+  if (name === 'iris_workflow_inspect' || name === 'iris_workflow_selection_get') {
     const json = parseJson(text);
     const titles = nodeTitles(json);
     const nodes = countOf(json, 'nodes') ?? (Array.isArray(json) ? json.length : undefined);
     const edges = countOf(json, 'edges') ?? countOf(json, 'connections');
-    if (name === 'flovart_workflow_selection_get') {
+    if (name === 'iris_workflow_selection_get') {
       if (!nodes) return { text: pick(language, '当前没有选中节点', 'Nothing selected'), thumbnails: [] };
       return { text: pick(language, `读取了 ${nodes} 个选中节点：`, `Read ${nodes} selected: `) + joinNames(titles, language), thumbnails: [] };
     }
@@ -197,17 +197,12 @@ export function summarizeToolCall(input: AgentToolSummaryInput): AgentToolSummar
     return { text: firstLine(text), thumbnails: [] };
   }
 
-  if (name === 'flovart_web_search' || name === 'flovart_grep') {
+  if (name === 'iris_web_search' || name === 'iris_grep') {
     const query = String(args?.query || args?.pattern || args?.q || '').trim();
     if (query) return { text: pick(language, `搜索「${query.slice(0, 60)}」`, `Searched “${query.slice(0, 60)}”`), thumbnails: [] };
   }
 
-  if (name === 'flovart_todo') {
-    const items = Array.isArray(args?.todos) ? args!.todos.length : Array.isArray(args?.items) ? args!.items.length : 0;
-    if (items) return { text: pick(language, `更新了 ${items} 项任务`, `Updated ${items} task${items === 1 ? '' : 's'}`), thumbnails: [] };
-  }
-
-  if (name === 'flovart_workflow_apply') {
+  if (name === 'iris_workflow_apply') {
     const operations = Array.isArray(args?.operations) ? args!.operations.length : Array.isArray(args?.ops) ? args!.ops.length : 0;
     if (operations) return { text: pick(language, `对画布做了 ${operations} 项修改`, `Applied ${operations} change${operations === 1 ? '' : 's'}`), thumbnails: [] };
   }

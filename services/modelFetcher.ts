@@ -569,7 +569,7 @@ export const FREE_KEY_LINKS: { provider: AIProvider; label: string; url: string;
 const MODEL_CACHE_TTL = 60 * 60 * 1000; // 1 小时
 // 缓存 key 带版本：模型目录/展示逻辑变更时 bump，强制旧缓存失效重拉
 const CACHE_KEY_PREFIX = 'modelCacheV3.';
-const modelCacheStorage = localforage.createInstance({ name: 'flovart', storeName: 'provider_model_cache' });
+const modelCacheStorage = localforage.createInstance({ name: 'iris', storeName: 'provider_model_cache' });
 
 interface CachedModels {
     models: FetchedModel[];

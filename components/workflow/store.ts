@@ -8,7 +8,7 @@ import { migrateWorkflowPersistedState, migrateWorkflowProject, migrateWorkflowP
 import { workflowStorage } from './storage';
 import type { WorkflowProject } from './types';
 
-export const WORKFLOW_STORE_KEY = 'flovart:workflow:projects';
+export const WORKFLOW_STORE_KEY = 'iris:workflow:projects';
 
 export function createWorkflowProject(title = '未命名工作流'): WorkflowProject {
   const now = new Date().toISOString();

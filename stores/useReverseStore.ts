@@ -80,6 +80,6 @@ export const useReverseStore = create<ReverseState>()(
         return { projects, activeIds };
       }),
     }),
-    { name: 'flovart-reverse', version: 4, migrate: (persisted, version) => migrateReverseState(persisted, version) as ReverseState },
+    { name: 'iris-reverse', version: 4, migrate: (persisted, version) => migrateReverseState(persisted, version) as ReverseState },
   ),
 );

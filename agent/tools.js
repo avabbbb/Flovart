@@ -1,11 +1,11 @@
 import { Type } from 'typebox';
-import { importFlovartModule, importFlovartPipelineModule } from './flovart-modules.js';
+import { importIrisModule, importIrisPipelineModule } from './iris-modules.js';
 
 const [{ AGENT_OPERATION_DEFINITIONS, AGENT_PUBLIC_COMMAND_SET }, agentTools, core, pipelineCommands] = await Promise.all([
-  importFlovartModule('agent-surface'),
-  importFlovartModule('agent-tools'),
-  importFlovartModule('core'),
-  importFlovartPipelineModule('commands'),
+  importIrisModule('agent-surface'),
+  importIrisModule('agent-tools'),
+  importIrisModule('core'),
+  importIrisPipelineModule('commands'),
 ]);
 const { PIPELINE_COMMAND_NAMES, PIPELINE_WRITE_COMMANDS } = pipelineCommands;
 const { COMMAND_ALIASES, COMMAND_REGISTRY } = core;
@@ -16,8 +16,8 @@ const AGENT_WRITE_COMMANDS = new Set(Object.entries(AGENT_OPERATION_DEFINITIONS)
   .map(([command]) => command));
 
 const toolName = command => {
-  const alias = Object.entries(COMMAND_ALIASES).find(([name, target]) => target === command && name.startsWith('flovart_'))?.[0];
-  return alias || `flovart_${command.replace(/[^a-zA-Z0-9]+/g, '_')}`;
+  const alias = Object.entries(COMMAND_ALIASES).find(([name, target]) => target === command && name.startsWith('iris_'))?.[0];
+  return alias || `iris_${command.replace(/[^a-zA-Z0-9]+/g, '_')}`;
 };
 
 const descriptorType = descriptor => {
@@ -40,14 +40,14 @@ const agentParameters = (args, write) => Type.Object({
 }, { additionalProperties: false });
 
 /** 返回模型可调用的最小稳定面（工具名与 Schema 来自统一 Agent 工具定义）；CLI Registry 仍保留兼容命令。 */
-export function getFlovartAgentTools() {
+export function getIrisAgentTools() {
   return getAgentToolSpecs('local')
     .filter(spec => COMMAND_REGISTRY[spec.command]?.availability === 'available' && AGENT_PUBLIC_COMMAND_SET.has(spec.command))
     .map(spec => ({ command: spec.command, name: spec.name, metadata: COMMAND_REGISTRY[spec.command], spec }));
 }
 
-export function createFlovartAgentTools(callCommand) {
-  return getFlovartAgentTools().map(({ command, name, metadata, spec }) => {
+export function createIrisAgentTools(callCommand) {
+  return getIrisAgentTools().map(({ command, name, metadata, spec }) => {
     const write = AGENT_WRITE_COMMANDS.has(command);
     return {
       name,
@@ -71,7 +71,7 @@ export function createFlovartAgentTools(callCommand) {
         const result = await callCommand(command, commandArgs, 'agent', idempotencyKey, signal);
         if (result?.ok === false) {
           // 预期内失败（预算、暂停、审核、版本冲突）作为结构化结果交还模型，由 kernel 的 afterToolCall 标记 isError，不再抛错。
-          const failure = { ok: false, error: { code: result.error?.code || 'COMMAND_FAILED', message: result.error?.message || 'Flovart 操作失败' } };
+          const failure = { ok: false, error: { code: result.error?.code || 'COMMAND_FAILED', message: result.error?.message || 'Iris 操作失败' } };
           return { content: [{ type: 'text', text: JSON.stringify(failure) }], details: { command, result, isError: true } };
         }
         return {
@@ -89,7 +89,7 @@ export const PIPELINE_ENTRY_COMMANDS = new Set(['pipeline.run.start', 'pipeline.
 
 export { PIPELINE_SYSTEM_RULES } from './pipeline-rules.js';
 
-export function createFlovartPipelineTools(callCommand) {
+export function createIrisPipelineTools(callCommand) {
   return PIPELINE_COMMAND_NAMES.map(command => {
     const metadata = COMMAND_REGISTRY[command];
     const write = PIPELINE_WRITE_COMMANDS.has(command);

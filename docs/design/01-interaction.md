@@ -1,4 +1,4 @@
-# Flovart 交互设计
+# Iris 交互设计
 
 > 状态：**Current truth**（2026-11-13 重构）。本文只管**交互与行为**：状态、流程、出口、谁能做什么、动效在什么时候发生。视觉与动效 token（颜色、字号、圆角、阴影、玻璃、弹簧数值）只在 [DESIGN.md](DESIGN.md)，本文引用不重复。
 > 标注约定沿用[总体设计](00-overview.md)：**已实现** = 代码在主干；**设计目标** = 尚未实现；**假设** = 待真实环境确认。§1–§10 编号保持稳定，供其他文档引用。
@@ -36,7 +36,7 @@
 | 宿主能力（能否上轨道、能否开关轨道） | 运行时探测宿主版本与 API，结果缓存并可刷新 | 用版本号 if/else 猜能力 |
 | Output 目标（Media Pool / 新轨道） | 由能力探测结果生成选项；P1 能力未验证时不出现 | 静态下拉选项 |
 | 文案与语言 | i18n 资源；错误文案来自错误码映射 | 组件内中英文硬编码 |
-| 命令 / 工具的显示名、光标角色名 | 命令注册表元数据（`tools/flovart/registry.js`）与 run Step 的 caller | 组件内维护第二份命令名映射（现状见 §19.4 问题 D7） |
+| 命令 / 工具的显示名、光标角色名 | 命令注册表元数据（`tools/iris/registry.js`）与 run Step 的 caller | 组件内维护第二份命令名映射（现状见 §19.4 问题 D7） |
 | 颜色、圆角、阴影、时长、曲线 | [DESIGN.md](DESIGN.md) 的 CSS 变量与 motion token | 组件内写 hex、`rounded-2xl`、`140ms ease`、自定义 cubic-bezier |
 | 尺寸与布局 | 容器宽度驱动（§8） | 固定像素栏宽、按设备型号分支 |
 | 端口、路径、Token、协议版本 | 只在高级诊断里显示，来自连接状态 | 出现在普通 UI |
@@ -48,7 +48,7 @@
 
 ### 4.1 每个状态都有出口
 
-每个界面状态必须至少提供一个：**返回 / 取消 / 重试 / 在别处打开（Open in Flovart）**。状态表（§5、§16、§19）中出口列不能为空，否则不允许合入。
+每个界面状态必须至少提供一个：**返回 / 取消 / 重试 / 在别处打开（Open in Iris）**。状态表（§5、§16、§19）中出口列不能为空，否则不允许合入。
 
 ### 4.2 等待都有上限
 
@@ -90,7 +90,7 @@ idle → planning → awaiting_approval → queued → running → completed
 | queued / running | 真实进度或“等待供应商” | — | 取消；关闭面板（任务继续） |
 | unknown_submit | “正在确认是否已提交”，不锁界面 | — | 继续其他工作；查看详情 |
 | completed | 候选结果 | 下一步（导入 / 应用） | 重新生成；丢弃 |
-| failed | 可读原因 + 建议 | 重试 / 修改 | 诊断；Open in Flovart |
+| failed | 可读原因 + 建议 | 重试 / 修改 | 诊断；Open in Iris |
 | canceled | “已取消”及计费提示 | 重新开始 | — |
 
 视觉映射（每个状态的颜色、图标、动效）见 §14.3；生成过程的细分状态（streaming / partial preview / late result）见 §19.6。
@@ -111,17 +111,17 @@ idle → planning → awaiting_approval → queued → running → completed
 
 | 步骤 | 状态 | 主动作 | 出口 |
 | --- | --- | --- | --- |
-| 无项目 / 无选择 | 一句话说明 + 示意 | 无（等待选择，不阻塞） | Open in Flovart |
+| 无项目 / 无选择 | 一句话说明 + 示意 | 无（等待选择，不阻塞） | Open in Iris |
 | 有选择 | Current Clip 卡 | Generate | 切换工具 |
 | Draw | 当前帧上画区域；可清除、可撤销笔画 | 完成 | 取消（不影响已有输入） |
 | 候选生成 | 网格中每格独立进度 | — | 单格取消 / 全部取消 |
 | 候选就绪 | 网格；悬停预览为叠加在当前帧上 | 选定 | 重新生成某一格 |
 | 已选定 | 选中格高亮 | Add to Media Pool / Add to new track | 换一个 |
-| 已上轨道 | 轨道上显示 Flovart 片段 | — | 开关；删除；替换为另一候选 |
+| 已上轨道 | 轨道上显示 Iris 片段 | — | 开关；删除；替换为另一候选 |
 
 规则：
 - 预览永远是“叠加在原帧上”，原片在任何步骤都不被写入。
-- 未选中的候选留在 Media Pool 的 Flovart bin，不自动删除；清理是用户显式动作。
+- 未选中的候选留在 Media Pool 的 Iris bin，不自动删除；清理是用户显式动作。
 - 能力探测失败时，P1 入口退化为“已导入 Media Pool，可拖到时间线”，不出现无法完成的按钮。
 - 宿主面板跟随宿主主题与密度，不套用玻璃材质（[DESIGN.md](DESIGN.md) §9.2）。
 
@@ -169,7 +169,7 @@ idle → planning → awaiting_approval → queued → running → completed
 
 ## 7. 文案与反馈
 
-- 用动词开头的按钮：Generate、Add to Media Pool、Add to new track、Open in Flovart。
+- 用动词开头的按钮：Generate、Add to Media Pool、Add to new track、Open in Iris。
 - 错误文案 = 发生了什么 + 用户能做什么，例如“供应商限流，30 秒后可重试”。不暴露端口、Lease、MCP JSON、Token、内部 bridge 名称；工具调用详情默认是人话摘要，原始参数只在“诊断”折叠里。
 - 进度描述要具体（“正在渲染 v3 · 第 212/360 帧”），避免“加载中”“处理中”这类空词。
 - 只对重要完成给确认反馈（导入成功、run 完成、归档完成）；常规成功不打断。
@@ -180,7 +180,7 @@ idle → planning → awaiting_approval → queued → running → completed
 
 ~~~text
 app-shell
-├─ top bar（画布 Canvas | Iris | Agent）
+├─ top bar（画布 Canvas | Cut | Agent）
 └─ workspace
    └─ studio-layout
       ├─ studio surface
@@ -231,7 +231,7 @@ app-shell
 | Surface | 一句话 | 拥有的工具 / 状态（唯一业务实现） | 不做 |
 | --- | --- | --- | --- |
 | **画布 Canvas** | GenAI 生成与 Workflow 基本盘 | 节点、连线、`workflow.inspect / selection.get / apply / node.run / viewport.set`、生成任务、素材库、版本 / take / batch、上传与转码 | 不托管多步 run 的编排；不放全量 trace |
-| **Iris**（全能后期助手 · Personal agent；原名 逆向 Reverse） | 对话优先的个人 Agent，**Flovart 画布是它的产出面**；Web 版不连任何宿主也完整可用，可选连接本地宿主同步剪辑上下文 | 对话、run（plan → steps → review rounds → versions）、多 Agent 光标、计划 / trace / 审批卡、预览播放器、版本对比、宿主连接器状态；Hypit 式逆向拆解（转写 → 对齐 → timeline → 字幕 / 视觉 / 音频轨）作为它的**一组工具与一个面板** | 不复制 Canvas 的节点 / 生成实现；不另存一份 Workflow；不把宿主连接设为前提 |
+| **Iris**（全能后期助手 · Personal agent；原名 逆向 Reverse） | 对话优先的个人 Agent，**Iris 画布是它的产出面**；Web 版不连任何宿主也完整可用，可选连接本地宿主同步剪辑上下文 | 对话、run（plan → steps → review rounds → versions）、多 Agent 光标、计划 / trace / 审批卡、预览播放器、版本对比、宿主连接器状态；Hypit 式逆向拆解（转写 → 对齐 → timeline → 字幕 / 视觉 / 音频轨）作为它的**一组工具与一个面板** | 不复制 Canvas 的节点 / 生成实现；不另存一份 Workflow；不把宿主连接设为前提 |
 | **Agent** | Agent 连接与状态管理 | runtime、模型 / Provider 路由、外部 Agent（Codex、Claude Code、DSH…）的发现 / 准备 / 健康 / 每个 Agent 的状态、Skill 安装 | 不放对话、不放 run 编辑；最多只读“最近 run”跳转 |
 
 **交接（hand-off）**：
@@ -567,7 +567,7 @@ Canvas Assistant drawer ──交给──▶ Iris：轻量问答就地完成；
 
 ### 19.2 Agent 计划与待办（run plan / step checklist / approvals）
 
-现状（已实现）：模型通过 `flovart_todo` 工具提交清单，`components/agent/AgentTodoCard.tsx` 只读渲染（pending / active / blocked / done 四态，active 用旋转图标）；付费 / 删除走 `AgentConfirmCard`；自动模式授权走 spend mandate（`agentSpendMandate.ts`）。
+现状：**2026-11-20 已整体移除执行计划（任务清单）**——`iris_todo` 工具、`AgentTodoCard`、`agentTodo.ts` 与提示词里的清单规则都已删除，`flovart_todo` 只作弃用的无操作别名保留；以下为移除前的记录。原实现：模型通过 `iris_todo` 工具提交清单，`components/agent/AgentTodoCard.tsx` 只读渲染（pending / active / blocked / done 四态，active 用旋转图标）；付费 / 删除走 `AgentConfirmCard`；自动模式授权走 spend mandate（`agentSpendMandate.ts`）。
 
 问题：清单与 run 无关联（只是最近一次工具结果）；`active` 的旋转图标没有 reduced-motion 处理；卡片 12px 圆角与内联样式绕过 token；`--isl-line` 未定义；确认卡与清单分离，用户看不出“哪一步在等我”。
 
@@ -622,7 +622,7 @@ Canvas Assistant drawer ──交给──▶ Iris：轻量问答就地完成；
 | 解锁 | 二次确认，说明将影响哪些下游 | 取消 |
 | 归档失败 | 已写部分保留，列出失败文件 | 重试失败项 |
 
-### 19.4 Assistant drawer 改造（`FlovartAgentPanel` / `AgentDrawerSections`）
+### 19.4 Assistant drawer 改造（`IrisAgentPanel` / `AgentDrawerSections`）
 
 > 2026-11-13 放置定案后：下面“改造后的设计”整体用于 **Iris 对话栏**（§12.5，2026-11-17 起对话为主体）；Canvas 抽屉保留同一组件的轻量模式（对话 + run 条 + “在 Iris 中继续”，§12.9）。审计问题 D1–D12 对两者都成立。
 
@@ -638,10 +638,10 @@ Canvas Assistant drawer ──交给──▶ Iris：轻量问答就地完成；
 | D6 | 运行中只有一行“Agent 正在处理...”，没有当前步骤 | `WorkflowAgentMessages` |
 | D7 | 命令显示名在组件内维护第二份中英映射 `COMMAND_LABELS`，违反 §3 | `AgentActivityPanel.tsx` |
 | D8 | 颜色与样式绕过 token：`#e5484d`、内联 `borderRadius: 12`、`rounded-xl`、未定义的 `--isl-line` | `AgentActivityPanel`、`AgentTodoCard` |
-| D9 | 硬编码中文：模式菜单说明“删除、付费生成…始终单独确认”、引用选择器“引用节点或我的素材”、发送 / 停止的 `aria-label` | `FlovartAgentPanel.tsx` |
-| D10 | 待办卡、确认卡、ask 卡、分组横幅在消息与输入框之间各自堆叠，最多同时出现 4 张卡，挤压对话区 | `FlovartAgentPanel.tsx` 1022–1060 行 |
+| D9 | 硬编码中文：模式菜单说明“删除、付费生成…始终单独确认”、引用选择器“引用节点或我的素材”、发送 / 停止的 `aria-label` | `IrisAgentPanel.tsx` |
+| D10 | 待办卡、确认卡、ask 卡、分组横幅在消息与输入框之间各自堆叠，最多同时出现 4 张卡，挤压对话区 | `IrisAgentPanel.tsx` 1022–1060 行 |
 | D11 | 动效：`.compact-right-panel` 对 width 做 3.4% 过冲弹簧；状态图标 `animate-spin` 无减弱处理 | `styles/agentPanelLibtv.css`、`AgentTodoCard` |
-| D12 | 1207 行单组件持有 20+ 个 `useState`（会话、确认、ask、mandate、模式、引用、附件、模型、分组…），状态互相影响难以验证 | `FlovartAgentPanel.tsx` |
+| D12 | 1207 行单组件持有 20+ 个 `useState`（会话、确认、ask、mandate、模式、引用、附件、模型、分组…），状态互相影响难以验证 | `IrisAgentPanel.tsx` |
 
 **改造后的设计**：
 
@@ -660,7 +660,7 @@ Canvas Assistant drawer ──交给──▶ Iris：轻量问答就地完成；
 | 顶栏可见分段 `对话 | 运行`；“连接指引 / 连接状态”移到 Agent 页，抽屉内只在断连时给一行“打开连接中心” | D2、D3 | `AgentDrawerSections` 的 `SECTIONS` 收为两项；`AgentHostPicker` 只在 Agent 页挂载 |
 | 顶栏玻璃、正文实底、停靠圆角 10px、暗色用暖色 | D1 | DESIGN.md §9.2 |
 | “运行”分区 = trace，按 run 分组，数据来自 Runtime（16 号），非 run 的零散操作归入“其他操作”折叠组 | D4 | `AgentActivityPanel` 改为读 run；`useAgentActivityStore` 降为实时缓冲 |
-| 工具消息默认一行人话摘要（来自注册表显示名 + 结果摘要），原始参数进“诊断”折叠；pending 用 `Clock` | D5、D7 | `ToolMessage`；显示名从 `tools/flovart/registry.js` 元数据读 |
+| 工具消息默认一行人话摘要（来自注册表显示名 + 结果摘要），原始参数进“诊断”折叠；pending 用 `Clock` | D5、D7 | `ToolMessage`；显示名从 `tools/iris/registry.js` 元数据读 |
 | 运行中显示当前步骤（与岛同源），而不是“正在处理” | D6 | run 条 |
 | 待处理托盘：同一时刻只展开 1 张卡，按 `确认 > 提问 > 计划` 排序，其余显示“还有 2 项” | D10 | `pendingAsk`、`confirmation`、`todoItems`、`groupBanner` 合并为一个队列 |
 | token 化与 i18n | D8、D9 | DESIGN.md、`t()` |
@@ -735,7 +735,7 @@ Canvas Assistant drawer ──交给──▶ Iris：轻量问答就地完成；
 
 ### 20.1 Inspora 帖子
 
-| # | 参考 | 交互 / 动效要点 | Flovart 落点 | 优先级 |
+| # | 参考 | 交互 / 动效要点 | Iris 落点 | 优先级 |
 | --- | --- | --- | --- | --- |
 | R1 | [dynamic release island](https://www.inspora.design/posts/dynamic-release-island)（@BrettFromDJ） | 状态 pill 展开为构建 / 签名 / 公证 / 上传进度面板；绿色扫光填满 pill，完成打勾 | run 状态岛（§16.2）、抽屉 run 条、流程站点进度 | P0 |
 | R2 | [tests visualised](https://www.inspora.design/posts/tests-visualised)（@zzzzshawn） | 每个文件一条分段进度，失败红标，失败用例重跑时显示修复状态，上方实时折线 | trace 分段进度与失败重试（§16.3）、评审轮次 revise → pass | P0 |
@@ -764,7 +764,7 @@ Canvas Assistant drawer ──交给──▶ Iris：轻量问答就地完成；
 
 2026-11-13 浏览 [GSAP Showcase](https://gsap.com/showcase/)（用了 Text Animation / UI Interactions 筛选与 flip、progress 搜索），逐个打开了现场站点。只借动效思路；产品内用 `motion` 实现。
 
-| # | 条目 | 观察到的动效（卡片标注的 GSAP 插件） | Flovart 落点 | 优先级 |
+| # | 条目 | 观察到的动效（卡片标注的 GSAP 插件） | Iris 落点 | 优先级 |
 | --- | --- | --- | --- | --- |
 | G1 | [Butter](https://www.butter.video/)（Site of the Week，ToyFight） | 大标题按行 / 词揭示，3D 小物件在词与词之间落入，品牌行横向跑马（ScrollTrigger、SplitText、Draggable、CustomEase） | 文字层逐词揭示、元素在文字间落入组装（§12.4） | P0 |
 | G2 | [Carter Ogunsola Portfolio](https://carterogunsola.com/)（Site of the Day） | 计数到 100 的预加载；切换视图时旧列表移出、新卡片飞入并错落定位（ScrollTrigger、Flip、CustomEase） | 首页 → 画布转场的 FLIP、元素飞入错开（§12.2、§12.4）；长任务计数进度（§19.6） | P0 |
@@ -776,7 +776,7 @@ Canvas Assistant drawer ──交给──▶ Iris：轻量问答就地完成；
 
 ### 20.3 Apple
 
-| # | 参考 | 要点 | Flovart 落点 |
+| # | 参考 | 要点 | Iris 落点 |
 | --- | --- | --- | --- |
 | A1 | [HIG · Motion](https://developer.apple.com/design/human-interface-guidelines/motion) | 有目的地加动效；动效可选、不能是唯一信息通道；反馈简短精确；高频交互少加动效；允许打断动画 | DESIGN.md §14 |
 | A2 | [HIG · Materials](https://developer.apple.com/design/human-interface-guidelines/materials) | Liquid Glass 是浮在内容层之上的控件 / 导航层；不要用于内容层；节制使用；文字多用 regular，媒体上用 clear 并在亮背景加 35% 暗化；减弱透明度 / 提高对比度设置会改变外观 | DESIGN.md §9.2 |
@@ -786,7 +786,7 @@ Canvas Assistant drawer ──交给──▶ Iris：轻量问答就地完成；
 
 ### 20.4 Figma
 
-| # | 参考 | 要点 | Flovart 落点 |
+| # | 参考 | 要点 | Iris 落点 |
 | --- | --- | --- | --- |
 | F1 | [How Figma put the bounce in spring animations](https://www.figma.com/blog/how-we-built-spring-animations/) | 贝塞尔难以避免“凭空加速 / 突停”；弹簧由物理参数决定路径；用“速度 + 过冲”两个手柄而非三个物理量调参，并显示时长；导出 mass / stiffness / damping 给 Framer Motion | DESIGN.md §14.3（两参数定义 + motion 统一 preset） |
 | F2 | [Inside the redesigned Figma (UI3)](https://www.figma.com/blog/behind-our-redesign-ui3) | 让作品而不是 UI 居中；可收起面板与底部细工具条；输入框加底色、下拉加边框、圆角与可选标签提升可用性 | §2 内容优先、DESIGN.md §6 |

@@ -1,4 +1,4 @@
-# DESIGN.md · Flovart
+# DESIGN.md · Iris
 
 > 状态：**Current truth**（2026-11-13）。本文只描述**视觉语言与动效 token**（看起来是什么、动起来是什么）；交互与行为（状态、流程、出口、谁能做什么）见 [01 交互设计](01-interaction.md)。两份不重复：本文给数值，01 引用数值。
 > 格式：参照 Refero Styles 的 DESIGN.md 分层（mood → tokens → typography → color → overview → components → logic → do/don't → motion）。所有数值取自当前代码：`styles/index.css`、`styles/motion.css`、`styles/adaptive.css`、`styles/workflow.css`、`styles/dshEmbed.css`、`components/` 扫描；标 **目标** 的是本次新增、代码尚未采用的 token。
@@ -6,7 +6,7 @@
 
 ## 1. Mood
 
-Flovart 是给**剪辑师、创作者和他们的 Coding Agent** 用的本地创作台：人和 Agent 在同一张无限画布上摆素材、跑生成、比版本。它应当像一张**温暖的工作纸**——安静、紧凑、可信：底色是米白纸面和炭黑墨线，只有一抹薄荷绿标记“可以按 / 正在进行 / 已选中”；面板是贴在纸上的扁平卡片，只有真正浮在画布之上的工具才轻轻透出底下的内容；动作短促、有弹性但不炫技。作品和画布永远比界面更显眼。
+Iris 是给**剪辑师、创作者和他们的 Coding Agent** 用的本地创作台：人和 Agent 在同一张无限画布上摆素材、跑生成、比版本。它应当像一张**温暖的工作纸**——安静、紧凑、可信：底色是米白纸面和炭黑墨线，只有一抹薄荷绿标记“可以按 / 正在进行 / 已选中”；面板是贴在纸上的扁平卡片，只有真正浮在画布之上的工具才轻轻透出底下的内容；动作短促、有弹性但不炫技。作品和画布永远比界面更显眼。
 
 ## 2. Key tokens
 
@@ -64,14 +64,14 @@ Flovart 是给**剪辑师、创作者和他们的 Coding Agent** 用的本地创
 
 **光标 / 子 Agent 色**（**目标**，§11.4）：从现有色阶派生，不新增色相以外的品牌色——`我 / 用户` 墨 `#1f1d1a`、主编排 薄荷 `#12a89b`、版式 / 字体 珊瑚 `#cf4b45`、素材 / 生成 阳光 `#b88a00`（`--isl-sun` 压暗以满足白字对比）、合成 / 行动 蓝 `#3f7fd9`、评审 紫 `#7a5cc7`。同屏最多 6 色；超出用同色加编号。
 
-**遗留，不再新增**：`--flovart-*`（冷灰 zinc 系）、`--flv-*`（rose / coral / violet / glow）。**待收敛漂移**：`#e5484d`、`#e05252`（失败红）、`#6c64b0`、`#00ff88`（生成态强调）、抽屉暗色 `rgba(28,29,34,.78)`、未定义的 `--isl-line`。
+**遗留，不再新增**：`--iris-*`（冷灰 zinc 系）、`--flv-*`（rose / coral / violet / glow）。**待收敛漂移**：`#e5484d`、`#e05252`（失败红）、`#6c64b0`、`#00ff88`（生成态强调）、抽屉暗色 `rgba(28,29,34,.78)`、未定义的 `--isl-line`。
 
 ## 5. Overview
 
 | 维度 | 规格 |
 | --- | --- |
 | Mood | 暖纸面、单一薄荷、扁平分层、紧凑密度（§1） |
-| Layout | 顶栏三个 surface：**画布 Canvas｜Iris｜Agent**（职责见 [01](01-interaction.md) §11）；下方工作区 = 主 surface + 可停靠侧栏；Canvas 的主体是无限画布，Iris = 对话栏 + 无限画布（产出面） |
+| Layout | 顶栏三个 surface：**画布 Canvas｜Cut｜Agent**（职责见 [01](01-interaction.md) §11）；下方工作区 = 主 surface + 可停靠侧栏；Canvas 的主体是无限画布，Iris = 对话栏 + 无限画布（产出面） |
 | Content width | 页面型内容 `--content-max: 1280px`；表单 `--form-max: 680px`；侧栏 `--sidebar-width: clamp(220px, 24vw, 320px)`；宿主面板 280–480px |
 | Grid | 画布 24px 点阵（`.workflow-bg--dots`，墨 16%）或线格（`--lines`，13%），可开关；吸附网格同 24px；页面用 `--space-*` 间距而非列栅格 |
 | Icons | `lucide-react`（^1.20）线性图标，常用 12–18px（15px 75 处、14px 66 处），描边默认 2 |
@@ -150,7 +150,7 @@ pressable 3D drop（`--isl-drop*`）已于 2026-10-30 删除；`--shadow-panel`�
 
 ### 9.3 磨砂浮层与遮罩（2026-11-16）
 
-用户更正：浮层与放大窗口要**半透明**的高级磨砂（参照 bleep-app，见 [references.md](references.md)），不要不透明底；窗外用 Flovart 深色遮罩，不要发白的蒙层。
+用户更正：浮层与放大窗口要**半透明**的高级磨砂（参照 bleep-app，见 [references.md](references.md)），不要不透明底；窗外用 Iris 深色遮罩，不要发白的蒙层。
 
 | Token | 亮 | 暗 | 定义处 |
 | --- | --- | --- | --- |
@@ -306,11 +306,11 @@ pressable 3D drop（`--isl-drop*`）已于 2026-10-30 删除；`--shadow-panel`�
 
 ### 14.7 动效库
 
-保留 `motion`（12.40.0，`motion/react`）。**GSAP 只作为候选，不加依赖**：3.13 起在 Webflow 支持下全部插件免费、可商用，但授权是 Webflow 的 *Standard "No Charge" GSAP License*（非开源），其 Prohibited Uses 包含“让用户无需代码构建视觉动画、与 Webflow 视觉动画构建能力竞争的工具”——Flovart 是创作工具，引入前需法务评估。体积（unpkg UMD，gzip）：`gsap.min.js` 28.4KB + ScrollTrigger 18.0KB + Flip 9.7KB + SplitText 3.7KB；本仓库 `motion.js` UMD 44.7KB（`framer-motion.js` 60.8KB）；两者在 Vite 中的 tree-shaken 实际增量**未实测**。现有需求（弹簧、布局动画、手势）motion 已覆盖；只有当需要 FLIP 跨容器重排或文字逐字拆分且 motion 不足时再评估。
+保留 `motion`（12.40.0，`motion/react`）。**GSAP 只作为候选，不加依赖**：3.13 起在 Webflow 支持下全部插件免费、可商用，但授权是 Webflow 的 *Standard "No Charge" GSAP License*（非开源），其 Prohibited Uses 包含“让用户无需代码构建视觉动画、与 Webflow 视觉动画构建能力竞争的工具”——Iris 是创作工具，引入前需法务评估。体积（unpkg UMD，gzip）：`gsap.min.js` 28.4KB + ScrollTrigger 18.0KB + Flip 9.7KB + SplitText 3.7KB；本仓库 `motion.js` UMD 44.7KB（`framer-motion.js` 60.8KB）；两者在 Vite 中的 tree-shaken 实际增量**未实测**。现有需求（弹簧、布局动画、手势）motion 已覆盖；只有当需要 FLIP 跨容器重排或文字逐字拆分且 motion 不足时再评估。
 
 ## 15. Elastic layout（弹性布局）
 
-**判断**：Flovart 的每块面板都会被用户拖宽拖窄、被窗口挤压、被嵌进宿主。UI 不是为某个宽度画的静态稿，而是一条**随自身宽度降级的曲线**。任何宽度下都不允许重叠、折行、文字被截成半个字（如 `Lo…`）或控件溢出面板。
+**判断**：Iris 的每块面板都会被用户拖宽拖窄、被窗口挤压、被嵌进宿主。UI 不是为某个宽度画的静态稿，而是一条**随自身宽度降级的曲线**。任何宽度下都不允许重叠、折行、文字被截成半个字（如 `Lo…`）或控件溢出面板。
 
 ### 15.1 降级梯（从宽到窄，依次执行）
 

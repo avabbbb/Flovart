@@ -164,7 +164,7 @@
 @keyframes agent-step-ping { 0% { transform: scale(.6); opacity: .45; } 100% { transform: scale(1.8); opacity: 0; } }
 @keyframes agent-step-dot { 0%, 80%, 100% { opacity: .3; } 40% { opacity: 1; } }
 
-/* ── 提问卡（flovart_ask）：外壳见 styles/agentCardShell.css。
+/* ── 提问卡（iris_ask）：外壳见 styles/agentCardShell.css。
    版式：Inspora 1-37「AI Agent Approval Cards」@Kevin 的 Questions 卡 —— 一页一题；选项行 = 字母键帽 + 文字；
    选中键帽反色；悬停高光跟随指针（--mx / --my）；最后一行「其他…」是输入框。 ── */
 .flv-card.agent-ask {

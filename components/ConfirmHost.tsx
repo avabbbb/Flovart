@@ -19,10 +19,10 @@ export function ConfirmHost() {
   }, [request]);
   if (!request) return null;
   return (
-    <div className={'flovart-confirm theme-aware' + (request.plan ? ' flovart-confirm--plan' : '')} role="alertdialog" aria-labelledby="flovart-confirm-title" style={{ zIndex: Z.notification }}>
-      <strong id="flovart-confirm-title">{request.title}</strong>
+    <div className={'iris-confirm theme-aware' + (request.plan ? ' iris-confirm--plan' : '')} role="alertdialog" aria-labelledby="iris-confirm-title" style={{ zIndex: Z.notification }}>
+      <strong id="iris-confirm-title">{request.title}</strong>
       {request.plan ? <GenerationPlanCard plan={request.plan} /> : request.body && <p>{request.body}</p>}
-      <div className="flovart-confirm__actions">
+      <div className="iris-confirm__actions">
         {request.extraLabel && <button type="button" onClick={() => runUiConfirmExtra(request.id)}>{request.extraLabel}</button>}
         <button type="button" onClick={() => answerUiConfirm(request.id, false)}>{request.cancelLabel}</button>
         <button type="button" ref={confirmRef} data-tone={request.tone} disabled={request.confirmDisabled} onClick={() => answerUiConfirm(request.id, true)}>{request.confirmLabel}</button>

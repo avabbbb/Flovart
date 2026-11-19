@@ -3,7 +3,7 @@ import type {
   WorkflowNode,
   WorkflowProject,
 } from '../components/workflow/types';
-import type { FlovartRuntimeApi } from './flovartRuntime';
+import type { IrisRuntimeApi } from './irisRuntime';
 
 export interface ProductionWorkflowProjection {
   schemaVersion: 'flovart.workflow-projection/1';
@@ -21,7 +21,7 @@ export interface ProductionWorkflowProjection {
 type ProjectionSyncResult = 'applied' | 'unchanged' | 'empty' | 'unavailable';
 
 interface ProductionProjectionAdapterOptions {
-  runtime: Pick<FlovartRuntimeApi, 'execute'> | null;
+  runtime: Pick<IrisRuntimeApi, 'execute'> | null;
   getProject: (projectId: string) => WorkflowProject | null;
   updateProject: (
     projectId: string,

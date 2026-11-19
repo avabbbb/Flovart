@@ -5,18 +5,18 @@ import { ingestWorkflowMedia, loadWorkflowMediaBlob } from '../../components/wor
 import { useWorkflowStore } from '../../components/workflow/store';
 import type { WorkflowNode, WorkflowProject } from '../../components/workflow/types';
 import { loadCreativeHostResource, registerCreativeHostResource } from './hostResourceRegistry';
-import { createFlovartStudioCore } from './studioClient';
+import { createIrisStudioCore } from './studioClient';
 import { loadWorkflowArtifact } from './artifactRegistry';
 import { StudioWorkflowController } from './studioWorkflow';
 import { hostSelectionResource, hostSelectionReference, StudioContractError } from './studioContract';
-import type { CreativeHostAdapter, FlovartArtifact, HostContext, HostImportResult, HostImportTarget, HostSelection, MaterializedHostSelection, StudioApplyRequest, StudioRunRequest } from './studioContract';
+import type { CreativeHostAdapter, IrisArtifact, HostContext, HostImportResult, HostImportTarget, HostSelection, MaterializedHostSelection, StudioApplyRequest, StudioRunRequest } from './studioContract';
 import { displayError } from '../displayError';
 
 /**
  * Browser-Link 桥：把宿主面板等待的 __FLOVART_* 注入全局接到浏览器里的
  * Workflow authority。面板 ≠ 第二份状态——__FLOVART_BROWSER_WORKSPACE__ 只暴露
  * live getter（每次调用重新读 store），generate() 经由
- * createFlovartStudioCore → dispatchWorkflowCommand → applyWorkflowMutation，
+ * createIrisStudioCore → dispatchWorkflowCommand → applyWorkflowMutation，
  * 目标对象、draftVersion、mutationId/幂等回执、撤销栈全部仍由
  * draftAuthority/store 持有；本模块只做连线，不持有可变业务状态。
  *
@@ -43,7 +43,7 @@ type StudioGlobal = typeof globalThis & {
 export interface BrowserWorkspaceBridge {
   getActiveProject(): WorkflowProject | null;
   materializeSelection(args: { selection: HostSelection }): Promise<MaterializedHostSelection | { blob: Blob; kind?: string; mimeType?: string }>;
-  importArtifact(args: { artifact: FlovartArtifact; target?: HostImportTarget }): Promise<HostImportResult>;
+  importArtifact(args: { artifact: IrisArtifact; target?: HostImportTarget }): Promise<HostImportResult>;
   subscribeContext?(listener: (context: unknown) => void): { dispose(): void };
 }
 
@@ -69,7 +69,7 @@ async function dispatchStudioCommand(command: string, args: Record<string, unkno
   if (result.confirmation?.required) {
     throw new StudioContractError(
       'WORKSPACE_UNAVAILABLE',
-      `这次制作需要先在 Flovart 画布中确认：${result.confirmation.summary}`,
+      `这次制作需要先在 Iris 画布中确认：${result.confirmation.summary}`,
       true,
     );
   }
@@ -77,7 +77,7 @@ async function dispatchStudioCommand(command: string, args: Record<string, unkno
     const code = result.error?.code || 'COMMAND_FAILED';
     throw new StudioContractError(
       code === 'REVISION_CONFLICT' || code === 'NOT_FOUND' ? 'WORKSPACE_UNAVAILABLE' : 'HOST_IMPORT_FAILED',
-      result.error?.message || 'Flovart 命令执行失败。',
+      result.error?.message || 'Iris 命令执行失败。',
       true,
     );
   }
@@ -93,7 +93,7 @@ function requireWorkspaceProject(projectId?: string): WorkflowProject {
   if (!project) {
     throw new StudioContractError(
       'WORKSPACE_UNAVAILABLE',
-      '请先打开 Flovart 画布（Workflow）后再从面板制作；面板不会离线伪造生成结果。',
+      '请先打开 Iris 画布（Workflow）后再从面板制作；面板不会离线伪造生成结果。',
       true,
     );
   }
@@ -140,13 +140,13 @@ async function materializeWorkflowSelection(selection: HostSelection): Promise<M
  * 与面板在真实宿主中「生成并添加」同一语义，且同样走 draftAuthority 的
  * mutationId/expectedRevision，可撤销、有回执。
  */
-async function importArtifactToWorkspace(args: { artifact: FlovartArtifact; target?: HostImportTarget }): Promise<HostImportResult> {
+async function importArtifactToWorkspace(args: { artifact: IrisArtifact; target?: HostImportTarget }): Promise<HostImportResult> {
   const { artifact } = args;
   const project = requireWorkspaceProject();
   const blob = artifact.blob || null;
   let storageKey: string | undefined;
   if (blob) {
-    const file = new File([blob], artifact.name || `flovart-result.${artifact.mimeType === 'video/mp4' ? 'mp4' : 'png'}`, { type: artifact.mimeType });
+    const file = new File([blob], artifact.name || `iris-result.${artifact.mimeType === 'video/mp4' ? 'mp4' : 'png'}`, { type: artifact.mimeType });
     const record = await ingestWorkflowMedia(file);
     storageKey = record.storageKey;
   }
@@ -158,7 +158,7 @@ async function importArtifactToWorkspace(args: { artifact: FlovartArtifact; targ
     ...(artifact.href ? { href: artifact.href } : {}),
     mimeType: artifact.mimeType,
   });
-  node.title = artifact.name || 'Flovart 结果';
+  node.title = artifact.name || 'Iris 结果';
   const mutationId = `studio-import-${nanoid(8)}`;
   const result = await dispatchWorkflowCommand({
     id: `studio-link:${nanoid()}`,
@@ -171,7 +171,7 @@ async function importArtifactToWorkspace(args: { artifact: FlovartArtifact; targ
       mutationId,
       idempotencyKey: mutationId,
       operations: [{ type: 'add_node', node }],
-      intent: `导入 Flovart 产物「${node.title}」`,
+      intent: `导入 Iris 产物「${node.title}」`,
     },
   });
   if (!result.ok) {
@@ -199,7 +199,7 @@ export interface InstallStudioBrowserLinkOptions {
  * host-contract.js 的 createBrowserWorkspaceAdapter 用）+ __FLOVART_STUDIO_CONTROLLER__
  * + __FLOVART_OPEN_CANVAS__，并广播 flovart:link-ready。
  * 无 Workflow 工程时 controller 仍在，但其 generate() 经 requireWorkspaceProject
- * 显式失败——面板状态行显示「等待 Flovart」，而不是假链接。
+ * 显式失败——面板状态行显示「等待 Iris」，而不是假链接。
  */
 export function installStudioBrowserLink(options: InstallStudioBrowserLinkOptions = {}): StudioBrowserLinkHandle {
   const globalScope = options.target || studioGlobal();
@@ -216,7 +216,7 @@ export function installStudioBrowserLink(options: InstallStudioBrowserLinkOption
 
   const adapter = options.adapter || createBrowserWorkspaceAdapter(globalScope);
 
-  const core = createFlovartStudioCore(dispatchStudioCommand, {
+  const core = createIrisStudioCore(dispatchStudioCommand, {
     registerHostResource: async materialized => registerCreativeHostResource(materialized),
     artifactGet: async args => loadWorkflowArtifact(args.artifactId || args.taskId || ''),
   });
@@ -238,7 +238,7 @@ export function installStudioBrowserLink(options: InstallStudioBrowserLinkOption
   const controller = new StudioWorkflowController(adapter, guardedCore);
   globalScope[CONTROLLER_KEY] = controller;
   globalScope[OPEN_CANVAS_KEY] = options.openCanvas || (() => {
-    throw new StudioContractError('WORKSPACE_UNAVAILABLE', '请连接 Flovart 后打开画布。', true);
+    throw new StudioContractError('WORKSPACE_UNAVAILABLE', '请连接 Iris 后打开画布。', true);
   });
   globalScope.dispatchEvent?.(new Event(LINK_READY_EVENT));
 
@@ -269,7 +269,7 @@ function createBrowserWorkspaceAdapter(globalScope: StudioGlobal): CreativeHostA
   const workspace = (): BrowserWorkspaceBridge => {
     const api = globalScope[WORKSPACE_KEY];
     if (!api || typeof api.getActiveProject !== 'function') {
-      throw new StudioContractError('HOST_CONTEXT_UNAVAILABLE', 'Flovart Browser Workflow 尚未注入工作区连接。', true);
+      throw new StudioContractError('HOST_CONTEXT_UNAVAILABLE', 'Iris Browser Workflow 尚未注入工作区连接。', true);
     }
     return api;
   };
@@ -307,7 +307,7 @@ function createBrowserWorkspaceAdapter(globalScope: StudioGlobal): CreativeHostA
     async materializeSelection(selection) {
       const current = selectionFromProject(projectOf());
       if (!current || current.selectionId !== selection.selectionId || locatorKeyOf(current.locator) !== locatorKeyOf(selection.locator)) {
-        throw new StudioContractError('HOST_CONTEXT_UNAVAILABLE', 'Flovart 画布当前选择已变化，请重新选择节点。', true);
+        throw new StudioContractError('HOST_CONTEXT_UNAVAILABLE', 'Iris 画布当前选择已变化，请重新选择节点。', true);
       }
       const result = await workspace().materializeSelection({ selection });
       if (result && 'resource' in result && 'reference' in result) return result as MaterializedHostSelection;

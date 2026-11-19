@@ -11,7 +11,7 @@ import type { WorkflowConnection, WorkflowNamedSnapshot, WorkflowNode, WorkflowP
 // v5：手动分组（batchGroupSource 'manual'）迁移成分组框（subgraph + groupKind 'group' + parentId），batchId 不再表示手动分组。
 // v6：去掉 operation 中间节点——生成记录挪到结果节点，输入直连结果（directOutputMigration.ts）；升级前整份状态写入备份键。
 export const WORKFLOW_PERSISTENCE_VERSION = 6;
-export const WORKFLOW_BACKUP_KEY = 'flovart:workflow:projects:backup';
+export const WORKFLOW_BACKUP_KEY = 'iris:workflow:projects:backup';
 
 export interface PersistedWorkflowStateLike {
   projects: WorkflowProject[];
@@ -252,7 +252,7 @@ export function migrateWorkflowProject(value: unknown, now = new Date().toISOStr
   };
 }
 
-export const WORKFLOW_QUARANTINE_KEY = 'flovart:workflow:projects:quarantine';
+export const WORKFLOW_QUARANTINE_KEY = 'iris:workflow:projects:quarantine';
 
 /**
  * 逐个迁移项目：某个项目迁移抛错时只隔离它（原始数据写入隔离键，不丢），其它项目照常打开。

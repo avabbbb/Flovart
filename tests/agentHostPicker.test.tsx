@@ -52,7 +52,7 @@ describe('Link 2.0 agent selection', () => {
   });
 
   it('surfaces setup guidance from the host definition without host branches', async () => {
-    vi.mocked(prepareAgent).mockResolvedValue({ state: 'needs_setup', label: '需安装', message: '安装包已下载，在 WorkBuddy 的技能页导入后即可使用 Flovart。' });
+    vi.mocked(prepareAgent).mockResolvedValue({ state: 'needs_setup', label: '需安装', message: '安装包已下载，在 WorkBuddy 的技能页导入后即可使用 Iris。' });
     render(<AgentHostPicker />);
     await screen.findByRole('button', { name: '使用 Codex' });
     const workbuddyCard = screen.getByRole('button', { name: /^WorkBuddy/ }).closest('.agent-card')!;
@@ -76,7 +76,7 @@ describe('Link 2.0 agent selection', () => {
   });
 
   it('shows numbered DSH steps with copyable commands when DeepSeek Harness is selected', async () => {
-    localStorage.setItem('flovart.agent.selectedHost', 'deepseek-harness');
+    localStorage.setItem('iris.agent.selectedHost', 'deepseek-harness');
     render(<AgentHostPicker />);
     const guide = await screen.findByTestId('agent-setup-guide');
     expect(within(guide).getByRole('heading', { name: 'DeepSeek Harness 接入步骤' })).toBeInTheDocument();

@@ -3,7 +3,7 @@ services:
   web:
     build: .
     ports:
-      - "${FLOVART_WEB_PORT:-1635}:1635"
+      - "${IRIS_WEB_PORT:-1635}:1635"
     environment:
       CHOKIDAR_USEPOLLING: "true"
     volumes:

@@ -1,0 +1,280 @@
+// @vitest-environment node
+
+import { describe, expect, it } from 'vitest';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+
+import { AGENT_PUBLIC_COMMANDS } from '../tools/iris/agent-surface.js';
+import { AGENT_OPERATION_DEFINITIONS } from '../tools/iris/agent-surface.js';
+import { createMcpServer, PIPELINE_MCP_TOOL_NAMES, SKILL_MCP_TOOL_NAMES } from '../tools/iris/mcp-server.js';
+import { PIPELINE_COMMAND_NAMES } from '../tools/iris/pipeline/commands.js';
+import { SKILL_SURFACE_COMMAND_NAMES } from '../tools/iris/skill-surface.js';
+import { createOperationGateway } from '../tools/iris/operation-gateway.js';
+
+async function connectProjection(gateway: (command: string, args: Record<string, unknown>, context: Record<string, unknown>) => Promise<unknown>) {
+  const server = createMcpServer({ gateway, includeResources: true });
+  const client = new Client({ name: 'iris-projection-test', version: '1.0.0' });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await server.connect(serverTransport);
+  await client.connect(clientTransport);
+  return { server, client };
+}
+
+describe('Iris MCP projection', () => {
+  it('registers deprecated flovart_* names only when asked to', async () => {
+    const server = createMcpServer({ gateway: async () => ({ ok: true }), includeLegacyFlovartNames: true });
+    const client = new Client({ name: 'iris-legacy-names-test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    const names = (await client.listTools()).tools.map(tool => tool.name);
+    expect(names).toContain('iris_status');
+    expect(names).toContain('flovart_status');
+    const result = await client.callTool({ name: 'flovart_status', arguments: {} });
+    expect(result.isError).not.toBe(true);
+  });
+
+  it('keeps operation metadata transport-neutral and complete for every stable command', () => {
+    for (const command of AGENT_PUBLIC_COMMANDS) {
+      expect(AGENT_OPERATION_DEFINITIONS[command]).toMatchObject({
+        sideEffects: expect.any(String),
+        risk: expect.any(String),
+        permissions: expect.any(Array),
+        idempotent: expect.any(Boolean),
+        mutation: expect.any(Boolean),
+        requiredCapabilities: expect.any(Array),
+      });
+    }
+  });
+
+  it('exposes exactly the stable Agent surface and no compatibility registry', async () => {
+    const { client } = await connectProjection(async () => ({ ok: true }));
+    const result = await client.listTools();
+
+    expect(result.tools.map(tool => tool.name)).toEqual([
+      'iris_status',
+      'iris_agent_turn',
+      'iris_task_start',
+      'iris_task_get',
+      'iris_task_cancel',
+      'iris_workflow_inspect',
+      'iris_workflow_selection_get',
+      'iris_workflow_focus_nodes',
+      'iris_workflow_apply',
+      'iris_generate',
+      'iris_models_list',
+      'iris_shortcut_list',
+      'iris_shortcut_apply',
+      'iris_group_create',
+      'iris_group_run',
+      'iris_workflow_search_nodes',
+      'iris_cost_estimate',
+      'iris_node_tool_list',
+      'iris_note_write',
+      'iris_media_import',
+      'iris_script_materialize',
+      'iris_export',
+      'iris_workflow_node_run',
+      'iris_workflow_node_stop',
+      'iris_image_tool',
+      'iris_video_tool',
+      'iris_audio_tool',
+      // 上一版 MCP 专用名：弃用别名，保留一个版本
+      'iris_workflow_selection',
+      'iris_workflow_focus',
+      'iris_workflow_run',
+      ...PIPELINE_COMMAND_NAMES.map(command => PIPELINE_MCP_TOOL_NAMES[command]),
+      ...SKILL_SURFACE_COMMAND_NAMES.map(command => SKILL_MCP_TOOL_NAMES[command]),
+    ]);
+    expect(result.tools).toHaveLength(AGENT_PUBLIC_COMMANDS.length + 3 + PIPELINE_COMMAND_NAMES.length + SKILL_SURFACE_COMMAND_NAMES.length);
+    expect(result.tools.map(tool => tool.name).join(' ')).not.toMatch(/command\.list|command\.schema|node\.create/);
+  });
+
+  it('projects typed workflow input without leaking transport context into operation args', async () => {
+    const calls: Array<{ command: string; args: Record<string, unknown>; context: Record<string, unknown> }> = [];
+    const { client } = await connectProjection(async (command, args, context) => {
+      calls.push({ command, args, context });
+      return { ok: true, revision: 8, token: 'should-not-cross-the-boundary' };
+    });
+
+    const result = await client.callTool({
+      name: 'iris_workflow_apply',
+      arguments: {
+        projectId: 'project-1',
+        expectedRevision: 7,
+        mutationId: 'mutation-1',
+        operations: [{ op: 'add', path: '/nodes/-', value: { id: 'node-1' } }],
+        idempotencyKey: 'idem-1',
+        agentIdentity: 'teleagent',
+        hostSessionId: 'tele-session-1',
+      },
+    });
+
+    expect(calls).toEqual([{
+      command: 'workflow.apply',
+      args: expect.objectContaining({
+        projectId: 'project-1',
+        expectedRevision: 7,
+        mutationId: 'mutation-1',
+        operations: [{ op: 'add', path: '/nodes/-', value: { id: 'node-1' } }],
+      }),
+      context: {
+        source: 'mcp',
+        idempotencyKey: 'idem-1',
+        caller: { agentIdentity: 'teleagent', hostSessionId: 'tele-session-1' },
+      },
+    }]);
+    expect(calls[0].args).not.toHaveProperty('idempotencyKey');
+    expect(calls[0].args).not.toHaveProperty('agentIdentity');
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({ ok: true, revision: 8, token: '[REDACTED]' });
+    expect(result.content[0].text).not.toContain('should-not-cross-the-boundary');
+  });
+
+  it('keeps Browser Workflow authority at the canonical gateway boundary', async () => {
+    const calls: Array<{ command: string; args: Record<string, unknown>; source: string; options: Record<string, unknown> }> = [];
+    const execute = createOperationGateway({
+      workspace: {
+        execute: async (command: string, args: Record<string, unknown>, source: string, options: Record<string, unknown>) => {
+          calls.push({ command, args, source, options });
+          return { ok: true };
+        },
+      },
+      status: async () => ({ ready: true }),
+    });
+
+    await execute('workflow.inspect', { projectId: 'project-1' }, {
+      source: 'mcp',
+      caller: { agentIdentity: 'teleagent', hostSessionId: 'session-1' },
+    });
+
+    expect(calls).toEqual([{
+      command: 'workflow.inspect',
+      args: { projectId: 'project-1', workspaceMode: 'browser' },
+      source: 'mcp',
+      options: { caller: { agentIdentity: 'teleagent', hostSessionId: 'session-1' } },
+    }]);
+  });
+
+  it('requires idempotency for writes and preserves structured error codes', async () => {
+    const gateway = createOperationGateway({
+      workspace: { execute: async () => ({ ok: true }) },
+      status: async () => ({ ready: true }),
+    });
+    const { client } = await connectProjection(gateway);
+    const result = await client.callTool({
+      name: 'iris_workflow_apply',
+      arguments: {
+        projectId: 'project-1',
+        expectedRevision: 1,
+        mutationId: 'mutation-1',
+        operations: [],
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_ARGUMENT' },
+    });
+  });
+
+  it('maps Workspace failures to MCP errors without exposing credentials', async () => {
+    const { client } = await connectProjection(async () => {
+      const error = new Error('Workspace unavailable') as Error & { code: string; toJSON: () => unknown };
+      error.code = 'WORKSPACE_UNAVAILABLE';
+      error.toJSON = () => ({ code: error.code, message: error.message, retryable: true, details: { token: 'private' } });
+      throw error;
+    });
+
+    const result = await client.callTool({ name: 'iris_workflow_inspect', arguments: {} });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      ok: false,
+      error: { code: 'WORKSPACE_UNAVAILABLE', details: { token: '[REDACTED]' } },
+    });
+    expect(result.content[0].text).not.toContain('private');
+  });
+
+  it('offers read-only current workspace and workflow resources', async () => {
+    const calls: string[] = [];
+    const { client } = await connectProjection(async command => {
+      calls.push(command);
+      return command === 'status'
+        ? { ready: true, agentToken: 'private' }
+        : { ok: true, workflow: { revision: 3 } };
+    });
+
+    const resources = await client.listResources();
+    expect(resources.resources.map(resource => resource.uri)).toEqual([
+      'flovart://workspace/current',
+      'flovart://workflow/current',
+    ]);
+    const current = await client.readResource({ uri: 'flovart://workflow/current' });
+    expect(calls).toContain('workflow.inspect');
+    expect(JSON.stringify(current)).not.toContain('private');
+  });
+
+  it('projects the agent video pipeline as iris_* tools that write into the same trace', async () => {
+    const calls: Array<{ command: string; args: Record<string, unknown>; context: Record<string, unknown> }> = [];
+    const server = createMcpServer({
+      gateway: async () => ({ ok: true }),
+      includeResources: false,
+      pipelineExecute: async (command: string, args: Record<string, unknown>, context: Record<string, unknown>) => {
+        calls.push({ command, args, context });
+        if (command === 'capture.ui') return { ok: false, error: { code: 'CONFIRMATION_REQUIRED', message: 'confirm first', retryable: false } };
+        return { ok: true, result: { runId: 'run_1', status: 'active', token: 'never-leaks' }, step: { seq: 1, tool: command, caller: context.caller } };
+      },
+    });
+    const client = new Client({ name: 'iris-pipeline-test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    const tools = (await client.listTools()).tools;
+    const render = tools.find(tool => tool.name === 'iris_composition_render');
+    expect(render?.inputSchema.required).toEqual(expect.arrayContaining(['runId', 'preset', 'mutationId']));
+    expect(render?.annotations?.readOnlyHint).toBe(false);
+    expect(tools.find(tool => tool.name === 'iris_pipeline_run_get')?.annotations?.readOnlyHint).toBe(true);
+    expect(tools.map(tool => tool.name)).toContain('iris_capture_ui');
+
+    const started = await client.callTool({ name: 'iris_pipeline_run_start', arguments: { projectId: 'p', brief: { keyLine: 'x' }, budget: { maxTasks: 3 }, budgetConfirmed: true, mutationId: 'm-1', agentIdentity: 'codex', hostSessionId: 'h' } });
+    expect(started.isError, JSON.stringify(started.content)).toBeFalsy();
+    expect(calls[0]).toEqual({
+      command: 'pipeline.run.start',
+      args: { projectId: 'p', brief: { keyLine: 'x' }, budget: { maxTasks: 3 }, budgetConfirmed: true, mutationId: 'm-1' },
+      context: { caller: 'codex', mutationId: 'm-1' },
+    });
+    expect(started.structuredContent).toMatchObject({ runId: 'run_1', token: '[REDACTED]', step: { caller: 'codex' } });
+
+    const capture = await client.callTool({ name: 'iris_capture_ui', arguments: { runId: 'run_1', url: 'http://localhost:5173', mutationId: 'm-2' } });
+    expect(capture.isError).toBe(true);
+    expect(capture.structuredContent).toMatchObject({ ok: false, error: { code: 'CONFIRMATION_REQUIRED' } });
+    expect(calls[1].context).toEqual({ caller: 'mcp', mutationId: 'm-2' });
+  });
+  it('projects the Skill ecosystem and receipts as iris_skill_* tools', async () => {
+    // 运行时拼出来的假密钥：避免 release 密钥审计扫到源码字面量。
+    const LEAK = ['sk', 'should-not-leak', '0'.repeat(10)].join('-');
+    const calls: Array<{ command: string; args: Record<string, unknown> }> = [];
+    const server = createMcpServer({
+      gateway: async () => ({ ok: true }),
+      includePipeline: false,
+      includeResources: false,
+      skillExecute: async (command: string, args: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return { ok: true, command, dir: '/tmp/draft', evaluation: { ok: true }, apiKey: LEAK };
+      },
+    });
+    const client = new Client({ name: 'iris-skill-test', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    const { tools } = await client.listTools();
+    expect(tools.find(tool => tool.name === 'iris_skill_list')?.annotations?.readOnlyHint).toBe(true);
+    expect(tools.find(tool => tool.name === 'iris_skill_draft')?.annotations?.readOnlyHint).toBe(false);
+    expect(tools.map(tool => tool.name)).toContain('iris_receipts_list');
+    const result = await client.callTool({ name: 'iris_skill_draft', arguments: { id: 'community.demo', fromProject: 'p-1', nodeIds: ['a'], agentIdentity: 'codex' } });
+    expect(calls).toEqual([{ command: 'skill.draft', args: { id: 'community.demo', fromProject: 'p-1', nodeIds: ['a'] } }]);
+    expect(JSON.stringify(result)).not.toContain(LEAK);
+  });
+});

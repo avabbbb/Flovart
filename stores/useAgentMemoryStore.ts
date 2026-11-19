@@ -1,4 +1,4 @@
-// 内置 Agent 的项目记忆存储：每个 Flovart 项目一份列表，localforage 持久化（浏览器业务数据不放 localStorage）。
+// 内置 Agent 的项目记忆存储：每个 Iris 项目一份列表，localforage 持久化（浏览器业务数据不放 localStorage）。
 // 读写规则（脱敏、去重、100 条上限淘汰最旧）在 services/agentProjectMemory.ts。
 import { create } from 'zustand';
 import localforage from 'localforage';
@@ -10,7 +10,7 @@ import {
   type AgentMemoryEntry,
 } from '../services/agentProjectMemory';
 
-const memoryStore = localforage.createInstance({ name: 'flovart', storeName: 'agent-memory' });
+const memoryStore = localforage.createInstance({ name: 'iris', storeName: 'agent-memory' });
 const memoryKey = (projectId: string) => `project.${projectId}`;
 
 interface AgentMemoryState {

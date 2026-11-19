@@ -726,7 +726,7 @@
 .iris-popover__hint { flex: 0 0 auto; font-size: 10px; color: var(--isl-ink-ghost); }
 .iris-popover__empty { margin: 0; padding: 8px 10px; color: var(--isl-ink-ghost); font-size: 12px; }
 
-/* ── 右：对话（复用 FlovartAgentPanel，只换外壳质感） */
+/* ── 右：对话（复用 IrisAgentPanel，只换外壳质感） */
 .iris-chat {
   overflow: hidden;
 }

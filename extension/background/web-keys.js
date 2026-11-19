@@ -4,11 +4,14 @@
 // - 每次写入带 revision；delta 的 baseRevision 对不上就拒绝，网页侧会改发全量 snapshot。
 // - 配对被撤销或拒绝时清空该 origin 的全部 Key。
 import { PAIRINGS_KEY, readPairings } from './web-pairings.js';
+import { ensureRenamedExtensionStorage } from './storage-migration.js';
 
-export const WEB_KEYS_KEY = 'flovartWebKeys';
+export const WEB_KEYS_KEY = 'irisWebKeys';
 export const REVISION_MISMATCH = 'keys.revision-mismatch';
 const MAX_KEYS = 200;
-const DB_NAME = 'flovart-extension';
+const DB_NAME = 'iris-extension';
+// 更名前的库：只读，用来取回旧的不可导出 AES-GCM 密钥（否则旧密文解不开）。
+const LEGACY_DB_NAME = 'flovart-extension';
 const DB_STORE = 'crypto';
 const CRYPTO_ID = 'web-keys-aes-gcm';
 
@@ -62,6 +65,30 @@ function base64ToBytes(value) {
   return bytes;
 }
 
+// 读取旧库里的密钥；旧库不存在时不创建空库。
+function legacyCryptoKey() {
+  return new Promise(resolve => {
+    let created = false;
+    const open = indexedDB.open(LEGACY_DB_NAME);
+    open.onupgradeneeded = () => {
+      created = true;
+      open.transaction?.abort();
+    };
+    open.onerror = () => resolve(null);
+    open.onsuccess = () => {
+      const db = open.result;
+      if (created || !db.objectStoreNames.contains(DB_STORE)) {
+        db.close();
+        resolve(null);
+        return;
+      }
+      const request = db.transaction(DB_STORE, 'readonly').objectStore(DB_STORE).get(CRYPTO_ID);
+      request.onsuccess = () => { resolve(request.result || null); db.close(); };
+      request.onerror = () => { resolve(null); db.close(); };
+    };
+  });
+}
+
 function idb(run, mode) {
   return new Promise((resolve, reject) => {
     const open = indexedDB.open(DB_NAME, 1);
@@ -89,6 +116,11 @@ export function defaultCryptoKey() {
   defaultKeyPromise ||= (async () => {
     const existing = await idb(store => store.get(CRYPTO_ID), 'readonly');
     if (existing) return existing;
+    const legacy = await legacyCryptoKey();
+    if (legacy) {
+      await idb(store => store.put(legacy, CRYPTO_ID), 'readwrite');
+      return legacy;
+    }
     const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
     await idb(store => store.put(key, CRYPTO_ID), 'readwrite');
     return key;
@@ -108,6 +140,7 @@ export function createWebKeyStore({ storage, cryptoKey = defaultCryptoKey } = {}
   };
 
   async function readAll() {
+    await ensureRenamedExtensionStorage(area());
     const stored = await area().get(WEB_KEYS_KEY);
     const value = stored?.[WEB_KEYS_KEY];
     return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -226,5 +259,5 @@ export function registerWebKeyHandlers(onWebMessage, store, chromeApi = globalTh
 
   return readPairings()
     .then(pairings => store.prune(new Set(Object.keys(pairings).filter(origin => pairings[origin]?.status === 'approved'))))
-    .catch(error => console.error('[Flovart Web Keys]', error));
+    .catch(error => console.error('[Iris Web Keys]', error));
 }

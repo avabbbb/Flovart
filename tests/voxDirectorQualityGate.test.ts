@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { auditVoxProductionSpec } from '../tools/flovart/vox-director-quality.js';
+import { auditVoxProductionSpec } from '../tools/iris/vox-director-quality.js';
 
 const approvedVoxSpec = {
   schemaVersion: 'flovart.production-spec/1',

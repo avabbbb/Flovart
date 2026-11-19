@@ -19,7 +19,7 @@ beforeEach(() => {
 
 afterEach(() => useAgentConnectionStore.getState().reset());
 
-describe('Flovart Link host activation', () => {
+describe('Iris Link host activation', () => {
   it('owns the prepare → writer → host sequence in one coordinator', async () => {
     const order: string[] = [];
     const result = await ensureHostReady('codex', {

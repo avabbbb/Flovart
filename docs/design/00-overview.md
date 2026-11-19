@@ -1,23 +1,23 @@
-# Flovart 总体设计
+# Iris 总体设计
 
 > 状态：**Current truth**（2026-10-07 文档重构）。本文是产品与系统的唯一总纲；各模块细节见同目录模块文档，交互规则见[交互设计](01-interaction.md)。
 > 标注约定：**已实现** = 代码在主干；**已验证** = 有 Support Matrix 证据；**设计目标** = 尚未实现；**假设** = 待真实环境确认。
 
 ## 1. 一句话
 
-Flovart 有两条并行的定位（2026-11-17 定案）：
+Iris 有两条并行的定位（2026-11-17 定案）：
 
-- **Flovart（Canvas + Agent）是 Workflow 生产工具**：在可见的无限画布上编排节点、生成、素材与版本；你自己的 Agent（Codex、Claude Code、DSH…）通过 Skill + CLI 调用同一套命令。宿主插件给素材加一层可开关、可替换的 AI 创意层，原素材不动，复杂制作再展开 Flovart。
-- **Iris 是全能后期助手（Personal agent）**：Web 版独立可用——对话优先，Flovart 无限画布是它的产出面，不装任何剪辑软件也能用。可选地连接本地宿主插件（DaVinci Resolve 先，Premiere、剪映 / CapCut 后续）同步剪辑上下文，免手动上传。核心主张：Agent 读完整工程上下文（图层、合成、关键帧、标记、素材），输出可编辑的工程改动或画布节点，而不是烤死的成片。见 [11-iris](11-iris.md)。
+- **Iris（Canvas + Agent）是 Workflow 生产工具**：在可见的无限画布上编排节点、生成、素材与版本；你自己的 Agent（Codex、Claude Code、DSH…）通过 Skill + CLI 调用同一套命令。宿主插件给素材加一层可开关、可替换的 AI 创意层，原素材不动，复杂制作再展开 Iris。
+- **Iris 是全能后期助手（Personal agent）**：Web 版独立可用——对话优先，Iris 无限画布是它的产出面，不装任何剪辑软件也能用。可选地连接本地宿主插件（DaVinci Resolve 先，Premiere、剪映 / CapCut 后续）同步剪辑上下文，免手动上传。核心主张：Agent 读完整工程上下文（图层、合成、关键帧、标记、素材），输出可编辑的工程改动或画布节点，而不是烤死的成片。见 [11-iris](11-iris.md)。
 
 对外短句：*Your footage. Plus one layer.*（宿主叠加层）
 
-Flovart是 local-first、agent-native、BYOK 的创作工作台。用户的模型、Key、素材和最终编辑权始终在用户一侧。
+Iris是 local-first、agent-native、BYOK 的创作工作台。用户的模型、Key、素材和最终编辑权始终在用户一侧。
 
 ## 2. 目标用户与首个任务
 
 - 宿主线首批用户：用 DaVinci Resolve Studio 21.1 做短视频、广告、创作者内容的个人剪辑师；同时会用 Codex / Claude Code 等 Coding Agent。
-- 宿主线首个任务：选中时间线上的一个片段 → 描述想要的效果（可在画面上圈一笔）→ Flovart 生成若干**叠加层候选** → 比较、选定 → 非破坏性送回宿主。
+- 宿主线首个任务：选中时间线上的一个片段 → 描述想要的效果（可在画面上圈一笔）→ Iris 生成若干**叠加层候选** → 比较、选定 → 非破坏性送回宿主。
 - 不是首个任务：让 AI 自动剪完一条片、替换整段原素材、实时 AI 视频。
 - Iris 线首个任务（设计目标）：在 Web 上用一句话说清要做的后期改动（可拖入素材）→ Iris 把计划与候选落到画布 → 用户在画布上比较、改、选定。连上 Resolve 后，同一任务直接从当前时间线取上下文。
 
@@ -35,7 +35,7 @@ Flovart是 local-first、agent-native、BYOK 的创作工作台。用户的模�
 
 ### 3.1 三个顶级 surface（2026-11-13 定案，2026-11-17 逆向改名 Iris）
 
-顶栏固定为 **画布 Canvas｜Iris｜Agent**（内部 `canvasView: 'reverse'` 与 `reverse` 目录在单独迁移前保持）：
+顶栏固定为 **画布 Canvas｜Cut｜Agent**（内部 `canvasView: 'reverse'` 与 `reverse` 目录在单独迁移前保持）：
 
 | Surface | 拥有 | 调用 / 被调用 |
 | --- | --- | --- |
@@ -56,7 +56,7 @@ Canvas 旁的 Assistant drawer 保留为轻量上下文入口：就地问答与�
 5. **能力驱动、不硬编码**：工具、模型、候选数量、宿主能力、文案全部来自注册表 / 能力发现 / 配置，UI 按 schema 渲染（规则见交互设计 §3）。
 6. **永不死锁**：任何状态都有出口，任何等待都可取消或超时，任何锁都会过期（规则见交互设计 §4）。
 7. **真实状态优先**：动画不能掩盖失败、未知提交或 Provider 无响应。
-8. **宿主原生感**：宿主里的 Flovart 是一个窄而克制的 contextual inspector，不是聊天页、后台或缩小版 Canvas。
+8. **宿主原生感**：宿主里的 Iris 是一个窄而克制的 contextual inspector，不是聊天页、后台或缩小版 Canvas。
 9. **连接器可选**：Iris 不依赖任何宿主；宿主连接器只读起步、按需同步上下文，没有连接器时不阻塞。
 
 ## 5. 关键决策（保留自历史 ADR）
@@ -105,7 +105,7 @@ Canvas 旁的 Assistant drawer 保留为轻量上下文入口：就地问答与�
 | --- | --- | --- |
 | R0 | Resolve 21.1 native MCP 真实连接 | 真实 Agent 读到当前项目与选择；记录版本与实际 tool 列表 |
 | R1 | 最小闭环（不付费） | 当前选择 → fixture 叠加层 → 持久文件 → Media Pool；原时间线不变 |
-| R2 | 轻面板收敛 | Current Clip → Tools → Generate → Task → Candidates → Add to Media Pool → Open in Flovart |
+| R2 | 轻面板收敛 | Current Clip → Tools → Generate → Task → Candidates → Add to Media Pool → Open in Iris |
 | R3 | 一条真实 Provider | 真实付费、取消、unknown-submit、持久素材、Media Pool |
 | R4 | 上新轨道（P1） | 叠加层放在源轨道上方并对齐；开关后原片逐像素不变；删除即撤销 |
 | R5 | Replace / Commit（P2） | 显式确认、提交前复核目标、可撤销 |
@@ -138,8 +138,8 @@ R0–R7 是宿主线；Resolve 部分同时作为 Iris 的第一个连接器。I
 | 术语 | 含义 | 避免 |
 | --- | --- | --- |
 | Canvas | 空间化 Workflow 创作面 | Canvas / Art 双系统 |
-| Iris（全能后期助手 · Personal agent） | 顶栏第二个 surface（原名 逆向 / Reverse）：对话优先、画布为产出面的个人 Agent；逆向拆解是其工具；宿主连接器可选；不是第二份 Workflow 权威 | 用 Iris 指代 Flovart 本身；没有画布产出的纯聊天页、隐式双写、复制 Hypit 源码 |
-| 旧代号 Iris | 2026-10 前 Flovart 的旧品牌（`Iris Link`、`Iris CLI`、`Iris Studio`、`iris-*` 兼容字段）；与 Iris surface 无关 | 在新文档里沿用；兼容字段按 §11 保留 |
+| Cut（原 逆向 Reverse，11-17–11-20 曾叫 Iris） | 顶栏第二个 surface：对话优先、画布为产出面的个人 Agent；逆向拆解是其工具；宿主连接器可选；不是第二份 Workflow 权威 | 用旧名指代它；没有画布产出的纯聊天页、隐式双写、复制 Hypit 源码 |
+| 旧名 Flovart | 2026-11-20 前的产品名；`flovart_*` 工具名、`FLOVART_*` 环境变量、旧存储 key 作为兼容别名保留（§11） | 在新文档与 UI 里沿用 |
 | Agent surface | 顶栏的 Agent 连接与状态中心：runtime、模型、外部 Agent 的 discover / prepare / status / switch | 对话、run 编辑、Tasks / Artifacts 工作区 |
 | Assistant drawer | Canvas 旁的轻量上下文助手；多步制作交给 Iris 的同一 run | Host picker、Agent 安装、独立 run 主场 |
 | Stable Agent operations | `status`、`workflow.inspect`、`workflow.selection.get`、`workflow.apply`、`workflow.node.run` | 每个 API 一个 tool |
@@ -150,10 +150,10 @@ R0–R7 是宿主线；Resolve 部分同时作为 Iris 的第一个连接器。I
 | Provider | 真正提供模型能力的服务 | Coding Agent、CLI、宿主 |
 | Creative host | Resolve / AE / PR / PS 等宿主 | — |
 | Native effect | 宿主保存并参与预览 / 导出的效果 | 面板按钮、网页预览 |
-| Flovart Link | 本地宿主 / Workflow 连接能力的代码名 | 第二份 Workflow、业务总线 |
+| Iris Link | 本地宿主 / Workflow 连接能力的代码名 | 第二份 Workflow、业务总线 |
 
 历史概念（Production Crew、Director、Workspace Operator、Native Draft、Dock production control、enterprise credits）不再用于推导新功能。
 
 ## 11. 品牌与兼容标识
 
-对外产品名统一用 **Flovart**；Iris 只是第二个 surface 的名字。技术兼容标识（`flovart` CLI、npm 包名、Skill 路径、事件名、CSS data 属性）暂时保留；改名是独立迁移，必须带别名与弃用说明，不与普通文档 / UI PR 混做。
+对外产品名统一用 **Iris**（2026-11-20 由 Flovart 更名，标签 `flovart-final` 是更名前最后一版）。顶栏为 画布 Canvas｜Cut｜Agent；本文与其他设计文档中把第二个 surface 称作 “Iris” 的段落写于更名前，指的是现在的 Cut。兼容：`flovart_*` 工具名是 `iris_*` 的弃用别名；`FLOVART_*` / `VITE_FLOVART_*` 环境变量作为回退；浏览器存储与 `~/.flovart` 首次启动复制到新名字且不删旧数据；`flovart.avabbbb.com` 过渡期仍受信。线上协议 / 持久化格式标识（`flovart:` 模型 id 与事件、`flovart.*/N` schema 标签、`flovart.skill.yaml`、`x-flovart-*`、`data-flovart-*`、`__FLOVART_*__`、`com.flovart.*`、`flovart://`、npm `@flovart/*`）暂时保留，改它们是独立迁移。

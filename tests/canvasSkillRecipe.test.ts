@@ -74,9 +74,9 @@ describe('skillFromRecipe', () => {
     expect(skill).toMatchObject({ id: 'mine.test', name: '雨夜短片', slug: 'rain-night', description: '三步复刻', createdAt: 'created-at-1', recipe });
     const lines = skill.prompt.split('\n');
     expect(lines[0]).toContain('雨夜短片');
-    expect(lines[1].startsWith('1. 用 flovart_generate 建图片生成节点「图片B」')).toBe(true);
+    expect(lines[1].startsWith('1. 用 iris_generate 建图片生成节点「图片B」')).toBe(true);
     expect(lines[1]).toContain('模型 seedream-4');
-    expect(lines[2].startsWith('2. 用 flovart_generate 建视频生成节点「视频C」')).toBe(true);
+    expect(lines[2].startsWith('2. 用 iris_generate 建视频生成节点「视频C」')).toBe(true);
     expect(lines[2]).toContain('输入：图片B、外部D');
     expect(lines[3]).toContain('1 列');
     expect(lines[4]).toContain('作者说明');

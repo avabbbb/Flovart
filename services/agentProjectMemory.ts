@@ -1,4 +1,4 @@
-// 项目记忆：内置 Agent 按 Flovart 项目保存的长期事实（用户偏好、已确认的风格 / 角色设定、命名约定等）。
+// 项目记忆：内置 Agent 按 Iris 项目保存的长期事实（用户偏好、已确认的风格 / 角色设定、命名约定等）。
 // 纯函数 + 工具定义；持久化在 stores/useAgentMemoryStore.ts（zustand + localforage）。
 //
 // 容量策略（参考 oh-my-pi，MIT：packages/coding-agent/src/memories/settings.ts 的 maxRawMemoriesForGlobal=200
@@ -9,7 +9,7 @@
 import { Type } from 'typebox';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
-export const MEMORY_TOOL_NAME = 'flovart_memory';
+export const MEMORY_TOOL_NAME = 'iris_memory';
 export const MEMORY_MAX_ENTRIES = 100;
 export const MEMORY_MAX_TEXT = 500;
 /** 注入系统提示词的记忆摘要上限（字符）。 */
@@ -183,7 +183,7 @@ export function createMemoryTool(options: { projectId: string; backend: AgentMem
   return {
     name: MEMORY_TOOL_NAME,
     label: 'memory',
-    description: '项目记忆（只属于当前 Flovart 项目，保存在本机）。action=add 写入一句以后还用得上的事实（用户偏好、确认过的风格 / 角色设定、命名约定），'
+    description: '项目记忆（只属于当前 Iris 项目，保存在本机）。action=add 写入一句以后还用得上的事实（用户偏好、确认过的风格 / 角色设定、命名约定），'
       + 'list 列出，search 按关键词查，delete 按 id 删除过时条目。'
       + `每个项目最多 ${MEMORY_MAX_ENTRIES} 条，满了自动淘汰最旧的；密钥、Token、密码会被自动脱敏，不要写入秘密，也不要记一次性的过程信息。`,
     parameters: Type.Object({

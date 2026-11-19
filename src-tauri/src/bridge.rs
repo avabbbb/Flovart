@@ -1,13 +1,13 @@
 //! 命令桥队列。
 //!
-//! 替换之前的 `.flovart/command-queue.json` 文件轮询；改为内存里的 Mutex<Vec<Entry>。
+//! 替换之前的 `.iris/command-queue.json` 文件轮询；改为内存里的 Mutex<Vec<Entry>。
 //! 外部 CLI / MCP / 扩展通过 deeplink 或内部 `bridge_enqueue` 入队，
 //! WebUI 端通过 `bridge_tick` 拉取 pending 改成 `running` 状态的一条记录。
 //! WebUI 完成后 `bridge_complete(id, result)` 写回。
 //!
 //! 持久化：每次入队 / 完成都写 SQLite `sync_log`，崩溃后可重建。
 
-use crate::errors::{FlovartError, FlovartResult};
+use crate::errors::{IrisError, IrisResult};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
@@ -85,12 +85,12 @@ impl BridgeQueue {
         id: &str,
         result: Option<serde_json::Value>,
         error: Option<serde_json::Value>,
-    ) -> FlovartResult<()> {
+    ) -> IrisResult<()> {
         let mut guard = self.entries.lock();
         let entry = guard
             .iter_mut()
             .find(|e| e.id == id)
-            .ok_or_else(|| FlovartError::NotFound(format!("bridge entry {id}")))?;
+            .ok_or_else(|| IrisError::NotFound(format!("bridge entry {id}")))?;
         entry.status = "done".into();
         entry.result = result;
         entry.error = error;

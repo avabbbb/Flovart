@@ -1,10 +1,10 @@
 {
   "effect": {
-    "name": "Flovart Scene Replace",
-    "matchName": "FLOVART_SceneReplace",
-    "category": "Flovart",
+    "name": "Iris Scene Replace",
+    "matchName": "IRIS_SceneReplace",
+    "category": "Iris",
     "entryPoint": "EffectMain",
-    "singleEntryPoint": "FlovartEffect.cpp",
+    "singleEntryPoint": "IrisEffect.cpp",
     "product": "after-effects",
     "targetSdk": "After Effects C++ Effect SDK (version pinned at real-host gate)",
     "buildStatus": "needs-native-sdk",
@@ -16,7 +16,7 @@
   "assetVersionRecord": {
     "schemaVersion": 1,
     "storage": "CEP USER_DATA",
-    "filename": "flovart-asset-<artifactId>-sha256-<digest>.<ext>",
+    "filename": "iris-asset-<artifactId>-sha256-<digest>.<ext>",
     "manifestLocation": "After Effects candidate layer comment",
     "fields": [
       "application and assetType",
@@ -50,7 +50,7 @@
   "parameters": [
     {
       "id": 1,
-      "symbol": "FLOVART_PARAM_ASSET_VERSION",
+      "symbol": "IRIS_PARAM_ASSET_VERSION",
       "name": "Asset Version",
       "type": "layer",
       "persisted": true,
@@ -60,7 +60,7 @@
     },
     {
       "id": 2,
-      "symbol": "FLOVART_PARAM_BLEND",
+      "symbol": "IRIS_PARAM_BLEND",
       "name": "Blend",
       "type": "float-slider",
       "persisted": true,

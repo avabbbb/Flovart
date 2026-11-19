@@ -4,7 +4,7 @@
 
 ## 1. 目标与边界
 
-Flovart 的 L4（创作效果）此前只有 Judge Rubric 和偏好对比较，没有题库、没有客观指标、没有按场景 / 难度的比率报告。本计划在现有评测体系里补上这一层，不另起一套：
+Iris 的 L4（创作效果）此前只有 Judge Rubric 和偏好对比较，没有题库、没有客观指标、没有按场景 / 难度的比率报告。本计划在现有评测体系里补上这一层，不另起一套：
 
 - **同一套口径**：Rubric 仍在 `eval/judge/rubrics/`，Judge、清洗、成对比较、kappa / Wilson、门禁都复用 `eval/judge/lib/`。
 - **两条轨道分开报告**：客观轨（规则 grader，100% 自动）与主观轨（1–5 盲评或记录下来的 Judge 整体分），参照 Seedance 2.0 SeedVideoBench 2.0，不合成一个分数。
@@ -46,14 +46,14 @@ Flovart 的 L4（创作效果）此前只有 Judge Rubric 和偏好对比较，�
 
 ## 5. 存储与看板
 
-- 结果库在 `eval/aigc/results/`（不进 git）：优先 `node:sqlite`（Node 22.5+ 内置），不可用时退回 JSONL；`FLOVART_AIGC_STORE=jsonl` 可强制。库里只有判定、撤回、评分和 take 元数据，没有媒体。
+- 结果库在 `eval/aigc/results/`（不进 git）：优先 `node:sqlite`（Node 22.5+ 内置），不可用时退回 JSONL；`IRIS_AIGC_STORE=jsonl` 可强制。库里只有判定、撤回、评分和 take 元数据，没有媒体。
 - `node eval/aigc/run.mjs report` 生成 `results/report/index.html` 与 `report.json`：无脚本、无外链、全部转义。
 
 ## 6. 偏好事件
 
 - 画布上「设为首图」（节点下的备选卡片与预览画廊都走 `promoteNodeAlternate`）成功后，记一条事件到本地 localforage（最多 2000 条）。rejected = 被换下去的首图 + 与被选中者同一批的其他备选。
 - Agent 的 `workflow.batch.pick` 是自动挑选，不是用户偏好，不记。
-- 导出：无头浏览器里 `await window.__flovartPreferenceEvents.exportJsonl()`（只读），再 `node eval/aigc/run.mjs prefs-export --events <file>` 转成 `eval/judge` `pairs` 的输入：每个节点只取最后一次选择；A / B 位置按 pair id 哈希决定，标准答案在 A、B 两侧大致均衡。pair 带 `refs`（媒体变体 ID），真实 Judge 跑之前需要按 ID 取图 / 抽帧作为 `images` 附上。
+- 导出：无头浏览器里 `await window.__irisPreferenceEvents.exportJsonl()`（只读），再 `node eval/aigc/run.mjs prefs-export --events <file>` 转成 `eval/judge` `pairs` 的输入：每个节点只取最后一次选择；A / B 位置按 pair id 哈希决定，标准答案在 A、B 两侧大致均衡。pair 带 `refs`（媒体变体 ID），真实 Judge 跑之前需要按 ID 取图 / 抽帧作为 `images` 附上。
 
 ## 7. 分期
 

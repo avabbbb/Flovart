@@ -19,4 +19,3 @@
 }
 .flv-machine { font-family: var(--font-machine); font-variant-numeric: tabular-nums; letter-spacing: 0; }
 
-/* 执行计划卡（components/agent/AgentTodoCard.tsx）外观已并入共用计划组件 PlanSteps：styles/planSteps.css。 */

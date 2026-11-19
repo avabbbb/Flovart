@@ -1,10 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
-import type { FlovartPluginConfig } from './config.ts'
+import type { IrisPluginConfig } from './config.ts'
 import { connectionErrorCode, logWorkspaceTargetFailure, resolveWorkspaceTarget, type WorkspaceTargetOptions } from './workspaceTarget.ts'
 
-export const WORKSPACE_PROXY_PATH = '/flovart-workspace'
+export const WORKSPACE_PROXY_PATH = '/iris-workspace'
 
 const ROUTES = new Map<string, ReadonlySet<string>>([
   ['/health', new Set(['GET'])],
@@ -69,7 +69,7 @@ async function readBody(request: IncomingMessage): Promise<Buffer | undefined> {
 }
 
 export function createWorkspaceProxyHandler(
-  config: Pick<FlovartPluginConfig, 'workspaceUrl' | 'workspaceToken'>,
+  config: Pick<IrisPluginConfig, 'workspaceUrl' | 'workspaceToken'>,
   fetchImpl: typeof globalThis.fetch = globalThis.fetch,
   targetOptions: WorkspaceTargetOptions = {},
 ): (request: IncomingMessage, response: ServerResponse) => Promise<void> {
@@ -116,7 +116,7 @@ export function createWorkspaceProxyHandler(
         return
       }
       const code = connectionErrorCode(error)
-      console.warn('[flovart] Workspace 代理失败: ' + (code ?? 'UNKNOWN') + ' ' + origin.origin)
+      console.warn('[iris] Workspace 代理失败: ' + (code ?? 'UNKNOWN') + ' ' + origin.origin)
       if (code === 'ECONNREFUSED') {
         json(response, 503, { ok: false, error: { code: 'WORKSPACE_UNREACHABLE', message: '无法连接 Workspace Operator：' + origin.origin + ' 拒绝连接。' } })
         return
@@ -126,11 +126,11 @@ export function createWorkspaceProxyHandler(
   }
 }
 
-export function registerWorkspaceProxy(ctx: Context, config: FlovartPluginConfig): void {
+export function registerWorkspaceProxy(ctx: Context, config: IrisPluginConfig): void {
   const handler = createWorkspaceProxyHandler(config)
   ctx.effect(() => ctx.webServer.register({
     kind: 'prefix',
     path: WORKSPACE_PROXY_PATH,
     handler,
-  }), 'flovart: same-origin Workspace Operator proxy')
+  }), 'iris: same-origin Workspace Operator proxy')
 }

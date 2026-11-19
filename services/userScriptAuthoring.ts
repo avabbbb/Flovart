@@ -11,7 +11,7 @@ import {
  * 脚本只是 UserScriptProviderDefinition JSON；执行仍由 UserScriptProviderAdapter 的固定解释器完成。
  * 定义里不含凭据，Key 仍保存在加密的 keyVault 中，发请求时最后注入。
  */
-const STORAGE_KEY = 'flovart.userScriptProviders.v1';
+const STORAGE_KEY = 'iris.userScriptProviders.v1';
 
 const CAPABILITIES: readonly WorkflowGenerationCapability[] = [
   'text-generate', 'audio-generate', 'text-to-image', 'image-edit', 'text-to-video',
@@ -175,8 +175,8 @@ function exampleDefinitions(model: string): UserScriptProviderDefinition[] {
 export function buildUserScriptAuthoringBrief({ modelName, draft }: { modelName?: string; draft?: string }): string {
   const model = modelName?.trim() || 'your-model-id';
   return [
-    '请为 Flovart 编写一份 Provider 适配脚本。目标模型：' + (modelName?.trim() || '（由用户在 Flovart 中选择）') + '。',
-    '适配脚本是一个 JSON 对象（UserScriptProviderDefinition），不是 JavaScript。Flovart 用固定解释器按它发请求、轮询和解析结果。我会附上要对接服务的接口文档。',
+    '请为 Iris 编写一份 Provider 适配脚本。目标模型：' + (modelName?.trim() || '（由用户在 Iris 中选择）') + '。',
+    '适配脚本是一个 JSON 对象（UserScriptProviderDefinition），不是 JavaScript。Iris 用固定解释器按它发请求、轮询和解析结果。我会附上要对接服务的接口文档。',
     '',
     '## 结构',
     '- id：2–64 位，只用字母、数字、点、下划线、短横线；name、version 可选。',

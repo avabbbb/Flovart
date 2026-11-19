@@ -1,0 +1,74 @@
+import path from 'node:path';
+import { AGENT_DIR, workspaceForProject } from './config.js';
+import { IrisAgentKernel } from './kernel.js';
+import { createProductionRuntimeStream, RUNTIME_AGENT_TEXT_MODEL } from './runtime-connection.js';
+
+export class IrisAgentService {
+  constructor({
+    databasePath = path.join(AGENT_DIR, 'agent-sessions.db'),
+    model = RUNTIME_AGENT_TEXT_MODEL,
+    streamFn = createProductionRuntimeStream(),
+    tools = [],
+  } = {}) {
+    this.databasePath = databasePath;
+    this.model = model;
+    this.streamFn = streamFn;
+    this.tools = tools;
+    this.sessions = new Map();
+    // 每个 projectId 一条串行发送队列：同项目 turn 链式排队执行，
+    // 避免 kernel.activeChangeSetId 被并发 turn 交叉污染。
+    this.sendQueues = new Map();
+  }
+
+  async getSession(projectId) {
+    const id = String(projectId || 'default');
+    let session = this.sessions.get(id);
+    if (!session) {
+      session = (async () => {
+        const kernel = new IrisAgentKernel({
+          databasePath: this.databasePath,
+          model: this.model,
+          streamFn: this.streamFn,
+          tools: this.tools,
+        });
+        await kernel.openSession({ projectId: id, cwd: workspaceForProject(id) });
+        return kernel;
+      })();
+      this.sessions.set(id, session);
+      session.catch(() => this.sessions.delete(id));
+    }
+    return session;
+  }
+
+  async snapshot(projectId) {
+    return (await this.getSession(projectId)).snapshot();
+  }
+
+  send(projectId, text, images = [], skillAttachment) {
+    const id = String(projectId || 'default');
+    const previous = this.sendQueues.get(id) || Promise.resolve();
+    const run = previous.then(() => this.getSession(id).then(kernel => kernel.send(text, images, skillAttachment)));
+    const tail = run.then(() => undefined, () => undefined);
+    this.sendQueues.set(id, tail);
+    tail.then(() => { if (this.sendQueues.get(id) === tail) this.sendQueues.delete(id); });
+    return run;
+  }
+
+  async subscribe(projectId, listener) {
+    return (await this.getSession(projectId)).subscribe(listener);
+  }
+
+  async cancel(projectId) {
+    const id = String(projectId || 'default');
+    // 会话不存在时不再强开新 session。
+    if (!this.sessions.has(id)) return;
+    (await this.getSession(id)).cancel();
+  }
+
+  async close() {
+    const sessions = await Promise.allSettled(this.sessions.values());
+    await Promise.all(sessions.flatMap(result => result.status === 'fulfilled' ? [result.value.close()] : []));
+    this.sessions.clear();
+    this.sendQueues.clear();
+  }
+}

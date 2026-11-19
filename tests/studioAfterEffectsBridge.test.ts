@@ -56,7 +56,7 @@ function createBridge(options: {
     crypto: webcrypto,
     __adobe_cep__: {
       evalScript(script: string, callback: (value: string) => void) {
-        const match = /^FlovartAE\.([A-Za-z0-9_]+)\((.*)\)$/.exec(script);
+        const match = /^IrisAE\.([A-Za-z0-9_]+)\((.*)\)$/.exec(script);
         if (!match) throw new Error(`Unexpected ExtendScript call: ${script}`);
         const args = JSON.parse(`[${match[2]}]`) as unknown[];
         hostCalls.push({ name: match[1], args });
@@ -129,7 +129,7 @@ describe('After Effects CEP bridge asset integrity', () => {
     const content = new Uint8Array([61, 62, 63]);
     const digest = await sha256(content);
     const { bridge, files, hostCalls } = createBridge();
-    const finalPath = `C:/cep/user-data/flovart-asset-artifact-reused-sha256-${digest}.png`;
+    const finalPath = `C:/cep/user-data/iris-asset-artifact-reused-sha256-${digest}.png`;
     files.set(finalPath, content.slice());
 
     await expect(bridge.importArtifact({

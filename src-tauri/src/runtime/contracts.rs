@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub const COMMAND_ENVELOPE_SCHEMA: &str =
-    include_str!("../../../tools/flovart/contracts/runtime/schemas/command-envelope.v1.json");
+    include_str!("../../../tools/iris/contracts/runtime/schemas/command-envelope.v1.json");
 pub const COMMAND_ENVELOPE_SCHEMA_ID: &str =
     "https://flovart.local/schemas/runtime/command-envelope.v1.json";
 

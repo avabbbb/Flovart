@@ -1,5 +1,5 @@
 /**
- * 何时引导用户安装 / 配对 Flovart 浏览器插件（网页端）。
+ * 何时引导用户安装 / 配对 Iris 浏览器插件（网页端）。
  *
  * 触发原因：
  * - configured：用户配置了只能经代理访问的网关（OpenCode 等，见 llmCorsProxy 的 PROXIED_HOSTS）；
@@ -13,15 +13,15 @@ import { toProxiedUrl } from './llmCorsProxy';
 export type ExtensionNeedReason = 'configured' | 'proxy' | 'quota';
 export type ExtensionPromptAction = 'install' | 'pair' | 'approve' | 'update';
 
-/** 商店上架前为空：构建时用 VITE_FLOVART_EXTENSION_CHROME_URL / VITE_FLOVART_EXTENSION_EDGE_URL 填真实地址。 */
+/** 商店上架前为空：构建时用 VITE_IRIS_EXTENSION_CHROME_URL / VITE_IRIS_EXTENSION_EDGE_URL 填真实地址（旧名 VITE_FLOVART_* 作回退）。 */
 export const EXTENSION_STORE_URLS = {
-  chrome: String(import.meta.env?.VITE_FLOVART_EXTENSION_CHROME_URL || ''),
-  edge: String(import.meta.env?.VITE_FLOVART_EXTENSION_EDGE_URL || ''),
+  chrome: String(import.meta.env?.VITE_IRIS_EXTENSION_CHROME_URL || import.meta.env?.VITE_FLOVART_EXTENSION_CHROME_URL || ''),
+  edge: String(import.meta.env?.VITE_IRIS_EXTENSION_EDGE_URL || import.meta.env?.VITE_FLOVART_EXTENSION_EDGE_URL || ''),
 };
 /** 商店地址未配置时的安装说明（旁加载步骤）。 */
-export const EXTENSION_INSTALL_FALLBACK_URL = 'https://github.com/avabbbb/Flovart/blob/main/extension/README.md';
+export const EXTENSION_INSTALL_FALLBACK_URL = 'https://github.com/avabbbb/Iris/blob/main/extension/README.md';
 
-export const PROMPT_DISMISS_KEY = 'flovart.extensionPrompt.dismissed';
+export const PROMPT_DISMISS_KEY = 'iris.extensionPrompt.dismissed';
 
 export function extensionInstallUrl(
   userAgent: string = typeof navigator !== 'undefined' ? navigator.userAgent : '',

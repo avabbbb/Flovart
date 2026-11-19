@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { STABLE_TOOL_COMMANDS } from '../dsh-plugin/src/tools';
 import { buildCliCommand } from '../dsh-plugin/src/cli';
 
-describe('DSH Flovart projection', () => {
+describe('DSH Iris projection', () => {
   it('keeps the model-facing tool surface aligned with the five stable commands', () => {
     expect(STABLE_TOOL_COMMANDS).toEqual([
       'status',
@@ -15,12 +15,12 @@ describe('DSH Flovart projection', () => {
   });
 
   it('serializes structured tool arguments as JSON CLI flags', () => {
-    expect(buildCliCommand('node "/tmp/flovart-cli.js"', 'workflow.apply', {
+    expect(buildCliCommand('node "/tmp/iris-cli.js"', 'workflow.apply', {
       operations: [{ op: 'add_node', node: { id: 'shot-1' } }],
       expectedRevision: 3,
     })).toEqual([
       'node',
-      '/tmp/flovart-cli.js',
+      '/tmp/iris-cli.js',
       'workflow.apply',
       '--operations=[{"op":"add_node","node":{"id":"shot-1"}}]',
       '--expectedRevision=3',

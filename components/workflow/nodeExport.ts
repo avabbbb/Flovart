@@ -162,7 +162,7 @@ export function planWorkflowExport(project: Pick<WorkflowProject, 'title' | 'nod
     throw new WorkflowExportError('NOTHING_TO_EXPORT', '没有可导出的内容：' + skipped.map(item => '「' + (item.title || item.nodeId) + '」' + item.reason).join('；'), { skipped });
   }
   const mode = entries.length === 1 && !target.groupId ? 'single' : 'zip';
-  const zipBase = safeExportName(target.fileName || (target.groupId ? (project.title || 'Flovart') + '-分组' : (project.title || 'Flovart') + '-导出'), 'Flovart-export');
+  const zipBase = safeExportName(target.fileName || (target.groupId ? (project.title || 'Iris') + '-分组' : (project.title || 'Iris') + '-导出'), 'Iris-export');
   const fileName = mode === 'single'
     ? (target.fileName ? safeExportName(target.fileName) + entries[0].fileName.slice(entries[0].fileName.lastIndexOf('.')) : entries[0].fileName)
     : zipBase.replace(/\.zip$/i, '') + '.zip';

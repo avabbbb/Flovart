@@ -14,7 +14,7 @@ import {
   type FileHandleLike,
 } from './localFolderSource';
 
-export const LOCAL_GREP_TOOL_NAME = 'flovart_grep';
+export const LOCAL_GREP_TOOL_NAME = 'iris_grep';
 
 export const LOCAL_GREP_LIMITS = {
   maxFiles: 400,

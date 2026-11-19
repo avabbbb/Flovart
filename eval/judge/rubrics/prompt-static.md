@@ -3,7 +3,7 @@ id: prompt-static
 version: 1.0.0
 title: Agent 提示词与 Skill 静态审查
 evalLayer: L1
-appliesTo: agent/kernel.js 系统提示词、skills/flovart/SKILL.md 及 commands/*.md、eval/judge/rubrics/*.md 本身
+appliesTo: agent/kernel.js 系统提示词、skills/iris/SKILL.md 及 commands/*.md、eval/judge/rubrics/*.md 本身
 inputs:
   document: 被审查的提示词或 Skill 全文
   registry: 当前命令注册表中的命令名与参数摘要
@@ -18,7 +18,7 @@ items:
   - code: PRM-HONEST-01
     layer: HONEST
     name: 命令真实存在
-    pass: 文中出现的每个 flovart 命令和参数都能在 registry 中找到
+    pass: 文中出现的每个 iris 命令和参数都能在 registry 中找到
     fail: 文中引用了 registry 中不存在的命令或参数
     evidence: [document, registry]
   - code: PRM-CONTENT-01

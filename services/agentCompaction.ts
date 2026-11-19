@@ -207,7 +207,7 @@ export function isContextOverflowMessage(message: AgentMessage | undefined | nul
 // 执行一次压缩（pi-agent-core 内置）
 // ---------------------------------------------------------------------------
 
-/** 摘要要求：中文、保留 Flovart 关键事实。 */
+/** 摘要要求：中文、保留 Iris 关键事实。 */
 export const COMPACTION_INSTRUCTIONS = '用中文撰写摘要。必须保留：用户的创作目标与已确认的约束（时长、画幅、风格、语言）；'
   + '画布上已创建 / 已确认的节点 id、锚点编号（A01/S01…）与生成结果状态；已读取的技能名称及其关键规则；未完成的待办与下一步。';
 

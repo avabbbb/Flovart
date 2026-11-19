@@ -1,7 +1,7 @@
 // Judge model providers.
 //
 // `openai-compatible` speaks the Chat Completions shape any compatible gateway
-// exposes; the key comes from FLOVART_JUDGE_API_KEY and is never written to
+// exposes; the key comes from IRIS_JUDGE_API_KEY and is never written to
 // evidence. `replay` answers from a JSONL file of recorded outputs, so tests,
 // CI and re-grading after a parser change never spend money.
 
@@ -11,14 +11,14 @@ import { basename } from 'node:path';
 export const DEFAULT_TEMPERATURE = 0.1;
 
 export function providerFromEnv(env = process.env) {
-  const kind = env.FLOVART_JUDGE_PROVIDER ?? 'openai-compatible';
+  const kind = env.IRIS_JUDGE_PROVIDER ?? 'openai-compatible';
   return {
     kind,
-    baseUrl: (env.FLOVART_JUDGE_BASE_URL ?? '').replace(/\/+$/, ''),
-    apiKey: env.FLOVART_JUDGE_API_KEY ?? '',
-    model: env.FLOVART_JUDGE_MODEL ?? '',
-    replayFile: env.FLOVART_JUDGE_REPLAY ?? '',
-    temperature: Number(env.FLOVART_JUDGE_TEMPERATURE ?? DEFAULT_TEMPERATURE),
+    baseUrl: (env.IRIS_JUDGE_BASE_URL ?? '').replace(/\/+$/, ''),
+    apiKey: env.IRIS_JUDGE_API_KEY ?? '',
+    model: env.IRIS_JUDGE_MODEL ?? '',
+    replayFile: env.IRIS_JUDGE_REPLAY ?? '',
+    temperature: Number(env.IRIS_JUDGE_TEMPERATURE ?? DEFAULT_TEMPERATURE),
   };
 }
 
@@ -32,7 +32,7 @@ export function createProvider(config, { fetchImpl = globalThis.fetch } = {}) {
   if (config.kind === 'replay') return createReplayProvider(config.replayFile);
   if (config.kind !== 'openai-compatible') throw new Error(`unknown judge provider ${config.kind}`);
   if (!config.baseUrl || !config.model) {
-    throw new Error('judge provider needs FLOVART_JUDGE_BASE_URL and FLOVART_JUDGE_MODEL (or FLOVART_JUDGE_PROVIDER=replay)');
+    throw new Error('judge provider needs IRIS_JUDGE_BASE_URL and IRIS_JUDGE_MODEL (or IRIS_JUDGE_PROVIDER=replay)');
   }
   return {
     id: `${config.kind}:${config.model}`,

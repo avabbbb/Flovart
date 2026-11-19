@@ -4,7 +4,7 @@
 // Runtime deployment condition on the real filesystem and then asks the real
 // production guard to judge it:
 //
-//   tools/flovart/runtime-client.js -> verifyDiscoveryPermissions(path)
+//   tools/iris/runtime-client.js -> verifyDiscoveryPermissions(path)
 //
 // It exists because the Hosted CI blocker was an environment-layer defect: the
 // same discovery record was accepted locally and rejected on a Windows runner.
@@ -16,7 +16,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
-import { verifyDiscoveryPermissions } from '../../tools/flovart/runtime-client.js';
+import { verifyDiscoveryPermissions } from '../../tools/iris/runtime-client.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, '..', '..');
@@ -29,7 +29,7 @@ function platformKind() {
 }
 
 function tempRoot() {
-  return process.env.FLOVARTBENCH_TMP_ROOT || join(repoRoot, '.tmp', 'flovartbench-env');
+  return process.env.IRISBENCH_TMP_ROOT || join(repoRoot, '.tmp', 'irisbench-env');
 }
 
 function systemExe(name) {
@@ -62,7 +62,7 @@ async function materialise(sandbox, scenario, acl) {
   const directory = join(sandbox, scenario);
   await mkdir(directory, { recursive: true });
   const file = join(directory, 'control-v1.json');
-  await writeFile(file, JSON.stringify({ version: 1, runtime: 'flovartbench', scenario }, null, 2), 'utf8');
+  await writeFile(file, JSON.stringify({ version: 1, runtime: 'irisbench', scenario }, null, 2), 'utf8');
 
   if (WINDOWS) {
     const icacls = systemExe('icacls.exe');

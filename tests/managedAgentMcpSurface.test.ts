@@ -1,11 +1,11 @@
 // @vitest-environment node
 
 import { describe, expect, it } from 'vitest';
-import { createFlovartAgentTools, getFlovartAgentTools } from '../agent/tools.js';
+import { createIrisAgentTools, getIrisAgentTools } from '../agent/tools.js';
 
-describe('Flovart Agent tool surface', () => {
+describe('Iris Agent tool surface', () => {
   it('exposes only the stable inspect/apply/run Workflow contract', () => {
-    const commands = getFlovartAgentTools().map(tool => tool.command);
+    const commands = getIrisAgentTools().map(tool => tool.command);
 
     expect(commands).toEqual([
       'status',
@@ -44,31 +44,31 @@ describe('Flovart Agent tool surface', () => {
     expect(commands.some(command => /^(?:canvas|element)\./.test(command))).toBe(false);
   });
 
-  it('gives the built-in Flovart Agent typed tools for that same small surface', () => {
-    const tools = createFlovartAgentTools(async () => ({ ok: true }));
+  it('gives the built-in Iris Agent typed tools for that same small surface', () => {
+    const tools = createIrisAgentTools(async () => ({ ok: true }));
     const names = tools.map(tool => tool.name);
-    const apply = tools.find(tool => tool.name === 'flovart_workflow_apply');
-    const status = tools.find(tool => tool.name === 'flovart_status');
+    const apply = tools.find(tool => tool.name === 'iris_workflow_apply');
+    const status = tools.find(tool => tool.name === 'iris_status');
 
-    expect(names).toContain('flovart_status');
-    expect(names).toContain('flovart_workflow_inspect');
-    expect(names).toContain('flovart_workflow_selection_get');
-    expect(names).toContain('flovart_workflow_node_run');
-    expect(names).toContain('flovart_workflow_apply');
-    expect(names).not.toContain('flovart_workflow_node_create');
-    expect(names).not.toContain('flovart_production_run');
+    expect(names).toContain('iris_status');
+    expect(names).toContain('iris_workflow_inspect');
+    expect(names).toContain('iris_workflow_selection_get');
+    expect(names).toContain('iris_workflow_node_run');
+    expect(names).toContain('iris_workflow_apply');
+    expect(names).not.toContain('iris_workflow_node_create');
+    expect(names).not.toContain('iris_production_run');
     expect(apply?.parameters.required).toContain('idempotencyKey');
-    expect(tools.find(tool => tool.name === 'flovart_workflow_node_run')?.parameters.required).toContain('idempotencyKey');
+    expect(tools.find(tool => tool.name === 'iris_workflow_node_run')?.parameters.required).toContain('idempotencyKey');
     expect(status?.parameters.required || []).not.toContain('idempotencyKey');
   });
 
   it('moves idempotencyKey to the command envelope instead of leaking it into Runtime args', async () => {
     let call: unknown[] = [];
-    const tools = createFlovartAgentTools(async (...args) => {
+    const tools = createIrisAgentTools(async (...args) => {
       call = args;
       return { ok: true };
     });
-    const run = tools.find(tool => tool.name === 'flovart_workflow_apply');
+    const run = tools.find(tool => tool.name === 'iris_workflow_apply');
 
     await run?.execute('tool-call', {
       projectId: 'project-1',
@@ -87,11 +87,11 @@ describe('Flovart Agent tool surface', () => {
 
   it('pins Agent Workflow commands to the Browser workspace', async () => {
     let call: unknown[] = [];
-    const tools = createFlovartAgentTools(async (...args) => {
+    const tools = createIrisAgentTools(async (...args) => {
       call = args;
       return { ok: true };
     });
-    const inspect = tools.find(tool => tool.name === 'flovart_workflow_inspect');
+    const inspect = tools.find(tool => tool.name === 'iris_workflow_inspect');
 
     await inspect?.execute('tool-call', {}, undefined);
 

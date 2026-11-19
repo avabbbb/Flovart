@@ -51,15 +51,15 @@
   },
   {
     "id": "path-b-builtin-agent-to-workflow-mutation",
-    "name": "B) Built-in Agent (FlovartAgentPanel) -> Workflow mutation",
+    "name": "B) Built-in Agent (IrisAgentPanel) -> Workflow mutation",
     "entry": "User types a prompt in the Workflow drawer Agent panel and sends",
     "modules": [
-      "components/agent/FlovartAgentPanel.tsx (composer, sessions, mode auto/manual, confirmation UI; chooses backend: ManagedFlovartAgentClient when getManagedAgentConnection() resolves, else BrowserAgentKernel)",
+      "components/agent/IrisAgentPanel.tsx (composer, sessions, mode auto/manual, confirmation UI; chooses backend: ManagedIrisAgentClient when getManagedAgentConnection() resolves, else BrowserAgentKernel)",
       "services/managedAgentConnection.ts (Tauri invoke 'managed_agent_connection' -> loopback url+token; browser fallback: getBrowserWorkflowBinding / loadDockConnection)",
-      "services/managedFlovartAgent.ts ManagedFlovartAgentClient.turn (POST /agent/flovart/turn SSE) — managed sidecar path",
-      "agent/flovart.js + agent/kernel.js FlovartAgentKernel (pi-agent-core Agent over SqliteSessionRepo; tools = createFlovartAgentTools(session.callCommand)) — managed sidecar path",
+      "services/managedIrisAgent.ts ManagedIrisAgentClient.turn (POST /agent/iris/turn SSE) — managed sidecar path",
+      "agent/iris.js + agent/kernel.js IrisAgentKernel (pi-agent-core Agent over SqliteSessionRepo; tools = createIrisAgentTools(session.callCommand)) — managed sidecar path",
       "services/browserAgentKernel.ts BrowserAgentKernel (pi-agent-core Agent in-page; BrowserSessionRepo -> localforage; createBrowserAgentStream -> OpenAI-compatible /chat/completions; createBrowserAgentTools)",
-      "services/workflowAgentBridge.ts WorkflowAgentBridge (managed path: SSE /events tool_call -> validateBrowserWorkspaceLease -> confirmWrite gate (auto mode bypasses non-high-risk) -> workflowContract.dispatch or executeFlovartCommand for non-workflow commands; runtime commands gated by RUNTIME_CONFIRM_COMMANDS + Tauri runtime availability)",
+      "services/workflowAgentBridge.ts WorkflowAgentBridge (managed path: SSE /events tool_call -> validateBrowserWorkspaceLease -> confirmWrite gate (auto mode bypasses non-high-risk) -> workflowContract.dispatch or executeIrisCommand for non-workflow commands; runtime commands gated by RUNTIME_CONFIRM_COMMANDS + Tauri runtime availability)",
       "services/browserWorkflowContract.ts createBrowserWorkflowContract -> dispatchWorkflowCommand",
       "services/workflowDispatcher.ts dispatchWorkflowCommand (validateEnvelope, idempotency cache, confirmation gate, command switch; workflow.apply path requires mutationId + expectedRevision; builds WorkflowDocumentOperation[] -> applyWorkflowMutation)",
       "components/workflow/draftAuthority.ts applyWorkflowMutation (mutationHash canonicalize+sha256, receipt replay check -> IDEMPOTENCY_KEY_REUSE, expectedRevision vs draftVersion -> REVISION_CONFLICT, applyWorkflowDraftChangeSet -> nodes/connections/draftChangeSets/draftRedoStack/objectVersions)",
@@ -84,7 +84,7 @@
       "managed path adds: session.callCommand lease/host-writer checks (WORKSPACE_REQUIRED for native/headless workspaceMode, LEASE_TARGET_CHANGED, authorizeExternalHost) and bridge validateBrowserWorkspaceLease"
     ],
     "sideEffects": [
-      "Chat session persisted (sqlite file or localforage keys flovart.agent.sessions.<projectId>)",
+      "Chat session persisted (sqlite file or localforage keys iris.agent.sessions.<projectId>)",
       "Workflow draft ChangeSet appended (undoable), draftLog entries for non-ui sources",
       "POST /workflow/state snapshot pushes; POST /workflow/result replies (managed path)",
       "window.confirm fallback or in-drawer confirmation card pauses the turn"
@@ -98,23 +98,23 @@
     ],
     "passThroughLayers": [
       "services/browserWorkflowContract.ts: Object.freeze wrapper that only re-labels dispatchWorkflowCommand as 'contract' — adds a version field but no validation, auth, or mapping of its own; a genuine pass-through seam",
-      "managedFlovartAgent.ts: transport-only SSE decoder (by design; but note it re-implements SSE parsing parallel to WorkflowAgentBridge's EventSource handling — two SSE stacks for one feature)"
+      "managedIrisAgent.ts: transport-only SSE decoder (by design; but note it re-implements SSE parsing parallel to WorkflowAgentBridge's EventSource handling — two SSE stacks for one feature)"
     ],
     "verdict": {
       "ownsResponsibility": "mostly",
-      "note": "Dual kernel implementations (in-page BrowserAgentKernel vs sidecar FlovartAgentKernel) duplicate session/skill-binding/confirmation logic; both funnel into the same dispatcher, which is the real authority. browserWorkflowContract.ts is a nominal boundary: it owns only a version constant. Confirmation semantics differ subtly between paths — managed path consults confirmWrite only when !highRisk && !operatorDraftOnly && !read, while browser path relies on dispatcher confirmation.required — same end state, two gate orderings to keep in sync."
+      "note": "Dual kernel implementations (in-page BrowserAgentKernel vs sidecar IrisAgentKernel) duplicate session/skill-binding/confirmation logic; both funnel into the same dispatcher, which is the real authority. browserWorkflowContract.ts is a nominal boundary: it owns only a version constant. Confirmation semantics differ subtly between paths — managed path consults confirmWrite only when !highRisk && !operatorDraftOnly && !read, while browser path relies on dispatcher confirmation.required — same end state, two gate orderings to keep in sync."
     }
   },
   {
     "id": "path-c-codex-cli-to-workflow-apply",
     "name": "C) Codex CLI -> workflow.apply",
-    "entry": "Codex (or any coding agent) runs `flovart workflow.apply --agent-identity codex --operations-json ... --idempotency-key ...` guided by skills/flovart/SKILL.md",
+    "entry": "Codex (or any coding agent) runs `iris workflow.apply --agent-identity codex --operations-json ... --idempotency-key ...` guided by skills/iris/SKILL.md",
     "modules": [
-      "skills/flovart/SKILL.md (contract doc: ensure -> inspect -> apply with mutationId/idempotencyKey/expectedRevision)",
-      "tools/flovart/cli.js (arg parse, normalizeCommandName, WORKSPACE_COMMANDS routing; rejects writes without --idempotency-key with INVALID_ARGUMENT before any I/O)",
-      "tools/flovart/core.js executeFlovartCommand (workflow.* branch: arg kebab->camel normalization, parseJsonOption for operations/patch/metadata, source='cli', caller{agentIdentity,hostSessionId}; dispatches via runtime.operation (operation-gateway) when command in AGENT_PUBLIC_COMMAND_SET else createWorkspaceFacade dispatch)",
-      "tools/flovart/operation-gateway.js createOperationGateway (assertPublicOperation -> UNKNOWN_COMMAND for non-public commands; assertWriteEnvelope requires idempotencyKey; forces workspaceMode='browser'; callerFromContext validates agentIdentity/hostSessionId pairing)",
-      "tools/flovart/workspace-client.js FlovartWorkspaceClient (reads ~/.flovart/agent.json via managed-agent/config.js; enforces http+loopback-only URL; POST /api/tools with x-flovart-agent-token; maps HTTP/body errors to WorkspaceClientError codes WORKSPACE_UNAVAILABLE/WORKSPACE_TIMEOUT/WORKSPACE_COMMAND_FAILED)",
+      "skills/iris/SKILL.md (contract doc: ensure -> inspect -> apply with mutationId/idempotencyKey/expectedRevision)",
+      "tools/iris/cli.js (arg parse, normalizeCommandName, WORKSPACE_COMMANDS routing; rejects writes without --idempotency-key with INVALID_ARGUMENT before any I/O)",
+      "tools/iris/core.js executeIrisCommand (workflow.* branch: arg kebab->camel normalization, parseJsonOption for operations/patch/metadata, source='cli', caller{agentIdentity,hostSessionId}; dispatches via runtime.operation (operation-gateway) when command in AGENT_PUBLIC_COMMAND_SET else createWorkspaceFacade dispatch)",
+      "tools/iris/operation-gateway.js createOperationGateway (assertPublicOperation -> UNKNOWN_COMMAND for non-public commands; assertWriteEnvelope requires idempotencyKey; forces workspaceMode='browser'; callerFromContext validates agentIdentity/hostSessionId pairing)",
+      "tools/iris/workspace-client.js IrisWorkspaceClient (reads ~/.iris/agent.json via managed-agent/config.js; enforces http+loopback-only URL; POST /api/tools with x-flovart-agent-token; maps HTTP/body errors to WorkspaceClientError codes WORKSPACE_UNAVAILABLE/WORKSPACE_TIMEOUT/WORKSPACE_COMMAND_FAILED)",
       "agent/index.js HTTP server (token check via persistent config token or bootstrap session tokens; POST /api/tools re-gates on AGENT_PUBLIC_COMMAND_SET — second surface check; session.callCommand)",
       "agent/session.js WorkflowAgentSession.callCommand (workspaceMode native/headless -> WORKSPACE_REQUIRED; requestedClientId vs activeClientId -> LEASE_TARGET_CHANGED; projectId vs bound snapshot -> LEASE_TARGET_CHANGED; cli/mcp-with-caller source -> authorizeExternalHost (AGENT_HOST_REQUIRED / AGENT_WRITER_INACTIVE / AGENT_HOST_SESSION_MISMATCH / AGENT_PROJECT_INACTIVE); ensureWorkspaceLease -> WorkspaceLeaseManager acquire+validate; forwards envelope over SSE 'tool_call' to the bound browser client)",
       "agent/workspace-lease.js WorkspaceLeaseManager (lease lifecycle: acquire/validate/renew/release/expire, mutation binding)",
@@ -123,7 +123,7 @@
       "agent/session.js resolveResult (POST /workflow/result -> pending requestId resolve/reject -> CLI prints result JSON)"
     ],
     "stateOwners": [
-      "~/.flovart/agent.json (agent/config.js): sidecar URL + bearer token",
+      "~/.iris/agent.json (agent/config.js): sidecar URL + bearer token",
       "agent/session.js: SSE client registry, pending request map, activeClientId/activeHostWriter, leases",
       "components/workflow/store.ts: project draft + receipts"
     ],
@@ -149,14 +149,14 @@
     "errorMappings": [
       "no agent.json -> WORKSPACE_UNAVAILABLE with WSL-aware guidance text",
       "non-loopback config URL -> WORKSPACE_UNAVAILABLE (refuses remote)",
-      "no connected browser -> WORKSPACE_UNAVAILABLE '当前没有已连接并同步项目的 Flovart Workflow'",
-      "stale/wrong project -> LEASE_TARGET_CHANGED with hint 'activate the target project in Flovart first'",
+      "no connected browser -> WORKSPACE_UNAVAILABLE '当前没有已连接并同步项目的 Iris Workflow'",
+      "stale/wrong project -> LEASE_TARGET_CHANGED with hint 'activate the target project in Iris first'",
       "host mismatch -> AGENT_WRITER_INACTIVE; missing identity -> AGENT_HOST_REQUIRED (SKILL.md documents the fix)",
       "sidecar 5xx/timeout -> WORKSPACE_TIMEOUT / retryable flags preserved into CLI error JSON",
       "dispatcher errors (REVISION_CONFLICT, IDEMPOTENCY_KEY_REUSE, BAD_REQUEST) cross the SSE boundary verbatim via /workflow/result"
     ],
     "passThroughLayers": [
-      "tools/flovart/workspace-client.js executeEnvelope: field-level pass-through (command/args/source/idempotencyKey/caller) — justified transport, but it does re-map flat HTTP failures into typed codes, so it owns error semantics",
+      "tools/iris/workspace-client.js executeEnvelope: field-level pass-through (command/args/source/idempotencyKey/caller) — justified transport, but it does re-map flat HTTP failures into typed codes, so it owns error semantics",
       "core.js workflow.* arg normalization block is a pure adapter (kebab-case->camelCase, JSON parse); it owns compatibility, no state"
     ],
     "verdict": {
@@ -267,19 +267,19 @@
   {
     "id": "path-f-workbuddy-skill-to-workflow",
     "name": "F) WorkBuddy Skill -> CLI -> Workflow",
-    "entry": "WorkBuddy chat invokes the bundled flovart skill; skill instructs the host to run flovart-cli commands",
+    "entry": "WorkBuddy chat invokes the bundled iris skill; skill instructs the host to run iris-cli commands",
     "modules": [
-      "integrations/workbuddy/flovart/connector-meta.json + cli.json (connector descriptor: npm i -g @flovart/cli; auth/status commands map to workbuddy.auth/status/unAuth; statusMatch '\"state\":\"local-ready\"')",
-      "integrations/workbuddy/flovart/skills/flovart/SKILL.md + references/workflow.md (agent-facing contract: flovart-cli ensure -> status -> workflow.inspect/selection.get -> workflow.apply -> workflow.node.run with --agent-identity workbuddy + stable mutation/idempotency ids)",
-      "tools/flovart/cli.js workbuddy.* branches (workbuddy.auth -> ensureFlovart({open:false}); workbuddy.status -> getLocalStatus -> {state:'local-ready'|'offline'}; workbuddy.unAuth -> always local-ready, no-op by design — documented 'never revokes shared credentials')",
-      "tools/flovart/ensure.js ensureFlovart (getLocalStatus -> if not ready spawn 'cli.js start [--source --web] --json --open' -> re-read status -> ensureResponse with HOST_NEEDS_LOGIN/HOST_NEEDS_SETUP/LINK_OFFLINE codes)",
-      "tools/flovart/local-status.js getLocalStatus (probe frontend candidates 127.0.0.1:37522/11451 + web-discovery + env; inspectLocalAgent via agent.json; FlovartRuntimeClient.status optional; browserConnected = agent ready && clients>0 && hasWorkflow)",
-      "then identical to path C: operation-gateway (for AGENT_PUBLIC_COMMAND_SET) or workspace facade -> FlovartWorkspaceClient -> agent/index.js /api/tools -> session.callCommand (source 'cli', caller{agentIdentity:'workbuddy'}) -> SSE tool_call -> browser bridge -> dispatcher -> draftAuthority -> store"
+      "integrations/workbuddy/iris/connector-meta.json + cli.json (connector descriptor: npm i -g @flovart/cli; auth/status commands map to workbuddy.auth/status/unAuth; statusMatch '\"state\":\"local-ready\"')",
+      "integrations/workbuddy/iris/skills/iris/SKILL.md + references/workflow.md (agent-facing contract: iris-cli ensure -> status -> workflow.inspect/selection.get -> workflow.apply -> workflow.node.run with --agent-identity workbuddy + stable mutation/idempotency ids)",
+      "tools/iris/cli.js workbuddy.* branches (workbuddy.auth -> ensureIris({open:false}); workbuddy.status -> getLocalStatus -> {state:'local-ready'|'offline'}; workbuddy.unAuth -> always local-ready, no-op by design — documented 'never revokes shared credentials')",
+      "tools/iris/ensure.js ensureIris (getLocalStatus -> if not ready spawn 'cli.js start [--source --web] --json --open' -> re-read status -> ensureResponse with HOST_NEEDS_LOGIN/HOST_NEEDS_SETUP/LINK_OFFLINE codes)",
+      "tools/iris/local-status.js getLocalStatus (probe frontend candidates 127.0.0.1:37522/11451 + web-discovery + env; inspectLocalAgent via agent.json; IrisRuntimeClient.status optional; browserConnected = agent ready && clients>0 && hasWorkflow)",
+      "then identical to path C: operation-gateway (for AGENT_PUBLIC_COMMAND_SET) or workspace facade -> IrisWorkspaceClient -> agent/index.js /api/tools -> session.callCommand (source 'cli', caller{agentIdentity:'workbuddy'}) -> SSE tool_call -> browser bridge -> dispatcher -> draftAuthority -> store"
     ],
     "stateOwners": [
       "WorkBuddy side: installed CLI package + connector lifecycle state (local-ready/offline)",
-      "Flovart side: identical to path C (agent.json, session.js, workflow store)",
-      "No WorkBuddy account state exists in Flovart — unAuth is intentionally a no-op"
+      "Iris side: identical to path C (agent.json, session.js, workflow store)",
+      "No WorkBuddy account state exists in Iris — unAuth is intentionally a no-op"
     ],
     "transformations": [
       "natural language -> skill-guided CLI invocations -> same envelope pipeline as path C",
@@ -291,13 +291,13 @@
       "downstream identical: public-surface gate, token, host-writer authorization (agentIdentity 'workbuddy' must match activeHostWriter), lease, dispatcher, revision"
     ],
     "sideEffects": [
-      "ensure may spawn `flovart start` child process and open the browser (--open suppressed for auth: authSuppressBrowser + open:false)",
+      "ensure may spawn `iris start` child process and open the browser (--open suppressed for auth: authSuppressBrowser + open:false)",
       "same workflow mutations as path C"
     ],
     "errorMappings": [
       "services down -> ensureResponse {ok:false,error.code: LINK_OFFLINE|HOST_NEEDS_LOGIN|HOST_NEEDS_SETUP, action}",
       "status always prints ok:true with state field — connector parses state, not exit code (statusMatch on local-ready)",
-      "unAuth always reports local-ready + explanatory message — a deliberately hollow success (documented: Flovart holds no WorkBuddy account)"
+      "unAuth always reports local-ready + explanatory message — a deliberately hollow success (documented: Iris holds no WorkBuddy account)"
     ],
     "passThroughLayers": [
       "connector-meta.json/cli.json are pure packaging descriptors (expected for a connector manifest)",
@@ -305,7 +305,7 @@
     ],
     "verdict": {
       "ownsResponsibility": "mostly",
-      "note": "Thin but honest layering: connector manifest + skill doc + the shared CLI pipeline. Two real observations: (1) workbuddy.auth only runs ensureFlovart — if services are already up it returns local-ready without proving the browser Workflow link specifically (ensureResponse checks browserConnected via getLocalStatus, so it does — verified); (2) unAuth unconditionally reports success even when nothing was ever connected — semantically correct per the no-account model but indistinguishable from a real logout to WorkBuddy's connector state machine."
+      "note": "Thin but honest layering: connector manifest + skill doc + the shared CLI pipeline. Two real observations: (1) workbuddy.auth only runs ensureIris — if services are already up it returns local-ready without proving the browser Workflow link specifically (ensureResponse checks browserConnected via getLocalStatus, so it does — verified); (2) unAuth unconditionally reports success even when nothing was ever connected — semantically correct per the no-account model but indistinguishable from a real logout to WorkBuddy's connector state machine."
     }
   }
 ]

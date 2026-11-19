@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const packageDir = resolve(import.meta.dirname, '..', 'tools', 'flovart');
+const packageDir = resolve(import.meta.dirname, '..', 'tools', 'iris');
 const packageManifest = JSON.parse(readFileSync(resolve(packageDir, 'package.json'), 'utf8'));
 const packageEntries = new Set(packageManifest.files || []);
 
@@ -37,7 +37,7 @@ describe('@flovart/cli package manifest', () => {
   });
 
   it('keeps the executable, managed agent, and Skill projections in the package', () => {
-    expect(packageManifest.bin).toMatchObject({ flovart: './cli.js', 'flovart-cli': './cli.js', 'flovart-mcp': './mcp-server.js' });
+    expect(packageManifest.bin).toMatchObject({ iris: './cli.js', 'iris-cli': './cli.js', 'iris-mcp': './mcp-server.js' });
     expect(packageEntries.has('mcp-server.js')).toBe(true);
     expect(packageEntries.has('operation-gateway.js')).toBe(true);
     expect([...packageEntries]).toEqual(expect.arrayContaining(['cli.js', 'managed-agent', 'skill', 'scripts']));

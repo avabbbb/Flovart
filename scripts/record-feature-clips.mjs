@@ -1,4 +1,4 @@
-// Feature-clip recording driver for the Flovart README.
+// Feature-clip recording driver for the Iris README.
 //
 // One invocation records one REAL, UI-driven operation inside a VISIBLE,
 // video-recorded Chrome-for-Testing window. Three scenario kinds share the same
@@ -22,9 +22,9 @@
 //   node scripts/record-feature-clips.mjs --clip reftab=crop,rotate --keep-raw
 //   node scripts/record-feature-clips.mjs --list
 //
-// Prerequisites: the local Flovart Agent + Web are already running — the same
+// Prerequisites: the local Iris Agent + Web are already running — the same
 // services scripts/record-hero.mjs uses. ffmpeg is required for MP4/GIF output;
-// set FLOVART_FFMPEG to override the auto-detected binary.
+// set IRIS_FFMPEG to override the auto-detected binary.
 
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
@@ -38,7 +38,7 @@ import {
   buildBrowserBootstrapUrl,
   issueBrowserBootstrapToken,
   probeWebUi,
-} from '../tools/flovart/local-agent.js';
+} from '../tools/iris/local-agent.js';
 import { resolveTestTempRoot } from './test-temp-root.mjs';
 
 const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -385,7 +385,7 @@ const CATALOG = {
       await input.waitFor({ state: 'visible', timeout: 20_000 });
       await wait(1200);
       await input.click();
-      await input.type(process.env.FLOVART_README_AGENT_PROMPT
+      await input.type(process.env.IRIS_README_AGENT_PROMPT
         || '帮我搭一个产品宣传短片的工作流：两个参考图节点、一个视频节点，并把两张参考图连到视频节点上', { delay: 35 });
       await wait(500);
       const before = await page.locator('[data-workflow-node-id]').count();
@@ -421,7 +421,7 @@ const FFMPEG_TOOLS = new Set([
 //                       a marquee drag both left a single selection, so
 //                       WorkflowNodeToolbar never rendered align/group)
 //   canvas-zoom         never captured: two runs died on a transient
-//                       "Timed out waiting for Flovart services" probe, which is
+//                       "Timed out waiting for Iris services" probe, which is
 //                       a local-service issue rather than a script one.
 const DEFERRED = new Set(['canvas-group-align', 'canvas-zoom']);
 
@@ -429,10 +429,10 @@ const DEFERRED = new Set(['canvas-group-align', 'canvas-zoom']);
 // 3. ffmpeg.
 // ---------------------------------------------------------------------------
 function resolveFfmpeg() {
-  const candidates = [process.env.FLOVART_FFMPEG, 'H:\\ffmpeg\\bin\\ffmpeg.exe',
+  const candidates = [process.env.IRIS_FFMPEG, 'H:\\ffmpeg\\bin\\ffmpeg.exe',
     'D:\\ffmpeg\\bin\\ffmpeg.exe', 'ffmpeg'].filter(Boolean);
   for (const c of candidates) if (c === 'ffmpeg' || existsSync(c)) return c;
-  throw new Error('ffmpeg not found — set FLOVART_FFMPEG to the ffmpeg binary.');
+  throw new Error('ffmpeg not found — set IRIS_FFMPEG to the ffmpeg binary.');
 }
 
 function runFfmpeg(args, label) {
@@ -465,7 +465,7 @@ const PLATE_HTML = `<!doctype html><html><body style="margin:0">
     background:#141118;transform:rotate(12deg)"></div>
   <div style="position:absolute;left:472px;top:210px;width:0;height:0;
     border-left:82px solid transparent;border-right:82px solid transparent;border-bottom:212px solid rgba(232,69,60,.95)"></div>
-  <div style="position:absolute;left:96px;top:496px;color:#fff;letter-spacing:.34em;font-size:26px;font-weight:700">FLOVART DEMO PLATE</div>
+  <div style="position:absolute;left:96px;top:496px;color:#fff;letter-spacing:.34em;font-size:26px;font-weight:700">IRIS DEMO PLATE</div>
   <div style="position:absolute;left:98px;top:540px;color:rgba(255,255,255,.62);font-size:17px;letter-spacing:.16em">1280 × 720 · locally generated fixture</div>
   <div style="position:absolute;right:76px;top:74px;width:210px;height:150px;border:3px solid rgba(255,255,255,.8);border-radius:6px"></div>
   <div style="position:absolute;right:96px;bottom:70px;display:flex;gap:16px">
@@ -485,7 +485,7 @@ async function ensureFixtures() {
     // resolves to the chromium_headless_shell channel, absent on this machine.
     const browser = await chromium.launch({
       headless: true,
-      executablePath: process.env.FLOVART_CHROME_PATH || chromium.executablePath(),
+      executablePath: process.env.IRIS_CHROME_PATH || chromium.executablePath(),
     });
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     await page.setContent(PLATE_HTML, { waitUntil: 'load' });
@@ -585,7 +585,7 @@ async function waitFor(check, timeoutMs = 90_000, intervalMs = 300) {
     try { const v = await check(); if (v) return v; } catch (e) { lastError = e; }
     await sleep(intervalMs);
   }
-  throw lastError || new Error('Timed out waiting for Flovart services.');
+  throw lastError || new Error('Timed out waiting for Iris services.');
 }
 
 // The workspace-writer handshake right after a fresh browser connects is racy:
@@ -604,7 +604,7 @@ async function retry(label, attempts, fn) {
   throw lastError;
 }
 
-// ~/.flovart/agent.json can drift from the agent that is actually running —
+// ~/.iris/agent.json can drift from the agent that is actually running —
 // a stale CLI `start` rewrites it to a dynamic port and then exits. Probe the
 // configured URL and fall back to the well-known port instead of dying on a
 // dead address.
@@ -623,9 +623,9 @@ async function resolveServices() {
   // Honour the same override the CLI uses, so the recorded browser and the CLI
   // writes always talk to the SAME agent. Without this, a stale agent.json can
   // point the browser at one agent and the CLI at another.
-  const agentConfigPath = process.env.FLOVART_AGENT_CONFIG
-    || join(homedir(), '.flovart', 'agent.json');
-  const webDiscoveryPath = join(homedir(), '.flovart', 'web.json');
+  const agentConfigPath = process.env.IRIS_AGENT_CONFIG
+    || join(homedir(), '.iris', 'agent.json');
+  const webDiscoveryPath = join(homedir(), '.iris', 'web.json');
 
   const configured = await waitFor(() => {
     if (!existsSync(agentConfigPath)) return null;
@@ -640,7 +640,7 @@ async function resolveServices() {
   if (agent.url !== configured.url) {
     console.log(`[clip] ${agentConfigPath} points at ${configured.url} (no /health) — using ${agent.url}`);
   }
-  // The CLI child resolves the agent from FLOVART_AGENT_CONFIG independently of
+  // The CLI child resolves the agent from IRIS_AGENT_CONFIG independently of
   // what the browser was pointed at, so write the resolved endpoint to its own
   // config and hand that to the child. Otherwise a stale discovery file makes
   // the browser talk to one agent and every CLI write to another.
@@ -649,7 +649,7 @@ async function resolveServices() {
 
   const web = await waitFor(async () => {
     const candidates = new Set();
-    if (process.env.FLOVART_WEB_URL) candidates.add(process.env.FLOVART_WEB_URL);
+    if (process.env.IRIS_WEB_URL) candidates.add(process.env.IRIS_WEB_URL);
     if (existsSync(webDiscoveryPath)) {
       try { candidates.add(JSON.parse(readFileSync(webDiscoveryPath, 'utf8')).url); } catch { /* malformed */ }
     }
@@ -677,9 +677,9 @@ function makeCli(agentConfigPath) {
   // Invoke the CLI through node directly instead of `npm run … -- …`.
   // An npm+shell hop on Windows re-splits argv, which silently truncates
   // titles at spaces and mangles the JSON metadata payload.
-  const cliPath = join(projectDir, 'tools', 'flovart', 'cli.js');
+  const cliPath = join(projectDir, 'tools', 'iris', 'cli.js');
   const env = agentConfigPath
-    ? { ...process.env, FLOVART_AGENT_CONFIG: agentConfigPath }
+    ? { ...process.env, IRIS_AGENT_CONFIG: agentConfigPath }
     : process.env;
   return args => new Promise((res, rej) => {
     const child = spawn(process.execPath, [cliPath, ...args, '--json'], {
@@ -713,12 +713,12 @@ async function recordClip(key, clip, services, fixtureOrigin, runTag) {
 
   const tempRoot = resolveTestTempRoot(projectDir);
   await mkdir(tempRoot, { recursive: true });
-  const testRoot = await mkdtemp(join(tempRoot, 'flovart-clip-'));
+  const testRoot = await mkdtemp(join(tempRoot, 'iris-clip-'));
   process.env.TEMP = testRoot;
   process.env.TMP = testRoot;
   process.env.TMPDIR = testRoot;
 
-  const chromeExecutable = process.env.FLOVART_CHROME_PATH || chromium.executablePath();
+  const chromeExecutable = process.env.IRIS_CHROME_PATH || chromium.executablePath();
   if (!existsSync(chromeExecutable)) throw new Error(`Chrome for Testing not found: ${chromeExecutable}`);
 
   const videoDir = join(testRoot, 'video');
@@ -737,9 +737,9 @@ async function recordClip(key, clip, services, fixtureOrigin, runTag) {
     args: ['--no-first-run', '--no-default-browser-check', '--window-size=1464,980'],
   });
   if (clip.llm) {
-    // Key 只在本机 ~/.flovart-readme（仓库外），写进一次性 profile 的旧版明文键；应用启动时迁移进加密 vault。
-    const dir = join(homedir(), '.flovart-readme');
-    const model = process.env.FLOVART_README_LLM_MODEL || 'zen/deepseek-v4.1-flash-free';
+    // Key 只在本机 ~/.iris-readme（仓库外），写进一次性 profile 的旧版明文键；应用启动时迁移进加密 vault。
+    const dir = join(homedir(), '.iris-readme');
+    const model = process.env.IRIS_README_LLM_MODEL || 'zen/deepseek-v4.1-flash-free';
     const seeded = [{ id: 'readme-llm', provider: 'openai_compatible', capabilities: ['text', 'agent'],
       key: readFileSync(join(dir, 'llm-key'), 'utf8').trim(), baseUrl: readFileSync(join(dir, 'llm-base'), 'utf8').trim(),
       name: 'README demo', isDefault: true, status: 'ok', customModels: [model], defaultModel: model }];

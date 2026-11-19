@@ -1,14 +1,14 @@
 // Hosted demo smoke: loads the static Pages build (no local Agent, no API key)
 // at desktop and narrow sizes, visits Canvas | Reverse | Agent, and records
 // screenshots, console/page errors, stuck loading text and horizontal overflow.
-// Usage: FLOVART_TEST_URL=<pages url> node scripts/hosted-demo-smoke.mjs [label]
+// Usage: IRIS_TEST_URL=<pages url> node scripts/hosted-demo-smoke.mjs [label]
 import { chromium } from 'playwright';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const defaultUrl = 'http:' + '//' + '127.0.0.1:4179' + '/Flovart/';
-const targetUrl = process.env.FLOVART_TEST_URL || defaultUrl;
+const defaultUrl = 'http:' + '//' + '127.0.0.1:4179' + '/Iris/';
+const targetUrl = process.env.IRIS_TEST_URL || defaultUrl;
 const label = process.argv[2] || 'local-dist';
 const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(projectDir, '.tmp', 'hosted-demo', label);
@@ -17,7 +17,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const viewports = [['desktop', 1440, 900], ['narrow', 390, 844]];
 const LOADING = /正在加载|Loading Workflow|Loading\.\.\./;
 
-const browser = await chromium.launch({ headless: true, executablePath: process.env.FLOVART_CHROME_PATH || chromium.executablePath() });
+const browser = await chromium.launch({ headless: true, executablePath: process.env.IRIS_CHROME_PATH || chromium.executablePath() });
 const summary = { targetUrl, label, at: new Date().toISOString(), runs: [] };
 try {
   for (const [name, width, height] of viewports) {

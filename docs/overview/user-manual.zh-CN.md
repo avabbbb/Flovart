@@ -1,18 +1,18 @@
-# Flovart 新用户操作手册
+# Iris 新用户操作手册
 
 > 适用版本：当前主分支（2026-11-17）。部署方式见[快速开始](quick-start.md)，外部 Agent 见[Skill 指南](skill-guide.md)，Provider 认证状态以[支持矩阵](../../SUPPORT_MATRIX.md)为准。
 
 ## 1. 五分钟上手
 
-1. 启动：`npm install` 后运行 `npm run flovart:cli -- start --source --web --open`，浏览器打开 `#/app` 的空白画布。
+1. 启动：`npm install` 后运行 `npm run iris:cli -- start --source --web --open`，浏览器打开 `#/app` 的空白画布。
 2. 添加 AI 服务：右上角「设置 → API」新增 Key。Closed Beta 推荐 RunningHub（图像 + 视频）；Gemini 与 OpenAI 兼容接口为 Experimental。自定义端点粘贴完整地址也会自动裁剪到 `/v1`。
 3. 模型映射：「设置 → 模型」把文本 / 图片 / 视频能力指向具体模型。
 4. 在画布双击或用工具栏新建生成节点，写提示词，运行。付费生成运行前会弹出费用确认。
 
-## 2. 顶栏：画布｜Iris｜Agent
+## 2. 顶栏：画布｜Cut｜Agent
 
 - **画布**：主要创作面，下文 §3 起都在这里。
-- **Iris**（即将推出）：全能后期助手。目前点进去只有“优化中”的占位页，你已有的逆向工程数据会保留。上线后它是一个可以直接对话的个人 Agent，产出落在画布上；不装剪辑软件也能用，也可以选择连接 DaVinci Resolve 等剪辑软件，自动带入时间线上下文。
+- **Cut**（即将推出，原名 逆向）：全能后期助手。目前点进去只有“优化中”的占位页，你已有的逆向工程数据会保留。上线后它是一个可以直接对话的个人 Agent，产出落在画布上；不装剪辑软件也能用，也可以选择连接 DaVinci Resolve 等剪辑软件，自动带入时间线上下文。
 - **Agent**：连接与管理外部 Agent（见 §5）。
 
 ### 2.1 画布与节点
@@ -42,8 +42,8 @@
 - **编写自己的 Skill**：
 
 ```bash
-npm run flovart:cli -- skill.init my-skill      # 生成 flovart.skill.yaml、SKILL.md、agents/openai.yaml
-npm run flovart:cli -- skill.validate my-skill  # 校验 manifest与输入槽位
+npm run iris:cli -- skill.init my-skill      # 生成 flovart.skill.yaml、SKILL.md、agents/openai.yaml
+npm run iris:cli -- skill.validate my-skill  # 校验 manifest与输入槽位
 ```
 
 槽位 id 须以小写字母开头（`^[a-z][\w-]{0,63}$`）；`skill.init` 不会覆盖已有目录。
@@ -51,8 +51,8 @@ npm run flovart:cli -- skill.validate my-skill  # 校验 manifest与输入槽位
 ## 5. 外部 Agent（Codex / Claude Code / OpenCode / WorkBuddy）
 
 ```bash
-npm run flovart:cli -- status --json
-npm run flovart:cli -- workflow.inspect --json
+npm run iris:cli -- status --json
+npm run iris:cli -- workflow.inspect --json
 ```
 
 日常只用 `status`、`workflow.inspect`、`workflow.selection.get`、`workflow.apply`、`workflow.node.run`；`ensure` / `doctor` 用于连接与诊断。Agent 不会拿到你的 Provider Key；工具可调用不等于已批准付费。
@@ -72,7 +72,7 @@ npm run flovart:cli -- workflow.inspect --json
 
 > 竞品一栏来自视频观察与公开资料，尚未逐条对照官方手册复核。
 
-| 能力 | 竞品常见做法 | Flovart |
+| 能力 | 竞品常见做法 | Iris |
 | --- | --- | --- |
 | 画布节点工作流 | LibTV 画布、RHTV 工作流 | ✓ 无限画布 + 节点 |
 | Agent 对话建节点 | LibTV 侧栏 Agent | ✓ 内置 Assistant + 外部 Agent CLI/MCP |
@@ -85,7 +85,7 @@ npm run flovart:cli -- workflow.inspect --json
 | 短剧分镜 | LibTV / Higgsfield | ✓ 结构化镜头（镜号/时长/场景/机位/台词） |
 | 成片拼接 | 常见 | ✓ 按镜号拼接；时间线精修交给 Resolve |
 | 角色一致性 | Higgsfield 角色 ID 类（待复核） | ✓ 已批准锚点自动接入，未批准则阻断 |
-| 本地优先执行、内容寻址素材 | 多为云端 | ✓ Flovart 特有 |
+| 本地优先执行、内容寻址素材 | 多为云端 | ✓ Iris 特有 |
 
 **覆盖度（诚实口径）**：按[复刻方案](../archive/2026-11-13-design-refresh/30-competitive-replication.zh-CN.md)（已归档，现行结论见 [Canvas / Workflow](../design/10-canvas-workflow.md) §5.1）的 14 项机制，14 项均已实现。用量一项的精度取决于服务商是否在流中返回 usage，缺失时只计次数；托管 Agent 的服务端 usage 不在本机。另有一处已知取舍：不内置时间线（交给 Resolve）。竞品一栏仍待对照官方手册复核。
 

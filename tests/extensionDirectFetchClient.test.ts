@@ -8,7 +8,7 @@ import { fakePortPair } from './helpers/fakePortPair';
 
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => false }));
 
-const ORIGIN = 'https://flovart.avabbbb.com';
+const ORIGIN = 'https://iris.avabbbb.com';
 const CHAT = 'https://opencode.ai/zen/v1/chat/completions';
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
@@ -87,7 +87,7 @@ describe('LLM transport (extension direct vs proxy)', () => {
     expect(nativeFetch).not.toHaveBeenCalled();
     const [url, init] = upstream.mock.calls[0] as any;
     expect(url).toBe(CHAT);
-    expect((init.headers as Headers).get('x-opencode-session')).toMatch(/^ses_flovart_/);
+    expect((init.headers as Headers).get('x-opencode-session')).toMatch(/^ses_iris_/);
     expect(new TextDecoder().decode(init.body)).toBe('{"stream":true}');
   });
 
@@ -121,7 +121,7 @@ describe('LLM transport (extension direct vs proxy)', () => {
   it('falls back when the extension never accepts the request', async () => {
     vi.useFakeTimers();
     try {
-      const silent = { supports: () => true, openChannel: () => fakePortPair('flovart-fetch', ORIGIN).web as any };
+      const silent = { supports: () => true, openChannel: () => fakePortPair('iris-fetch', ORIGIN).web as any };
       const pending = extensionDirectFetch(silent, { url: CHAT, method: 'POST', headers: new Headers() });
       const assertion = expect(pending).rejects.toBeInstanceOf(ExtensionDirectUnavailableError);
       await vi.advanceTimersByTimeAsync(5000);

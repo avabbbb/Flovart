@@ -18,7 +18,7 @@ async function resetSkillStores() {
   await localforage.removeItem(MINE_SKILLS_KEY);
   await localforage.removeItem(DISABLED_SKILLS_KEY);
   useUserSkillsStore.setState({ skills: [], disabledIds: new Set(), favoriteIds: new Set(), loaded: false });
-  await localforage.removeItem('flovart.skill.favorites.v1');
+  await localforage.removeItem('iris.skill.favorites.v1');
   useSkillHubStore.setState({
     hubUrl: '', hubStatus: 'idle', hubError: undefined, hubSkills: [], localSkills: [], registryStatus: 'unavailable',
     refreshLocal: vi.fn(async () => undefined),
@@ -126,7 +126,7 @@ describe('Skill Hub picker UI', () => {
     const bundled = listBundledProductionSkills()[0];
     fireEvent.click(await screen.findByRole('button', { name: `查看 ${bundled.displayName} 详情` }));
     expect(await screen.findByText('SKILL.md 预览')).toBeInTheDocument();
-    expect(screen.getByText(/内置 Skill 随 Flovart 发布/)).toBeInTheDocument();
+    expect(screen.getByText(/内置 Skill 随 Iris 发布/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /删除|编辑/ })).not.toBeInTheDocument();
   });
 

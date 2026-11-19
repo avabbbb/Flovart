@@ -26,7 +26,7 @@ const LONG_SKILL = ['---', 'name: demo', 'description: 演示技能：纸艺拼�
 const catalog: AgentSkillCatalog = {
   list: () => [
     { id: 'demo', aliases: ['community.demo'], name: 'demo', description: '演示技能：纸艺拼贴短片。', source: 'bundled' },
-    { id: 'flovart', aliases: [], name: 'flovart', description: 'CLI only', source: 'project' },
+    { id: 'iris', aliases: [], name: 'iris', description: 'CLI only', source: 'project' },
   ],
   read: async (id, file) => (id === 'demo' && file === 'SKILL.md' ? LONG_SKILL : id === 'demo' && file === 'references/a.md' ? '# 参考 A' : null),
 };
@@ -36,8 +36,8 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('browser agent harness', () => {
   let kernel: BrowserAgentKernel | undefined;
-  beforeEach(async () => { await localforage.removeItem(`flovart.agent.sessions.${PROJECT}`); });
-  afterEach(async () => { await kernel?.close(); kernel = undefined; await localforage.removeItem(`flovart.agent.sessions.${PROJECT}`); });
+  beforeEach(async () => { await localforage.removeItem(`iris.agent.sessions.${PROJECT}`); });
+  afterEach(async () => { await kernel?.close(); kernel = undefined; await localforage.removeItem(`iris.agent.sessions.${PROJECT}`); });
 
   const make = (options: Partial<ConstructorParameters<typeof BrowserAgentKernel>[0]> = {}) => new BrowserAgentKernel({
     projectId: PROJECT, route, tools: [], confirm: async () => true, systemPrompt: 'SYS', getThinkingLevel: () => 'off',
@@ -57,16 +57,16 @@ describe('browser agent harness', () => {
     const system = systemOf(bodies[0]);
     expect(system).toContain('SYS');
     expect(system).toContain('- demo：演示技能');
-    expect(system).not.toContain('- flovart：');
+    expect(system).not.toContain('- iris：');
     expect(system).toContain('强制使用');
     expect(system).toContain('主角叫小林');
     expect(system).not.toContain('规则 1：');
     const request = JSON.stringify(bodies[0].messages);
     expect(request).toContain('最后一行：结尾用品牌色。'); // 完整原文，没有 2000 字截断
-    expect(bodies[0].tools?.map(tool => tool.function.name)).toEqual(expect.arrayContaining(['flovart_skill_read', 'flovart_memory', 'flovart_todo']));
-    expect(events).toEqual(['tool_execution_start:flovart_skill_read', 'tool_execution_end:flovart_skill_read']);
+    expect(bodies[0].tools?.map(tool => tool.function.name)).toEqual(expect.arrayContaining(['iris_skill_read', 'iris_memory', 'flovart_todo']));
+    expect(events).toEqual(['tool_execution_start:iris_skill_read', 'tool_execution_end:iris_skill_read']);
     expect(first.messages.map(message => message.role)).toEqual(['user', 'tool', 'assistant']);
-    expect(first.messages[1]).toMatchObject({ toolName: 'flovart_skill_read' });
+    expect(first.messages[1]).toMatchObject({ toolName: 'iris_skill_read' });
 
     await kernel.send('再来一版', [], attachment);
     const toolMessages = bodies[1].messages.filter(message => message.role === 'tool');
@@ -97,7 +97,7 @@ describe('browser agent harness', () => {
   it('dedupes model-initiated skill reads and keeps the read list across compaction and reopen', async () => {
     const bodies: Body[] = [];
     const script: Array<() => Response> = [
-      () => toolCall('flovart_skill_read', { id: 'demo', file: 'references/a.md' }),
+      () => toolCall('iris_skill_read', { id: 'demo', file: 'references/a.md' }),
       () => reply('读完了'),
       () => reply('x'.repeat(4_000)),
     ];
@@ -105,7 +105,7 @@ describe('browser agent harness', () => {
       const body = JSON.parse(String(init.body)) as Body;
       bodies.push(body);
       if (isSummaryRequest(body)) return reply('## 摘要\n用户在做纸艺短片，已读 demo 技能。');
-      return (script.shift() ?? (() => toolCall('flovart_skill_read', { id: 'demo', file: 'references/a.md' })))();
+      return (script.shift() ?? (() => toolCall('iris_skill_read', { id: 'demo', file: 'references/a.md' })))();
     }));
     kernel = make({ compaction: { keepRecentTokens: 500 } });
     await kernel.openSession();
@@ -124,10 +124,10 @@ describe('browser agent harness', () => {
       const body = JSON.parse(String(init.body)) as Body;
       bodies.push(body);
       followUp += 1;
-      return followUp === 1 ? toolCall('flovart_skill_read', { id: 'demo', file: 'references/a.md' }) : reply('ok');
+      return followUp === 1 ? toolCall('iris_skill_read', { id: 'demo', file: 'references/a.md' }) : reply('ok');
     }));
     const after = await kernel.send('再看一下参考') as { messages: Array<{ role: string; text: string; toolName?: string }> };
-    const lastTool = after.messages.filter(message => message.toolName === 'flovart_skill_read').at(-1)!;
+    const lastTool = after.messages.filter(message => message.toolName === 'iris_skill_read').at(-1)!;
     expect(lastTool.text).toContain('已读过');
     expect(lastTool.text).toContain('压缩');
     expect(lastTool.text).not.toContain('# 参考 A');
@@ -228,7 +228,7 @@ describe('browser agent harness', () => {
 });
 
 describe('browser agent harness: stop during compaction', () => {
-  afterEach(async () => { await localforage.removeItem(`flovart.agent.sessions.${PROJECT}-stop`); });
+  afterEach(async () => { await localforage.removeItem(`iris.agent.sessions.${PROJECT}-stop`); });
 
   it('stopping while the pre-send compaction runs ends the turn without sending it', async () => {
     let turns = 0;

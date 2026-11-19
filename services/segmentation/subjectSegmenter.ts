@@ -64,7 +64,7 @@ function defaultEnvironment() {
 }
 
 function defaultCreateWorker(): WorkerLike {
-  return new Worker(new URL('./samWorker.ts', import.meta.url), { type: 'module', name: 'flovart-subject-segmenter' }) as unknown as WorkerLike;
+  return new Worker(new URL('./samWorker.ts', import.meta.url), { type: 'module', name: 'iris-subject-segmenter' }) as unknown as WorkerLike;
 }
 
 type Pending = {

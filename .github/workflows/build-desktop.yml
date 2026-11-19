@@ -1,4 +1,4 @@
-# Flovart - Tauri 桌面应用全平台构建 + 自动发布
+# Iris - Tauri 桌面应用全平台构建 + 自动发布
 #
 # 触发条件（推送 main 不再触发，四平台构建只在需要时跑）：
 #   1. 推送 v* tag         → 完整验证后发布（v0.* 为内测 Prerelease）
@@ -13,8 +13,8 @@
 #   TAURI_SIGNING_PRIVATE_KEY_PASSWORD - 私钥密码（生成时无密码则留空）
 #
 # 包含组件：
-#   - Flovart 主程序（React 19 + Tauri 2）
-#   - flovart-host 启动器（Chrome / Edge Native Messaging 宿主，源在 src/bin/host.rs）
+#   - Iris 主程序（React 19 + Tauri 2）
+#   - iris-host 启动器（Chrome / Edge Native Messaging 宿主，源在 src/bin/host.rs）
 #   - 平台原生安装包（Windows: NSIS .exe，Linux: .deb / .AppImage）
 #
 # Sidecar 编译：
@@ -124,7 +124,7 @@ jobs:
         shell: pwsh
         run: |
           node scripts/build-agent-sidecar.mjs --target x86_64-pc-windows-msvc
-          $agent = 'src-tauri/binaries/flovart-agent-x86_64-pc-windows-msvc.exe'
+          $agent = 'src-tauri/binaries/iris-agent-x86_64-pc-windows-msvc.exe'
           if (-not (Test-Path -LiteralPath $agent -PathType Leaf)) {
             throw "Agent sidecar was not produced: $agent"
           }
@@ -162,7 +162,7 @@ jobs:
         include:
           - platform: windows-latest
             rust_target: x86_64-pc-windows-msvc
-            binary_name: flovart-host.exe
+            binary_name: iris-host.exe
             sidecar_ext: .exe
             bundle_args: --bundles nsis
             installer_glob: |
@@ -171,7 +171,7 @@ jobs:
             label: Windows x64
           - platform: macos-15
             rust_target: aarch64-apple-darwin
-            binary_name: flovart-host
+            binary_name: iris-host
             sidecar_ext: ''
             bundle_args: --bundles app,dmg
             installer_glob: |
@@ -179,7 +179,7 @@ jobs:
             label: macOS Apple Silicon
           - platform: macos-15-intel
             rust_target: x86_64-apple-darwin
-            binary_name: flovart-host
+            binary_name: iris-host
             sidecar_ext: ''
             bundle_args: --bundles app,dmg
             installer_glob: |
@@ -187,7 +187,7 @@ jobs:
             label: macOS Intel
           - platform: ubuntu-22.04
             rust_target: x86_64-unknown-linux-gnu
-            binary_name: flovart-host
+            binary_name: iris-host
             sidecar_ext: ''
             bundle_args: --bundles deb,appimage
             installer_glob: |
@@ -256,9 +256,9 @@ jobs:
           fi
 
       # ── Sidecar pre-build ──
-      # 从 src/bin/host.rs 编译 flovart-host（Chrome Native Messaging 宿主），
+      # 从 src/bin/host.rs 编译 iris-host（Chrome Native Messaging 宿主），
       # 放到 src-tauri/binaries/，文件名带 target triple 后缀，供 Tauri externalBin 查找。
-      - name: Build sidecar flovart-host
+      - name: Build sidecar iris-host
         working-directory: src-tauri
         shell: bash
         run: |
@@ -267,10 +267,10 @@ jobs:
           # sidecar is being compiled; the following Tauri build uses the full
           # release config and the freshly copied sidecar.
           export TAURI_CONFIG='{"bundle":{"externalBin":[]}}'
-          cargo build --bin flovart-host --target ${{ matrix.rust_target }} --release
+          cargo build --bin iris-host --target ${{ matrix.rust_target }} --release
           mkdir -p binaries
           source_path="target/${{ matrix.rust_target }}/release/${{ matrix.binary_name }}"
-          sidecar_path="binaries/flovart-host-${{ matrix.rust_target }}${{ matrix.sidecar_ext }}"
+          sidecar_path="binaries/iris-host-${{ matrix.rust_target }}${{ matrix.sidecar_ext }}"
           if [[ ! -s "$source_path" ]]; then
             echo "Expected sidecar was not built: $source_path" >&2
             exit 1
@@ -286,15 +286,15 @@ jobs:
           file binaries/* 2>/dev/null || true
 
       # ── Agent sidecar pre-build ──
-      # Bundle agent/index.js → single-ESM → Node SEA → flovart-agent-<triple>.
+      # Bundle agent/index.js → single-ESM → Node SEA → iris-agent-<triple>.
       # tauri.conf.json externalBin requires this to exist before tauri build;
-      # without it the bundler fails on "resource path binaries/flovart-agent-*".
-      # Runs the SAME agent core as dev (`npm run flovart:agent`) — no second Agent.
-      - name: Build sidecar flovart-agent (Node SEA)
+      # without it the bundler fails on "resource path binaries/iris-agent-*".
+      # Runs the SAME agent core as dev (`npm run iris:agent`) — no second Agent.
+      - name: Build sidecar iris-agent (Node SEA)
         shell: bash
         run: |
           node scripts/build-agent-sidecar.mjs --target ${{ matrix.rust_target }}
-          agent_path="src-tauri/binaries/flovart-agent-${{ matrix.rust_target }}${{ matrix.sidecar_ext }}"
+          agent_path="src-tauri/binaries/iris-agent-${{ matrix.rust_target }}${{ matrix.sidecar_ext }}"
           if [[ ! -s "$agent_path" ]]; then
             echo "Agent sidecar was not produced: $agent_path" >&2
             exit 1
@@ -313,19 +313,19 @@ jobs:
             {
               echo "is_tag=true"
               echo "tag_name=${GITHUB_REF_NAME}"
-              echo "release_name=Flovart ${GITHUB_REF_NAME} (Closed Beta)"
+              echo "release_name=Iris ${GITHUB_REF_NAME} (Closed Beta)"
               echo "release_body<<EOF"
-              echo "## Flovart Release / 发行版"
+              echo "## Iris Release / 发行版"
               echo ""
               echo "**English:**"
-              echo "- Flovart main app + flovart-host launcher (Chrome / Edge Native Messaging host)"
+              echo "- Iris main app + iris-host launcher (Chrome / Edge Native Messaging host)"
               echo "- Windows, macOS (Apple Silicon + Intel) and Linux installers with multi-language NSIS on Windows (EN / 简中 / 繁中 / 日 / 韩 / FR / DE / ES / IT / PT-BR / RU)"
               echo "- Signed updater artifacts; v0.x builds are prereleases, not stable updates"
               echo "- Creative hosts: Experimental; paid-provider certification pending (see SUPPORT_MATRIX.md)"
               echo "- macOS: ad-hoc signed, not notarized; Windows: no Authenticode signature"
               echo ""
               echo "**简体中文：**"
-              echo "- 包含 Flovart 主程序 + flovart-host 启动器（Chrome / Edge 原生消息宿主）"
+              echo "- 包含 Iris 主程序 + iris-host 启动器（Chrome / Edge 原生消息宿主）"
               echo "- Windows、macOS（Apple Silicon + Intel）和 Linux 安装包，Windows NSIS 安装器支持 11 种语言（英 / 简中 / 繁中 / 日 / 韩 / 法 / 德 / 西 / 意 / 葡 / 俄）"
               echo "- 更新产物已签名；v0.x 为内测预发布，不进入稳定自动更新频道"
               echo "- 宿主集成 Experimental，付费 Provider 认证待完成；详见 SUPPORT_MATRIX.md"
@@ -342,18 +342,18 @@ jobs:
             {
               echo "is_tag=false"
               echo "tag_name=nightly-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
-              echo "release_name=Flovart Nightly v__VERSION__ (build #${GITHUB_RUN_NUMBER})"
+              echo "release_name=Iris Nightly v__VERSION__ (build #${GITHUB_RUN_NUMBER})"
               echo "release_body<<EOF"
-              echo "## Flovart Nightly Build / 预发布版"
+              echo "## Iris Nightly Build / 预发布版"
               echo ""
               echo "**English:**"
-              echo "- Flovart main app + flovart-host launcher"
+              echo "- Iris main app + iris-host launcher"
               echo "- Windows, macOS (Apple Silicon + Intel) and Linux installers"
               echo "- Multi-language NSIS installer (EN / 简中 / 繁中 / 日 / 韩 / FR / DE / ES / IT / PT-BR / RU)"
               echo "- This is a pre-release, may be unstable"
               echo ""
               echo "**简体中文：**"
-              echo "- 包含 Flovart 主程序 + flovart-host 启动器"
+              echo "- 包含 Iris 主程序 + iris-host 启动器"
               echo "- 提供 Windows、macOS（Apple Silicon + Intel）和 Linux 安装包"
               echo "- NSIS 安装器支持 11 种语言（英 / 简中 / 繁中 / 日 / 韩 / 法 / 德 / 西 / 意 / 葡 / 俄）"
               echo "- 这是预发布版本，可能不稳定"
@@ -518,8 +518,8 @@ jobs:
         with:
           path: ${{ github.workspace }}
           format: spdx-json
-          output-file: ${{ github.workspace }}/dist/release-artifacts/flovart-${{ matrix.platform }}-sbom.spdx.json
-          artifact-name: flovart-${{ matrix.platform }}-${{ matrix.rust_target }}-sbom
+          output-file: ${{ github.workspace }}/dist/release-artifacts/iris-${{ matrix.platform }}-sbom.spdx.json
+          artifact-name: iris-${{ matrix.platform }}-${{ matrix.rust_target }}-sbom
           upload-artifact: false
           upload-release-assets: false
 
@@ -528,14 +528,14 @@ jobs:
         run: |
           node scripts/check-release-artifacts.mjs \
             --artifact-dir "dist/release-artifacts" \
-            --sbom "dist/release-artifacts/flovart-${{ matrix.platform }}-sbom.spdx.json"
+            --sbom "dist/release-artifacts/iris-${{ matrix.platform }}-sbom.spdx.json"
 
       - name: Attest release artifacts and SBOM
         if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/attest@v4
         with:
           subject-path: ${{ github.workspace }}/dist/release-artifacts/installers/*
-          sbom-path: ${{ github.workspace }}/dist/release-artifacts/flovart-${{ matrix.platform }}-sbom.spdx.json
+          sbom-path: ${{ github.workspace }}/dist/release-artifacts/iris-${{ matrix.platform }}-sbom.spdx.json
 
       - name: Upload checksums and SBOM to release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -546,13 +546,13 @@ jobs:
           cp dist/release-artifacts/SHA256SUMS.txt "dist/release-artifacts/SHA256SUMS-${{ matrix.rust_target }}.txt"
           gh release upload "${{ steps.meta.outputs.tag_name }}" \
             dist/release-artifacts/SHA256SUMS-${{ matrix.rust_target }}.txt \
-            dist/release-artifacts/flovart-${{ matrix.platform }}-sbom.spdx.json \
+            dist/release-artifacts/iris-${{ matrix.platform }}-sbom.spdx.json \
             --clobber
 
       - name: Upload release evidence bundle
         uses: actions/upload-artifact@v4
         with:
-          name: flovart-${{ matrix.platform }}-${{ matrix.rust_target }}-release-evidence
+          name: iris-${{ matrix.platform }}-${{ matrix.rust_target }}-release-evidence
           path: dist/release-artifacts
           if-no-files-found: error
 
@@ -562,8 +562,8 @@ jobs:
         run: |
           $version = "${{ github.ref_name }}" -replace '^v', ''
           npm run build:agent-toolkit -- `
-            --runtime="src-tauri/target/${{ matrix.rust_target }}/release/flovart.exe" `
-            --host="src-tauri/binaries/flovart-host-${{ matrix.rust_target }}.exe" `
+            --runtime="src-tauri/target/${{ matrix.rust_target }}/release/iris.exe" `
+            --host="src-tauri/binaries/iris-host-${{ matrix.rust_target }}.exe" `
             --platform=win32-x64 `
             --version=$version `
             --output=dist/agent-toolkit
@@ -575,8 +575,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ github.ref_name }}" `
-            "dist/agent-toolkit/flovart-agent-toolkit-win32-x64.tar.gz" `
-            "dist/agent-toolkit/flovart-agent-toolkit-manifest.json" `
+            "dist/agent-toolkit/iris-agent-toolkit-win32-x64.tar.gz" `
+            "dist/agent-toolkit/iris-agent-toolkit-manifest.json" `
             --clobber
 
   # Matrix builds upload into a draft. Finalization is deliberately a

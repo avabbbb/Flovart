@@ -141,7 +141,7 @@ describe('Studio Browser-Link bridge', () => {
     const source = readFileSync(join(process.cwd(), 'integrations', 'studio', 'shared', 'host-contract.js'), 'utf8');
     const sandbox = { Blob, setInterval, clearInterval, console, window: undefined as unknown };
     vm.runInNewContext(source, sandbox);
-    const hosts = (sandbox as Record<string, any>).FlovartStudioHosts;
+    const hosts = (sandbox as Record<string, any>).IrisStudioHosts;
     // The panel-side adapter resolves through the injected live getter.
     const workspace = (globalThis as Record<string, any>).__FLOVART_BROWSER_WORKSPACE__;
     const adapter = hosts.createBrowserWorkspaceAdapter({ workspace });

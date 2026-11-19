@@ -1,4 +1,4 @@
-// 网页画布 ↔ Flovart 浏览器插件通道（externally_connectable + 长连接 Port）。
+// 网页画布 ↔ Iris 浏览器插件通道（externally_connectable + 长连接 Port）。
 // 插件侧见 extension/background/web-bridge.js。只有用户在插件 popup 里批准后，双方才收发业务消息。
 
 export type ExtensionBridgeStatus =
@@ -66,7 +66,7 @@ interface PendingRequest {
   cancel(): void;
 }
 
-export const EXTENSION_PORT_NAME = 'flovart-web';
+export const EXTENSION_PORT_NAME = 'iris-web';
 export const EXTENSION_PROTOCOL_VERSION = '1';
 const HELLO_STATUSES: Record<string, ExtensionBridgeStatus> = {
   none: 'none',
@@ -309,7 +309,7 @@ export function getExtensionBridge(): ExtensionBridge {
   if (!sharedBridge) {
     sharedBridge = createExtensionBridge({
       runtime: browserRuntime(),
-      extensionIds: parseExtensionIds(import.meta.env.VITE_FLOVART_EXTENSION_IDS),
+      extensionIds: parseExtensionIds(import.meta.env.VITE_IRIS_EXTENSION_IDS || import.meta.env.VITE_FLOVART_EXTENSION_IDS),
     });
   }
   return sharedBridge;

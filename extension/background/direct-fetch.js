@@ -1,5 +1,5 @@
 // 网页画布经插件直连模型上游（不走 Cloudflare Worker /api/llm-proxy，省 Workers 配额）。
-// 每个请求一个长连接 Port（名称 flovart-fetch）：
+// 每个请求一个长连接 Port（名称 iris-fetch）：
 //   网页 → 插件  { type: 'fetch.start', url, method, headers: [[k, v]], bodyBase64? }
 //                { type: 'fetch.abort' } / { type: 'fetch.ping' }（保活）；网页断开 Port 也视为取消
 //   插件 → 网页  { type: 'fetch.accepted' } → { type: 'fetch.head', status, statusText, headers }
@@ -14,7 +14,7 @@ import {
   checkDirectUpstream,
 } from './upstream-allowlist.js';
 
-export const DIRECT_FETCH_PORT_NAME = 'flovart-fetch';
+export const DIRECT_FETCH_PORT_NAME = 'iris-fetch';
 export const DIRECT_FETCH_CAPABILITY = 'llm.fetch';
 const START_TIMEOUT_MS = 10_000;
 
@@ -45,7 +45,7 @@ function pickHeaders(entries, allowed) {
 }
 
 /**
- * 处理一个 flovart-fetch Port。依赖注入便于测试：
+ * 处理一个 iris-fetch Port。依赖注入便于测试：
  * - fetchImpl：上游 fetch
  * - isApprovedOrigin(origin) → Promise<boolean>：origin 在白名单内且配对已批准
  */
@@ -105,7 +105,7 @@ export function createDirectFetchHandler({ fetchImpl = (...args) => fetch(...arg
       }
       const checked = checkDirectUpstream(message.url, message.method);
       if (checked.error) {
-        fail(checked.error, '上游不在 Flovart 直连白名单内');
+        fail(checked.error, '上游不在 Iris 直连白名单内');
         return;
       }
       const { url, publicDoc, method } = checked;
@@ -130,7 +130,7 @@ export function createDirectFetchHandler({ fetchImpl = (...args) => fetch(...arg
         }
       }
       if (url.hostname === 'opencode.ai' && !headers.has('x-opencode-session')) {
-        headers.set('x-opencode-session', 'ses_flovart_' + crypto.randomUUID().replace(/-/g, ''));
+        headers.set('x-opencode-session', 'ses_iris_' + crypto.randomUUID().replace(/-/g, ''));
       }
       send({ type: 'fetch.accepted' });
 

@@ -31,7 +31,7 @@ export class AppErrorBoundary extends React.Component<{ children: React.ReactNod
     if (!this.state.error) return this.props.children;
     return (
       <div role='alert' data-testid='app-error-boundary' style={{ padding: 32, fontFamily: 'system-ui, sans-serif', maxWidth: 560, margin: '10vh auto' }}>
-        <h1 style={{ fontSize: 20, marginBottom: 12 }}>Flovart 遇到了问题 / Something went wrong</h1>
+        <h1 style={{ fontSize: 20, marginBottom: 12 }}>Iris 遇到了问题 / Something went wrong</h1>
         <p style={{ marginBottom: 16, opacity: 0.8 }}>你的画布已保存在本地。可以重新加载，或复制诊断信息发给我们。Your canvas is saved locally. Reload, or copy diagnostics to share with us.</p>
         <div style={{ display: 'flex', gap: 8 }}>
           <button type='button' onClick={() => window.location.reload()}>重新加载 / Reload</button>

@@ -15,7 +15,7 @@ import type { AssetFolder } from '../types';
 import {
     decodePromptClipboard,
     encodePromptClipboard,
-    FLOVART_PROMPT_CLIPBOARD_MIME,
+    IRIS_PROMPT_CLIPBOARD_MIME,
     hydratePromptText,
     rebindPromptDocument,
     type PromptReferenceMention,
@@ -81,7 +81,7 @@ export function routeMentionKey(phase: MentionPopupPhase, key: string): MentionK
 }
 
 // 程序化写回（润色/翻译/还原）带此 meta，不解除 @ 建议抑制。
-export const suggestionProgrammaticMeta = 'flovartProgrammaticWrite';
+export const suggestionProgrammaticMeta = 'irisProgrammaticWrite';
 
 // 真实用户输入事务（键入、IME、鼠标点选、拖放/剪切）解除抑制；插件追加的事务不算。
 export function releasesSuggestionSuppression(tr: { docChanged: boolean; getMeta: (key: string) => unknown }): boolean {
@@ -411,7 +411,7 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
                     suppressSuggestionRef.current = false;
                     const clipboard = event.clipboardData;
                     if (!clipboard) return false;
-                    const encoded = clipboard.getData(FLOVART_PROMPT_CLIPBOARD_MIME);
+                    const encoded = clipboard.getData(IRIS_PROMPT_CLIPBOARD_MIME);
                     const payload = decodePromptClipboard(encoded);
                     const plainText = payload?.plainText || clipboard.getData('text/plain');
                     if (!payload && !plainText.includes('@')) return false;
@@ -459,7 +459,7 @@ const RichPromptEditor = forwardRef<RichPromptEditorHandle, RichPromptEditorProp
                         const document = { type: 'doc', content: slice.content.toJSON() };
                         const wrapper = window.document.createElement('div');
                         wrapper.appendChild(DOMSerializer.fromSchema(view.state.schema).serializeFragment(slice.content));
-                        event.clipboardData.setData(FLOVART_PROMPT_CLIPBOARD_MIME, encodePromptClipboard(document));
+                        event.clipboardData.setData(IRIS_PROMPT_CLIPBOARD_MIME, encodePromptClipboard(document));
                         event.clipboardData.setData('text/plain', editorJSONToText(document));
                         event.clipboardData.setData('text/html', wrapper.innerHTML);
                         event.preventDefault();

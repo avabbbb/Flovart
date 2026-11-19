@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: flovart
+    name: iris
     runtime: static
     buildCommand: npm ci && npm run build
     staticPath: /dist

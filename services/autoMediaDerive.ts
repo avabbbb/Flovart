@@ -49,7 +49,7 @@ export function planAutoMediaDerivations(
   return tasks;
 }
 
-const AUTO_MEDIA_DERIVE_STORAGE_KEY = 'flovart.autoMediaDerive.v1';
+const AUTO_MEDIA_DERIVE_STORAGE_KEY = 'iris.autoMediaDerive.v1';
 
 export function loadAutoMediaDeriveSettings(storage: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage): AutoMediaDeriveSettings {
   try {

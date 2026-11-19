@@ -11,7 +11,7 @@ import type {
 } from './types';
 
 /**
- * 分镜行 → 每行一个生成节点（LibTV `script storyboard` 的 Flovart 版，libtv-docs-study P0-4）。
+ * 分镜行 → 每行一个生成节点（LibTV `script storyboard` 的 Iris 版，libtv-docs-study P0-4）。
  *
  * 脚本节点是结构化规划节点，它的行不会以“隐藏 prompt”的形式进入生成链：
  * - 每行建一个 image / video 生成节点，提示词写进该节点 Prompt Bar（富文本文档，用户看得见、改得了）；

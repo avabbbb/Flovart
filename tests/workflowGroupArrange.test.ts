@@ -42,7 +42,7 @@ describe('group arrangement', () => {
   it('names files with auto sequence numbers', () => {
     expect(sequencedFileNames('shot', 3)).toEqual(['shot_01', 'shot_02', 'shot_03']);
     expect(sequencedFileNames(' my/shot ', 1)).toEqual(['my_shot_01']);
-    expect(sequencedFileNames('', 2)).toEqual(['flovart_01', 'flovart_02']);
+    expect(sequencedFileNames('', 2)).toEqual(['iris_01', 'iris_02']);
     expect(sequencedFileNames('x', 120)[119]).toBe('x_120');
   });
 });

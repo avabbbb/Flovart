@@ -8,7 +8,7 @@
 import { readFile as fsReadFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { DEFAULT_CONFIG, type FlovartPluginConfig } from './config.ts'
+import { DEFAULT_CONFIG, type IrisPluginConfig } from './config.ts'
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]'])
 
@@ -42,7 +42,7 @@ export interface WorkspaceTargetOptions {
 }
 
 export function agentConfigPath(env: Readonly<Record<string, string | undefined>> = process.env): string {
-  return env.FLOVART_AGENT_CONFIG || join(homedir(), '.dsh', 'workspace', 'agent.json')
+  return env.IRIS_AGENT_CONFIG || join(homedir(), '.dsh', 'workspace', 'agent.json')
 }
 
 /** A loopback http origin with an explicit port, or null for anything else. */
@@ -83,12 +83,12 @@ function readErrorCode(error: unknown): string {
 }
 
 export async function resolveWorkspaceTarget(
-  config: Pick<FlovartPluginConfig, 'workspaceUrl' | 'workspaceToken'>,
+  config: Pick<IrisPluginConfig, 'workspaceUrl' | 'workspaceToken'>,
   options: WorkspaceTargetOptions = {},
 ): Promise<WorkspaceTargetResult> {
   if (config.workspaceToken && config.workspaceUrl && config.workspaceUrl !== DEFAULT_CONFIG.workspaceUrl) {
     const origin = loopbackOrigin(config.workspaceUrl)
-    if (!origin) return invalidUrl(config.workspaceUrl, 'FLOVART_WORKSPACE_URL')
+    if (!origin) return invalidUrl(config.workspaceUrl, 'IRIS_WORKSPACE_URL')
     return { ok: true, target: { origin, token: config.workspaceToken, source: 'env' } }
   }
   const file = agentConfigPath(options.env ?? process.env)
@@ -118,7 +118,7 @@ export async function resolveWorkspaceTarget(
 
 /** Logs only the failure code and the URL or file tried. */
 export function logWorkspaceTargetFailure(failure: WorkspaceTargetFailure): void {
-  console.warn('[flovart] Workspace Operator 不可用: ' + failure.code + ' ' + failure.tried)
+  console.warn('[iris] Workspace Operator 不可用: ' + failure.code + ' ' + failure.tried)
 }
 
 function errorCode(value: unknown): string | undefined {

@@ -41,10 +41,10 @@ async function startToolRuntimeStub() {
   const server = http.createServer((_request, response) => {
     response.writeHead(200, { 'Content-Type': 'text/event-stream' });
     response.write('event: start\ndata: {"provider":"runtime","model":"agent-text"}\n\n');
-    response.write('event: toolcall-start\ndata: {"index":0,"id":"call-1","name":"flovart_workflow_inspect"}\n\n');
-    response.write('event: toolcall-delta\ndata: {"index":0,"id":"call-1","name":"flovart_workflow_inspect","delta":"{"}\n\n');
+    response.write('event: toolcall-start\ndata: {"index":0,"id":"call-1","name":"iris_workflow_inspect"}\n\n');
+    response.write('event: toolcall-delta\ndata: {"index":0,"id":"call-1","name":"iris_workflow_inspect","delta":"{"}\n\n');
     response.write('event: toolcall-delta\ndata: {"index":0,"delta":"\\"projectId\\":\\"project-1\\"}"}\n\n');
-    response.write('event: toolcall-end\ndata: {"index":0,"id":"call-1","name":"flovart_workflow_inspect","arguments":"{\\"projectId\\":\\"project-1\\"}"}\n\n');
+    response.write('event: toolcall-end\ndata: {"index":0,"id":"call-1","name":"iris_workflow_inspect","arguments":"{\\"projectId\\":\\"project-1\\"}"}\n\n');
     response.end('event: done\ndata: {"finishReason":"toolUse"}\n\n');
   });
   servers.push(server);
@@ -64,9 +64,9 @@ describe('Runtime agent-text stream', () => {
     const stream = streamFn(
       {
         id: 'runtime-agent-text',
-        name: 'Flovart Runtime agent-text',
-        api: 'flovart-runtime',
-        provider: 'flovart',
+        name: 'Iris Runtime agent-text',
+        api: 'iris-runtime',
+        provider: 'iris',
         baseUrl: '',
         reasoning: false,
         input: ['text'],
@@ -106,9 +106,9 @@ describe('Runtime agent-text stream', () => {
     expect(() => streamFn(
       {
         id: 'runtime-agent-text',
-        name: 'Flovart Runtime agent-text',
-        api: 'flovart-runtime',
-        provider: 'flovart',
+        name: 'Iris Runtime agent-text',
+        api: 'iris-runtime',
+        provider: 'iris',
         baseUrl: '',
         reasoning: false,
         input: ['text'],
@@ -127,9 +127,9 @@ describe('Runtime agent-text stream', () => {
     const stream = streamFn(
       {
         id: 'runtime-agent-text',
-        name: 'Flovart Runtime agent-text',
-        api: 'flovart-runtime',
-        provider: 'flovart',
+        name: 'Iris Runtime agent-text',
+        api: 'iris-runtime',
+        provider: 'iris',
         baseUrl: '',
         reasoning: false,
         input: ['text'],
@@ -140,7 +140,7 @@ describe('Runtime agent-text stream', () => {
       {
         messages: [{ role: 'user', content: '读取当前 Workflow', timestamp: 1 }],
         tools: [{
-          name: 'flovart_workflow_inspect',
+          name: 'iris_workflow_inspect',
           description: '读取 Workflow',
           parameters: { type: 'object', properties: { projectId: { type: 'string' } } },
         }],
@@ -163,7 +163,7 @@ describe('Runtime agent-text stream', () => {
       content: [{
         type: 'toolCall',
         id: 'call-1',
-        name: 'flovart_workflow_inspect',
+        name: 'iris_workflow_inspect',
         arguments: { projectId: 'project-1' },
       }],
     });

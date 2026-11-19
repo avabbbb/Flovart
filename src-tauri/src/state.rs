@@ -5,7 +5,7 @@
 //!
 //! 路径：`app_data_dir/flovart-state.db`，由 lib.rs 在 setup() 中提供。
 
-use crate::errors::FlovartResult;
+use crate::errors::IrisResult;
 use parking_lot::Mutex;
 use rusqlite::{params, Connection};
 use std::path::Path;
@@ -70,7 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_sync_log_entity ON sync_log(entity, entity_id, ti
 "#;
 
 impl StateDb {
-    pub fn open(path: &Path) -> FlovartResult<Self> {
+    pub fn open(path: &Path) -> IrisResult<Self> {
         let conn = Connection::open(path)?;
         conn.busy_timeout(std::time::Duration::from_millis(250))?;
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
@@ -82,7 +82,7 @@ impl StateDb {
 
     // ── KV ─────────────────────────────────────────────────────
 
-    pub fn kv_set(&self, key: &str, value: &str) -> FlovartResult<()> {
+    pub fn kv_set(&self, key: &str, value: &str) -> IrisResult<()> {
         let now = chrono::Utc::now().timestamp_millis();
         let conn = self.conn.lock();
         conn.execute(
@@ -93,7 +93,7 @@ impl StateDb {
         Ok(())
     }
 
-    pub fn kv_get(&self, key: &str) -> FlovartResult<Option<String>> {
+    pub fn kv_get(&self, key: &str) -> IrisResult<Option<String>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare("SELECT value FROM kv WHERE key = ?1")?;
         let mut rows = stmt.query(params![key])?;
@@ -104,13 +104,13 @@ impl StateDb {
         }
     }
 
-    pub fn kv_delete(&self, key: &str) -> FlovartResult<bool> {
+    pub fn kv_delete(&self, key: &str) -> IrisResult<bool> {
         let conn = self.conn.lock();
         let n = conn.execute("DELETE FROM kv WHERE key = ?1", params![key])?;
         Ok(n > 0)
     }
 
-    pub fn kv_keys(&self) -> FlovartResult<Vec<String>> {
+    pub fn kv_keys(&self) -> IrisResult<Vec<String>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare("SELECT key FROM kv ORDER BY updated_at DESC")?;
         let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
@@ -121,7 +121,7 @@ impl StateDb {
         Ok(out)
     }
 
-    pub fn kv_list_prefix(&self, prefix: &str) -> FlovartResult<Vec<(String, String)>> {
+    pub fn kv_list_prefix(&self, prefix: &str) -> IrisResult<Vec<(String, String)>> {
         let conn = self.conn.lock();
         let mut stmt =
             conn.prepare("SELECT key, value FROM kv WHERE key LIKE ?1 ORDER BY updated_at DESC")?;
@@ -136,7 +136,7 @@ impl StateDb {
         Ok(out)
     }
 
-    pub fn kv_dump(&self) -> FlovartResult<Vec<(String, String)>> {
+    pub fn kv_dump(&self) -> IrisResult<Vec<(String, String)>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare("SELECT key, value FROM kv")?;
         let rows = stmt.query_map([], |row| {
@@ -158,7 +158,7 @@ impl StateDb {
         action: &str,
         source: &str,
         payload: Option<&str>,
-    ) -> FlovartResult<()> {
+    ) -> IrisResult<()> {
         let now = chrono::Utc::now().timestamp_millis();
         let conn = self.conn.lock();
         conn.execute(
@@ -174,11 +174,11 @@ impl StateDb {
 
 #[tauri::command]
 pub fn state_set(
-    ctx: tauri::State<'_, std::sync::Arc<crate::FlovartContext>>,
+    ctx: tauri::State<'_, std::sync::Arc<crate::IrisContext>>,
     key: String,
     value: String,
     source: Option<String>,
-) -> FlovartResult<()> {
+) -> IrisResult<()> {
     ctx.state_db.kv_set(&key, &value)?;
     let _ = ctx.state_db.sync_log(
         "kv",
@@ -192,8 +192,8 @@ pub fn state_set(
 
 #[tauri::command]
 pub fn state_get(
-    ctx: tauri::State<'_, std::sync::Arc<crate::FlovartContext>>,
+    ctx: tauri::State<'_, std::sync::Arc<crate::IrisContext>>,
     key: String,
-) -> FlovartResult<Option<String>> {
+) -> IrisResult<Option<String>> {
     ctx.state_db.kv_get(&key)
 }

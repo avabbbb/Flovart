@@ -105,7 +105,7 @@ const MODE_TOKENS: Array<[string, ProductModelMode]> = [
     ['text-to-image', 'text-to-image'],
 ];
 
-/** 这些线路需要 Flovart 尚未建模的输入（视频编辑、LoRA、图层拆分…），不进入生成模型目录。 */
+/** 这些线路需要 Iris 尚未建模的输入（视频编辑、LoRA、图层拆分…），不进入生成模型目录。 */
 const EXCLUDED_SEGMENT = /video-edit|edit-video|extend|motion-control|layer-decomposition|upscale|upscaler|lora|draft|lip-sync|character|transition|super-resolution|enhance|to-3d|deprecated|-star\b|star-fast|audio-to-video|image-audio|regeneration|context-ir/i;
 
 export const IMAGE_MODES: ProductModelMode[] = ['text-to-image', 'image-to-image'];
@@ -255,7 +255,7 @@ export interface ParseDocMeta {
 
 /**
  * 把一个 RunningHub API 文档（markdown + 内嵌 OpenAPI YAML）解析为线路能力。
- * 无法安全执行的线路（无 prompt、工具类、必填字段无法由 Flovart 提供、缺少模式所需媒体）返回 null。
+ * 无法安全执行的线路（无 prompt、工具类、必填字段无法由 Iris 提供、缺少模式所需媒体）返回 null。
  */
 export function parseRunningHubApiDoc(markdown: string, meta: ParseDocMeta = {}): DynamicRouteSchema | null {
     const yamlText = extractYamlBlock(markdown);
@@ -353,7 +353,7 @@ export function parseRunningHubApiDoc(markdown: string, meta: ParseDocMeta = {})
     }
     if (primaryMode === 'image-to-video' && media.length === 0) return null;
 
-    // 必填媒体字段若没被映射，Flovart 无法填充 → 不可执行
+    // 必填媒体字段若没被映射，Iris 无法填充 → 不可执行
     const mappedFields = new Set(media.map(m => m.field));
     if (rawMedia.some(m => m.required && !mappedFields.has(m.field))) return null;
 
@@ -499,7 +499,7 @@ export function familyDisplayName(titles: string[], family: string): string {
 
 // ── 注册表 + 缓存 ───────────────────────────────────────────────────────────
 
-const CACHE_KEY = 'flovart.runningHubDocRoutes.v1';
+const CACHE_KEY = 'iris.runningHubDocRoutes.v1';
 export const RUNNINGHUB_DOC_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 type SiteCache = {

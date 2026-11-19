@@ -73,12 +73,12 @@ describe('agent web search', () => {
     const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
       const body = JSON.parse(String(init.body));
       expect(body).toMatchObject({ jsonrpc: '2.0', method: 'tools/call', params: { name: 'web_search' } });
-      expect(body.params.arguments.objective).toBe('Flovart');
+      expect(body.params.arguments.objective).toBe('Iris');
       return jsonRpc(body.id, { search_id: 's', results: [{ title: 'T', url: 'https://t.example', excerpts: ['x'] }] });
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const sources = await searchParallelWeb({ query: 'Flovart', limit: 3 });
+    const sources = await searchParallelWeb({ query: 'Iris', limit: 3 });
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('https://search.parallel.ai/mcp');
     expect(init.method).toBe('POST');
@@ -139,7 +139,7 @@ describe('agent web search', () => {
   it('registers the search tool even without any credential', () => {
     const names = createBrowserAgentTools({ projectId: 'p', confirm: async () => true, activeChangeSetId: '' })
       .map(tool => tool.name);
-    expect(names).toContain('flovart_web_search');
+    expect(names).toContain('iris_web_search');
   });
 
   it('formats sources for the model', () => {

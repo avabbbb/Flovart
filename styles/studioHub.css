@@ -1,6 +1,6 @@
 /* 放大的资源窗口（components/studio/StudioHub.tsx）：Skills / History / Library 共用一个外壳。
    参照：bleep-app 磨砂窗口（半透明 + 强模糊，用户 2026-11-16 坚持“半透明才高级”）、用户截图 Hub（files/uploads/image-07a477a05144）。
-   窗外：Flovart 深色遮罩 --flv-scrim，浅色主题也用深色，不用发白的蒙层。
+   窗外：Iris 深色遮罩 --flv-scrim，浅色主题也用深色，不用发白的蒙层。
    只用 DESIGN.md token；窄宽度按 @container 收成图标侧栏（DESIGN §15 弹性降级）。 */
 
 :root {

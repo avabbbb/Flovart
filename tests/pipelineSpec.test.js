@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { applyPatch, clipsForFindings, diffSpecs, emptySpec, lockedClipsUnchanged, validateSpec } from '../tools/flovart/pipeline/spec.js';
-import { alignLines, alignTokens, fixtureWords, tokenize } from '../tools/flovart/pipeline/voice.js';
-import { findingsSignature, validateFindings } from '../tools/flovart/pipeline/review.js';
-import { buildFfmpegCommand } from '../tools/flovart/pipeline/render.js';
+import { applyPatch, clipsForFindings, diffSpecs, emptySpec, lockedClipsUnchanged, validateSpec } from '../tools/iris/pipeline/spec.js';
+import { alignLines, alignTokens, fixtureWords, tokenize } from '../tools/iris/pipeline/voice.js';
+import { findingsSignature, validateFindings } from '../tools/iris/pipeline/review.js';
+import { buildFfmpegCommand } from '../tools/iris/pipeline/render.js';
 
 const base = () => applyPatch(emptySpec({ width: 1080, height: 1920 }), [
   { op: 'add', track: 'visual', clip: { id: 'a', kind: 'image', artifactId: 'art_a', startMs: 0, durationMs: 4000 } },
@@ -42,7 +42,7 @@ describe('pipeline composition spec V2', () => {
 
 describe('pipeline voice alignment', () => {
   it('tokenizes CJK per character and latin per word', () => {
-    expect(tokenize('把截图丢给 Flovart，提问').map(token => token.normalized)).toEqual(['把', '截', '图', '丢', '给', 'flovart', '提', '问']);
+    expect(tokenize('把截图丢给 Iris，提问').map(token => token.normalized)).toEqual(['把', '截', '图', '丢', '给', 'iris', '提', '问']);
   });
 
   it('aligns script lines to evidence and times action words on the timeline', () => {

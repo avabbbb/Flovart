@@ -77,7 +77,7 @@ export function alignPromptReferences(input: PromptReferenceInput): PromptRefere
     const name = (ascii ?? cjk ?? '').trim();
     const matches = input.nodes.filter(node => node.id !== input.targetNodeId && nodeName(node) === name);
     if (matches.length === 0) {
-      failure = { ok: false, code: 'NODE_NAME_NOT_FOUND', message: `没有名为「${name}」的节点；用 @ref:<节点id> 或先 flovart_inspect 查节点名。`, details: { name } };
+      failure = { ok: false, code: 'NODE_NAME_NOT_FOUND', message: `没有名为「${name}」的节点；用 @ref:<节点id> 或先 iris_inspect 查节点名。`, details: { name } };
       return full;
     }
     if (matches.length > 1) {

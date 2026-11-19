@@ -3,7 +3,7 @@
  * 只存 key 列表（`mine:<id>` / `bundled:<id>` …），不碰主 store（持久化 version 4 不动）。
  */
 
-export const SKILL_ORDER_KEY = 'flovart.studioHub.skillOrder.v1';
+export const SKILL_ORDER_KEY = 'iris.studioHub.skillOrder.v1';
 
 export function loadSkillOrder(storage: Pick<Storage, 'getItem'> | undefined = globalThis.localStorage): string[] {
   try {

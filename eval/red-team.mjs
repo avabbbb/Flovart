@@ -17,7 +17,7 @@ import { canonicalHash } from './environment/snapshot.mjs';
 import { createNopRunner, createOracleRunner } from './runners/deterministic.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const sandbox = join(here, '..', '.tmp', 'flovartbench-redteam');
+const sandbox = join(here, '..', '.tmp', 'irisbench-redteam');
 
 const results = [];
 

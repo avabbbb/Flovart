@@ -102,7 +102,7 @@ export function WebDavSettingsTab({ userApiKeys, onUpdateApiKey }: WebDavSetting
         </label>
         <label className="block">
           <span className={labelClass}>远程目录</span>
-          <input className={fieldClass} value={config.remoteDir} placeholder="flovart" onChange={event => patch({ remoteDir: event.target.value })} />
+          <input className={fieldClass} value={config.remoteDir} placeholder="iris" onChange={event => patch({ remoteDir: event.target.value })} />
         </label>
         <label className="block">
           <span className={labelClass}>用户名</span>

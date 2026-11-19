@@ -1,10 +1,10 @@
-// Build the self-contained `flovart-agent` sidecar binary bundled into the
+// Build the self-contained `iris-agent` sidecar binary bundled into the
 // Tauri desktop via `bundle.externalBin` (see src-tauri/tauri.conf.json).
 //
 // Pipeline (Node SEA — https://nodejs.org/api/single-executable-applications.html):
 //   1. esbuild bundles agent/index.js into ONE self-contained ESM file
 //      (agent-bundle.mjs). A plugin rewrites the runtime's dynamic
-//      `importFlovartModule(name)` / `../tools/flovart/*` specifiers — which
+//      `importIrisModule(name)` / `../tools/iris/*` specifiers — which
 //      cannot read sibling files inside a single executable — to the concrete
 //      modules and inlines them.
 //   2. A tiny CommonJS trampoline (sea-main.cjs) embeds that ESM source as a
@@ -14,9 +14,9 @@
 //      run the ESM core.
 //   3. `node --experimental-sea-config` produces sea-prep.blob from the
 //      trampoline; postject injects it into a copy of the current node.exe,
-//      producing src-tauri/binaries/flovart-agent-<target-triple>[.exe].
+//      producing src-tauri/binaries/iris-agent-<target-triple>[.exe].
 //
-// The result runs the SAME agent/index.js core as `npm run flovart:agent`
+// The result runs the SAME agent/index.js core as `npm run iris:agent`
 // (dev mode). No agent-desktop.js duplicate exists.
 //
 // Usage:  node scripts/build-agent-sidecar.mjs [--target <triple>]
@@ -95,73 +95,73 @@ function run(command, args, options = {}) {
 }
 
 /**
- * The flovart-modules.js loader body used for every copy in the graph. It keeps
- * the same module-name validation as agent/flovart-modules.js but resolves only
- * `flovart-module:<name>` specifier — no `../tools/flovart/**` or repo-root
+ * The iris-modules.js loader body used for every copy in the graph. It keeps
+ * the same module-name validation as agent/iris-modules.js but resolves only
+ * `iris-module:<name>` specifier — no `../tools/iris/**` or repo-root
  * `../<name>.js` glob that esbuild would expand across the whole checkout
  * (scanning volatile .tmp/* dirs) or leave unresolvable inside a SEA. The
- * scheme resolves to tools/flovart/<name>.js via the plugin below.
+ * scheme resolves to tools/iris/<name>.js via the plugin below.
  */
-const FLOVART_MODULE_LOADER = `// Generated loader: every concrete module the agent imports is referenced by a
+const IRIS_MODULE_LOADER = `// Generated loader: every concrete module the agent imports is referenced by a
 // STATIC specifier so esbuild inlines it into the single SEA bundle. A dynamic
-// import('flovart-module:'+name) cannot be folded and would reach the runtime
+// import('iris-module:'+name) cannot be folded and would reach the runtime
 // ESM loader as an unsupported scheme — so the map below enumerates the names
-// statically and keeps the same name-validation contract as flovart-modules.js.
+// statically and keeps the same name-validation contract as iris-modules.js.
 const MODULES = {
-  'agent-kit': () => import('flovart-module:agent-kit'),
-  'agent-surface': () => import('flovart-module:agent-surface'),
-  'agent-tools': () => import('flovart-module:agent-tools'),
-  'core': () => import('flovart-module:core'),
-  'host-discovery': () => import('flovart-module:host-discovery'),
-  'host-registry': () => import('flovart-module:host-registry'),
-  'registry': () => import('flovart-module:registry'),
-  'skill-draft': () => import('flovart-module:skill-draft'),
+  'agent-kit': () => import('iris-module:agent-kit'),
+  'agent-surface': () => import('iris-module:agent-surface'),
+  'agent-tools': () => import('iris-module:agent-tools'),
+  'core': () => import('iris-module:core'),
+  'host-discovery': () => import('iris-module:host-discovery'),
+  'host-registry': () => import('iris-module:host-registry'),
+  'registry': () => import('iris-module:registry'),
+  'skill-draft': () => import('iris-module:skill-draft'),
 };
-export async function importFlovartModule(name) {
+export async function importIrisModule(name) {
   const moduleName = String(name || '').trim();
   const loader = MODULES[moduleName];
-  if (!loader) throw new Error('Invalid Flovart module name.');
+  if (!loader) throw new Error('Invalid Iris module name.');
   return loader();
 }
 const PIPELINE_MODULES = {
-  'commands': () => import('flovart-module:pipeline/commands'),
-  'index': () => import('flovart-module:pipeline/index'),
+  'commands': () => import('iris-module:pipeline/commands'),
+  'index': () => import('iris-module:pipeline/index'),
 };
-export async function importFlovartPipelineModule(name) {
+export async function importIrisPipelineModule(name) {
   const moduleName = String(name || '').trim();
   const loader = PIPELINE_MODULES[moduleName];
-  if (!loader) throw new Error('Invalid Flovart pipeline module name.');
+  if (!loader) throw new Error('Invalid Iris pipeline module name.');
   return loader();
 }
 `;
 
 /**
  * Resolve the agent's layout-flexible dynamic imports so esbuild inlines the
- * concrete tools/flovart/* modules into a single self-contained ESM bundle.
+ * concrete tools/iris/* modules into a single self-contained ESM bundle.
  * Inside a single executable there is no on-disk module tree, so the runtime's
- * `importFlovartModule(name)` / `../tools/flovart/*` specifiers cannot read
+ * `importIrisModule(name)` / `../tools/iris/*` specifiers cannot read
  * sibling files.
  */
-function flovartModuleInliningPlugin() {
+function irisModuleInliningPlugin() {
   return {
-    name: 'flovart-module-inlining',
+    name: 'iris-module-inlining',
     setup(build) {
-      // Replace every flovart-modules.js copy (agent/, managed-agent/) with the
+      // Replace every iris-modules.js copy (agent/, managed-agent/) with the
       // sibling-resolving loader above so its dynamic specifier inlines the
-      // concrete module instead of emitting a wide `../tools/flovart/**` or
+      // concrete module instead of emitting a wide `../tools/iris/**` or
       // repo-root `../<name>.js` glob.
-      build.onLoad({ filter: /flovart-modules\.js$/ }, args => (
-        { contents: FLOVART_MODULE_LOADER, loader: 'js', resolveDir: dirname(args.path) }
+      build.onLoad({ filter: /iris-modules\.js$/ }, args => (
+        { contents: IRIS_MODULE_LOADER, loader: 'js', resolveDir: dirname(args.path) }
       ));
-      // The loader emits `import('flovart-module:<name>')` for the concrete
+      // The loader emits `import('iris-module:<name>')` for the concrete
       // modules the agent needs (host-discovery, host-registry, agent-kit,
       // registry, agent-surface, core). Map the scheme to
-      // tools/flovart/<name>.js so each inlines into the single bundle. Without
+      // tools/iris/<name>.js so each inlines into the single bundle. Without
       // this resolver the scheme is treated as a bare specifier, left external,
       // and the SEA fails at runtime with `Module not found in bundle`.
-      build.onResolve({ filter: /^flovart-module:/ }, args => {
-        const name = args.path.slice('flovart-module:'.length);
-        const local = join(REPO_DIR, 'tools', 'flovart', `${name}.js`);
+      build.onResolve({ filter: /^iris-module:/ }, args => {
+        const name = args.path.slice('iris-module:'.length);
+        const local = join(REPO_DIR, 'tools', 'iris', `${name}.js`);
         if (existsSync(local)) return { path: local };
         return { path: args.path, external: true };
       });
@@ -180,7 +180,7 @@ function flovartModuleInliningPlugin() {
         return { path: args.path, external: true };
       });
 
-      // Static `../tools/flovart/<name>.js` and `../<name>.js` specifiers (e.g.
+      // Static `../tools/iris/<name>.js` and `../<name>.js` specifiers (e.g.
       // agent/skill-*.js re-exports, agent/runtime-connection.js fallbacks)
       // resolve to concrete files where present; absent managed-agent-layout
       // fallbacks are left external (they sit behind runtime try/catch).
@@ -220,12 +220,12 @@ async function bundleAgentEntry(outfile) {
     format: 'esm',
     target: 'node22',
     packages: 'bundle',
-    plugins: [flovartModuleInliningPlugin()],
+    plugins: [irisModuleInliningPlugin()],
     banner: {
       // Bundled CJS deps emit `__require('node:...')` shims that fall back to a
       // dynamic require; under a data: URL no require exists. Provide one via
       // createRequire so those shims resolve node: builtins and real deps.
-      js: `// flovart-agent SEA bundle — generated by scripts/build-agent-sidecar.mjs
+      js: `// iris-agent SEA bundle — generated by scripts/build-agent-sidecar.mjs
 import { createRequire as __seaCreateRequire } from 'node:module';
 const require = __seaCreateRequire(process.execPath);`,
     },
@@ -245,7 +245,7 @@ function writeSeaTrampoline(trampolinePath) {
   // asset, writes it to a per-run temp file, and `import()`s that file URL so
   // `import.meta.url` is a real file URL (required by agent/production-skills.js
   // and pi-storage-sqlite-node's migration loader, which fileURLToPath it).
-  const code = `// flovart-agent SEA CommonJS entry.
+  const code = `// iris-agent SEA CommonJS entry.
 const sea = require('node:sea');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -254,7 +254,7 @@ const { pathToFileURL } = require('node:url');
 
 (async () => {
   const source = sea.getAsset('agent-bundle.mjs', 'utf8');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flovart-agent-sea-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'iris-agent-sea-'));
   const entry = path.join(dir, 'agent-bundle.mjs');
   fs.writeFileSync(entry, source, 'utf8');
   await import(pathToFileURL(entry).href);
@@ -313,7 +313,7 @@ function injectSeaBlob(nodeBinary, blobPath, outputBinary) {
 export async function buildAgentSidecar(options = {}) {
   const target = options.target || defaultTargetTriple();
   const exeSuffix = target.includes('windows') ? '.exe' : '';
-  const binaryName = `flovart-agent-${target}${exeSuffix}`;
+  const binaryName = `iris-agent-${target}${exeSuffix}`;
   const outputBinary = join(BINARIES_DIR, binaryName);
   const bundlePath = join(STAGE_DIR, 'agent-bundle.mjs');
   const trampolinePath = join(STAGE_DIR, 'sea-main.cjs');
@@ -344,7 +344,7 @@ async function main() {
     binary: result.binary,
     name: result.name,
     target: result.target,
-    externalBin: 'binaries/flovart-agent',
+    externalBin: 'binaries/iris-agent',
   }, null, 2));
 }
 

@@ -4,8 +4,8 @@ import { BrowserAgentRuntime, AgentRuntimeError, delegatedPolicyFor, getBrowserA
 import { resolveToolApproval, toolApprovalFor } from '../services/agentToolPolicy';
 import { resolveBrowserAgentTextRoute } from '../services/browserAgentKernel';
 import type { UserApiKey } from '../types';
-import { COMMAND_REGISTRY } from '../tools/flovart/core.js';
-import { AGENT_PUBLIC_COMMANDS } from '../tools/flovart/agent-surface.js';
+import { COMMAND_REGISTRY } from '../tools/iris/core.js';
+import { AGENT_PUBLIC_COMMANDS } from '../tools/iris/agent-surface.js';
 
 const textKey: UserApiKey = {
   id: 'runtime-key',
@@ -33,13 +33,13 @@ async function connect() {
 
 describe('browser agent runtime', () => {
   beforeEach(async () => {
-    await localforage.removeItem(`flovart.agent.sessions.${projectId}`);
-    await localforage.removeItem(`flovart.agent.session.${projectId}`);
+    await localforage.removeItem(`iris.agent.sessions.${projectId}`);
+    await localforage.removeItem(`iris.agent.session.${projectId}`);
   });
 
   afterEach(async () => {
-    await localforage.removeItem(`flovart.agent.sessions.${projectId}`);
-    await localforage.removeItem(`flovart.agent.session.${projectId}`);
+    await localforage.removeItem(`iris.agent.sessions.${projectId}`);
+    await localforage.removeItem(`iris.agent.session.${projectId}`);
   });
 
   it('registers by project, opens a session, and unregisters on close', async () => {
@@ -98,7 +98,7 @@ function fakeKernel(text = '处理完成') {
       state.sends.push(input);
       state.messages.push({ role: 'user', text: input });
       state.messages.push({ role: 'assistant', text });
-      state.messages.push({ role: 'tool', toolName: 'flovart_workflow_inspect', isError: false });
+      state.messages.push({ role: 'tool', toolName: 'iris_workflow_inspect', isError: false });
       return undefined;
     },
     cancel: () => undefined,
@@ -125,7 +125,7 @@ async function connectFake(kernel: RuntimeKernel, draftVersion = 7) {
 
 describe('delegated agent turns', () => {
   beforeEach(async () => {
-    await localforage.removeItem(`flovart.agent.sessions.${projectId}`);
+    await localforage.removeItem(`iris.agent.sessions.${projectId}`);
   });
 
   it('runs delegated turns headless: read-only by default, write only when asked, user policy carried over', () => {
@@ -155,7 +155,7 @@ describe('delegated agent turns', () => {
       sessionId: 'session-1',
       text: '改了标题',
       draftVersion: 7,
-      toolCalls: [{ name: 'flovart_workflow_inspect', status: 'success' }],
+      toolCalls: [{ name: 'iris_workflow_inspect', status: 'success' }],
     });
     await runtime.close();
   });

@@ -44,10 +44,10 @@ describe('agent SkillRegistry', () => {
   let registry: SkillRegistry;
 
   beforeEach(() => {
-    repoRoot = mkdtempSync(join(tmpdir(), 'flovart-skill-repo-'));
+    repoRoot = mkdtempSync(join(tmpdir(), 'iris-skill-repo-'));
     skillsRoot = join(repoRoot, '.agents', 'skills');
     mkdirSync(skillsRoot, { recursive: true });
-    userRoot = mkdtempSync(join(tmpdir(), 'flovart-skill-user-'));
+    userRoot = mkdtempSync(join(tmpdir(), 'iris-skill-user-'));
     registry = new SkillRegistry({ repoRoot, roots: [skillsRoot, userRoot] });
   });
 
@@ -227,7 +227,7 @@ describe('agent SkillRegistry.readFile (/api/skills/:id/file)', () => {
   let registry: SkillRegistry;
 
   beforeEach(() => {
-    repoRoot = mkdtempSync(join(tmpdir(), 'flovart-skill-file-'));
+    repoRoot = mkdtempSync(join(tmpdir(), 'iris-skill-file-'));
     skillsRoot = join(repoRoot, '.agents', 'skills');
     mkdirSync(skillsRoot, { recursive: true });
     registry = new SkillRegistry({ repoRoot, roots: [skillsRoot] });

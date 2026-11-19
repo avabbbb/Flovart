@@ -10,7 +10,7 @@ import type { WorkflowProject } from '../workflow/types';
  *
  * This page is for discovering, preparing, and switching local/external coding
  * agents (Codex, WorkBuddy, etc.). It intentionally does not contain the
- * built-in Flovart assistant; that assistant stays beside Canvas/Table in the
+ * built-in Iris assistant; that assistant stays beside Canvas/Table in the
  * right drawer so users can keep the work visible while chatting.
  */
 function isHostedDemo(): boolean {
@@ -28,15 +28,15 @@ export function AgentConnectionsPage({ project, language = 'zho' }: { project: W
     ? {
         tag: 'Agent · DSH',
         title: '用 DeepSeek Harness（DSH）指挥画布',
-        body: 'DSH 主会话是指挥入口，Flovart 插件在 Flovart 页签中读取并修改你当前可见的 Workflow。生成仍走同一条确认与提交链路。',
+        body: 'DSH 主会话是指挥入口，Iris 插件在 Iris 页签中读取并修改你当前可见的 Workflow。生成仍走同一条确认与提交链路。',
         envHosted: '你正在使用线上演示页（HTTPS）。线上页无法连接你电脑上的 DSH 或本地 Agent：浏览器会阻止 HTTPS 页面访问本机 http 服务。以下步骤需要在本地工作区完成。',
         envLocal: '当前为本地工作区，可按以下步骤连接 DSH。',
         stepsTitle: '本地连接步骤',
         steps: [
-          { text: '克隆 Flovart 仓库并安装依赖（Node 22.19+ 或 24+）', command: 'npm install' },
+          { text: '克隆 Iris 仓库并安装依赖（Node 22.19+ 或 24+）', command: 'npm install' },
           { text: '安装 DSH Profile（兼容 DeepSeek Harness 0.2.2-rc.1 起的 0.2.x）', command: 'npm run dsh:profile:install' },
           { text: '启动 DSH；启动器会准备本地工作区并打开可见 Workflow', command: 'npm run dsh:start' },
-          { text: '在 DeepSeek 主会话切换到 Flovart 页签，用自然语言指挥，例如“创建三个镜头的工作流”，再“只修改第二个镜头”' },
+          { text: '在 DeepSeek 主会话切换到 Iris 页签，用自然语言指挥，例如“创建三个镜头的工作流”，再“只修改第二个镜头”' },
           { text: '回到本地画布查看变更；没有可见 Workflow 时 DSH 会明确提示，不会创建隐藏副本' },
           { text: '连不上时运行诊断，并在画布右侧 Agent 面板的「连接状态」查看原因与下一步', command: 'npm --prefix dsh-plugin run profile:doctor' },
         ],
@@ -46,15 +46,15 @@ export function AgentConnectionsPage({ project, language = 'zho' }: { project: W
     : {
         tag: 'Agent · DSH',
         title: 'Drive the canvas from DeepSeek Harness (DSH)',
-        body: 'The DSH main conversation is the command entry; the Flovart plugin reads and edits your currently visible Workflow from the Flovart tab. Generation still goes through the same confirm-and-submit path.',
+        body: 'The DSH main conversation is the command entry; the Iris plugin reads and edits your currently visible Workflow from the Iris tab. Generation still goes through the same confirm-and-submit path.',
         envHosted: 'You are on the hosted demo (HTTPS). It cannot reach DSH or a local agent on your computer: browsers block HTTPS pages from calling local http services. The steps below run in a local workspace.',
         envLocal: 'This is a local workspace; follow the steps below to connect DSH.',
         stepsTitle: 'Local setup',
         steps: [
-          { text: 'Clone the Flovart repo and install dependencies (Node 22.19+ or 24+)', command: 'npm install' },
+          { text: 'Clone the Iris repo and install dependencies (Node 22.19+ or 24+)', command: 'npm install' },
           { text: 'Install the DSH profile (DeepSeek Harness 0.2.x, from 0.2.2-rc.1)', command: 'npm run dsh:profile:install' },
           { text: 'Start DSH; the launcher prepares the local workspace and opens a visible Workflow', command: 'npm run dsh:start' },
-          { text: 'In the DeepSeek main conversation open the Flovart tab and give instructions, e.g. "create a three-shot workflow", then "only change the second shot"' },
+          { text: 'In the DeepSeek main conversation open the Iris tab and give instructions, e.g. "create a three-shot workflow", then "only change the second shot"' },
           { text: 'Check the change on the local canvas; with no visible Workflow DSH says so and never creates a hidden copy' },
           { text: 'If it cannot connect, run the doctor and check the reason under Status in the Agent panel beside the canvas', command: 'npm --prefix dsh-plugin run profile:doctor' },
         ],
@@ -62,48 +62,48 @@ export function AgentConnectionsPage({ project, language = 'zho' }: { project: W
         drawer: 'Without DSH you can keep working in the assistant panel beside the canvas.',
       };
   const handoffPrompt = zh
-    ? `你是 Flovart 的本地编码 Agent。请通过可见的 Flovart Workflow 操作画布，不要直接改前端状态。
+    ? `你是 Iris 的本地编码 Agent。请通过可见的 Iris Workflow 操作画布，不要直接改前端状态。
 
-仓库：https://github.com/avabbbb/Flovart
+仓库：https://github.com/avabbbb/Iris
 
 准备：
-git clone https://github.com/avabbbb/Flovart.git
-cd Flovart
+git clone https://github.com/avabbbb/Iris.git
+cd Iris
 npm install
-npm run flovart:cli -- ensure --json
-npm run flovart:cli -- status --json
+npm run iris:cli -- ensure --json
+npm run iris:cli -- status --json
 
 连接后先读：
-npm run flovart:cli -- workflow.inspect --summary --json
+npm run iris:cli -- workflow.inspect --summary --json
 
 约束：
-- 只通过 flovart CLI / Flovart Skill 的 Workflow 契约读写；参考 .claude/skills/flovart/SKILL.md。
+- 只通过 iris CLI / Iris Skill 的 Workflow 契约读写；参考 .claude/skills/iris/SKILL.md。
 - 写入只用 workflow.apply，带 projectId、expectedRevision、mutationId；多个修改合并为一次 apply。
 - 不直接写 React/Zustand、浏览器存储、Runtime 数据库或 Provider 私有 API。
 - 修改前后都要 inspect；付费生成前先让用户确认。
 
-如果在 DSH 中运行：先执行 npm run dsh:profile:install，然后在 DSH 主会话切到 Flovart 页签，用同一套自然语言指令操作画布；其他 Agent 使用上面的 CLI 方式。`
-    : `You are a local coding agent working on Flovart. Operate only through the visible Flovart Workflow; never write frontend state directly.
+如果在 DSH 中运行：先执行 npm run dsh:profile:install，然后在 DSH 主会话切到 Iris 页签，用同一套自然语言指令操作画布；其他 Agent 使用上面的 CLI 方式。`
+    : `You are a local coding agent working on Iris. Operate only through the visible Iris Workflow; never write frontend state directly.
 
-Repository: https://github.com/avabbbb/Flovart
+Repository: https://github.com/avabbbb/Iris
 
 Prepare:
-git clone https://github.com/avabbbb/Flovart.git
-cd Flovart
+git clone https://github.com/avabbbb/Iris.git
+cd Iris
 npm install
-npm run flovart:cli -- ensure --json
-npm run flovart:cli -- status --json
+npm run iris:cli -- ensure --json
+npm run iris:cli -- status --json
 
 Read the graph first:
-npm run flovart:cli -- workflow.inspect --summary --json
+npm run iris:cli -- workflow.inspect --summary --json
 
 Constraints:
-- Read/write only through the flovart CLI / Flovart Skill Workflow contract; see .claude/skills/flovart/SKILL.md.
+- Read/write only through the iris CLI / Iris Skill Workflow contract; see .claude/skills/iris/SKILL.md.
 - Writes go through workflow.apply with projectId, expectedRevision and mutationId; batch related edits into one apply.
 - Never write React/Zustand, browser storage, Runtime databases or Provider private APIs directly.
 - Inspect before and after changes; ask the user before any paid generation.
 
-For DSH: run npm run dsh:profile:install, then switch to the Flovart tab in the DSH main conversation and use the same natural-language instructions. Other agents should use the CLI setup above.`;
+For DSH: run npm run dsh:profile:install, then switch to the Iris tab in the DSH main conversation and use the same natural-language instructions. Other agents should use the CLI setup above.`;
   return (
     <div className="h-full min-h-0 overflow-y-auto" data-testid="agent-connections-page" style={{ color: 'var(--isl-ink)' }}>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 sm:p-6">
@@ -124,7 +124,7 @@ For DSH: run npm run dsh:profile:install, then switch to the Flovart tab in the 
               <div>
                 <strong className="text-sm">{zh ? '给其他本地 Agent 的提示词' : 'Prompt for another local agent'}</strong>
                 <p className="mt-1 text-xs" style={{ color: 'var(--isl-ink-soft)' }}>
-                  {zh ? '复制后直接发给 Codex / Claude Code / 你自己的 Agent。没有 DSH 也能通过 GitHub 源码和 Flovart CLI 接入本地可见画布。' : 'Copy this into Codex, Claude Code or your own agent. It can use the GitHub source and Flovart CLI without DSH.'}
+                  {zh ? '复制后直接发给 Codex / Claude Code / 你自己的 Agent。没有 DSH 也能通过 GitHub 源码和 Iris CLI 接入本地可见画布。' : 'Copy this into Codex, Claude Code or your own agent. It can use the GitHub source and Iris CLI without DSH.'}
                 </p>
               </div>
               <button

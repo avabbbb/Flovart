@@ -5,19 +5,19 @@ param(
 $ErrorActionPreference = 'Stop'
 
 if ([string]::IsNullOrWhiteSpace($Artifact)) {
-  $Artifact = Join-Path $PSScriptRoot '..\src-tauri\target\release\bundle\nsis\Flovart_0.3.2_x64-setup.exe'
+  $Artifact = Join-Path $PSScriptRoot '..\src-tauri\target\release\bundle\nsis\Iris_0.3.2_x64-setup.exe'
 }
 $artifact = (Resolve-Path -LiteralPath $Artifact).Path
 $artifactItem = Get-Item -LiteralPath $artifact
 $artifactHash = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash
-$installRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('flovart-rc-installer-' + [guid]::NewGuid().ToString('N'))
+$installRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('iris-rc-installer-' + [guid]::NewGuid().ToString('N'))
 
 New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
 $installer = Start-Process -FilePath $artifact -ArgumentList @('/S', "/D=$installRoot") -Wait -PassThru
 $installedExes = @(Get-ChildItem -LiteralPath $installRoot -Recurse -File -Filter '*.exe' -ErrorAction SilentlyContinue |
   Where-Object { $_.Name -notin @('uninstall.exe', 'Uninstall.exe') })
 $installedExe = $installedExes |
-  Where-Object { $_.BaseName -ieq 'flovart' } |
+  Where-Object { $_.BaseName -ieq 'iris' } |
   Select-Object -First 1
 if ($null -eq $installedExe) {
   $installedExe = $installedExes | Select-Object -First 1

@@ -5,15 +5,15 @@
   "pluginVersion": "0.1.0",
   "compatibleSets": [
     {
-      "setId": "flovart-2026-08-rc8",
+      "setId": "iris-2026-08-rc8",
       "deepseekHarness": ">=0.2.2-rc.1 <0.3.0-0",
       "deepseekHarnessCommit": "141eb6f",
       "node": "^22.19.0 || >=24.0.0",
-      "flovartRuntime": ">=0.3.2",
-      "flovartWebUI": ">=0.3.2",
+      "irisRuntime": ">=0.3.2",
+      "irisWebUI": ">=0.3.2",
       "operationSkill": "",
       "protocol": {
-        "channel": "flovart-workspace-command",
+        "channel": "iris-workspace-command",
         "version": 1
       }
     }
@@ -23,7 +23,7 @@
       "package": "@flovart/dsh-plugin",
       "patch": "./cordis.patch.yml",
       "clientEntry": "./client",
-      "rowId": "flovart"
+      "rowId": "iris"
     },
     "workflowView": {
       "kind": "contextual-conversation-view",
@@ -38,19 +38,19 @@
       "autoWorkspace": true,
       "sidebarEntry": true,
       "iframe": true,
-      "iframeSrc": "/flovart-app/?embed=dsh#/app",
-      "workspaceProxyPath": "/flovart-workspace",
+      "iframeSrc": "/iris-app/?embed=dsh#/app",
+      "workspaceProxyPath": "/iris-workspace",
       "webui": {
-      "routePrefix": "/flovart-app",
+      "routePrefix": "/iris-app",
       "root": "./webui",
-      "bootstrapPath": "/flovart-app/api/bootstrap"
+      "bootstrapPath": "/iris-app/api/bootstrap"
     }
     },
     "hostTools": {
       "kind": "cli-derivation",
-      "commandList": "flovart command.list --json",
-      "commandSchema": "flovart command.schema --command {command} --json",
-      "bootstrap": "flovart ensure --json"
+      "commandList": "iris command.list --json",
+      "commandSchema": "iris command.schema --command {command} --json",
+      "bootstrap": "iris ensure --json"
     }
   },
   "privacy": {

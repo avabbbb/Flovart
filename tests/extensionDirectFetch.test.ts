@@ -12,7 +12,7 @@ import {
 import { createDirectFetchHandler } from '../extension/background/direct-fetch.js';
 import { fakePortPair } from './helpers/fakePortPair';
 
-const ORIGIN = 'https://flovart.avabbbb.com';
+const ORIGIN = 'https://iris.avabbbb.com';
 const CHAT = 'https://opencode.ai/zen/v1/chat/completions';
 const DOC = 'https://www.runninghub.cn/runninghub-api-doc-cn/api-519905081.md';
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -26,7 +26,7 @@ function startRequest(options: {
   origin?: string;
   message?: Record<string, unknown>;
 }) {
-  const { web, ext } = fakePortPair('flovart-fetch', options.origin ?? ORIGIN);
+  const { web, ext } = fakePortPair('iris-fetch', options.origin ?? ORIGIN);
   const received: any[] = [];
   let disconnected = false;
   web.onMessage.addListener(message => received.push(message));
@@ -125,7 +125,7 @@ describe('extension direct-fetch handler', () => {
     expect(headers.get('authorization')).toBe('Bearer sk-test');
     expect(headers.get('cookie')).toBeNull();
     expect(headers.get('x-evil')).toBeNull();
-    expect(headers.get('x-opencode-session')).toMatch(/^ses_flovart_/);
+    expect(headers.get('x-opencode-session')).toMatch(/^ses_iris_/);
     expect(init).toMatchObject({ method: 'POST', redirect: 'manual', credentials: 'omit' });
     expect(new TextDecoder().decode(init.body as Uint8Array)).toBe('{"stream":true}');
 

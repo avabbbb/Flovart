@@ -1,12 +1,12 @@
 import localforage from 'localforage';
 
 const storage = localforage.createInstance({
-  name: 'flovart_workflow_v2',
+  name: 'iris_workflow_v2',
   storeName: 'workflow_projects',
 });
 
 const mediaStorage = localforage.createInstance({
-  name: 'flovart_workflow_v2',
+  name: 'iris_workflow_v2',
   storeName: 'workflow_media',
 });
 

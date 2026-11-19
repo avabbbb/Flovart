@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 const runtimeExecute = vi.hoisted(() => vi.fn());
 
-vi.mock('../services/flovartRuntime', () => ({
-  getFlovartRuntimeApi: () => ({ execute: runtimeExecute }),
+vi.mock('../services/irisRuntime', () => ({
+  getIrisRuntimeApi: () => ({ execute: runtimeExecute }),
 }));
 vi.mock('../services/runtimeArtifacts', () => ({
   loadRuntimeArtifactBlob: vi.fn(async () => new Blob(['img'], { type: 'image/png' })),

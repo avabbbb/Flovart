@@ -2,11 +2,11 @@
 
 > 状态：**PROPOSAL**（2026-11-13；§6 放置同日修订为“逆向 = 全能助手主场”；2026-11-17 逆向改名 Iris，改为对话优先、画布为产出面）。本文是提案，不是 current truth；被接受后按 AGENTS.md §9 蒸馏进 [00 总体设计](00-overview.md)、[12 Agent](12-agent.md)、[13 Generation & Runtime](13-generation-runtime.md)、[10 Canvas / Workflow](10-canvas-workflow.md)，再归档本文。
 > **实施进度（2026-11-15）**：P0 的工具层与 trace 已在 `main` 实现并端到端跑通（见 §12）：trace 在 Runtime 共用的 `flovart-state.db`（migration 5）；Remotion 文字 / 字幕 / 音频轨、`capture.ui`、MCP 投影、CJK 字体已上线；配音经 RunningHub 调 MiniMax speech 已真实实测。Canvas 抽屉 run 卡片与画布版本分组是轻量入口，Iris 对话栏与 Agent 光标、DSH 投影、直连 MiniMax 与 WhisperX 实测尚未完成，本文仍是提案。桌面级真实操作录制另见 [录制与剪辑 Hub 计划](../plans/recordly-capture-hub.md)。
-> 标注约定沿用总纲：**已实现** = 代码在主干；**已验证** = 有 Support Matrix 证据；**设计目标** = 尚未实现；**假设** = 待真实环境确认。本文“Flovart 今天”一列全部来自 2026-11-13 `main`（`b92e29b`）真实代码核对，不来自旧文档。
+> 标注约定沿用总纲：**已实现** = 代码在主干；**已验证** = 有 Support Matrix 证据；**设计目标** = 尚未实现；**假设** = 待真实环境确认。本文“Iris 今天”一列全部来自 2026-11-13 `main`（`b92e29b`）真实代码核对，不来自旧文档。
 
 ## 0. 一句话
 
-让 Flovart **内置 Agent** 在用户本机，从 brief 到成片自由调用工具，跑完一条可审计的 trace：取真实素材 → 写稿分镜 → 生成实景 / 配音 → 对齐 → 代码合成 → 渲染 → **看真实帧做评审 → 只改指定秒数 → 再渲染**，多轮迭代并把每一版、每条音轨、每次评审归档。外部 Agent（Codex、Claude Code、DSH）通过 Skill + CLI / MCP 调用**同一批操作**，写进**同一条 trace**。
+让 Iris **内置 Agent** 在用户本机，从 brief 到成片自由调用工具，跑完一条可审计的 trace：取真实素材 → 写稿分镜 → 生成实景 / 配音 → 对齐 → 代码合成 → 渲染 → **看真实帧做评审 → 只改指定秒数 → 再渲染**，多轮迭代并把每一版、每条音轨、每次评审归档。外部 Agent（Codex、Claude Code、DSH）通过 Skill + CLI / MCP 调用**同一批操作**，写进**同一条 trace**。
 
 ## 1. 参考流水线（BaiFu《连做 4 条百万曝光产品宣传片》方法拆解）
 
@@ -40,16 +40,16 @@
 | C22 | 费用与审批 | 限制单轮生成次数，小样确认后再批量 |
 | C23 | 长流程编排 | 多轮对话、可中断、可恢复，全程可追溯 |
 
-## 2. 能力矩阵：需要什么 vs Flovart 今天有什么
+## 2. 能力矩阵：需要什么 vs Iris 今天有什么
 
 “今天”列：**有** = 已实现且内置 Agent 能调用；**部分** = 代码有但缺关键一段或 Agent 调不到；**缺** = 没有实现。
 
-| 能力 | 用于 | Flovart 今天 | 差距 / 需要的工作 | 优先级 |
+| 能力 | 用于 | Iris 今天 | 差距 / 需要的工作 | 优先级 |
 | --- | --- | --- | --- | --- |
-| C1 Brief / 定位 | 全片目标、画幅、时长 | **部分**：`flovart_ask` 表单提问、`flovart_todo` 清单、`flovart_web_search`（`services/browserAgentKernel.ts`、`agent/todo.js`）；没有结构化 Brief | 定义 `brief` 作为 run 的第一个 artifact（受众、渠道、核心一句、画幅、语言、时长、预算） | P0 |
-| C2 参考片拆解 | 学镜头关系 | **部分**：Iris 逆向拆解纯函数层（`services/reverse/narrative.ts`、`align.ts`、`caption.ts`、`composition.ts`）、节点工具 `video-extract-frame`、`reverse-prompt`、`flovart_workflow_media_view` 抽任意秒数帧 | Reverse 拆解结果可作为 run 输入（`reverseProjectId`）；Agent 侧有读取 Reverse 工程的只读入口 | P1 |
-| C3 读产品仓库 | 找卖点与路径 | **部分**：`flovart_grep` 只搜已授权本地文件夹的文本（`services/agentLocalGrep.ts`）；内置 Agent 提示词明确“不得访问 Shell、任意文件” | 内置 Agent 保持只读授权目录；需要跑脚本 / 启动项目时交给外部 Coding Agent（见 §6） | P1 |
-| C4 演示数据注入 | 干净的演示状态 | **缺**（属于用户产品仓库，不是 Flovart 能力） | 不在 Flovart 内实现；由外部 Coding Agent 在用户仓库完成，Flovart 只记录为 trace 中的外部步骤 | P2 |
+| C1 Brief / 定位 | 全片目标、画幅、时长 | **部分**：`iris_ask` 表单提问、`iris_web_search`（`services/browserAgentKernel.ts`、`agent/todo.js`）；没有结构化 Brief | 定义 `brief` 作为 run 的第一个 artifact（受众、渠道、核心一句、画幅、语言、时长、预算） | P0 |
+| C2 参考片拆解 | 学镜头关系 | **部分**：Iris 逆向拆解纯函数层（`services/reverse/narrative.ts`、`align.ts`、`caption.ts`、`composition.ts`）、节点工具 `video-extract-frame`、`reverse-prompt`、`iris_workflow_media_view` 抽任意秒数帧 | Reverse 拆解结果可作为 run 输入（`reverseProjectId`）；Agent 侧有读取 Reverse 工程的只读入口 | P1 |
+| C3 读产品仓库 | 找卖点与路径 | **部分**：`iris_grep` 只搜已授权本地文件夹的文本（`services/agentLocalGrep.ts`）；内置 Agent 提示词明确“不得访问 Shell、任意文件” | 内置 Agent 保持只读授权目录；需要跑脚本 / 启动项目时交给外部 Coding Agent（见 §6） | P1 |
+| C4 演示数据注入 | 干净的演示状态 | **缺**（属于用户产品仓库，不是 Iris 能力） | 不在 Iris 内实现；由外部 Coding Agent 在用户仓库完成，Iris 只记录为 trace 中的外部步骤 | P2 |
 | C5 真实 UI 采集 | 截图 / 录屏 / 原生动效 | **缺**：Agent 无截图 / 录屏工具；仓库有 `playwright` 依赖但只用于测试 | 新增 Runtime 能力 `capture.ui`（本机 Playwright 打开用户给的本地 URL，按步骤截图 / 录屏 → durable artifact）；P0 先用“外部 Agent 或用户放进授权文件夹 → `asset.import`” | P1（P0 走导入） |
 | C6 素材盘点 | 缺口清单 | **部分**：`asset.list`（CLI，Agent 内置工具不可用）、本地文件夹引用（`services/localFolderSource.ts`） | `asset.list` 支持按 run / tag 过滤并进入 pipeline 工具集 | P0 |
 | C7 三栏脚本与分镜 | 镜头规划、静态关键帧 | **部分**：`script` 节点与 `ScriptNodeEditor.tsx`、`services/shotPlanning.ts`、`components/workflow/productionBible.ts`、`WorkflowStoryboard.tsx`、`batch.plan` | 脚本行增加 `narration / displayText / speechText / visual` 字段；静态关键帧 = 合成 spec 的单帧渲染（复用 C17） | P0 |
@@ -63,12 +63,12 @@
 | C15 屏幕跟踪合成 | 真实 UI 长进实景 | **缺** | P1 先支持手动四角关键帧 + 透视（Remotion 内实现）；自动跟踪、手指遮罩 P2 | P2 |
 | C16 ffmpeg 处理 | 剪、拼、抽帧、探测 | **部分**：浏览器 ffmpeg.wasm 节点工具（trim / merge / extract-frame / av-split / audio-trim / speed / pitch / stem-split，`components/workflow/operationRegistry.ts`、`services/videoTools.ts`、`services/audioTools.ts`）；Runtime 原生 ffmpeg / ffprobe 只用于 `media.render` | 增加受控 `media.probe`（时长、编码、黑帧、静音、响度）；不开放任意 ffmpeg 命令行 | P0 |
 | C17 渲染导出 | MP4 | **部分**：`scripts/render-production.mjs`（Remotion `renderMedia`）存在但没有任何调用方；Runtime `media.render` 是 ffmpeg 拼接 + 字幕 + 旁白（`local_media.rs`） | `composition.render` = Runtime 任务，engine 选 `remotion`（调用上述脚本）或 `ffmpeg-concat`；结果是 durable artifact | **P0** |
-| C18 帧级评审 | 看真实画面 | **部分**：`flovart_workflow_media_view`（`services/agentMediaView.ts`）可对图片 / 视频节点按秒抽帧（单次 ≤6 张）；只认画布节点，不认 Runtime artifact；没有音频理解 | `media.frames` 支持 artifact、时间列表、两版并排；`media.probe` 自动检查黑帧 / 静音；音频评审靠转写回读（C11） | **P0** |
+| C18 帧级评审 | 看真实画面 | **部分**：`iris_workflow_media_view`（`services/agentMediaView.ts`）可对图片 / 视频节点按秒抽帧（单次 ≤6 张）；只认画布节点，不认 Runtime artifact；没有音频理解 | `media.frames` 支持 artifact、时间列表、两版并排；`media.probe` 自动检查黑帧 / 静音；音频评审靠转写回读（C11） | **P0** |
 | C19 批评 → 定向修补 | 多轮修 | **部分**：`ProductionShotV1.locked` 已有“锁定镜头”语义；`workflow.apply` 有 revision + 幂等；没有结构化评审记录 | `review.submit`（发现项：时间点 / 层 / 问题 / 修法 / 结论）+ `composition.patch`（基于版本号的局部修改，尊重锁） | **P0** |
 | C20 版本追踪与对比 | v1 → vN | **部分**：节点批次候选与 `set_batch_primary`、晚到结果作为新版本、`draftLog`（200 条）、会话分支 `branchSession`；Runtime 表 `production_spec_revisions` 已存在 | 合成 spec 的每次修订 = 一个版本，复用 `production_spec_revisions`；每次渲染挂在版本上；画布上用一个分组显示各版成片 | **P0** |
 | C21 素材库与归档 | 可回溯、可交付 | **部分**：Runtime 内容寻址 artifact（`artifact.locate`、sha256）；浏览器 `services/studio/artifactRegistry.ts` 仅 30 分钟 TTL、最多 64 条；`projectTransfer.ts` 导出为 dataUrl JSON；Reverse 左侧库有 Tasks / Artifacts | run 内所有产物都进 Runtime artifact store；`run.archive` 输出归档清单（成片、spec、音轨、废片、评审）到用户目录 | P1（P0 先保证全部是 durable artifact） |
 | C22 费用与审批 | 控制花费 | **有（部分）**：`services/agentSpendMandate.ts`（自动模式任务数 / 金额上限）、`services/agentToolPolicy.ts`（OMP 式审批：read/write/exec tier + always-ask/write/yolo 模式 + 按工具策略 + 会话授权；不是沙箱）、Runtime `production_gates` / `run_budgets` / `usage_ledger` | run 级预算（任务数、金额、最大评审轮数）一次授权，范围变化重新确认 | P0 |
-| C23 长流程编排 / trace | 多轮、可恢复 | **部分**：会话按项目存 localforage（`services/browserAgentKernel.ts`）；运行日志 `useAgentActivityStore.ts`（内存 200 条）；Runtime `runtime_events` / `production_runs` / `stage_runs` 持久；内置 Agent 工具只有 `AGENT_BROWSER_COMMANDS`（`tools/flovart/agent-surface.js`）+ 节点工具 + 搜索 / grep / ask / 看图 / todo，**调不到** `task.*`、`artifact.locate`、`asset.list`、`generate.*`、`production.*` | 新增 run → step → tool call → artifact → version → review round 的持久 trace（§4），由命令边界自动记录；内置 Agent 在 run 内按需加载 pipeline 工具集 | **P0** |
+| C23 长流程编排 / trace | 多轮、可恢复 | **部分**：会话按项目存 localforage（`services/browserAgentKernel.ts`）；运行日志 `useAgentActivityStore.ts`（内存 200 条）；Runtime `runtime_events` / `production_runs` / `stage_runs` 持久；内置 Agent 工具只有 `AGENT_BROWSER_COMMANDS`（`tools/iris/agent-surface.js`）+ 节点工具 + 搜索 / grep / ask / 看图 / todo，**调不到** `task.*`、`artifact.locate`、`asset.list`、`generate.*`、`production.*` | 新增 run → step → tool call → artifact → version → review round 的持久 trace（§4），由命令边界自动记录；内置 Agent 在 run 内按需加载 pipeline 工具集 | **P0** |
 
 ### 2.1 2026-11-15 复核（上表“今天”列为 11-13 基线，以本节为准）
 
@@ -95,7 +95,7 @@
 
 原则（与 AGENTS.md §3、§4 一致）：
 
-- 每个工具**只包装一份已有业务函数**；没有现成实现的先实现业务函数，再在注册表 `tools/flovart/contracts/runtime/command-registry.v1.json` 登记，CLI / MCP / DSH / 内置 Agent 都从注册表投影。
+- 每个工具**只包装一份已有业务函数**；没有现成实现的先实现业务函数，再在注册表 `tools/iris/contracts/runtime/command-registry.v1.json` 登记，CLI / MCP / DSH / 内置 Agent 都从注册表投影。
 - 这些工具组成 **pipeline 工具集**，只在一个 run 激活时加载给内置 Agent；**不加入**稳定 baseline（`status`、`workflow.inspect`、`workflow.selection.get`、`workflow.apply`、`workflow.node.run`），认证后再按 Support Matrix 升级。
 - 所有写操作带 `runId` + `mutationId`；同 ID 同载荷返回原结果，同 ID 不同载荷拒绝。
 - 付费调用走现有 spend mandate 与 Runtime gate；本地计算（渲染、转写、探测）不收费但要显示进度、可取消。
@@ -117,7 +117,7 @@
 | `media.frames` | artifactId 或 nodeId、times[]、compareWith?（另一版本）、zoom? | 图片（≤6 张 / 次） | `services/agentMediaView.ts` 扩展到 Runtime artifact | 只读 | — | 部分 |
 | `review.submit` | runId、version、findings[{atSec \| range, layer, severity, issue, fix}]、verdict: pass \| revise \| block、reviewer: agent \| user | roundId | 新 Runtime 记录 | 无 | mutationId | 设计目标（P0） |
 | `run.archive` | runId、include[final, spec, stems, rejected, reviews] | archive 清单 artifact、目录路径 | Runtime artifact store + 导出 | 写用户目录前确认 | runId + 版本集 | 设计目标（P1） |
-| 现有辅助 | `flovart_ask`、`flovart_todo`、`flovart_web_search`、`flovart_grep`、`task.get` / `task.cancel` | — | 现有 | 现有 | 现有 | 已实现（`task.*` 需加入内置工具集） |
+| 现有辅助 | `iris_ask`、`iris_web_search`、`iris_grep`、`task.get` / `task.cancel` | — | 现有 | 现有 | 现有 | 已实现（`task.*` 需加入内置工具集） |
 
 不提供：任意 shell、任意 ffmpeg 参数、任意文件读写、直接写 React store。需要这些的步骤（跑用户仓库、注入演示数据）属于外部 Coding Agent，结果用 `asset.import` 带回。
 
@@ -145,7 +145,7 @@ Run（一次宣传片制作；durable identity = runId）
 ### 4.2 存储与归属
 
 - **Run / Step / Version / ReviewRound 由本地 Runtime（SQLite）保存**，复用 `production_sessions`、`production_spec_revisions`、`production_runs`、`runtime_tasks`、`runtime_events`、`usage_ledger`、`run_budgets`；新增一张 `run_steps` 与一张 `review_rounds`（迁移脚本放 `src-tauri/src/runtime/migrations/`）。不建第二套任务系统。
-- **Step 由命令边界自动写**：`tools/flovart/operation-gateway.js` / `services/workflowAgentBridge.ts` 在执行带 `runId` 的命令时记录，模型不负责“记账”，也就无法漏记或伪造。
+- **Step 由命令边界自动写**：`tools/iris/operation-gateway.js` / `services/workflowAgentBridge.ts` 在执行带 `runId` 的命令时记录，模型不负责“记账”，也就无法漏记或伪造。
 - 内置 Agent 会话仍在浏览器 localforage（现状），会话只保存 `runId` 引用；外部 Agent 的会话留在 Codex / Claude / DSH 自己那里。
 - 画布侧只保存引用：run 的各版成片以视频节点出现在一个分组里（复用批次候选 + `set_batch_primary` 语义），节点 metadata 记 `runId` / `version`。
 
@@ -156,7 +156,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 → review.submit(vN, findings, verdict)
    ├─ pass  → 可进入 final 渲染 / 扩写 / 归档
    ├─ revise→ composition.patch(baseVersion=vN, ops 只动 findings 对应的片段, locks 保持) → vN+1 → 再渲染
-   └─ block → 停下，用 flovart_ask 问用户（缺素材、需付费、方向分歧）
+   └─ block → 停下，用 iris_ask 问用户（缺素材、需付费、方向分歧）
 ```
 
 - 每轮 findings 必须引用具体时间点或片段 ID；“整体不好”不是合法 finding。
@@ -211,7 +211,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 
 | 证据 | 位置 | 说明 |
 | --- | --- | --- |
-| 抽屉只在 Canvas / Reverse 打开 | `App.tsx`：`open={canvasView !== 'agent' && rightOpen}`，内含 `FlovartAgentPanel` | 新方案中该组件在逆向里以 docked 侧栏形态复用，在 Canvas 里保留轻量模式 |
+| 抽屉只在 Canvas / Reverse 打开 | `App.tsx`：`open={canvasView !== 'agent' && rightOpen}`，内含 `IrisAgentPanel` | 新方案中该组件在逆向里以 docked 侧栏形态复用，在 Canvas 里保留轻量模式 |
 | 抽屉已有“对话 / 连接指引 / 连接状态 / 运行日志”四个分区 | `components/agent/AgentDrawerSections.tsx` | 新方案收为“计划 / 运行 / 对话 / 逆向拆解”，连接类分区移到 Agent 页 |
 | 内置 Agent 内核按项目持有 | `services/browserAgentRuntime.ts` | 不变：run 与项目同生命周期 |
 | Agent 页明确不含内置助手 | `components/agent/AgentWorkspace.tsx` | 不变 |
@@ -222,7 +222,7 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 
 ```text
 用户 PC
-├─ Flovart Web / Tauri 窗口：Iris（个人 Agent）+ Canvas（内置 Agent 内核，LLM 走用户配置的文本路由）
+├─ Iris Web / Tauri 窗口：Iris（个人 Agent）+ Canvas（内置 Agent 内核，LLM 走用户配置的文本路由）
 ├─ Local Runtime（Rust，src-tauri/src/runtime/）
 │   ├─ SQLite：tasks / events / production_* / run_steps / review_rounds / usage_ledger
 │   ├─ Artifact store（内容寻址）
@@ -239,10 +239,10 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 
 ## 8. 外部 Agent 与 DSH 如何接入同一条 trace
 
-- pipeline 工具登记在同一注册表后，自动出现在 CLI（`tools/flovart/cli.js`）、stdio MCP（`tools/flovart/mcp-server.js`）与 DSH 插件（`dsh-plugin/src/tools.ts` 的 `flovart_*` 映射）中，参数与权限一致。
+- pipeline 工具登记在同一注册表后，自动出现在 CLI（`tools/iris/cli.js`）、stdio MCP（`tools/iris/mcp-server.js`）与 DSH 插件（`dsh-plugin/src/tools.ts` 的 `iris_*` 映射）中，参数与权限一致。
 - 推荐分工（对应参考文章）：**Codex / Claude Code** 在用户产品仓库里跑项目、注入演示数据、截图录屏、导出原生动画，然后 `asset.import` 到当前 run；**内置 Agent 或外部 Agent** 负责编排（脚本、配音、合成、评审、修补）。两者都写同一个 runId，trace 里 `caller` 区分是谁做的。
 - `agent.turn`：外部 Agent 可把“评审这一版”委派给内置 Agent 跑一轮（现有：默认只读、只回摘要、同一 mutationId 幂等）。
-- Skill（`skills/flovart/`）新增一个 pipeline 命令文档，只写已登记、已验证的命令；`.agents/`、`.claude/` 投影随 canonical 同步，不手改。
+- Skill（`skills/iris/`）新增一个 pipeline 命令文档，只写已登记、已验证的命令；`.agents/`、`.claude/` 投影随 canonical 同步，不手改。
 
 ## 9. 分阶段实施
 
@@ -317,14 +317,14 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 
 | 部分 | 位置 | 说明 |
 | --- | --- | --- |
-| 命令边界与 trace | `tools/flovart/pipeline/index.js` | 每次命令自动写 Step（caller、argsDigest、mutationId、status、attempts、产物）；同 mutationId 同载荷重放原结果、不同载荷拒绝；进程中断后的 `running` / `unknown_submit` Step 由同一 mutationId 续跑，`pipeline.run.get` 返回 `resumeFrom` |
-| 持久层 | `tools/flovart/pipeline/store.js`、`src-tauri/src/runtime/pipeline_trace.rs` | 与 Runtime 共用 `flovart-state.db`（migration 5，`pipeline_*` 表）+ 内容寻址 artifact 目录（sha256）；Node 写，Rust `pipeline.run.get` 只读 |
-| 合成 spec V2 | `tools/flovart/pipeline/spec.js` | visual / text / captions / audio 四轨；`locked` 片段修改须显式 `unlock` + reason；修订绑定评审轮时只允许改 findings 涉及的片段（`PATCH_OUT_OF_SCOPE`）；`baseVersion` 过期返回 `VERSION_CONFLICT` |
-| 渲染 | `tools/flovart/pipeline/render.js` | 受控 ffmpeg filtergraph（镜头、文字、字幕、旁白、音乐 sidechain 闪避），preset still / draft / final；`final` 需要该版本已有 pass 评审；Remotion 引擎（`engine: remotion`）画面 / 文字 / 字幕 / 音频轨齐全，draft 按 0.5 缩放，still 仍走 ffmpeg |
+| 命令边界与 trace | `tools/iris/pipeline/index.js` | 每次命令自动写 Step（caller、argsDigest、mutationId、status、attempts、产物）；同 mutationId 同载荷重放原结果、不同载荷拒绝；进程中断后的 `running` / `unknown_submit` Step 由同一 mutationId 续跑，`pipeline.run.get` 返回 `resumeFrom` |
+| 持久层 | `tools/iris/pipeline/store.js`、`src-tauri/src/runtime/pipeline_trace.rs` | 与 Runtime 共用 `flovart-state.db`（migration 5，`pipeline_*` 表）+ 内容寻址 artifact 目录（sha256）；Node 写，Rust `pipeline.run.get` 只读 |
+| 合成 spec V2 | `tools/iris/pipeline/spec.js` | visual / text / captions / audio 四轨；`locked` 片段修改须显式 `unlock` + reason；修订绑定评审轮时只允许改 findings 涉及的片段（`PATCH_OUT_OF_SCOPE`）；`baseVersion` 过期返回 `VERSION_CONFLICT` |
+| 渲染 | `tools/iris/pipeline/render.js` | 受控 ffmpeg filtergraph（镜头、文字、字幕、旁白、音乐 sidechain 闪避），preset still / draft / final；`final` 需要该版本已有 pass 评审；Remotion 引擎（`engine: remotion`）画面 / 文字 / 字幕 / 音频轨齐全，draft 按 0.5 缩放，still 仍走 ffmpeg |
 | 评审工具 | `media.js`、`review.js` | `media.probe`（时长、黑帧、静音、LUFS）、`media.frames`（≤6 帧，可与上一版并排）；`review.submit` 拒绝没有时间点 / 修法的 finding，Agent 评审前必须看过该版本的帧，重复 findings 返回 `REPEATED_FINDINGS`，超过 `maxRounds` 自动 block |
 | 声音 | `voice.js` | `audio.tts` 路由 fake / minimax / runninghub（runninghub = RunningHub 标准模型 API 上的 MiniMax speech 02 / 2.6 / 2.8，提交后轮询 `/openapi/v2/query`，超时报 `PROVIDER_UNKNOWN_SUBMIT` 不重提；真实 trial 用 `npm run trial:runninghub-tts`，2026-11-15 已跑通，单句约 3.3 秒、计费约 0.004 元；`speechText` 与 `displayText` 分离，输出时长与参数快照）；`audio.transcribe` 引擎 whisperx / hypit / fixture；`timeline.align` 用 LCS 对齐 + 插值 |
 | 预算与门禁 | `index.js` | run 级预算（maxTasks / maxCost / maxRounds）在创建时一次确认；付费步 reserve → confirm / release 写入 run 账本 |
-| 注册表 / CLI | `command-registry.v1.json`、`tools/flovart/cli.js` | 13 条命令登记为 available；写命令强制 `--mutation-id`；结构化参数用 `--args-json` 或 `--file` |
+| 注册表 / CLI | `command-registry.v1.json`、`tools/iris/cli.js` | 13 条命令登记为 available；写命令强制 `--mutation-id`；结构化参数用 `--args-json` 或 `--file` |
 | 内置 Agent | `agent/tools.js`、`agent/kernel.js`、`agent/pipeline-rules.js`、`agent/session.js` | pipeline 工具不经浏览器租约；非入口工具只能作用于本会话的活动 run；注册了 pipeline 工具时追加评审循环规则 |
 
 ### 12.2 验证
@@ -334,11 +334,11 @@ composition.render(vN, draft) → media.probe → media.frames(关键时间点 +
 
 ### 12.3 与提案的偏离和未完成项
 
-- **存储（已对齐 §4.2，2026-11-14）**：trace 表由 migration 5 建立，Rust Runtime 与 Node pipeline 执行同一份 SQL（`tools/flovart/contracts/runtime/migrations/0005_agent_pipeline.sql`）、共用 `runtime_migrations` 账本和 `flovart-state.db`。表名加 `pipeline_` 前缀，避免与 Runtime 的 `artifacts` 概念冲突；仍未复用 `production_*` / `usage_ledger`，预算走 `pipeline_usage_ledger`。写入只在 Node 命令边界，Rust 侧提供只读 `pipeline.run.get`，`npm run e2e:pipeline:parity` 校验两边输出逐字段一致。
+- **存储（已对齐 §4.2，2026-11-14）**：trace 表由 migration 5 建立，Rust Runtime 与 Node pipeline 执行同一份 SQL（`tools/iris/contracts/runtime/migrations/0005_agent_pipeline.sql`）、共用 `runtime_migrations` 账本和 `flovart-state.db`。表名加 `pipeline_` 前缀，避免与 Runtime 的 `artifacts` 概念冲突；仍未复用 `production_*` / `usage_ledger`，预算走 `pipeline_usage_ledger`。写入只在 Node 命令边界，Rust 侧提供只读 `pipeline.run.get`，`npm run e2e:pipeline:parity` 校验两边输出逐字段一致。
 - **Canvas（2026-11-14）**：抽屉“运行日志”顶部新增“视频流水线”分区（`components/agent/AgentPipelineRunsSection.tsx`），每个 run 一张卡片：状态、head 版本、最近一轮评审、Step 数与失败数、blocker；展开看逐步 trace（tool / caller / 状态 / 错误码 / 重试次数）、各版本的锁定片段与结论、可继续的 Step。“放到画布”把每个版本最好的一份视频渲染（final 优先于 draft，跳过 rejected 与单帧 still）放进同一个自动批次 `pipeline-<runId>`（`batchIndex = 版本号 - 1`），叠放主图指向最新版本；已在画布上的 artifact 不重复插入。数据只读取本机 agent 的 `GET /pipeline/*`。按 §6 修订，这里是 Canvas 侧的轻量入口；“在逆向中继续”与逆向 docked 侧栏尚未实现。
 - **Remotion 三轨（2026-11-14）**：ProductionSpec V1 增加可选 `texts` / `captions` / `audio`（帧为单位），`components/reverse/ProductionVideo.tsx` 绘制文字层（top 10% / center / bottom 底边 78%）、底部字幕（底边 88%、半透明底框）与音频（music 在 voice 出声帧闪避到 25%，增益封顶 0 dB）；字体栈中文优先（Noto CJK / 苹方 / 雅黑）。本地 artifact 链接进 bundle 的 `publicDir`，以 `static:<文件名>` 经 `staticFile` 供给。`npm run e2e:pipeline:remotion` 用真实 run 的 v2 spec 出 540×960 draft，检查音频流、时长与缩放并截字幕帧和文字帧。
-- **capture.ui 与 MCP（2026-11-14）**：`capture.ui`（`tools/flovart/pipeline/capture.js`）只开 localhost / 回环地址或授权文件夹内的 `file://`，每个 `goto` 步骤同样校验；启动浏览器前要 `confirmed: true`。浏览器依次取 `FLOVART_CAPTURE_BROWSER`、Playwright 自带 Chromium、Remotion 已下载的 headless shell。截图为 PNG；录屏用 CDP screencast 收带时间戳的帧，本机 ffmpeg 按真实间隔拼成 30fps H.264 MP4（不依赖 Playwright 自带 ffmpeg）。`npm run e2e:pipeline:capture` 14 项检查。stdio MCP（`tools/flovart/mcp-server.js`）把 14 条 pipeline 命令投影为 `flovart_<命令>` 工具，参数 schema 来自注册表，`agentIdentity` 记为 Step 的 caller；Skill 增加 `commands/pipeline.md`。
-- **CJK 字体（2026-11-14）**：`resolveFontInfo` 依次取 `FLOVART_FONT_FILE` → 已知中文字体路径（雅黑 / 苹方 / 冬青 / Noto CJK / 思源 / 文泉驿）→ `fc-list :lang=zh` 选无衬线常规体 → 拉丁兜底；要画的文字含中日韩字符却只剩拉丁兜底时报 `CAPABILITY_UNAVAILABLE`（capability `font`，附安装提示），不再渲染方框。Remotion 引擎把同一字体文件放进 publicDir 以 `FontFace` 嵌入（`delayRender` 等就绪，加载失败中止），两条引擎用同一字体、不依赖渲染机的浏览器字体。
+- **capture.ui 与 MCP（2026-11-14）**：`capture.ui`（`tools/iris/pipeline/capture.js`）只开 localhost / 回环地址或授权文件夹内的 `file://`，每个 `goto` 步骤同样校验；启动浏览器前要 `confirmed: true`。浏览器依次取 `IRIS_CAPTURE_BROWSER`、Playwright 自带 Chromium、Remotion 已下载的 headless shell。截图为 PNG；录屏用 CDP screencast 收带时间戳的帧，本机 ffmpeg 按真实间隔拼成 30fps H.264 MP4（不依赖 Playwright 自带 ffmpeg）。`npm run e2e:pipeline:capture` 14 项检查。stdio MCP（`tools/iris/mcp-server.js`）把 14 条 pipeline 命令投影为 `iris_<命令>` 工具，参数 schema 来自注册表，`agentIdentity` 记为 Step 的 caller；Skill 增加 `commands/pipeline.md`。
+- **CJK 字体（2026-11-14）**：`resolveFontInfo` 依次取 `IRIS_FONT_FILE` → 已知中文字体路径（雅黑 / 苹方 / 冬青 / Noto CJK / 思源 / 文泉驿）→ `fc-list :lang=zh` 选无衬线常规体 → 拉丁兜底；要画的文字含中日韩字符却只剩拉丁兜底时报 `CAPABILITY_UNAVAILABLE`（capability `font`，附安装提示），不再渲染方框。Remotion 引擎把同一字体文件放进 publicDir 以 `FontFace` 嵌入（`delayRender` 等就绪，加载失败中止），两条引擎用同一字体、不依赖渲染机的浏览器字体。
 - **未做**：DSH 插件的 pipeline 投影。
 - **未实测**：直连 MiniMax TTS（RunningHub 路由已实测）与真实 WhisperX / hypit（只按文档形状实现）；真实 Windows / macOS 渲染机上的字体选择只按路径表实现，未在真机验证。
 - `cargo test --lib` 已在 Linux 沙箱运行（含 pipeline_trace 单测与 Node/Rust 一致性测试）。`rust-ini` 锁定到 0.21.1：0.21.3 给 `ParseOption` 加了字段，`tauri-plugin-deep-link` 2.6.2 会编译失败。

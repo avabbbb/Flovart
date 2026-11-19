@@ -39,10 +39,10 @@ describe('shared studio shell', () => {
     expect(model.actions.openSettings).toHaveBeenCalledOnce();
   });
 
-  it.each(['zho', 'en'] as const)('names the second top-level tab Iris (%s)', language => {
+  it.each(['zho', 'en'] as const)('names the top-level tabs Canvas/画布, Cut, Agent (%s)', language => {
     render(<MemoryRouter><StudioTopMenu model={{ ...menuModel('workflow'), language }} /></MemoryRouter>);
     const tabs = screen.getAllByRole('tab').map(tab => tab.textContent);
-    expect(tabs).toEqual(language === 'zho' ? ['画布', 'Iris', 'Agent'] : ['Canvas', 'Iris', 'Agent']);
-    expect(tabs.join(' ')).not.toMatch(/逆向|Reverse/);
+    expect(tabs).toEqual(language === 'zho' ? ['画布', 'Cut', 'Agent'] : ['Canvas', 'Cut', 'Agent']);
+    expect(tabs.join(' ')).not.toMatch(/逆向|Reverse|Iris/);
   });
 });

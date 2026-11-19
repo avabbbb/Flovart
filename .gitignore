@@ -71,13 +71,13 @@ src-tauri/target/
 src-tauri/binaries/
 src-tauri/.tauri_private_key
 src-tauri/.tauri_private_key.pub
-.flovart/
+.iris/
 
 # dsh-plugin build output
 dsh-plugin/lib/
 dsh-plugin/skill/
 
-# FlovartBench raw evidence: trajectories and snapshots for every trial.
+# IrisBench raw evidence: trajectories and snapshots for every trial.
 # The generated reports under eval/reports/ are the artifact of record; the raw
 # per-trial files are uploaded as CI artifacts instead of committed.
 eval/results/
@@ -97,11 +97,11 @@ eval/product-maturity/scenarios/
 
 # Historical evaluation media is evidence output, not source. Keep reports,
 # specs and verification JSON in Git; publish generated binaries as CI/Release artifacts.
-tools/flovart/evaluations/**/*.mp4
-tools/flovart/evaluations/**/*.wav
-tools/flovart/evaluations/**/*.png
-tools/flovart/evaluations/**/*.jpg
-tools/flovart/evaluations/**/*.jpeg
+tools/iris/evaluations/**/*.mp4
+tools/iris/evaluations/**/*.wav
+tools/iris/evaluations/**/*.png
+tools/iris/evaluations/**/*.jpg
+tools/iris/evaluations/**/*.jpeg
 
 # local reference clones (license-incompatible, never commit)
 _ref/

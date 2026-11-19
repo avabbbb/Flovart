@@ -2,11 +2,11 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { runSkillCommand } from '../tools/flovart/skill-commands.js';
+import { runSkillCommand } from '../tools/iris/skill-commands.js';
 
 const dirs: string[] = [];
 async function tempDir() {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'flovart-skill-'));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'iris-skill-'));
   dirs.push(dir);
   return dir;
 }

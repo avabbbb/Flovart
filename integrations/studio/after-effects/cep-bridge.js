@@ -10,7 +10,7 @@
     if (nativeBridge && typeof nativeBridge[name] === 'function') return Promise.resolve(nativeBridge[name].apply(nativeBridge, args || []));
     if (typeof evalScript !== 'function') return Promise.reject(new Error('After Effects CEP bridge 不可用。'));
     return new Promise(function (resolve, reject) {
-      var script = 'FlovartAE.' + name + '(' + (args || []).map(function (arg) { return JSON.stringify(arg); }).join(',') + ')';
+      var script = 'IrisAE.' + name + '(' + (args || []).map(function (arg) { return JSON.stringify(arg); }).join(',') + ')';
       evalScript.call(global.__adobe_cep__, script, function (value) {
         var parsed = parse(value);
         if (parsed && parsed.error) reject(new Error(parsed.error)); else resolve(parsed);
@@ -23,14 +23,14 @@
   };
   var filePath = function (prefix, extension) {
     var root = systemPath();
-    return root ? root + '/flovart-' + prefix + '-' + Date.now() + '-' + Math.floor(Math.random() * 1000000000) + extension : '';
+    return root ? root + '/iris-' + prefix + '-' + Date.now() + '-' + Math.floor(Math.random() * 1000000000) + extension : '';
   };
   var assetFilePath = function (artifact, extension) {
     var root = systemPath();
     var artifactId = String(artifact && artifact.artifactId || '');
     var sha256 = String(artifact && artifact.sha256 || '').toLowerCase();
     if (!root || !/^[A-Za-z0-9_-]{1,100}$/.test(artifactId) || !/^[a-f0-9]{64}$/.test(sha256)) return '';
-    return root + '/flovart-asset-' + artifactId + '-sha256-' + sha256 + extension;
+    return root + '/iris-asset-' + artifactId + '-sha256-' + sha256 + extension;
   };
   var extensionForMimeType = function (mimeType) {
     var type = String(mimeType || '').split(';')[0].trim().toLowerCase();
@@ -126,7 +126,7 @@
       var bytes = new Uint8Array(buffer);
       var encoded = base64FromBytes(bytes);
       var value = cep && cep.fs && cep.fs.writeFile ? cep.fs.writeFile(file, encoded, cep.encoding && cep.encoding.Base64) : null;
-      if (!value || value.err) throw new Error('After Effects 无法写入 Flovart 产物。');
+      if (!value || value.err) throw new Error('After Effects 无法写入 Iris 产物。');
     }).then(function () {
       return verifyFile(file, metadata);
     });

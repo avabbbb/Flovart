@@ -99,7 +99,7 @@ describe('fixed product model catalog', () => {
     })).toMatchObject({ resolution: '720p', durationSec: 8 });
   });
 
-  it('exposes only Veo modes that are both documented and wired in Flovart', () => {
+  it('exposes only Veo modes that are both documented and wired in Iris', () => {
     const fast = getProductModels('video').find(model => model.id === 'flovart:veo-3.1-fast');
     const lite = getProductModels('video').find(model => model.id === 'flovart:veo-3.1-lite');
     expect(fast?.capabilities.modes).toEqual(expect.arrayContaining(['reference-to-video', 'first-last-frame']));

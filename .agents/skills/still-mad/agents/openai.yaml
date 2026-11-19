@@ -1,4 +1,4 @@
 interface:
   display_name: "静止系 MAD"
   short_description: "用歌曲和静态图卡点剪成静止系 MAD，推拉摇移震与闪白"
-  default_prompt: "Use $still-mad to cut my song and images into a still-image MAD with Flovart."
+  default_prompt: "Use $still-mad to cut my song and images into a still-image MAD with Iris."

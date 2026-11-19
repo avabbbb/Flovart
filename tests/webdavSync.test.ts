@@ -14,7 +14,7 @@ import {
 // URL 用拼接构造，避免字面量在传输中被吞。
 const DAV = 'https' + String.fromCharCode(58) + '//dav.example.com';
 
-const config: WebDavConfig = { url: DAV + '/dav/', remoteDir: '/flovart/', username: 'u', password: 'p' };
+const config: WebDavConfig = { url: DAV + '/dav/', remoteDir: '/iris/', username: 'u', password: 'p' };
 
 function key(patch: Partial<UserApiKey> = {}): UserApiKey {
   return {
@@ -33,7 +33,7 @@ function key(patch: Partial<UserApiKey> = {}): UserApiKey {
 
 describe('webdavSync', () => {
   it('joins urls and encodes segments', () => {
-    expect(joinWebDavUrl(config.url, '/flovart/', 'a b.json')).toBe(DAV + '/dav/flovart/a%20b.json');
+    expect(joinWebDavUrl(config.url, '/iris/', 'a b.json')).toBe(DAV + '/dav/iris/a%20b.json');
     expect(joinWebDavUrl(config.url, '')).toBe(DAV + '/dav');
   });
 
@@ -62,7 +62,7 @@ describe('webdavSync', () => {
 
   it('rejects foreign or newer payloads', () => {
     expect(() => parseSyncPayload('{"app":"x","channels":[]}')).toThrow(WebDavError);
-    expect(() => parseSyncPayload({ app: 'flovart', version: 99, channels: [] })).toThrow(/版本/);
+    expect(() => parseSyncPayload({ app: 'iris', version: 99, channels: [] })).toThrow(/版本/);
   });
 
   it('creates the remote dir when PROPFIND returns 404 and sends basic auth', async () => {
@@ -70,7 +70,7 @@ describe('webdavSync', () => {
       .mockResolvedValueOnce(new Response(null, { status: 404 }))
       .mockResolvedValueOnce(new Response(null, { status: 201 }));
     await expect(testWebDavConnection(config, fetchImpl)).resolves.toEqual({ dirCreated: true });
-    expect(fetchImpl.mock.calls[0][0]).toBe(DAV + '/dav/flovart/');
+    expect(fetchImpl.mock.calls[0][0]).toBe(DAV + '/dav/iris/');
     expect(fetchImpl.mock.calls[1][1].method).toBe('MKCOL');
     expect((fetchImpl.mock.calls[0][1].headers as Headers).get('Authorization')).toBe('Basic ' + btoa('u:p'));
   });
@@ -90,7 +90,7 @@ describe('webdavSync', () => {
     expect(result.updatedIds).toEqual([]);
     const put = fetchImpl.mock.calls[2];
     expect(put[1].method).toBe('PUT');
-    expect(put[0]).toBe(DAV + '/dav/flovart/flovart-settings.json');
+    expect(put[0]).toBe(DAV + '/dav/iris/iris-settings.json');
     expect(String(put[1].body)).not.toContain('sk-secret');
   });
 });

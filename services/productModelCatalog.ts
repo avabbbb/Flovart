@@ -8,7 +8,7 @@ import type {
 import type { VideoAspectRatio } from './aiGateway';
 import { getRouteCatalog, getRouteDurations, getRouteSchema, type RouteCapabilitySchema } from './runningHubRouteCatalog';
 import { familyDisplayName, getRunningHubRoutesVersion, modeFromEndpoint, runningHubDocSite } from './runningHubDynamicRoutes';
-import { PRODUCT_MODEL_ENTRIES } from '../tools/flovart/product-models.js';
+import { PRODUCT_MODEL_ENTRIES } from '../tools/iris/product-models.js';
 import { resolveRouteMapping } from './routeMapping';
 
 export type ProductModelCapability = {

@@ -51,7 +51,7 @@ export interface IrisStoryboardPageProps {
   onCreateProject: () => string;
   /** 跳到画布并聚焦该节点。 */
   onFocusNode: (nodeId: string) => void;
-  /** 右侧对话：App 传入同一个 FlovartAgentPanel（不另起 Agent）。 */
+  /** 右侧对话：App 传入同一个 IrisAgentPanel（不另起 Agent）。 */
   chat: ReactNode;
   onNotify?: (message: string, level?: 'info' | 'success' | 'warning' | 'error') => void;
 }

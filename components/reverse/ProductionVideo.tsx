@@ -28,7 +28,7 @@ export const PRODUCTION_FONT_STACK = '"Noto Sans CJK SC", "Noto Sans SC", "Sourc
 
 const resolveSrc = (src: string) => (isStaticAssetRef(src) ? staticFile(src.slice(STATIC_ASSET_PREFIX.length)) : src);
 
-export const EMBEDDED_FONT_FAMILY = 'FlovartEmbedded';
+export const EMBEDDED_FONT_FAMILY = 'IrisEmbedded';
 
 /** 加载嵌入字体：渲染等字体就绪再出帧（delayRender），失败直接中止，不出方框画面。返回要用的字体栈。 */
 function useEmbeddedFont(fontSrc?: string): string {

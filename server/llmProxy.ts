@@ -32,7 +32,7 @@ export const LLM_PROXY_UPSTREAMS: Record<string, readonly string[]> = {
 /**
  * Public, key-less documentation upstreams (RunningHub API docs: llms.txt + per-API markdown).
  * These are GET-only, need no API key, and only `.md` / `llms.txt` resources are reachable.
- * Flovart reads them to build RunningHub route schemas dynamically (the docs are not CORS-enabled).
+ * Iris reads them to build RunningHub route schemas dynamically (the docs are not CORS-enabled).
  */
 export const LLM_PROXY_PUBLIC_DOC_UPSTREAMS: Record<string, readonly string[]> = {
   'www.runninghub.cn': ['/runninghub-api-doc-cn/'],
@@ -73,10 +73,10 @@ const FORWARDED_RESPONSE_HEADERS = [
 ] as const;
 
 export const LLM_PROXY_MAX_BODY_BYTES = 32 * 1024 * 1024;
-export const LLM_PROXY_USER_AGENT = 'flovart-web/0.3 (+https://github.com/avabbbb/Flovart)';
+export const LLM_PROXY_USER_AGENT = 'iris-web/0.3 (+https://github.com/avabbbb/Iris)';
 
 function jsonError(status: number, message: string, code: string): Response {
-  return new Response(JSON.stringify({ error: { message, type: 'flovart_proxy_error', code } }), {
+  return new Response(JSON.stringify({ error: { message, type: 'iris_proxy_error', code } }), {
     status,
     headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
   });
@@ -130,18 +130,18 @@ export async function handleLlmProxy(request: Request, options: LlmProxyOptions 
   const origin = request.headers.get('origin');
   const allowedExtra = origin && options.allowedOrigins?.includes(origin);
   if (!allowedExtra && !isSameOrigin(request, requestUrl)) {
-    return jsonError(403, 'Cross-origin use of the Flovart LLM proxy is not allowed', 'forbidden_origin');
+    return jsonError(403, 'Cross-origin use of the Iris LLM proxy is not allowed', 'forbidden_origin');
   }
 
   const upstream = resolveUpstreamUrl(requestUrl);
   if (!upstream) {
-    return jsonError(400, 'Upstream is not on the Flovart LLM proxy allowlist', 'upstream_not_allowed');
+    return jsonError(400, 'Upstream is not on the Iris LLM proxy allowlist', 'upstream_not_allowed');
   }
 
   // Doc hosts are only reachable for their public .md / llms.txt resources, and only via GET.
   const publicDoc = isPublicDocUpstream(upstream);
   if (LLM_PROXY_PUBLIC_DOC_UPSTREAMS[upstream.hostname] && (!publicDoc || method !== 'GET')) {
-    return jsonError(400, 'Upstream is not on the Flovart LLM proxy allowlist', 'upstream_not_allowed');
+    return jsonError(400, 'Upstream is not on the Iris LLM proxy allowlist', 'upstream_not_allowed');
   }
 
   const headers = new Headers();
@@ -159,7 +159,7 @@ export async function handleLlmProxy(request: Request, options: LlmProxyOptions 
   // OpenCode Go rejects requests without a session id (400 MissingSessionID).
   // The Web shim always sends a stable one; this is only a last-resort fallback.
   if (upstream.hostname === 'opencode.ai' && !headers.has('x-opencode-session')) {
-    headers.set('x-opencode-session', `ses_flovart_${crypto.randomUUID().replace(/-/g, '')}`);
+    headers.set('x-opencode-session', `ses_iris_${crypto.randomUUID().replace(/-/g, '')}`);
   }
 
   let body: ArrayBuffer | undefined;

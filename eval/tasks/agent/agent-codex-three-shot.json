@@ -8,7 +8,7 @@
       "split": "regression",
       "suite": "agent",
       "difficulty": "intermediate",
-      "instruction": "Create a three-shot product video workflow: three video nodes connected in sequence (Shot 1 -> Shot 2 -> Shot 3). Read the Flovart skill at .agents/skills/flovart/SKILL.md first, then use the Flovart CLI operations (npm run flovart:cli -- ...). Do not modify any source files; only operate the live Workflow through the CLI.",
+      "instruction": "Create a three-shot product video workflow: three video nodes connected in sequence (Shot 1 -> Shot 2 -> Shot 3). Read the Iris skill at .agents/skills/iris/SKILL.md first, then use the Iris CLI operations (npm run iris:cli -- ...). Do not modify any source files; only operate the live Workflow through the CLI.",
       "fixture": {
         "project": {
           "id": "project_codex",

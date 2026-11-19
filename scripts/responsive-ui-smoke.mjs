@@ -5,14 +5,14 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertTestPath, resolveTestTempRoot } from './test-temp-root.mjs';
 
-const targetUrl = process.env.FLOVART_TEST_URL || 'http://127.0.0.1:7410';
+const targetUrl = process.env.IRIS_TEST_URL || 'http://127.0.0.1:7410';
 const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const chromeExecutable = process.env.FLOVART_CHROME_PATH || chromium.executablePath();
+const chromeExecutable = process.env.IRIS_CHROME_PATH || chromium.executablePath();
 if (!existsSync(chromeExecutable)) throw new Error(`Chrome for Testing executable was not found: ${chromeExecutable}`);
 const tempRoot = resolveTestTempRoot(projectDir);
-const outputDir = assertTestPath(process.env.FLOVART_RESPONSIVE_ARTIFACT_DIR || resolve(tempRoot, 'responsive-artifacts'), 'Responsive UI artifacts');
+const outputDir = assertTestPath(process.env.IRIS_RESPONSIVE_ARTIFACT_DIR || resolve(tempRoot, 'responsive-artifacts'), 'Responsive UI artifacts');
 await mkdir(tempRoot, { recursive: true });
-const profileDir = await mkdtemp(resolve(tempRoot, 'flovart-responsive-ui-'));
+const profileDir = await mkdtemp(resolve(tempRoot, 'iris-responsive-ui-'));
 process.env.TEMP = profileDir;
 process.env.TMP = profileDir;
 process.env.TMPDIR = profileDir;
@@ -177,7 +177,7 @@ try {
   await page.locator('.studio-top-menu__modes').getByRole('button', { name: '工作流', exact: true }).click();
   await sleep(1000);
   await captureMatrix(page, 'workflow-shell', '.workflow-workspace', { allowCanvasChildren: true });
-  await page.locator('.canvas-view-switch').getByRole('tab', { name: /^(Iris|逆向|Reverse)$/ }).click();
+  await page.locator('.canvas-view-switch').getByRole('tab', { name: /^(Cut|Iris|逆向|Reverse)$/ }).click();
   await sleep(900);
   await capture(page, 'reverse', ['reverse-1024x768', 1024, 768], '[data-testid="iris-storyboard"]', { allowCanvasChildren: true });
   await capture(page, 'reverse', ['reverse-640x900', 640, 900], '[data-testid="iris-storyboard"]', { allowCanvasChildren: true });

@@ -109,10 +109,10 @@ describe('local grep scope semantics (OMP-aligned)', () => {
   });
 
   it('reports a missing path as Path not found, not as an empty search', async () => {
-    folders.set('f1', { name: 'Flovart', root: fakeDirectory('Flovart', { src: { 'a.ts': 'const alternates = [];' } }), permission: 'granted' });
+    folders.set('f1', { name: 'Iris', root: fakeDirectory('Iris', { src: { 'a.ts': 'const alternates = [];' } }), permission: 'granted' });
     const missing = await grepLocalFolders({ pattern: 'alternates', path: 'components' });
     expect(missing.error).toContain('Path not found: components');
-    expect(missing.error).toContain('Flovart');
+    expect(missing.error).toContain('Iris');
 
     const empty = await grepLocalFolders({ pattern: 'nothing-here', path: 'src' });
     expect(empty.error).toBeUndefined();
@@ -120,7 +120,7 @@ describe('local grep scope semantics (OMP-aligned)', () => {
   });
 
   it('searches the root for omitted path and for "."', async () => {
-    folders.set('f1', { name: 'Flovart', root: fakeDirectory('Flovart', { src: { 'a.ts': 'x\nconst alternates = [];' } }), permission: 'granted' });
+    folders.set('f1', { name: 'Iris', root: fakeDirectory('Iris', { src: { 'a.ts': 'x\nconst alternates = [];' } }), permission: 'granted' });
     for (const path of [undefined, '.', './']) {
       const result = await grepLocalFolders({ pattern: 'alternates', path });
       expect(result.matches).toEqual([expect.objectContaining({ path: 'src/a.ts', line: 2 })]);
@@ -128,10 +128,10 @@ describe('local grep scope semantics (OMP-aligned)', () => {
   });
 
   it('accepts a single file, a folder-name prefix, and ;-lists with partial misses', async () => {
-    folders.set('f1', { name: 'Flovart', root: fakeDirectory('Flovart', { src: { 'a.ts': 'alternates', 'b.ts': 'alternates' }, 'README': 'alternates' }), permission: 'granted' });
+    folders.set('f1', { name: 'Iris', root: fakeDirectory('Iris', { src: { 'a.ts': 'alternates', 'b.ts': 'alternates' }, 'README': 'alternates' }), permission: 'granted' });
     expect((await grepLocalFolders({ pattern: 'alternates', path: 'src/a.ts' })).matches.map(m => m.path)).toEqual(['src/a.ts']);
     expect((await grepLocalFolders({ pattern: 'alternates', path: 'README' })).matches.map(m => m.path)).toEqual(['README']);
-    expect((await grepLocalFolders({ pattern: 'alternates', path: 'Flovart/src' })).matches).toHaveLength(2);
+    expect((await grepLocalFolders({ pattern: 'alternates', path: 'Iris/src' })).matches).toHaveLength(2);
     const partial = await grepLocalFolders({ pattern: 'alternates', path: 'src; nope' });
     expect(partial.error).toBeUndefined();
     expect(partial.missingPaths).toEqual(['nope']);

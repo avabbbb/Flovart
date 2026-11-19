@@ -5,22 +5,22 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-import { buildBrowserBootstrapUrl, issueBrowserBootstrapToken, probeWebUi, redactBootstrapUrl } from '../tools/flovart/local-agent.js';
+import { buildBrowserBootstrapUrl, issueBrowserBootstrapToken, probeWebUi, redactBootstrapUrl } from '../tools/iris/local-agent.js';
 import { resolveTestTempRoot } from './test-temp-root.mjs';
 
 const projectDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const tempRoot = resolveTestTempRoot(projectDir);
 await mkdir(tempRoot, { recursive: true });
-const testRoot = await mkdtemp(join(tempRoot, 'flovart-chrome-smoke-'));
+const testRoot = await mkdtemp(join(tempRoot, 'iris-chrome-smoke-'));
 const env = {
   ...process.env,
   TEMP: testRoot,
   TMP: testRoot,
   TMPDIR: testRoot,
-  FLOVART_PROJECT_DIR: projectDir,
-  FLOVART_AGENT_CONFIG: join(testRoot, 'agent.json'),
-  FLOVART_WEB_DISCOVERY: join(testRoot, 'web.json'),
-  FLOVART_BROWSER_LAUNCH_STATE: join(testRoot, 'browser-launch.json'),
+  IRIS_PROJECT_DIR: projectDir,
+  IRIS_AGENT_CONFIG: join(testRoot, 'agent.json'),
+  IRIS_WEB_DISCOVERY: join(testRoot, 'web.json'),
+  IRIS_BROWSER_LAUNCH_STATE: join(testRoot, 'browser-launch.json'),
 };
 // Playwright inherits the parent environment, so keep Chromium's own crash,
 // cache, and temporary writes beside the H: test profile as well.
@@ -28,11 +28,11 @@ process.env.TEMP = testRoot;
 process.env.TMP = testRoot;
 process.env.TMPDIR = testRoot;
 const cliArgs = [
-  'tools/flovart/cli.js',
+  'tools/iris/cli.js',
   'start', '--source', '--web',
   '--web-port=0', '--agent-port=0', '--no-open',
 ];
-const chromeExecutable = process.env.FLOVART_CHROME_PATH || chromium.executablePath();
+const chromeExecutable = process.env.IRIS_CHROME_PATH || chromium.executablePath();
 if (!existsSync(chromeExecutable)) {
   throw new Error(`Chrome for Testing executable was not found: ${chromeExecutable}`);
 }
@@ -84,10 +84,10 @@ async function waitForWebDiscovery(env, timeoutMs = 45_000) {
   while (Date.now() <= deadline) {
     attempts += 1;
     try {
-      if (!existsSync(env.FLOVART_WEB_DISCOVERY)) {
+      if (!existsSync(env.IRIS_WEB_DISCOVERY)) {
         lastObservation = 'discovery-file-missing';
       } else {
-        const discovery = readJson(env.FLOVART_WEB_DISCOVERY);
+        const discovery = readJson(env.IRIS_WEB_DISCOVERY);
         const origin = await probeWebUi(discovery.url, { timeoutMs: 800 }).catch(() => null);
         if (origin) return origin;
         // The probe keeps returning null; keep the redacted discovery file so a
@@ -305,10 +305,10 @@ let page = null;
 let result = null;
 try {
   const web = await waitForWebDiscovery(env);
-  const discovery = readJson(env.FLOVART_WEB_DISCOVERY);
+  const discovery = readJson(env.IRIS_WEB_DISCOVERY);
   const agent = await waitFor('agent-config', () => {
-    if (!existsSync(env.FLOVART_AGENT_CONFIG)) return null;
-    const connection = readJson(env.FLOVART_AGENT_CONFIG);
+    if (!existsSync(env.IRIS_AGENT_CONFIG)) return null;
+    const connection = readJson(env.IRIS_AGENT_CONFIG);
     return connection?.url && connection?.token ? connection : null;
   });
   const bootstrapToken = await issueBrowserBootstrapToken(agent);

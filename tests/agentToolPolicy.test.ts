@@ -42,11 +42,11 @@ const spend = { tier: 'exec', override: true, hardGate: 'spend', reason: '可能
 const del = { tier: 'exec', override: true, hardGate: 'delete', reason: '删除内容' } as const;
 
 describe('tool approval declarations', () => {
-  it('classifies Flovart commands by tier with safety overrides for spend and delete', () => {
+  it('classifies Iris commands by tier with safety overrides for spend and delete', () => {
     expect(toolApprovalFor('workflow.inspect')).toEqual({ tier: 'read' });
-    expect(toolApprovalFor('flovart_workflow_media_view')).toEqual({ tier: 'read' });
-    expect(toolApprovalFor('flovart_web_search')).toEqual({ tier: 'read' });
-    expect(toolApprovalFor('flovart_grep')).toEqual({ tier: 'read' });
+    expect(toolApprovalFor('iris_workflow_media_view')).toEqual({ tier: 'read' });
+    expect(toolApprovalFor('iris_web_search')).toEqual({ tier: 'read' });
+    expect(toolApprovalFor('iris_grep')).toEqual({ tier: 'read' });
     expect(toolApprovalFor('workflow.node.stop')).toEqual({ tier: 'read' });
     expect(toolApprovalFor('workflow.focus.nodes')).toEqual({ tier: 'read' });
     expect(toolApprovalFor('workflow.apply', { operations: [{ type: 'update_node', id: 'n1', patch: { title: 'x' } }] })).toEqual({ tier: 'write' });
@@ -106,7 +106,7 @@ describe('resolveToolApproval — order matches oh-my-pi', () => {
     expect(resolve('yolo', 'write', { userPolicy: { 'tool.x': 'allow' } }).action).toBe('allow');
   });
 
-  it('3. yolo ignores a bare override (OMP) but keeps the Flovart spend/delete hard gates', () => {
+  it('3. yolo ignores a bare override (OMP) but keeps the Iris spend/delete hard gates', () => {
     expect(resolve('yolo', { tier: 'exec', override: true, reason: 'critical' }).action).toBe('allow');
     expect(resolve('yolo', del)).toMatchObject({ action: 'prompt', grantable: false, hardGate: 'delete', reason: '删除内容' });
     expect(resolve('yolo', del, { userPolicy: { 'tool.x': 'allow' } }).action).toBe('prompt');
@@ -177,12 +177,12 @@ describe('approval persistence', () => {
     expect(migrateApprovalMode('garbage')).toBe(DEFAULT_APPROVAL_MODE);
     expect(DEFAULT_APPROVAL_MODE).toBe('write');
 
-    const legacy = memoryStorage({ 'flovart.agent.mode': 'manual' });
+    const legacy = memoryStorage({ 'iris.agent.mode': 'manual' });
     expect(readApprovalMode(legacy)).toBe('always-ask');
-    expect(legacy.data.get('flovart.agent.approvalMode')).toBe('always-ask');
-    expect(legacy.data.has('flovart.agent.mode')).toBe(false);
+    expect(legacy.data.get('iris.agent.approvalMode')).toBe('always-ask');
+    expect(legacy.data.has('iris.agent.mode')).toBe(false);
 
-    const stored = memoryStorage({ 'flovart.agent.approvalMode': 'auto' });
+    const stored = memoryStorage({ 'iris.agent.approvalMode': 'auto' });
     expect(readApprovalMode(stored)).toBe('write');
     writeApprovalMode('yolo', stored);
     expect(readApprovalMode(stored)).toBe('yolo');
@@ -191,16 +191,16 @@ describe('approval persistence', () => {
 
   it('persists the per-tool user policy, ignoring invalid values', () => {
     const storage = memoryStorage();
-    writeUserToolPolicy({ 'workflow.apply': 'allow', flovart_web_search: 'DENY' as never, bogus: 'maybe' as never }, storage);
-    expect(readUserToolPolicy(storage)).toEqual({ 'workflow.apply': 'allow', flovart_web_search: 'deny' });
+    writeUserToolPolicy({ 'workflow.apply': 'allow', iris_web_search: 'DENY' as never, bogus: 'maybe' as never }, storage);
+    expect(readUserToolPolicy(storage)).toEqual({ 'workflow.apply': 'allow', iris_web_search: 'deny' });
     writeUserToolPolicy({}, storage);
-    expect(storage.data.has('flovart.agent.toolApproval')).toBe(false);
+    expect(storage.data.has('iris.agent.toolApproval')).toBe(false);
   });
 
   it('migrates whole-command legacy "always allow" grants and drops sub-tool ones', () => {
-    const storage = memoryStorage({ 'flovart.agent.alwaysAllow': JSON.stringify(['workflow.apply:write', 'workflow.node.tool:video-trim:write']) });
+    const storage = memoryStorage({ 'iris.agent.alwaysAllow': JSON.stringify(['workflow.apply:write', 'workflow.node.tool:video-trim:write']) });
     expect(readUserToolPolicy(storage)).toEqual({ 'workflow.apply': 'allow' });
-    expect(storage.data.has('flovart.agent.alwaysAllow')).toBe(false);
-    expect(JSON.parse(storage.data.get('flovart.agent.toolApproval')!)).toEqual({ 'workflow.apply': 'allow' });
+    expect(storage.data.has('iris.agent.alwaysAllow')).toBe(false);
+    expect(JSON.parse(storage.data.get('iris.agent.toolApproval')!)).toEqual({ 'workflow.apply': 'allow' });
   });
 });

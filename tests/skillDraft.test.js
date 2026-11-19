@@ -2,8 +2,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildSkillDraft, evaluateSkillDraft, extractCanvasSubgraph, topologicalNodeOrder } from '../tools/flovart/skill-draft.js';
-import { runSkillCommand } from '../tools/flovart/skill-commands.js';
+import { buildSkillDraft, evaluateSkillDraft, extractCanvasSubgraph, topologicalNodeOrder } from '../tools/iris/skill-draft.js';
+import { runSkillCommand } from '../tools/iris/skill-commands.js';
 
 // Token-shaped fixture assembled at runtime: the release secret audit scans source text,
 // and this value only exists to prove the subgraph export redacts credentials.
@@ -66,7 +66,7 @@ describe('skill draft from session', () => {
   });
 
   it('skill.draft writes the draft and installs only after evaluation passes', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'flovart-skill-draft-'));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'iris-skill-draft-'));
     try {
       const snapshotPath = path.join(root, 'snapshot.json');
       await fs.writeFile(snapshotPath, JSON.stringify({ projectId: 'proj-1', project, receipts }), 'utf8');
@@ -85,7 +85,7 @@ describe('skill draft from session', () => {
   });
 
   it('skill.draft --from-project reads any Workspace project (history canvases included) plus its receipts', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'flovart-skill-project-'));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'iris-skill-project-'));
     const requests = [];
     const workspace = {
       async execute(command, args) {
@@ -109,7 +109,7 @@ describe('skill draft from session', () => {
       const skillMd = await fs.readFile(path.join(drafted.dir, 'SKILL.md'), 'utf8');
       expect(skillMd.indexOf('选 51ae')).toBeLessThan(skillMd.indexOf('生成奶蛙'));
       const manifest = await fs.readFile(path.join(drafted.dir, 'flovart.skill.yaml'), 'utf8');
-      expect(manifest).toContain('flovart-session:proj-old');
+      expect(manifest).toContain('iris-session:proj-old');
       expect(manifest).not.toContain(FAKE_KEY);
       const receiptsResult = await runSkillCommand('receipts.list', { projectId: 'proj-old' }, { workspace });
       expect(receiptsResult.receipts).toHaveLength(2);

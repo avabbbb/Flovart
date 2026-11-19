@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // capture.ui 端到端：本机起一个 localhost 页面，经 pipeline 命令边界截图 + 录屏，
 // 检查确认门、公网拒绝、授权文件夹 file://、产物进 run 且 trace 有对应 Step。
-// 需要本机 Chromium（Playwright 自带、FLOVART_CAPTURE_BROWSER，或 Remotion 已下载的 headless shell）。
+// 需要本机 Chromium（Playwright 自带、IRIS_CAPTURE_BROWSER，或 Remotion 已下载的 headless shell）。
 import { createServer } from 'node:http';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -12,8 +12,8 @@ const outDir = join(ROOT, '.tmp', 'pipeline-capture');
 rmSync(outDir, { recursive: true, force: true });
 const authorized = join(outDir, 'authorized-folder');
 mkdirSync(authorized, { recursive: true });
-process.env.FLOVART_PIPELINE_HOME = join(outDir, 'runtime');
-process.env.FLOVART_PIPELINE_ALLOWED_ROOTS = authorized;
+process.env.IRIS_PIPELINE_HOME = join(outDir, 'runtime');
+process.env.IRIS_PIPELINE_ALLOWED_ROOTS = authorized;
 
 const page = `<!doctype html><meta charset="utf-8"><title>Demo</title>
 <style>body{margin:0;font:32px "Noto Sans CJK SC",system-ui,sans-serif;background:#101418;color:#f4f4f5;display:grid;place-items:center;height:100vh}
@@ -24,8 +24,8 @@ const server = createServer((_, response) => { response.writeHead(200, { 'conten
 await new Promise(done => server.listen(0, '127.0.0.1', done));
 const base = `http://localhost:${server.address().port}/`;
 
-const { Pipeline } = await import(pathToFileURL(join(ROOT, 'tools/flovart/pipeline/index.js')).href);
-const pipeline = new Pipeline({ home: process.env.FLOVART_PIPELINE_HOME });
+const { Pipeline } = await import(pathToFileURL(join(ROOT, 'tools/iris/pipeline/index.js')).href);
+const pipeline = new Pipeline({ home: process.env.IRIS_PIPELINE_HOME });
 const agent = { caller: 'codex' };
 const checks = [];
 const check = (name, condition, details) => {

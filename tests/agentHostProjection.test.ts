@@ -16,7 +16,7 @@ afterEach(() => {
 
 describe('Agent Host Projection preparation', () => {
   it('prepares the selected coding-agent Skill without returning filesystem details', () => {
-    const projectDir = mkdtempSync(join(tmpdir(), 'flovart-host-projection-'));
+    const projectDir = mkdtempSync(join(tmpdir(), 'iris-host-projection-'));
     mkdirSync(join(projectDir, '.agents'), { recursive: true });
     const result = prepareAgentHostProjection({
       agentIdentity: 'codex',
@@ -31,8 +31,8 @@ describe('Agent Host Projection preparation', () => {
       projection: { status: 'ready', skillReady: true, bootstrapReady: true },
     });
     expect(JSON.stringify(result)).not.toContain(projectDir);
-    expect(existsSync(join(projectDir, '.agents', 'skills', 'flovart', 'SKILL.md'))).toBe(true);
-    expect(readFileSync(join(projectDir, '.agents', 'skills', 'flovart', 'SKILL.md'), 'utf8')).toContain('workflow.apply');
+    expect(existsSync(join(projectDir, '.agents', 'skills', 'iris', 'SKILL.md'))).toBe(true);
+    expect(readFileSync(join(projectDir, '.agents', 'skills', 'iris', 'SKILL.md'), 'utf8')).toContain('workflow.apply');
   });
 
   it('keeps DSH on its external Plugin/Profile projection', () => {
@@ -69,7 +69,7 @@ describe('Agent Host Projection preparation', () => {
           ok: true,
           agentIdentity: { id: 'codex', label: 'Codex' },
           distributionTarget: { id: 'codex-skill', label: 'Codex Skill', kind: 'skill' },
-          projection: { status: 'ready', skillReady: true, bootstrapReady: true, message: 'Codex 的 Flovart Skill 已准备。' },
+          projection: { status: 'ready', skillReady: true, bootstrapReady: true, message: 'Codex 的 Iris Skill 已准备。' },
         }), { status: 200, headers: { 'content-type': 'application/json' } });
       },
     });

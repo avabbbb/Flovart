@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Start DSH Desktop with a ready Workspace Operator.
 //
-// DSH Desktop itself never starts the Flovart Workspace Operator, so the
-// embedded Flovart pane shows "bootstrap 仅接受同源页面请求" / "连接失败"
+// DSH Desktop itself never starts the Iris Workspace Operator, so the
+// embedded Iris pane shows "bootstrap 仅接受同源页面请求" / "连接失败"
 // until one is running. This launcher adopts an already-healthy Operator
 // (same borrow semantics as dsh-plugin/scripts/workspace-supervisor.mjs);
 // otherwise it owns one for the lifetime of the DSH window.
@@ -26,14 +26,14 @@ const option = name => {
   return index >= 0 ? argv[index + 1] : undefined;
 };
 
-const workspaceDir = process.env.FLOVART_AGENT_HOME || join(homedir(), '.dsh', 'workspace');
-const configFile = process.env.FLOVART_AGENT_CONFIG || join(workspaceDir, 'agent.json');
+const workspaceDir = process.env.IRIS_AGENT_HOME || join(homedir(), '.dsh', 'workspace');
+const configFile = process.env.IRIS_AGENT_CONFIG || join(workspaceDir, 'agent.json');
 const operatorEnv = {
   ...process.env,
-  FLOVART_WORKSPACE_ONLY: '1',
-  FLOVART_AGENT_HOME: workspaceDir,
-  FLOVART_AGENT_CONFIG: configFile,
-  FLOVART_CREW_DIR: process.env.FLOVART_CREW_DIR || join(workspaceDir, 'crew'),
+  IRIS_WORKSPACE_ONLY: '1',
+  IRIS_AGENT_HOME: workspaceDir,
+  IRIS_AGENT_CONFIG: configFile,
+  IRIS_CREW_DIR: process.env.IRIS_CREW_DIR || join(workspaceDir, 'crew'),
 };
 
 function readConfig() {
@@ -79,7 +79,7 @@ async function main() {
   let owned = null;
   const existing = readConfig();
   if (existing && await probe(existing.url)) {
-    console.log('[flovart] 复用已运行的 Workspace Operator：' + existing.url);
+    console.log('[iris] 复用已运行的 Workspace Operator：' + existing.url);
   } else {
     owned = spawn(process.execPath, [join(REPO_ROOT, 'agent', 'index.js')], {
       cwd: REPO_ROOT,
@@ -91,9 +91,9 @@ async function main() {
       stdio: 'ignore',
       windowsHide: true,
     });
-    owned.once('error', error => { console.error('[flovart] 启动 Workspace Operator 失败：' + error.message); });
+    owned.once('error', error => { console.error('[iris] 启动 Workspace Operator 失败：' + error.message); });
     const config = await waitForOperator();
-    console.log('[flovart] Workspace Operator 已就绪：' + config.url + (flag('--ensure-only') ? '（后台保留）' : ''));
+    console.log('[iris] Workspace Operator 已就绪：' + config.url + (flag('--ensure-only') ? '（后台保留）' : ''));
   }
 
   if (flag('--ensure-only')) {
@@ -106,13 +106,13 @@ async function main() {
     if (owned) owned.kill();
     throw new Error('找不到 DSH Desktop。用 --exe <path> 或设置 DSH_DESKTOP_EXE。');
   }
-  console.log('[flovart] 启动 DSH Desktop：' + desktop);
+  console.log('[iris] 启动 DSH Desktop：' + desktop);
   const app = spawn(desktop, [], { stdio: 'ignore', windowsHide: false, detached: true });
   app.unref();
   if (owned) owned.unref();
 }
 
 main().catch(error => {
-  console.error('[flovart] ' + (error instanceof Error ? error.message : String(error)));
+  console.error('[iris] ' + (error instanceof Error ? error.message : String(error)));
   process.exitCode = 1;
 });

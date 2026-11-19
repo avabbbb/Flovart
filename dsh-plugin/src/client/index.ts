@@ -1,7 +1,7 @@
 // @flovart/dsh-plugin, browser half.
 //
-// Embeds the real Flovart page (same-origin /flovart-app/) as the single
-// Browser Authority. Registers it as sidebar.panellist + main (id flovart)
+// Embeds the real Iris page (same-origin /iris-app/) as the single
+// Browser Authority. Registers it as sidebar.panellist + main (id iris)
 // and as the body of the conversation.view tab; shell.overlay stays as before.
 // uiWorkspace, locale and theme are optional services: each is feature-detected.
 
@@ -13,14 +13,14 @@ import type { SlotCore, SlotMap } from '@deepseek-ai/dsh-client-ui-slots'
 // applies them; erased by the client bundle.
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { createFlovartFrame, FlovartIcon } from './FlovartFrame.tsx'
+import { createIrisFrame, IrisIcon } from './IrisFrame.tsx'
 import { isRecord, setLocale, setScheme, watchDocumentTheme, type ColorScheme } from './frameBridge.ts'
 import { OverlayHost } from './OverlayHost.tsx'
 
 // Required services on the guarded browser ctx.
 export const inject = ['slots'] as const
 
-const VIEW_ID = 'flovart'
+const VIEW_ID = 'iris'
 
 function listen(target: ClientContext, event: string, listener: () => void): () => void {
   const on: unknown = Reflect.get(target, 'on')
@@ -58,7 +58,7 @@ export function apply(ctx: ClientContext): void {
   ctx.inject(['uiWorkspace'], scoped => scoped.effect(() => {
     workspace = Reflect.get(scoped, 'uiWorkspace')
     return () => { workspace = undefined }
-  }, 'flovart: uiWorkspace handle'))
+  }, 'iris: uiWorkspace handle'))
 
   ctx.inject(['locale'], scoped => scoped.effect(() => {
     const service: unknown = Reflect.get(scoped, 'locale')
@@ -66,7 +66,7 @@ export function apply(ctx: ClientContext): void {
     sync()
     const off = listen(scoped, 'locale/change', sync)
     return () => { off(); setLocale(undefined) }
-  }, 'flovart: locale bridge'))
+  }, 'iris: locale bridge'))
 
   // theme/change and getTheme() are unverified in 0.2.2; both are guarded and
   // the document watcher below carries the tokens either way.
@@ -76,43 +76,43 @@ export function apply(ctx: ClientContext): void {
     sync()
     const off = listen(scoped, 'theme/change', sync)
     return () => { off(); setScheme(undefined) }
-  }, 'flovart: theme bridge'))
+  }, 'iris: theme bridge'))
 
-  ctx.effect(() => watchDocumentTheme(), 'flovart: theme token watcher')
+  ctx.effect(() => watchDocumentTheme(), 'iris: theme token watcher')
 
   // Fills a DSH draft only; whenDraftExists replace, never auto-sends.
   const startSession = (prompt: string) => {
     if (!isRecord(workspace) || typeof workspace.startSession !== 'function') {
-      console.warn('Flovart: uiWorkspace.startSession is unavailable; no draft was created.')
+      console.warn('Iris: uiWorkspace.startSession is unavailable; no draft was created.')
       return
     }
     try {
       const result: unknown = workspace.startSession.call(workspace, undefined, { prompt, whenDraftExists: 'replace' })
-      if (result instanceof Promise) result.catch(error => console.warn('Flovart: uiWorkspace.startSession failed.', error))
+      if (result instanceof Promise) result.catch(error => console.warn('Iris: uiWorkspace.startSession failed.', error))
     } catch (error) {
-      console.warn('Flovart: uiWorkspace.startSession failed.', error)
+      console.warn('Iris: uiWorkspace.startSession failed.', error)
     }
   }
 
-  const FlovartFrame = createFlovartFrame(startSession)
+  const IrisFrame = createIrisFrame(startSession)
   ctx.slots.inject('conversation.view', () => ctx.slots.register({
     name: 'conversation.view',
     id: VIEW_ID,
-    label: 'Flovart',
-  }, FlovartFrame))
+    label: 'Iris',
+  }, IrisFrame))
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
     name: 'sidebar.panellist',
     id: VIEW_ID,
     order: 6,
-    label: 'Flovart',
-  }, FlovartIcon))
+    label: 'Iris',
+  }, IrisIcon))
   ctx.slots.inject('main', () => ctx.slots.register({
     name: 'main',
     key: VIEW_ID,
-  }, FlovartFrame))
+  }, IrisFrame))
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
-    id: 'flovart-status',
+    id: 'iris-status',
   }, OverlayHost))
 }
 

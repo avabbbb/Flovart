@@ -1342,7 +1342,7 @@ async function blobToDataUrl(href: string): Promise<string> {
  * 本地媒体地址前缀 → 材质化入口。与 components/workflow/media.ts 的 loadFallbackMediaBlob
  * 支持清单保持一致；不在清单内的地址视为不可物化，走保底错误。
  */
-const LOCAL_MATERIALIZABLE_PREFIXES = ['local-folder:', 'asset-library:', 'cold-media:', 'idb:', 'idb-video:', 'flovart-browser-import:'];
+const LOCAL_MATERIALIZABLE_PREFIXES = ['local-folder:', 'asset-library:', 'cold-media:', 'idb:', 'idb-video:', 'iris-browser-import:'];
 
 function uploadFileNameFor(mimeType: string | undefined, label: string | undefined, fallbackBase: string) {
     const extension = (mimeType || '').split('/')[1]?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
@@ -1788,8 +1788,8 @@ function buildOpenRouterHeaders(apiKey: string) {
     return {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
-        'HTTP-Referer': globalThis.location?.origin || 'https://flovart.app',
-        'X-OpenRouter-Title': 'Flovart',
+        'HTTP-Referer': globalThis.location?.origin || 'https://iris.app',
+        'X-OpenRouter-Title': 'Iris',
     };
 }
 
@@ -4155,7 +4155,7 @@ export async function executeUnifiedIgnition(input: UnifiedIgnitionInput): Promi
             : buildPromptWithReferenceBindings(prompt, input.references);
         if (userScriptProvider) {
             if (!input.canonicalInput || !input.materializedReferences) {
-                throw new UnsupportedGenerationInputError('自定义 AI 服务必须通过 Flovart 的统一生成输入进入 Workflow。');
+                throw new UnsupportedGenerationInputError('自定义 AI 服务必须通过 Iris 的统一生成输入进入 Workflow。');
             }
             const scriptResult = await executeUserScriptProvider(
                 userScriptProvider,

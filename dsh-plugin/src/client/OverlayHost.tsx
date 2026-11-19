@@ -1,16 +1,16 @@
 /**
- * shell.overlay entry: Flovart light overlays (approval/status/Artifact).
+ * shell.overlay entry: Iris light overlays (approval/status/Artifact).
  * Receives Bridge events from the conversation.view relay and shows a small
  * dismissible stack. Never hosts Workflow/Table editing — that stays in the
  * view or the independent window.
  */
 
 import { useEffect, useRef, useState, type ReactElement } from 'react'
-import { bridgeBus, type FlovartBridgeEvent } from './bus.ts'
+import { bridgeBus, type IrisBridgeEvent } from './bus.ts'
 
 interface OverlayItem {
   id: number
-  event: FlovartBridgeEvent
+  event: IrisBridgeEvent
 }
 
 const OVERLAY_TTL_MS = 10000
@@ -85,16 +85,16 @@ export function OverlayHost(): ReactElement {
   )
 }
 
-function titleOf(event: FlovartBridgeEvent): string {
+function titleOf(event: IrisBridgeEvent): string {
   switch (event.kind) {
-    case 'connected': return 'Flovart 已连接'
-    case 'badges': return 'Flovart 状态更新'
+    case 'connected': return 'Iris 已连接'
+    case 'badges': return 'Iris 状态更新'
     case 'intent': return '制作意图更新'
     case 'receipt': return '执行回执完成'
   }
 }
 
-function detailOf(event: FlovartBridgeEvent): string {
+function detailOf(event: IrisBridgeEvent): string {
   switch (event.kind) {
     case 'connected': return '工作页已通过 Harness 内部通道连接，状态与产物徽标已贯通。'
     case 'badges': {
