@@ -27,6 +27,7 @@ import { agentToolInputSchema, getAgentToolSpecs } from '../tools/iris/agent-too
 import { createLegacyTodoTool, LEGACY_TODO_TOOL_NAME } from '../agent/todo.js';
 import type { ImageContent } from '@earendil-works/pi-ai';
 import type { WorkflowNode } from '../components/workflow/types';
+import { useWorkflowStore } from '../components/workflow/store';
 import { resolveNodeOrAlternate } from '../components/workflow/batchAlternates';
 import { loadAgentNodeMedia, type AgentVideoFrame, type AgentVideoLayout } from './agentMediaView';
 import { buildAgentAskForm, type AgentAskForm, type AgentAskSpec } from '../components/agent/agentAskForm';
@@ -49,10 +50,11 @@ import {
   type SkillReadRecord,
 } from './agentSkills';
 import { MergedSkillCatalog } from './agentSkillCatalog';
-import { createMemoryTool, formatMemorySummary, MEMORY_TOOL_NAME, type AgentMemoryBackend } from './agentProjectMemory';
+import { createMemoryTool, formatMemoryNudge, formatMemorySummary, looksLikeDecisionConfirmation, MEMORY_TOOL_NAME, type AgentMemoryBackend, type MemoryNudgeInput } from './agentProjectMemory';
 import {
   BROWSER_AGENT_CONTEXT_WINDOW,
   classifyAgentRequestFailure,
+  compactionThresholdTokens,
   compactSession,
   DEFAULT_AGENT_COMPACTION_SETTINGS,
   estimateRequestTokens,
@@ -757,6 +759,52 @@ export type AgentAskResult =
   | { ok: false; error: string }
   | { ok: false; cancelled: true };
 
+/** 自动转后台的运行先等多久（期间完成就照常返回结果）。 */
+export const BACKGROUND_INLINE_WAIT_MS = 20_000;
+/** node.run 一次跑这么多个节点以上就转后台。 */
+export const BACKGROUND_MIN_BATCH = 4;
+
+/**
+ * 哪些调用会跑好几分钟、应该走后台任务（P2-G）：视频生成（generate run=true 的视频节点、包含视频节点的 node.run）、
+ * 整组运行、≥BACKGROUND_MIN_BATCH 个节点的批量运行。只写不跑的 generate、单张图片运行仍走同步路径。
+ */
+export function shouldRunInBackground(command: string, args: Record<string, unknown>, nodes: readonly WorkflowNode[]): boolean {
+  if (!BROWSER_TASKABLE_COMMANDS.includes(command)) return false;
+  const byId = new Map(nodes.map(node => [node.id, node]));
+  if (command === 'workflow.group.run') return true;
+  if (command === 'workflow.generate') {
+    if (args.run !== true && args.run !== 'true') return false;
+    if (args.dryRun === true || args['dry-run'] === true) return false;
+    const target = typeof args.nodeId === 'string' ? byId.get(args.nodeId.trim()) : undefined;
+    return args.type === 'video' || target?.type === 'video';
+  }
+  if (command === 'workflow.node.run') {
+    const raw = args.nodeIds ?? args.nodeId;
+    const ids = (Array.isArray(raw) ? raw.map(String) : typeof raw === 'string' ? raw.split(',') : []).map(id => id.trim()).filter(Boolean);
+    if (ids.length >= BACKGROUND_MIN_BATCH) return true;
+    return ids.some(id => byId.get(id)?.type === 'video');
+  }
+  return false;
+}
+
+/** 命令失败时交给模型的说明：错误码 + 消息 + 结构化 details（截断），让模型据此修正，而不是只看到一句话。 */
+function describeCommandError(command: string, result: { error?: { code?: string; message?: string; details?: Record<string, unknown> } }): string {
+  const message = result.error?.message || `${command} 执行失败`;
+  const code = result.error?.code;
+  const details = result.error?.details;
+  if (!code && !details) return message;
+  let detailText = '';
+  if (details && Object.keys(details).length) {
+    try {
+      detailText = JSON.stringify(details);
+      if (detailText.length > 1500) detailText = detailText.slice(0, 1500) + '…';
+    } catch {
+      detailText = '';
+    }
+  }
+  return message + (code ? '\n[' + code + ']' : '') + (detailText ? ' details=' + detailText : '');
+}
+
 export interface BrowserAgentToolDependencies {
   projectId: string;
   /** 高风险操作（删除、付费、Production 运行等）的用户确认；返回 false 表示拒绝 */
@@ -774,6 +822,8 @@ export interface BrowserAgentToolDependencies {
    * 未提供时 fail closed：按 always-ask 处理、没有任何授权（与 OMP 一致）。
    */
   getApproval?: () => ApprovalContext;
+  /** 自动转后台的运行先等多久再交回 taskId（测试用；缺省 BACKGROUND_INLINE_WAIT_MS）。 */
+  backgroundInlineWaitMs?: number;
 }
 
 const FAIL_CLOSED_APPROVAL: ApprovalContext = { mode: 'always-ask' };
@@ -832,12 +882,102 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
       result = await workflowContract.dispatch(withWorkflowHumanApproval(envelope));
     }
     if (!result.ok) {
-      throw new Error(result.error?.message || `${command} 执行失败`);
+      throw new Error(describeCommandError(command, result));
     }
     return {
       content: [{ type: 'text' as const, text: JSON.stringify(result.result ?? { ok: true }) }],
       details: result,
     };
+  };
+  // 后台任务（iris_task_start / get / cancel）：与外部宿主同一份定义，命令清单收窄到浏览器能执行的。
+  const tasks = browserAgentTaskLayer(dependencies.projectId, envelope => workflowContract.dispatch(envelope));
+  /**
+   * 启动一个后台任务：先在本回合完成审批（策略层 + 付费确认卡），批准后才进后台，立即返回任务视图。
+   * iris_task_start 与自动转后台（P2-G）共用这一条路径。
+   */
+  const startTask = async (target: string, args: Record<string, unknown>): Promise<{ task: Record<string, unknown> } | { immediate: { content: Array<{ type: 'text'; text: string }>; details: unknown } }> => {
+    const asResult = (value: unknown) => ({ immediate: { content: [{ type: 'text' as const, text: JSON.stringify(value) }], details: value } });
+    if (!BROWSER_TASKABLE_COMMANDS.includes(target)) throw new Error('不能放到后台的命令：' + (target || '(空)') + '。可用：' + BROWSER_TASKABLE_COMMANDS.join('、'));
+    // 同一回合里对同一命令、同一参数的重试重放同一个任务：不再弹卡，也不会重复提交生成。
+    // 键用稳定的参数哈希（与键顺序无关），回合 ID 只用来限定重放范围；跨回合 / 刷新后的重复由台账按参数哈希拦截。
+    const idempotencyKey = (dependencies.activeChangeSetId || 'turn') + ':' + target + ':' + taskArgsHash(target, args);
+    const replay = await tasks.existing(idempotencyKey);
+    if (replay) return asResult(replay);
+    // 同参数任务还在跑（或刷新前已开始、提交状态未知）：不再提交。刷新前的那种要用户明确确认才重新提交。
+    const duplicate = await tasks.inflight({ command: target, args });
+    let resubmit = false;
+    if (duplicate && !duplicate.resubmitRequiresConfirmation) return asResult(duplicate);
+    if (duplicate) {
+      const verdict = readConfirmVerdict(await dependencies.confirm('同样参数的任务在刷新页面前已经开始，可能已经提交给模型服务并扣费，当前无法确认结果。仍要重新提交一次吗？', {
+        kind: 'other',
+        command: target,
+        args,
+        tool: target,
+        grantable: false,
+        reason: '可能重复扣费',
+      }));
+      if (!verdict.approved) return asResult(duplicate);
+      resubmit = true;
+    }
+    await guard(target, args);
+    let approved = false;
+    if (workflowCommandNeedsConfirmation(target, args)) {
+      const envelope = { id: crypto.randomUUID(), command: target, args: { ...args, projectId: dependencies.projectId, workspaceMode: 'browser' }, source: 'agent' } as const;
+      const probe = await workflowContract.dispatch(envelope);
+      if (!probe.ok) throw new Error(describeCommandError(target, probe));
+      if (probe.confirmation?.required) {
+        const decision = toolApprovalFor(target, args);
+        const verdict = readConfirmVerdict(await dependencies.confirm(probe.confirmation.summary, {
+          ...workflowConfirmRequest(envelope),
+          tier: decision.tier,
+          tool: target,
+          grantable: false,
+          ...(decision.reason ? { reason: decision.reason } : {}),
+        }));
+        if (!verdict.approved) throw new Error(verdict.message);
+        approved = true;
+      } else {
+        // 命令面没有要求确认就已经执行完了（不会发生在付费命令上）：直接交回结果，不再重复执行。
+        return { immediate: { content: [{ type: 'text' as const, text: JSON.stringify({ done: true, status: 'succeeded', result: probe.result ?? { ok: true } }) }], details: probe } };
+      }
+    }
+    return { task: await tasks.start({ command: target, args, idempotencyKey, approved, resubmit }) };
+  };
+  const projectNodes = (): readonly WorkflowNode[] => dependencies.getNodes?.()
+    ?? useWorkflowStore.getState().projects.find(project => project.id === dependencies.projectId)?.nodes
+    ?? [];
+  const inlineWaitMs = dependencies.backgroundInlineWaitMs ?? BACKGROUND_INLINE_WAIT_MS;
+  /**
+   * P2-G：视频生成、整组运行、大批量运行可能要几分钟。这些调用即使模型直接用 node_run / generate(run=true)，
+   * 也自动走后台任务（与 iris_task_start 同一审批、同一台账、刷新后可续）：先等 inlineWaitMs，
+   * 期间完成就照常把结果交回（与同步调用相同）；还没完成就交回 taskId，不再把这一轮卡住几分钟。
+   */
+  const runInBackground = async (command: string, input: Record<string, unknown>) => {
+    const started = await startTask(command, input);
+    if ('immediate' in started) return started.immediate;
+    const task = started.task;
+    const taskId = String(task.taskId || '');
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const settled = await Promise.race([
+      tasks.settled(taskId).then(() => true, () => true),
+      new Promise<boolean>(resolve => { timer = setTimeout(() => resolve(false), inlineWaitMs); }),
+    ]);
+    if (timer) clearTimeout(timer);
+    if (settled) {
+      const view = await tasks.get({ taskId });
+      if (view.status === 'succeeded') {
+        const value = view.result ?? { ok: true };
+        return { content: [{ type: 'text' as const, text: JSON.stringify(value) }], details: { ok: true, result: value, taskId } };
+      }
+      const failure = view.error as { code?: string; message?: string; details?: unknown } | undefined;
+      throw new Error((failure?.message || command + ' 执行失败') + (failure?.code ? '（' + failure.code + '）' : '') + '；taskId=' + taskId);
+    }
+    const promoted = {
+      ...task,
+      backgrounded: true,
+      note: '这是可能要几分钟的付费运行，已自动转到后台（taskId=' + taskId + '）。先告诉用户已开始，之后用 iris_task_get 查进度，不要在同一轮里高频轮询，也不要重复提交。',
+    };
+    return { content: [{ type: 'text' as const, text: JSON.stringify(promoted) }], details: promoted };
   };
   // 工具名、说明与参数 Schema 全部来自统一 Agent 工具定义（与本机 Agent / MCP / DSH 同一份）；
   // projectId 由内置 Agent 注入，不让模型填。
@@ -857,12 +997,11 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
         execute: async (_toolCallId, params, _signal) => {
           const input = { ...(params as Record<string, unknown>) };
           if (command === 'workflow.video.tool' && input.tool === 'video-merge' && !input.nodeId && Array.isArray(input.sourceNodeIds)) input.nodeId = input.sourceNodeIds[0];
+          if (shouldRunInBackground(command, input, projectNodes())) return runInBackground(command, input);
           return runCommand(command, input);
         },
       };
     });
-  // 后台任务（iris_task_start / get / cancel）：与外部宿主同一份定义，命令清单收窄到浏览器能执行的。
-  const tasks = browserAgentTaskLayer(dependencies.projectId, envelope => workflowContract.dispatch(envelope));
   const taskTools: AgentTool[] = getAgentToolSpecs('builtin')
     .filter(spec => spec.command.startsWith('agent.task.'))
     .map(spec => {
@@ -885,54 +1024,9 @@ export function createBrowserAgentTools(dependencies: BrowserAgentToolDependenci
           if (command === 'agent.task.start') {
             const target = String(input.command || '');
             const args = input.args && typeof input.args === 'object' && !Array.isArray(input.args) ? { ...(input.args as Record<string, unknown>) } : {};
-            if (!BROWSER_TASKABLE_COMMANDS.includes(target)) throw new Error('不能放到后台的命令：' + (target || '(空)') + '。可用：' + BROWSER_TASKABLE_COMMANDS.join('、'));
-            // 先在本回合完成审批，批准后才进后台；后台执行带人工批准，不会再弹卡。
-            // 同一回合里对同一命令、同一参数的重试重放同一个任务：不再弹卡，也不会重复提交生成。
-            // 键用稳定的参数哈希（与键顺序无关），回合 ID 只用来限定重放范围；跨回合 / 刷新后的重复由台账按参数哈希拦截。
-            const idempotencyKey = (dependencies.activeChangeSetId || 'turn') + ':' + target + ':' + taskArgsHash(target, args);
-            const replay = await tasks.existing(idempotencyKey);
-            if (replay) return { content: [{ type: 'text' as const, text: JSON.stringify(replay) }], details: replay };
-            // 同参数任务还在跑（或刷新前已开始、提交状态未知）：不再提交。刷新前的那种要用户明确确认才重新提交。
-            const duplicate = await tasks.inflight({ command: target, args });
-            let resubmit = false;
-            if (duplicate && !duplicate.resubmitRequiresConfirmation) {
-              return { content: [{ type: 'text' as const, text: JSON.stringify(duplicate) }], details: duplicate };
-            }
-            if (duplicate) {
-              const verdict = readConfirmVerdict(await dependencies.confirm('同样参数的任务在刷新页面前已经开始，可能已经提交给模型服务并扣费，当前无法确认结果。仍要重新提交一次吗？', {
-                kind: 'other',
-                command: target,
-                args,
-                tool: target,
-                grantable: false,
-                reason: '可能重复扣费',
-              }));
-              if (!verdict.approved) return { content: [{ type: 'text' as const, text: JSON.stringify(duplicate) }], details: duplicate };
-              resubmit = true;
-            }
-            await guard(target, args);
-            let approved = false;
-            if (workflowCommandNeedsConfirmation(target, args)) {
-              const envelope = { id: crypto.randomUUID(), command: target, args: { ...args, projectId: dependencies.projectId, workspaceMode: 'browser' }, source: 'agent' } as const;
-              const probe = await workflowContract.dispatch(envelope);
-              if (!probe.ok) throw new Error(probe.error?.message || `${target} 执行失败`);
-              if (probe.confirmation?.required) {
-                const decision = toolApprovalFor(target, args);
-                const verdict = readConfirmVerdict(await dependencies.confirm(probe.confirmation.summary, {
-                  ...workflowConfirmRequest(envelope),
-                  tier: decision.tier,
-                  tool: target,
-                  grantable: false,
-                  ...(decision.reason ? { reason: decision.reason } : {}),
-                }));
-                if (!verdict.approved) throw new Error(verdict.message);
-                approved = true;
-              } else {
-                // 命令面没有要求确认就已经执行完了（不会发生在付费命令上）：直接交回结果，不再重复执行。
-                return { content: [{ type: 'text' as const, text: JSON.stringify({ done: true, status: 'succeeded', result: probe.result ?? { ok: true } }) }], details: probe };
-              }
-            }
-            result = await tasks.start({ command: target, args, idempotencyKey, approved, resubmit });
+            const started = await startTask(target, args);
+            if ('immediate' in started) return started.immediate;
+            result = started.task;
           } else if (command === 'agent.task.get') {
             result = await tasks.get({ taskId: String(input.taskId || ''), afterSeq: typeof input.afterSeq === 'number' ? input.afterSeq : undefined });
           } else {
@@ -1085,7 +1179,9 @@ function createMediaViewTool(getNodes: () => readonly WorkflowNode[]): AgentTool
     label: 'workflow.media.view',
     description: '查看图片/视频节点的真实画面：图片缩到长边 ≤1024px。视频默认拼成一张帧网格（每格左上角标 #序号 时间码，左上→右下按时间排列）：'
       + '均匀取 count 帧（默认 9，最多 16），可用 start/end 限定秒数窗口，窗口超过 30s 时分页，用 page 翻页；times 指定任意秒数时按这些秒数拼网格。'
-      + '需要单帧大图时用 layout=frames（配合 frames: first/middle/last 或 times）。单次最多 6 张图。',
+      + '需要单帧大图时用 layout=frames（配合 frames: first/middle/last 或 times）。单次最多 6 张图。'
+      + '视频说明里带时长与粗略时间线（采样帧之间的疑似切镜），规划成片时长时先看它。'
+      + 'compare=true：把 nodeIds（最多 4 个，图片原图 / 视频帧网格）缩到同一高度并排拼成一张对比图，用来对照参考素材检查产物的风格、角色与构图。',
     parameters: Type.Object({
       nodeIds: Type.Array(Type.String()),
       frames: Type.Optional(Type.Array(frame)),
@@ -1095,11 +1191,12 @@ function createMediaViewTool(getNodes: () => readonly WorkflowNode[]): AgentTool
       start: Type.Optional(Type.Number({ description: '帧网格窗口起点（秒）' })),
       end: Type.Optional(Type.Number({ description: '帧网格窗口终点（秒）' })),
       page: Type.Optional(Type.Number({ description: '窗口超过 30s 时的页码，从 1 开始' })),
+      compare: Type.Optional(Type.Boolean({ description: 'true 时把这些节点并排拼成一张对比图（例如参考图 vs 产物帧网格），最多 4 个' })),
     }),
     execute: async (_toolCallId, params) => {
-      const { nodeIds, frames, times, layout, count, start, end, page } = params as {
+      const { nodeIds, frames, times, layout, count, start, end, page, compare } = params as {
         nodeIds: string[]; frames?: AgentVideoFrame[]; times?: number[]; layout?: AgentVideoLayout;
-        count?: number; start?: number; end?: number; page?: number;
+        count?: number; start?: number; end?: number; page?: number; compare?: boolean;
       };
       const nodes = getNodes();
       const found: WorkflowNode[] = [];
@@ -1110,7 +1207,7 @@ function createMediaViewTool(getNodes: () => readonly WorkflowNode[]): AgentTool
         if (resolved) found.push(resolved.node);
         else missing.push(id + '：节点不存在');
       }
-      const view = await loadAgentNodeMedia(found, { frames, times, layout, grid: { count, start, end, page } });
+      const view = await loadAgentNodeMedia(found, { frames, times, layout, grid: { count, start, end, page }, compare: compare === true });
       const notes = [...view.notes, ...missing];
       const content: Array<{ type: 'text'; text: string } | ImageContent> = [{ type: 'text', text: notes.join('\n') || '没有可查看的画面' }, ...view.images];
       return { content, details: { nodeIds, imageCount: view.images.length } };
@@ -1133,9 +1230,9 @@ const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Iris Agent，Iris 生成式 AI 图
 - iris_group_create / iris_group_run：分组框（与生成批次、备选无关）与整组执行（按依赖顺序、只确认一次费用）。
 - iris_workflow_search_nodes：按关键字 / 类型 / 锚点编号（A 角色、S 场景、P 道具、T 风格，如 A02）/ 状态（empty/running/done/error）/ 镜号查节点，只返回精简结果并分页。画布大时先用它定位，再对少数节点 inspect；用户说“A02”“第 3 镜”“失败的视频”时用它解析成节点 id。
 - iris_models_list：列出模型的真实能力（各生成方式是否已配置、参考上限、张数、比例、分辨率、时长，含 RunningHub 动态模型）。选/换模型前先调，不要猜 modelId 或逐个试。
-- iris_cost_estimate：运行前预估（只读、不扣费）：nodeIds 或 groupId → 每个节点的模型、任务数、预估费用与合计，以及被提交前检查拦下的节点。多个节点或整组运行前先调用，把清单与合计告诉用户再请求运行；cost 为 null 就说费用未知，不要自己估。
+- iris_cost_estimate：运行前预估（只读、不扣费）：nodeIds 或 groupId → 每个节点的模型、任务数、预估费用与合计，以及被提交前检查拦下的节点。多个节点或整组运行前先调用，把清单与合计告诉用户再请求运行；cost 为 null 就说费用未知（costHint 说明原因），只报 costTier 档位，不要自己估金额。
 - iris_workflow_node_run：重跑已写好提示词的生成节点（nodeId 或 nodeIds 批量，一次确认费用），返回 batch 与 takes。
-- iris_task_start / iris_task_get / iris_task_cancel：多个镜头、整组或视频生成可能要几分钟，用 iris_task_start 包装 workflow.node.run / workflow.group.run 等放到后台（确认费用后立即返回 taskId），先告诉用户已开始，再用 iris_task_get 查进度；不要在同一轮里高频轮询，用户问进度或下一轮再查。
+- iris_task_start / iris_task_get / iris_task_cancel：多个镜头、整组或视频生成可能要几分钟，用 iris_task_start 包装 workflow.node.run / workflow.group.run 等放到后台（确认费用后立即返回 taskId），先告诉用户已开始，再用 iris_task_get 查进度；不要在同一轮里高频轮询，用户问进度或下一轮再查。视频生成、整组运行、4 个以上节点的批量运行即使直接调用 node_run / generate(run=true) 也会自动转后台：结果里有 backgrounded:true 和 taskId 时按后台任务处理，不要重复提交。
 - iris_workflow_node_stop：停止某个节点正在进行的生成。
 - iris_media_import：把 http(s) 地址或素材库素材导入画布成为媒体节点，可直接接到生成节点作参考（加 @chip）。
 - iris_script_materialize：把脚本节点的分镜行建成生成节点（kind=image|video，rows=1-5 / 1,3,6-9）。每行一个生成节点，行里的 imagePrompt/videoPrompt 写进 Prompt Bar，characterRefs 与 @ref:<id> 变成 @chip + 连线，脚本行回存节点 id。只建不跑：确认后把返回的 nodeIds 交给 iris_workflow_node_run 分批运行。
@@ -1144,11 +1241,11 @@ const BROWSER_DEFAULT_SYSTEM_PROMPT = `你是 Iris Agent，Iris 生成式 AI 图
 - iris_workflow_apply：结构化修改画布（移动、连线、分组、改标题、调整参考顺序 reorder_connections 等）。operations 只允许 add_node、create_connected_node、update_node、delete_nodes、delete_connections、connect_nodes、move_nodes、reorder_nodes、reorder_connections、group_nodes、ungroup_nodes、set_batch_primary。不要用它建文本节点。新节点可以不写 id（系统生成，结果的 affectedNodeIds 带回）。一次生成多张时，第 2–N 张是首图节点上的备选（inspect 里的 alternateIds），不是独立节点：media_view 可以直接看备选 id；要把它们拆成画布上的独立节点，用 ungroup_nodes（ids 给首图节点 id 拆全部，给备选 id 只拆这几张）；set_batch_primary 把某张备选设为首图。
 - iris_image_tool / iris_video_tool / iris_audio_tool：在图片 / 视频 / 音频节点上执行后处理工具（裁剪、放大、去背景、扩图；剪辑、截帧、音视频分离、拼接；音频剪辑、变速、变调、分离），结果作为新节点写回画布。参数不确定时先用 iris_node_tool_list 查。
 - iris_ask：需要用户在几个方案里做选择或补充关键信息时，用 questions 结构化提问（每题 id + question；single/multi 给 options，选项写成完整方案并用 recommended 标推荐；text 收自由输入；卡片自带「其他」输入框）。开工前把会改变结果的信息一次问齐（见 Skill 的「开工前问齐」清单），不要分多轮追问；不要用它询问 API Key、Token 等秘密，也不要在正文里堆长问题让用户再回一轮。
-- iris_workflow_media_view：查看图片/视频节点的真实画面（nodeIds）。视频默认返回一张带时间码的帧网格（count 帧数、start/end 窗口、长视频用 page 翻页；times: [秒数] 指定时间点）；需要单帧大图用 layout=frames。inspect 里的 [media] 只是脱敏占位；需要判断构图、风格或检查生成结果时调用它。用户 @引用的图片/视频会自动附带画面。用户粘贴的截图、拖入的视频会作为本轮图片内容直接附上。
+- iris_workflow_media_view：查看图片/视频节点的真实画面（nodeIds）。视频默认返回一张带时间码的帧网格（count 帧数、start/end 窗口、长视频用 page 翻页；times: [秒数] 指定时间点）；需要单帧大图用 layout=frames。inspect 里的 [media] 只是脱敏占位；需要判断构图、风格或检查生成结果时调用它。视频说明里有时长和粗略时间线（疑似切镜位置），规划成片时长前先看源片；compare=true 把参考图和产物（图片或帧网格）并排拼成一张，检查风格/角色是否贴合源素材时用它。用户 @引用的图片/视频会自动附带画面。用户粘贴的截图、拖入的视频会作为本轮图片内容直接附上。
 - iris_web_search：联网搜索（Parallel 公共 MCP，免 Key，失败回退 DeepSeek）。需要外部资料、竞品信息、风格参考或事实核对时调用；结果给出来源 URL，引用时要带上。
 - iris_grep：在用户连接过的本地文件夹里搜文本文件（正则）。用户说“我本地的素材/文档里有…”时先用它；只能搜已授权文件夹，读不到任意路径。
 - iris_skill_read：读取技能（Skill）的完整说明（id，可选 file 读 references/、commands/ 下的文件，长文件用 offset 翻页）。任务与下方技能索引里的某个技能匹配时先读再做。
-- iris_memory：项目记忆（add/list/search/delete，只属于当前项目）。用户说“记住…”、或确认了以后还要沿用的偏好 / 设定时写入一句事实；不要写入密钥、Token、密码或一次性过程。
+- iris_memory：项目记忆（add/list/search/delete，只属于当前项目）。用户说“记住…”、或确认了以后还要沿用的偏好 / 设定（风格、角色/产品设定、画幅、时长、选定的模型或费用档位）时，当轮就写入一句事实，不要等到最后；长任务进行中上下文会被压缩，没写进记忆的已确认事实会丢。不要写入密钥、Token、密码或一次性过程。
 command.list/schema 属于 CLI discovery/debug，不是你的工具；不得访问 Shell、任意文件或 Provider Secret。
 
 ## 画布能力地图
@@ -1180,8 +1277,9 @@ command.list/schema 属于 CLI discovery/debug，不是你的工具；不得访�
 ## 工作规则
 默认只操作当前已绑定的可见 Browser Workflow；没有 Browser binding 时必须显式失败，不能切换到 Native、隐藏图或从 React/localforage 读取 Workflow 图，也不能自行解析 Provider。
 生成只用 iris_generate（或对已写好提示词的节点用 iris_workflow_node_run），其余修改用 iris_workflow_apply 的结构化 operations，全部交给同一个 WorkflowExecutor；不得模拟鼠标、直接改 React state，或用 CLI、文件桥在后台另做一份结果。
-文本节点是备注：绝不用它承载提示词、剧本、分镜或 prompt_context，也不要把它连到任何节点；用户明确要求写备注时才用 iris_note_write。改已有节点的提示词也用 iris_generate（不传 run），它会保留并重排 @引用。
-写操作使用稳定的 idempotencyKey；只有工具返回成功后，才能声称画布已变化。可逆修改直接落到用户可见的同一 Workflow 并合并为本轮 ChangeSet，每次修改后读取返回的 draftVersion/objectVersions 再继续。
+文本节点是备注：绝不用它承载提示词、剧本、分镜或 prompt_context，也不要把它连到任何节点；用户明确要求写备注时才用 iris_note_write。改已有节点的提示词也用 iris_generate（不传 run、也不传 references），节点已有的参考、顺序与用途原样保留；结果 model.submode 与 references 和你预期不符、或有 warnings 时先修正，不要运行。多参考时给每个参考写 purpose（subject 主体 / style 风格 / background 背景…），不要只靠「图片1/图片2」的编号表达用途。
+写操作使用稳定的 idempotencyKey；只有工具返回成功后，才能声称画布已变化。可逆修改直接落到用户可见的同一 Workflow 并合并为本轮 ChangeSet，每次修改后读取返回的 draftVersion/objectVersions 再继续：返回的 draftVersion 已是所有内部写入（含运行）之后的最终版本，直接作为下一次 expectedRevision。
+费用：用户没指定模型时，先用 iris_models_list 的 costTier 给出一个省钱档（cheap）和一个质量档（premium/standard）的模型让用户选，说明差别；有 priceRange 时报真实单价。
 删除、付费执行、Production 审批和运行会要求用户确认，不得绕过；普通可逆布局和节点编辑无需逐次确认。没有用户确认的 Production Mandate 时不得声称付费制作已经开始。
 
 ## 制作循环（每一步都落在可见 Workflow 上）
@@ -1340,6 +1438,8 @@ export class BrowserAgentKernel {
   private steerInFlight = new Map<AgentMessage, string>();
   /** send() 进行中（含压缩、组装提示词、两次模型调用之间这些 isStreaming 为 false 的空档）：插话照收。 */
   private turnActive = false;
+  /** 本轮的记忆提醒（P1-E）：确认决定 / 快压缩 / 刚压缩。每轮开始时重算。 */
+  private memoryNudge: MemoryNudgeInput = {};
 
   constructor(options: BrowserAgentKernelOptions) {
     this.projectId = options.projectId;
@@ -1437,7 +1537,8 @@ export class BrowserAgentKernel {
     // 我的 Skill 只存在浏览器里、不在技能目录中，无法走 iris_skill_read：绑定时把指令直接拼进系统提示词。
     const bound = this.boundProductionSkill;
     const userSkill = bound && isUserSkillAttachment(bound) && !resolveSkillEntry(entries, bound.id) ? skillSystemContext(bound) : '';
-    return [this.systemPrompt, skills, userSkill, memory].filter(Boolean).join('\n\n');
+    const nudge = this.memory ? formatMemoryNudge(this.memoryNudge) : '';
+    return [this.systemPrompt, skills, userSkill, memory, nudge].filter(Boolean).join('\n\n');
   }
 
   /** 用当前 session + route 构建 PI Agent 实例；会话切换后复用。 */
@@ -1741,6 +1842,8 @@ export class BrowserAgentKernel {
         this.compactionEpoch += 1;
         await this.repo?.persist(this.session);
         this.agent.state.messages = (await this.session.buildContext()).messages;
+        // 压缩后系统提示词重算：项目记忆重新注入，并提醒以记忆 + 摘要为准（P1-E）。
+        this.memoryNudge = { ...this.memoryNudge, nearCompaction: false, justCompacted: true };
         this.agent.state.systemPrompt = await this.composeSystemPrompt();
       }
       if (started) this.emit({ type: 'compaction_end', reason, compacted: Boolean(outcome), tokensBefore: outcome?.tokensBefore ?? 0 });
@@ -1895,9 +1998,21 @@ export class BrowserAgentKernel {
     if (!this.agent) throw new Error('Iris Agent session is not open');
     this.syncThinkingLevel();
     const agent = this.agent;
+    // 记忆提醒：用户在确认决定、或上下文已过压缩阈值的 80%（下一两轮就会压缩）时，提醒先写项目记忆。
+    const pendingTokens = this.estimateContextTokens({ text: prompt, images: images.length });
+    this.memoryNudge = {
+      confirmation: looksLikeDecisionConfirmation(prompt),
+      nearCompaction: this.compactionSettings.enabled && pendingTokens > compactionThresholdTokens(this.contextWindow, this.compactionSettings) * 0.8,
+    };
     agent.state.systemPrompt = await this.composeSystemPrompt();
     const cancelEpoch = this.cancelEpoch;
+    const epochBefore = this.compactionEpoch;
     await this.compactIfNeeded({ text: prompt, images: images.length });
+    if (this.compactionEpoch !== epochBefore) {
+      // 刚压缩完：记忆已随系统提示词重新注入，提醒以它为准并补齐摘要里的已确认事实。
+      this.memoryNudge = { ...this.memoryNudge, nearCompaction: false, justCompacted: true };
+      agent.state.systemPrompt = await this.composeSystemPrompt();
+    }
     // 压缩期间用户点了停止：这一轮不再发送（用户消息也不写入会话）。
     if (this.cancelEpoch !== cancelEpoch) throw new Error(AGENT_ABORTED_MESSAGE);
     const forced = await this.forcedSkillMessages();

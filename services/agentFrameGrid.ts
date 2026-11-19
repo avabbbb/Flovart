@@ -201,3 +201,85 @@ export function describeMediaSize(width: number, height: number): string {
   const ratio = nearestAspectRatio(w, h);
   return '原始 ' + w + '×' + h + (ratio ? '，比例≈' + ratio : '');
 }
+
+// ---------------------------------------------------------------------------
+// 粗略时间线：采样帧之间画面突变的位置（切镜候选）。只比较网格里已经抽出的帧，不额外解码。
+// ---------------------------------------------------------------------------
+
+/** 每帧的签名边长：8×8 灰度。 */
+export const FRAME_SIGNATURE_SIZE = 8;
+/** 相邻采样帧平均灰度差（0–1）超过它就当作一次切镜候选。 */
+export const SCENE_CUT_THRESHOLD = 0.22;
+
+/** RGBA 像素 → 0–1 灰度签名。 */
+export function frameSignatureFromRgba(data: ArrayLike<number>): number[] {
+  const signature: number[] = [];
+  for (let index = 0; index + 3 < data.length; index += 4) {
+    signature.push((0.299 * data[index] + 0.587 * data[index + 1] + 0.114 * data[index + 2]) / 255);
+  }
+  return signature;
+}
+
+export interface SceneCut {
+  /** 突变发生在这两个采样时间之间（秒）。 */
+  from: number;
+  to: number;
+  /** 0–1：平均灰度差 */
+  score: number;
+}
+
+/** 相邻采样帧的签名差 → 切镜候选（粗略：只能定位到两个采样点之间）。 */
+export function detectSceneCuts(times: readonly number[], signatures: ReadonlyArray<readonly number[] | undefined>, threshold = SCENE_CUT_THRESHOLD): SceneCut[] {
+  const cuts: SceneCut[] = [];
+  for (let index = 1; index < times.length; index += 1) {
+    const previous = signatures[index - 1];
+    const current = signatures[index];
+    if (!previous || !current || !previous.length || previous.length !== current.length) continue;
+    let total = 0;
+    for (let cell = 0; cell < current.length; cell += 1) total += Math.abs(current[cell] - previous[cell]);
+    const score = total / current.length;
+    if (score >= threshold) cuts.push({ from: times[index - 1], to: times[index], score: Math.round(score * 100) / 100 });
+  }
+  return cuts;
+}
+
+/** 给模型的一句时间线：时长、采样间隔、切镜候选（没有就说没有明显切镜）。 */
+export function describeSceneCuts(duration: number, times: readonly number[], cuts: readonly SceneCut[]): string {
+  const step = times.length > 1 ? (times[times.length - 1] - times[0]) / (times.length - 1) : 0;
+  const head = '粗略时间线（采样间隔约 ' + (Math.round(step * 10) / 10) + 's，总长 ' + formatTimecode(duration) + '）：';
+  if (!cuts.length) return head + '采样帧之间没有明显切镜，可能是一个连续镜头';
+  return head + cuts.length + ' 处疑似切镜 ' + cuts.map(cut => formatTimecode(cut.from) + '–' + formatTimecode(cut.to)).join('、')
+    + '（只定位到采样点之间；要精确用 start/end 缩小窗口再看）';
+}
+
+// ---------------------------------------------------------------------------
+// 并排对比：参考图与产物（图片或视频帧网格）拼成一张，每格上方标节点名。
+// ---------------------------------------------------------------------------
+
+export const COMPARE_MAX_EDGE = 2048;
+export const COMPARE_MAX_PANELS = 4;
+export const COMPARE_LABEL_HEIGHT = 28;
+
+export interface CompareLayout {
+  width: number;
+  height: number;
+  labelHeight: number;
+  panels: Array<{ x: number; y: number; width: number; height: number }>;
+}
+
+/** 等高横排：每个面板缩到同一高度，总宽不超过 maxEdge；面板上方留一条标签。 */
+export function planCompareLayout(sizes: ReadonlyArray<{ width: number; height: number }>, maxEdge = COMPARE_MAX_EDGE, gap = 8, labelHeight = COMPARE_LABEL_HEIGHT): CompareLayout {
+  const items = sizes.map(size => ({ width: size.width > 0 ? size.width : 1024, height: size.height > 0 ? size.height : 1024 }));
+  if (!items.length) return { width: 0, height: 0, labelHeight, panels: [] };
+  const targetHeight = Math.min(...items.map(item => item.height), maxEdge - labelHeight);
+  const widths = items.map(item => item.width * (targetHeight / item.height));
+  const scale = Math.min(1, (maxEdge - gap * (items.length - 1)) / widths.reduce((sum, width) => sum + width, 0));
+  const height = Math.max(1, Math.floor(targetHeight * scale));
+  let x = 0;
+  const panels = widths.map(width => {
+    const panel = { x, y: labelHeight, width: Math.max(1, Math.floor(width * scale)), height };
+    x += panel.width + gap;
+    return panel;
+  });
+  return { width: x - gap, height: height + labelHeight, labelHeight, panels };
+}

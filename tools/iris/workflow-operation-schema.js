@@ -122,9 +122,9 @@ export const WORKFLOW_OPERATION_ITEM_SCHEMA = Object.freeze({
     op('reorder_nodes', ['ids'], { ids: idList }, '重排全部节点顺序（必须完整、不重复）。'),
     op('reorder_connections', [], {
       targetNodeId: { ...nonEmptyString, description: '要调整参考顺序的生成节点。' },
-      orderedSourceIds: { ...idList, description: '上游参考节点 id 的新顺序；首尾帧取第 1、2 个，chip 编号（图片1/图片2…）随之变化。' },
-      ids: { ...idList, description: '高级：全部连接 id 的完整新顺序（与 targetNodeId/orderedSourceIds 二选一）。' },
-    }, '调整参考顺序：给 targetNodeId + orderedSourceIds（推荐），或完整的连接 ids。'),
+      orderedSourceIds: { ...idList, description: '上游参考节点 id（不是连接 id）的新顺序；首尾帧取第 1、2 个，chip 编号（图片1/图片2…）随之变化。没列出的上游保持原相对顺序排在后面。' },
+      ids: { ...idList, description: '高级：目标节点全部入边的连接 id 新顺序（与 targetNodeId/orderedSourceIds 二选一）。' },
+    }, '调整参考顺序：给 targetNodeId + orderedSourceIds（推荐），或目标节点全部入边的连接 ids。已经是这个顺序时返回 noop:true（不算错误）；dryRun 返回 referenceOrder 预览。'),
     op('group_nodes', ['ids', 'batchId'], { ids: idList, batchId: nonEmptyString, source: { type: 'string' } }, '把节点编成一个批次组。'),
     op('ungroup_nodes', ['ids'], { ids: idList }, '解散批次组；也用于拆开多结果叠放：ids 给首图节点 id 会把它的全部备选（metadata.alternates）拆成画布上的独立节点（排在首图右侧），给备选 id 只拆这几张；拆出的节点沿用备选 id。'),
     op('set_batch_primary', ['batchId', 'nodeId'], { batchId: nonEmptyString, nodeId: nonEmptyString }, '设置批次主节点。'),
@@ -144,5 +144,6 @@ export const WORKFLOW_APPLY_GUIDE = [
   '未知字段会直接报错。示例：',
   '{"type":"update_node","id":"node-1","patch":{"title":"视频-延长"}}；',
   '{"type":"update_node","id":"node-1","patch":{"metadata":{"prompt":"龙喷火，镜头缓推","config":{"durationSec":15}}}}；',
-  '{"type":"connect_nodes","fromNodeId":"image-1","toNodeId":"video-1"}。',
+  '{"type":"connect_nodes","fromNodeId":"image-1","toNodeId":"video-1"}；',
+  '{"type":"reorder_connections","targetNodeId":"gen-1","orderedSourceIds":["img-subject","img-bg"]}（已是该顺序时返回 noop:true）。',
 ].join('');

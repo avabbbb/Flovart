@@ -10,6 +10,7 @@
 import type { WorkflowNode } from '../components/workflow/types';
 import type { GenerationGateDetails } from './generationGate';
 import { spendDemand } from './agentSpendMandate';
+import { modelCostTier, type ModelCostTier } from './modelCostTier';
 
 export interface RunApprovalItem { nodeId: string; title: string; mode: 'image' | 'video' }
 
@@ -58,6 +59,10 @@ export interface RunCostEstimateItem {
   /** null：没有匹配的计价规则，以 AI 服务账单为准。 */
   estimatedCost: { amount: number; currency: 'USD' | 'CNY' } | null;
   costBasis: 'pricing-rule' | 'unknown';
+  /** 金额未知的原因与修法（见 GenerationGateDetails.costUnknownReason）。 */
+  costUnknownReason?: 'no-key' | 'no-route' | 'no-pricing-rule';
+  /** 费用档位：cheap / standard / premium（同家族定位，不是价格）；金额未知时也能告诉用户贵不贵。 */
+  costTier: ModelCostTier;
   resolution?: string;
   durationSec?: number;
   blockers?: string[];
@@ -70,6 +75,8 @@ export interface RunCostEstimate {
   /** 合计：cost 为 null 表示至少一个节点没有估算，或币种不一致。 */
   total: { tasks: number; cost: { amount: number; currency: 'USD' | 'CNY' } | null };
   unknownCostNodeIds: string[];
+  /** 金额未知时给 Agent 的一句说明（为什么、怎么补上）；全部已知时省略。 */
+  costHint?: string;
   /** 有 blocker 的节点：确认卡上的「运行」按钮会被禁用，先修好再请求运行。 */
   blockedNodeIds: string[];
   /** 与确认卡第一行同一句（describeRunApproval）。 */
@@ -101,6 +108,8 @@ export function estimateRunCost(
       taskCount: gate.taskCount,
       estimatedCost: gate.estimatedCost ?? null,
       costBasis: gate.estimatedCost ? 'pricing-rule' : 'unknown',
+      ...(!gate.estimatedCost && gate.costUnknownReason ? { costUnknownReason: gate.costUnknownReason } : {}),
+      costTier: modelCostTier(gate.modelId || byId.get(item.nodeId)?.metadata?.config?.modelId),
       ...(gate.resolution ? { resolution: gate.resolution } : {}),
       ...(gate.durationSec ? { durationSec: gate.durationSec } : {}),
       ...(gate.blockers?.length ? { blockers: gate.blockers.map(notice => notice.message) } : {}),
@@ -114,9 +123,25 @@ export function estimateRunCost(
     items,
     total: { tasks: demand.tasks, cost: demand.cost },
     unknownCostNodeIds: items.filter(item => !item.estimatedCost).map(item => item.nodeId),
+    ...(items.some(item => !item.estimatedCost) ? { costHint: describeUnknownCost(items) } : {}),
     blockedNodeIds: items.filter(item => item.blockers?.length).map(item => item.nodeId),
     summary: copy.title + ' · ' + copy.detail,
   };
+}
+
+const UNKNOWN_COST_FIX: Record<NonNullable<RunCostEstimateItem['costUnknownReason']>, string> = {
+  'no-key': '还没有配置 API Key',
+  'no-route': '当前 API Key 没有这个模型的线路',
+  'no-pricing-rule': '线路上没有计价规则（在 设置 → AI 服务 → 计价规则 填写单价后才有金额）',
+};
+
+/** 金额未知时：按原因归类说明，并给出费用档位，让 Agent 仍能告诉用户贵不贵、怎么补上金额。 */
+function describeUnknownCost(items: readonly RunCostEstimateItem[]): string {
+  const unknown = items.filter(item => !item.estimatedCost);
+  const reasons = [...new Set(unknown.map(item => item.costUnknownReason).filter(Boolean))] as Array<keyof typeof UNKNOWN_COST_FIX>;
+  const tiers = [...new Set(unknown.map(item => item.costTier))];
+  return unknown.length + ' 个节点没有金额：' + (reasons.map(reason => UNKNOWN_COST_FIX[reason]).join('；') || '没有匹配的计价规则')
+    + '。费用档位：' + tiers.join('/') + '（档位不是价格，不要自己估金额）。';
 }
 
 const money = (currency: 'USD' | 'CNY', amount: number) => (currency === 'USD' ? '$' : '¥') + amount.toFixed(2);

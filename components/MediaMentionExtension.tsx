@@ -104,6 +104,10 @@ export const MediaMentionNode = Node.create({
             assetId: { default: null },
             /** 带区域的引用：{x,y,w,h}（0-1）与可选 mask；null 表示整张图。 */
             region: { default: null },
+            /** 参考角色（first_frame / last_frame / style…）：Agent 写入，运行时读取；null 表示按顺序推导。 */
+            role: { default: null },
+            /** 参考用途（subject / style / background…）：编进发给模型的参考说明；null 表示未声明。 */
+            purpose: { default: null },
         };
     },
 
@@ -135,6 +139,8 @@ export interface MentionData {
     sourceType?: 'connected' | 'assetLibrary';
     assetId?: string;
     region?: WorkflowReferenceRegion | null;
+    role?: string | null;
+    purpose?: string | null;
 }
 
 export function extractMentions(editorJSON: Record<string, unknown>): MentionData[] {

@@ -19,8 +19,14 @@ const REFERENCE_ITEM = Object.freeze({
     role: {
       type: 'string',
       enum: ['first_frame', 'last_frame', 'reference', 'character', 'style', 'mask', 'source_video', 'source_audio'],
-      description: '参考角色（可选）。首尾帧视频给 first_frame + last_frame；其余默认按顺序作参考。',
+      description: '参考角色（可选，决定进哪个参数槽）。首尾帧视频给 first_frame + last_frame；其余默认按顺序作参考。',
     },
+    purpose: {
+      type: 'string',
+      enum: ['subject', 'character', 'product', 'style', 'background', 'scene', 'pose', 'composition', 'other'],
+      description: '参考用途（可选）：主体 / 角色 / 产品 / 风格 / 背景 / 场景 / 姿势 / 构图。多参考时务必写上：会编成「参考说明：图片1=主体，图片2=背景」追加给模型，避免只靠图片编号猜用途。',
+    },
+    order: { type: 'integer', minimum: 1, description: '显式顺序（1 起，可选）：chip 编号与连线按它排；省略时按数组顺序。' },
     region: {
       type: 'object',
       additionalProperties: false,
@@ -44,7 +50,9 @@ const REFERENCE_ITEM = Object.freeze({
 
 const GENERATE_DESCRIPTION = [
   '在画布上生成图片/视频的唯一入口：只建或复用一个生成节点，提示词直接写进它的 Prompt Bar，',
-  'references 里的素材同时成为 @chip 和连线（顺序 = chip 顺序：图片1、图片2…），然后可选原位运行。',
+  'references 里的素材同时成为 @chip 和连线（顺序 = chip 顺序：图片1、图片2…），然后可选原位运行。多参考时给每个参考写 purpose（subject/style/background…），用途会随提示词一起发给模型。',
+  '复用节点（传 nodeId）只改提示词时不传 references：节点已有的参考、顺序与用途原样保留（结果 referenceSource=inherited）；传了 references 就以它为准，漏掉的已有参考会报 REFERENCES_DROPPED 并拒绝运行，确认要去掉加 dropReferences=true。',
+  '写入后会回读节点核对模式与参考，不一致时返回 warnings（run=true 时直接报 GENERATE_INVARIANT_FAILED、不扣费）。返回的 draftVersion 是最终版本，可直接作下一次 expectedRevision。',
   '不传 nodeId 时按 type=image|video 新建；传 nodeId 时复用该生成节点（不能是文本备注、脚本或音频）。',
   'prompt 里可用 @ref:<节点id>、已批准锚点的编号 @A01 / @S01、@shot:3 或 @"节点名"（名字须唯一，否则 AMBIGUOUS_NODE_NAME 并列候选）精确指代参考，也可写 @图片1 / @视频1；没写到的 references 会自动追加 chip；',
   'prompt 引用了没连线的节点会自动连上并在 autoLinked 里回报（linkPolicy=reject 时改为报 REFERENCE_NOT_LINKED）。断开连线/删节点时下游 Prompt Bar 的对应 chip 会被清掉，结果里有 prunedMentions。',
@@ -174,6 +182,7 @@ const DEFINITIONS = [
         },
         description: '分镜元数据（可选）：镜头顺序用 shot.index 表示，不要用连线表示镜头先后',
       },
+      dropReferences: { type: 'boolean', description: '复用节点时，references 没列出的已有参考：true 断开它们的连线（可撤销）；默认 false 只警告并拒绝运行。不传 references 时沿用节点已有参考，不需要这个参数。' },
       linkPolicy: { type: 'string', enum: ['auto', 'reject'], description: 'prompt 引用了没连线的节点时：auto（默认）自动连线并回报 autoLinked；reject 直接拒绝' },
       run: { type: 'boolean', description: 'true 时写完立即原位运行（扣费，需用户确认）；默认 false' },
       dryRun: { type: 'boolean', description: 'true 时只返回将写入的节点、模型解析与诊断，不写画布' },

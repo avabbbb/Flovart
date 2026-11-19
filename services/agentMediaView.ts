@@ -6,8 +6,14 @@ import type { WorkflowNode } from '../components/workflow/types';
 import { loadWorkflowMediaBlob, workflowBlobToDataUrl } from '../components/workflow/media';
 import { extractVideoFrame, extractVideoFramesAt } from './videoFrameExtractor';
 import {
+  COMPARE_MAX_PANELS,
   FRAME_GRID_DEFAULT_COUNT,
+  FRAME_SIGNATURE_SIZE,
   describeFrameGrid,
+  describeSceneCuts,
+  detectSceneCuts,
+  frameSignatureFromRgba,
+  planCompareLayout,
   describeMediaSize,
   frameGridLabel,
   normalizeFrameTimes,
@@ -47,8 +53,11 @@ export async function loadAgentNodeMedia(
     maxImages?: number;
     layout?: AgentVideoLayout;
     grid?: AgentVideoGridOptions;
+    /** true：把这些节点（图片原图 / 视频帧网格）并排拼成一张对比图，例如参考图 vs 产物。 */
+    compare?: boolean;
   } = {},
 ): Promise<AgentMediaView> {
+  if (options.compare) return loadAgentMediaComparison(nodes, { times: options.times, grid: options.grid });
   const maxImages = options.maxImages ?? AGENT_MEDIA_MAX_IMAGES;
   const frames = options.frames?.length ? options.frames : AGENT_VIDEO_FRAMES;
   // 只给了 frames（首/中/尾）且没指定 layout 时沿用逐帧附图；其余情况默认帧网格。
@@ -79,7 +88,8 @@ export async function loadAgentNodeMedia(
       if (layout === 'grid') {
         const grid = await loadVideoFrameGrid(blob, { times, grid: options.grid });
         images.push(grid.image);
-        notes.push(describeFrameGrid({ nodeId: node.id, title: node.title, duration: grid.duration, times: grid.times, layout: grid.layout, page: grid.page, totalPages: grid.totalPages, width: grid.width, height: grid.height }));
+        notes.push(describeFrameGrid({ nodeId: node.id, title: node.title, duration: grid.duration, times: grid.times, layout: grid.layout, page: grid.page, totalPages: grid.totalPages, width: grid.width, height: grid.height })
+          + '\n  ' + describeSceneCuts(grid.duration, grid.times, grid.cuts));
         continue;
       }
       if (times.length) {
@@ -141,7 +151,12 @@ async function toSizedImageContent(blob: Blob): Promise<{ image: ImageContent; w
 async function loadVideoFrameGrid(
   blob: Blob,
   options: { times: readonly number[]; grid?: AgentVideoGridOptions },
-): Promise<{ image: ImageContent; duration: number; times: number[]; layout: FrameGridLayout; page: number; totalPages: number; width: number; height: number }> {
+): Promise<{ image: ImageContent; canvas: HTMLCanvasElement; duration: number; times: number[]; cuts: ReturnType<typeof detectSceneCuts>; layout: FrameGridLayout; page: number; totalPages: number; width: number; height: number }> {
+  const signatures: Array<number[] | undefined> = [];
+  const probe = document.createElement('canvas');
+  probe.width = FRAME_SIGNATURE_SIZE;
+  probe.height = FRAME_SIGNATURE_SIZE;
+  const probeContext = probe.getContext('2d', { willReadFrequently: true } as CanvasRenderingContext2DSettings);
   let sourceWidth = 0;
   let sourceHeight = 0;
   let canvas: HTMLCanvasElement | null = null;
@@ -177,6 +192,15 @@ async function loadVideoFrameGrid(
       const cell = layout!.cells[index];
       const context = ctx!;
       context.drawImage(video, cell.x, cell.y, cell.width, cell.height);
+      // 8×8 灰度签名：相邻采样帧突变 = 切镜候选（粗略时间线）。读不了像素（跨域等）时跳过。
+      if (probeContext) {
+        try {
+          probeContext.drawImage(video, 0, 0, FRAME_SIGNATURE_SIZE, FRAME_SIGNATURE_SIZE);
+          signatures[index] = frameSignatureFromRgba(probeContext.getImageData(0, 0, FRAME_SIGNATURE_SIZE, FRAME_SIGNATURE_SIZE).data);
+        } catch {
+          signatures[index] = undefined;
+        }
+      }
       const label = frameGridLabel(index, time);
       const fontSize = layout!.fontSize;
       context.font = 'bold ' + fontSize + 'px sans-serif';
@@ -194,8 +218,10 @@ async function loadVideoFrameGrid(
   const dataUrl = await workflowBlobToDataUrl(jpeg);
   return {
     image: { type: 'image', data: dataUrl.slice(dataUrl.indexOf(',') + 1), mimeType: 'image/jpeg' },
+    canvas,
     duration: result.duration,
     times: result.times,
+    cuts: detectSceneCuts(result.times, signatures),
     layout,
     page,
     totalPages,
@@ -210,4 +236,71 @@ async function canvasToJpeg(canvas: HTMLCanvasElement): Promise<Blob> {
   const jpeg = await promise;
   if (!jpeg) throw new Error('画面编码失败');
   return jpeg;
+}
+
+/**
+ * 并排对比（P2-H）：每个节点一格——图片用原图，视频用带时间码的帧网格——缩到同一高度横排成一张图，
+ * 每格上方标「#序号 节点名」。用来对照参考素材检查产物的风格、角色、构图是否一致。最多 COMPARE_MAX_PANELS 个节点。
+ */
+export async function loadAgentMediaComparison(
+  nodes: readonly WorkflowNode[],
+  options: { times?: readonly number[]; grid?: AgentVideoGridOptions } = {},
+): Promise<AgentMediaView> {
+  const notes: string[] = [];
+  const panels: Array<{ source: CanvasImageSource; width: number; height: number; label: string; close?: () => void }> = [];
+  const times = (options.times || []).filter(time => Number.isFinite(time) && time >= 0);
+  for (const node of nodes) {
+    if (panels.length >= COMPARE_MAX_PANELS) {
+      notes.push(node.id + '：对比最多 ' + COMPARE_MAX_PANELS + ' 个节点，未加入');
+      continue;
+    }
+    if (node.type !== 'image' && node.type !== 'video') {
+      notes.push(node.id + '：' + node.type + ' 节点没有可对比的画面');
+      continue;
+    }
+    try {
+      const { storageKey, href, artifactRef } = node.metadata;
+      const blob = await loadWorkflowMediaBlob(storageKey, href, artifactRef);
+      const label = '#' + (panels.length + 1) + ' ' + (node.title || node.id);
+      if (node.type === 'image') {
+        const bitmap = await createImageBitmap(blob);
+        panels.push({ source: bitmap, width: bitmap.width, height: bitmap.height, label, close: () => bitmap.close() });
+        notes.push(label + '（' + node.id + '）：图片' + (describeMediaSize(bitmap.width, bitmap.height) ? '，' + describeMediaSize(bitmap.width, bitmap.height) : ''));
+      } else {
+        const grid = await loadVideoFrameGrid(blob, { times, grid: options.grid });
+        panels.push({ source: grid.canvas, width: grid.canvas.width, height: grid.canvas.height, label });
+        notes.push(label + '（' + node.id + '）：' + describeFrameGrid({ nodeId: node.id, title: node.title, duration: grid.duration, times: grid.times, layout: grid.layout, width: grid.width, height: grid.height })
+          + '；' + describeSceneCuts(grid.duration, grid.times, grid.cuts));
+      }
+    } catch (error) {
+      notes.push(node.id + '：读取失败（' + (error instanceof Error ? error.message : String(error)) + '）');
+    }
+  }
+  if (!panels.length) return { images: [], notes };
+  try {
+    const layout = planCompareLayout(panels);
+    const canvas = document.createElement('canvas');
+    canvas.width = layout.width;
+    canvas.height = layout.height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('图像处理上下文初始化失败');
+    context.fillStyle = '#111';
+    context.fillRect(0, 0, layout.width, layout.height);
+    context.font = 'bold ' + Math.round(layout.labelHeight * 0.6) + 'px sans-serif';
+    context.textBaseline = 'middle';
+    panels.forEach((panel, index) => {
+      const cell = layout.panels[index];
+      context.drawImage(panel.source, cell.x, cell.y, cell.width, cell.height);
+      context.fillStyle = '#fff';
+      context.fillText(panel.label, cell.x + 6, layout.labelHeight / 2, Math.max(10, cell.width - 12));
+    });
+    const jpeg = await canvasToJpeg(canvas);
+    const dataUrl = await workflowBlobToDataUrl(jpeg);
+    return {
+      images: [{ type: 'image', data: dataUrl.slice(dataUrl.indexOf(',') + 1), mimeType: 'image/jpeg' }],
+      notes: ['并排对比图：' + panels.length + ' 格，左→右依次为 ' + panels.map(panel => panel.label).join('、') + '，每格缩到同一高度', ...notes],
+    };
+  } finally {
+    panels.forEach(panel => panel.close?.());
+  }
 }

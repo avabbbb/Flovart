@@ -1,6 +1,7 @@
 import type { UserApiKey } from '../types';
 import type { WorkflowDocumentOperation, WorkflowNode } from '../components/workflow/types';
 import { getProductModel, getProductModels, isProductModelConfigured } from './productModelCatalog';
+import { modelCostTier, type ModelCostTier } from './modelCostTier';
 
 /**
  * Agent 可用的产品模型目录：Agent 只能写真实存在的 modelId（如 flovart:seedream-5-flash），
@@ -13,6 +14,8 @@ export type AgentModelChoice = {
   modes: string[];
   /** 当前 API Key / 线路映射能直接跑；未知（没注入 Key）时省略。 */
   configured?: boolean;
+  /** 费用档位：cheap 省钱 / standard / premium 高质量（同家族定位，不是价格）。 */
+  costTier: ModelCostTier;
 };
 
 let keysProvider: (() => UserApiKey[]) | null = null;
@@ -32,6 +35,7 @@ export function listAgentModelChoices(capability: 'image' | 'video'): AgentModel
     id: model.id,
     name: model.shortName || model.name,
     modes: [...model.capabilities.modes],
+    costTier: modelCostTier(model.id),
     ...(keys ? { configured: isProductModelConfigured(model.id, keys) } : {}),
   }));
   // 已配好线路的排在前面，模型选择时优先用它们。
@@ -40,7 +44,7 @@ export function listAgentModelChoices(capability: 'image' | 'video'): AgentModel
 
 export function agentModelCatalogSummary() {
   return {
-    note: 'metadata.config.modelId 只能填这里的 id（configured=true 的已配好线路，可直接运行）；不要自己编 id。',
+    note: 'metadata.config.modelId 只能填这里的 id（configured=true 的已配好线路，可直接运行）；不要自己编 id。costTier=cheap/standard/premium 是费用档位（不是价格），用户没指定模型时给一个省钱档和一个质量档让用户选。',
     image: listAgentModelChoices('image'),
     video: listAgentModelChoices('video'),
   };

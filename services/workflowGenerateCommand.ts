@@ -7,6 +7,7 @@ import { buildWorkflowPromptDocument, workflowPromptMentionAttrs } from '../comp
 import { createPromptIntent, type PromptIntent } from '../components/workflow/promptIntent';
 import { reorderReferenceOperations } from '../components/workflow/references';
 import { validateReferenceRegion } from '../components/workflow/referenceRegion';
+import { isReferencePurpose, REFERENCE_PURPOSES, type WorkflowReferencePurpose } from '../components/workflow/referencePurpose';
 import { buildNodeRefIndex, extractNodeRefs, isNodeRefMiss, resolveNodeRef, type NodeRefIndex } from '../components/workflow/nodeRefResolver';
 import type {
   WorkflowConnection,
@@ -34,6 +35,7 @@ import {
   type ProductModelDefinition,
 } from './productModelCatalog';
 import { resolveWorkflowDefaultModel } from './workflowPromptPolicy';
+import { describeModelCost } from './modelCostTier';
 
 /**
  * Agent 工具 v2：iris_generate / iris_models_list 的纯规划逻辑。
@@ -65,6 +67,10 @@ export interface GenerateReference {
   role?: WorkflowGenerationReferenceRole;
   /** 带区域的引用（仅图片）：{x,y,w,h} 0-1 归一化，可选 mask；执行前裁剪，不建中间节点。 */
   region?: WorkflowReferenceRegion;
+  /** 参考用途（主体 / 风格 / 背景…）：编进发给模型的参考说明，并显示在 inspect 里。 */
+  purpose?: WorkflowReferencePurpose;
+  /** 显式顺序（1 起）：给了就按它排 chip / 连线顺序，没给的按出现顺序排在后面。 */
+  order?: number;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -89,9 +95,57 @@ export function parseGenerateReferences(value: unknown): GenerateReference[] {
     }
     const regionCheck = isRecord(item) ? validateReferenceRegion(item.region) : {};
     if (regionCheck.error) throw new WorkflowGenerateError('BAD_REQUEST', `references[${index}].${regionCheck.error}`);
+    const purpose = isRecord(item) && item.purpose !== undefined && item.purpose !== null ? String(item.purpose) : undefined;
+    if (purpose && !isReferencePurpose(purpose)) {
+      throw new WorkflowGenerateError('BAD_REQUEST', `references[${index}].purpose 不支持：${purpose}；可用 ${REFERENCE_PURPOSES.join('/')}`);
+    }
+    const order = isRecord(item) && item.order !== undefined && item.order !== null ? Number(item.order) : undefined;
+    if (order !== undefined && (!Number.isFinite(order) || order < 0)) throw new WorkflowGenerateError('BAD_REQUEST', `references[${index}].order 必须是非负数字`);
     if (seen.has(nodeId)) return [];
     seen.add(nodeId);
-    return [{ nodeId, ...(role ? { role: role as WorkflowGenerationReferenceRole } : {}), ...(regionCheck.region ? { region: regionCheck.region } : {}) }];
+    return [{
+      nodeId,
+      ...(role ? { role: role as WorkflowGenerationReferenceRole } : {}),
+      ...(regionCheck.region ? { region: regionCheck.region } : {}),
+      ...(purpose ? { purpose: purpose as WorkflowReferencePurpose } : {}),
+      ...(order !== undefined ? { order } : {}),
+    }];
+  }).map((reference, index) => ({ reference, index }))
+    // 显式 order 优先（稳定排序），没给 order 的保持原顺序排在后面。
+    .sort((left, right) => (left.reference.order ?? Number.MAX_SAFE_INTEGER) - (right.reference.order ?? Number.MAX_SAFE_INTEGER) || left.index - right.index)
+    .map(item => item.reference);
+}
+
+const MEDIA_NODE_TYPES = new Set(['image', 'video', 'audio']);
+
+/**
+ * 生成节点当前的参考（按连线顺序 = chip 顺序）：可见的图片/视频/音频上游，带 Prompt Bar chip 上保存的 role / region / purpose。
+ * 隐藏的输入节点（运行时保留原图的内部节点）不算。
+ */
+export function currentGenerateReferences(target: WorkflowNode, nodes: readonly WorkflowNode[], connections: readonly WorkflowConnection[]): GenerateReference[] {
+  const mentionAttrs = new Map<string, Record<string, unknown>>();
+  const walk = (value: unknown) => {
+    if (!isRecord(value)) return;
+    if (value.type === 'mediaMention' && isRecord(value.attrs) && typeof value.attrs.id === 'string' && !mentionAttrs.has(value.attrs.id)) mentionAttrs.set(value.attrs.id, value.attrs);
+    if (Array.isArray(value.content)) value.content.forEach(walk);
+  };
+  walk(target.metadata.richTextDocument);
+  const byId = new Map(nodes.map(node => [node.id, node]));
+  const seen = new Set<string>();
+  return connections.flatMap(connection => {
+    if (connection.toNodeId !== target.id || seen.has(connection.fromNodeId)) return [];
+    const source = byId.get(connection.fromNodeId);
+    if (!source || source.isVisible === false || !MEDIA_NODE_TYPES.has(source.type)) return [];
+    seen.add(source.id);
+    const attrs = mentionAttrs.get(source.id) || {};
+    const role = typeof attrs.role === 'string' && REFERENCE_ROLES.has(attrs.role as WorkflowGenerationReferenceRole) ? attrs.role as WorkflowGenerationReferenceRole : undefined;
+    const region = validateReferenceRegion(attrs.region ?? undefined).region;
+    return [{
+      nodeId: source.id,
+      ...(role ? { role } : {}),
+      ...(region && source.type === 'image' ? { region } : {}),
+      ...(isReferencePurpose(attrs.purpose) ? { purpose: attrs.purpose } : {}),
+    }];
   });
 }
 
@@ -157,6 +211,8 @@ export function describeProductModel(model: ProductModelDefinition, keys: UserAp
     durations: caps.durations,
     qualities: caps.qualities,
     audioControl: caps.audioControl,
+    // P2-F：费用档位（cheap/standard/premium）+ 用户计价规则里的真实单价区间（有才给）。
+    ...describeModelCost(model.id, keys),
   };
 }
 
@@ -184,6 +240,7 @@ export function listWorkflowModels(args: Record<string, unknown>, keys: UserApiK
   return {
     models,
     defaultModelIds: defaults,
+    costTierNote: 'costTier 是模型在同家族里的档位（cheap 省钱 / standard / premium 高质量），不是价格；priceRange 是用户计价规则里的真实单价。没指定模型时，先给用户一个省钱档和一个质量档的选择。',
     configured: keys.length > 0,
     ...(available.length ? {} : { note: keys.length ? '当前 API Key 下没有能运行这些条件的模型；列出的是全部候选（available=false），需要用户在设置里配置线路。' : '还没有配置任何 AI 服务 API Key：列出的是全部候选，运行前需要用户在设置里添加 Key。' }),
   };
@@ -207,9 +264,15 @@ export interface GeneratePlan {
   operations: WorkflowDocumentOperation[];
   prompt: string;
   model: { modelId?: string; submode: ProductModelMode; routeId?: string; provider?: string; source?: string };
-  references: Array<{ nodeId: string; label: string; kind: string; role?: WorkflowGenerationReferenceRole; region?: WorkflowReferenceRegion; mentioned: boolean }>;
+  references: Array<{ nodeId: string; label: string; kind: string; order: number; role?: WorkflowGenerationReferenceRole; region?: WorkflowReferenceRegion; purpose?: WorkflowReferencePurpose; mentioned: boolean }>;
   promptIntent: PromptIntent;
   diagnostics: GenerateDiagnostic[];
+  /** 写入前节点已有的参考（可见媒体上游，按 chip 顺序）；新建节点为空。 */
+  priorReferenceIds: string[];
+  /** references 的来源：caller=调用方显式给出；inherited=没传 references，沿用节点已有参考；none=新建且没有参考。 */
+  referenceSource: 'caller' | 'inherited' | 'none';
+  /** 显式 references 漏掉了节点已有的参考（且没给 dropReferences=true）：写入照常，但拒绝 run=true。 */
+  droppedReferenceIds: string[];
   /** prompt 引用了但原本没连线、本次自动连上的节点（P0-2）。 */
   autoLinked: string[];
 }
@@ -251,6 +314,19 @@ function attachMentionRegions(document: unknown, regionById: Map<string, Workflo
     if (!isRecord(value)) return;
     if (value.type === 'mediaMention' && isRecord(value.attrs) && typeof value.attrs.id === 'string' && regionById.has(value.attrs.id)) {
       value.attrs = { ...value.attrs, region: regionById.get(value.attrs.id) };
+    }
+    if (Array.isArray(value.content)) value.content.forEach(walk);
+  };
+  walk(document);
+}
+
+/** 把 role / purpose 写进对应 chip 的 attrs（Prompt Bar 与运行时都读这里）。原地修改新建的文档。 */
+function attachMentionAttrs(document: unknown, attrsById: Map<string, Record<string, unknown>>) {
+  const walk = (value: unknown) => {
+    if (!isRecord(value)) return;
+    if (value.type === 'mediaMention' && isRecord(value.attrs) && typeof value.attrs.id === 'string') {
+      const extra = attrsById.get(value.attrs.id);
+      if (extra && Object.keys(extra).length) value.attrs = { ...value.attrs, ...extra };
     }
     if (Array.isArray(value.content)) value.content.forEach(walk);
   };
@@ -308,12 +384,28 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
   const nodeId = target?.id || stableNodeId(input.mutationId);
 
   const seenReferences = new Set<string>();
-  const explicitReferences: GenerateReference[] = parseGenerateReferences(args.references).flatMap(reference => {
+  // P0-A：复用节点且没传 references 时沿用节点已有参考（连线 + chip 上的 role/region/purpose），
+  // 以前这里只看本次参数，改提示词会把参考静默丢掉、推导成 text-to-image，下一次运行白花钱。
+  const referencesGiven = args.references !== undefined && args.references !== null;
+  const priorReferences = target ? currentGenerateReferences(target, input.nodes, input.connections) : [];
+  const priorReferenceIds = priorReferences.map(reference => reference.nodeId);
+  const callerReferences: GenerateReference[] = parseGenerateReferences(args.references).flatMap(reference => {
     const resolved = resolveRefOrThrow(reference.nodeId, refIndex, '参考节点');
     if (seenReferences.has(resolved)) return [];
     seenReferences.add(resolved);
-    return [{ ...reference, nodeId: resolved }];
+    // 调用方没写的 role / region / purpose 沿用 chip 上已有的值。
+    const prior = priorReferences.find(item => item.nodeId === resolved);
+    return [{ ...(prior ? { ...(prior.role ? { role: prior.role } : {}), ...(prior.region ? { region: prior.region } : {}), ...(prior.purpose ? { purpose: prior.purpose } : {}) } : {}), ...reference, nodeId: resolved }];
   });
+  const inherited = !referencesGiven && priorReferences.length > 0;
+  const explicitReferences: GenerateReference[] = referencesGiven ? callerReferences : priorReferences.filter(reference => {
+    if (seenReferences.has(reference.nodeId)) return false;
+    seenReferences.add(reference.nodeId);
+    return true;
+  });
+  if (inherited) {
+    diagnostics.push({ code: 'REFERENCES_INHERITED', message: `没传 references：沿用节点已有的 ${priorReferences.length} 个参考（${priorReferenceIds.join('、')}），顺序不变。要改参考请显式传 references。` });
+  }
   // P0-2：prompt 里的 @ref（@A01 / @shot:N / @"名字" 已先改写为 @ref）与连线必须一致——没连线的按策略自动补进 references 或拒绝。
   const linkPolicy = args.linkPolicy === 'reject' ? 'reject' : 'auto';
   const alignment = alignPromptReferences({
@@ -330,6 +422,14 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
     ...explicitReferences,
     ...alignment.autoLinked.filter(id => !seenReferences.has(id)).map(nodeId => ({ nodeId })),
   ];
+  // 显式 references 没列出节点已有的参考：dropReferences=true 时断开这些连线（可撤销），否则写入但不让运行。
+  const keptIds = new Set(references.map(reference => reference.nodeId));
+  const omittedIds = referencesGiven ? priorReferenceIds.filter(id => !keptIds.has(id)) : [];
+  const dropReferences = args.dropReferences === true || args.dropReferences === 'true';
+  const droppedReferenceIds = dropReferences ? [] : omittedIds;
+  if (droppedReferenceIds.length) {
+    diagnostics.push({ code: 'REFERENCES_DROPPED', message: `references 没包含节点已有的参考 ${droppedReferenceIds.join('、')}：它们不会参与生成，但连线还在。确认要去掉就加 dropReferences=true（会断开连线），要保留就把它们写进 references；在此之前不会运行。` });
+  }
   const referenceNodes = references.map(reference => {
     const node = input.nodes.find(item => item.id === reference.nodeId);
     if (!node) throw new WorkflowGenerateError('NOT_FOUND', '参考节点不存在：' + reference.nodeId);
@@ -348,6 +448,14 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
     throw new WorkflowGenerateError('BAD_REQUEST', `${mode} 节点的 submode 只能是 ${modeOrder(mode).join(' / ')}`);
   }
   const submode = requestedSubmode || inferGenerateSubmode(mode, referenceNodes);
+  if (referenceNodes.length && (submode === 'text-to-image' || submode === 'text-to-video')) {
+    // 文生模式在运行时会丢掉全部参考（inputResolver 对 text-to-* 清空 references）：不让参考被静默丢弃。
+    throw new WorkflowGenerateError('SUBMODE_REFERENCE_MISMATCH', `submode=${submode} 会忽略全部 ${referenceNodes.length} 个参考（${referenceNodes.map(reference => reference.node.id).join('、')}）。去掉 submode 让系统按参考推导，或传 references: [] 加 dropReferences=true 明确改成文生。`, {
+      submode,
+      referenceIds: referenceNodes.map(reference => reference.node.id),
+      suggestedSubmode: inferGenerateSubmode(mode, referenceNodes),
+    });
+  }
   const kinds = referenceNodes.map(reference => reference.kind);
 
   // 模型：显式给定 > 节点已有模型 > 与 PromptBar 相同的默认策略
@@ -474,6 +582,14 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
     nodes = [...nodes, node];
   }
   const createId = input.createId || nanoid;
+  if (dropReferences && omittedIds.length) {
+    const omitted = new Set(omittedIds);
+    const ids = connections.filter(connection => connection.toNodeId === nodeId && omitted.has(connection.fromNodeId)).map(connection => connection.id);
+    if (ids.length) {
+      operations.push({ type: 'delete_connections', ids });
+      connections = connections.filter(connection => !ids.includes(connection.id));
+    }
+  }
   referenceNodes.forEach(reference => {
     if (connections.some(connection => connection.fromNodeId === reference.node.id && connection.toNodeId === nodeId)) return;
     const connection: WorkflowConnection = { id: 'conn-' + createId(), fromNodeId: reference.node.id, toNodeId: nodeId };
@@ -499,6 +615,11 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
   });
   const regionById = new Map(referenceNodes.filter(reference => reference.region).map(reference => [reference.node.id, reference.region!]));
   if (regionById.size) attachMentionRegions(document.richTextDocument, regionById);
+  // role / purpose 也写进 chip：之后 node.run 或改提示词时不丢（以前 role 只在本次 promptIntent 里）。
+  attachMentionAttrs(document.richTextDocument, new Map(referenceNodes.map(reference => [reference.node.id, {
+    ...(reference.role ? { role: reference.role } : {}),
+    ...(reference.purpose ? { purpose: reference.purpose } : {}),
+  }])));
   if (document.unresolved.length) {
     diagnostics.push({ code: 'UNRESOLVED_MENTION', message: `@ref:${document.unresolved.join('、@ref:')} 不在 references 里，已保留为文字；要引用请加进 references。` });
   }
@@ -551,16 +672,85 @@ export function planWorkflowGenerate(input: GeneratePlanInput): GeneratePlan {
       ...(route ? { routeId: route.routeId, provider: String(route.key.provider) } : {}),
       source: model.id.startsWith('rh:') ? 'runninghub-doc' : 'static',
     },
-    references: referenceNodes.map(reference => ({
+    references: referenceNodes.map((reference, index) => ({
       nodeId: reference.node.id,
       label: labels.get(reference.node.id)?.label || reference.node.title,
       kind: reference.kind,
+      order: index + 1,
       ...(reference.role ? { role: reference.role } : {}),
       ...(reference.region ? { region: reference.region } : {}),
+      ...(reference.purpose ? { purpose: reference.purpose } : {}),
       mentioned: document.mentionIds.includes(reference.node.id),
     })),
     promptIntent,
     diagnostics,
     autoLinked: alignment.autoLinked,
+    priorReferenceIds,
+    referenceSource: referencesGiven ? 'caller' : inherited ? 'inherited' : 'none',
+    droppedReferenceIds,
   };
+}
+
+export interface GenerateInvariantIssue {
+  code: 'NODE_MISSING' | 'MODE_MISMATCH' | 'SUBMODE_MISMATCH' | 'MODEL_MISMATCH' | 'REFERENCES_LOST' | 'REFERENCE_NOT_IN_PROMPT' | 'REFERENCE_ORDER_MISMATCH' | 'SUBMODE_IGNORES_REFERENCES' | 'REFERENCES_DROPPED';
+  message: string;
+  details: Record<string, unknown>;
+}
+
+const mentionIdsOf = (document: unknown): string[] => {
+  const ids: string[] = [];
+  const walk = (value: unknown) => {
+    if (!isRecord(value)) return;
+    if (value.type === 'mediaMention' && isRecord(value.attrs) && typeof value.attrs.id === 'string' && !ids.includes(value.attrs.id)) ids.push(value.attrs.id);
+    if (Array.isArray(value.content)) value.content.forEach(walk);
+  };
+  walk(document);
+  return ids;
+};
+
+/**
+ * 写入后的不变量（P0-A）：回读已提交的节点，核对 mode / submode / 模型 / 参考与计划一致，
+ * 参考既在 Prompt Bar chip 里、连线顺序也与计划一致；调用方传了参考或节点原本有参考，结果却没有参考，一律报出来。
+ * 有任何问题时 dispatcher 拒绝 run=true（写入已完成，可撤销），把结构化 details 交回调用方。
+ */
+export function checkGenerateInvariant(
+  plan: Pick<GeneratePlan, 'nodeId' | 'mode' | 'model' | 'references' | 'priorReferenceIds' | 'referenceSource' | 'droppedReferenceIds'>,
+  committed: { nodes: readonly WorkflowNode[]; connections: readonly WorkflowConnection[] },
+  args: Record<string, unknown> = {},
+): GenerateInvariantIssue[] {
+  const issues: GenerateInvariantIssue[] = [];
+  const node = committed.nodes.find(item => item.id === plan.nodeId);
+  if (!node) return [{ code: 'NODE_MISSING', message: `写入后找不到生成节点 ${plan.nodeId}`, details: { nodeId: plan.nodeId } }];
+  const config = node.metadata.config;
+  const expectedIds = plan.references.map(reference => reference.nodeId);
+  if (generateModeOf(node) !== plan.mode || (config?.mode && config.mode !== plan.mode)) {
+    issues.push({ code: 'MODE_MISMATCH', message: `节点 ${node.id} 的模式是 ${config?.mode || node.type}，计划是 ${plan.mode}`, details: { expected: plan.mode, actual: config?.mode || node.type } });
+  }
+  if (config?.submode !== plan.model.submode) {
+    issues.push({ code: 'SUBMODE_MISMATCH', message: `节点 ${node.id} 的生成方式是 ${String(config?.submode)}，计划是 ${plan.model.submode}`, details: { expected: plan.model.submode, actual: config?.submode ?? null } });
+  }
+  if (plan.model.modelId && config?.modelId !== plan.model.modelId) {
+    issues.push({ code: 'MODEL_MISMATCH', message: `节点 ${node.id} 的模型是 ${String(config?.modelId)}，计划是 ${plan.model.modelId}`, details: { expected: plan.model.modelId, actual: config?.modelId ?? null } });
+  }
+  if (expectedIds.length && (plan.model.submode === 'text-to-image' || plan.model.submode === 'text-to-video')) {
+    issues.push({ code: 'SUBMODE_IGNORES_REFERENCES', message: `${plan.model.submode} 会忽略全部参考`, details: { submode: plan.model.submode, referenceIds: expectedIds } });
+  }
+  const passedReferences = Array.isArray(args.references) ? args.references.length > 0 : typeof args.references === 'string' && args.references.trim().length > 0;
+  const explicitlyCleared = (args.dropReferences === true || args.dropReferences === 'true') && plan.referenceSource === 'caller';
+  if (!expectedIds.length && !explicitlyCleared && (passedReferences || plan.priorReferenceIds.length)) {
+    issues.push({ code: 'REFERENCES_LOST', message: `调用方传了参考或节点原本有参考（${plan.priorReferenceIds.join('、') || '见 references 参数'}），写入后却没有任何参考`, details: { priorReferenceIds: plan.priorReferenceIds, submode: plan.model.submode } });
+  }
+  const mentioned = mentionIdsOf(node.metadata.richTextDocument);
+  const notInPrompt = expectedIds.filter(id => !mentioned.includes(id));
+  if (notInPrompt.length) {
+    issues.push({ code: 'REFERENCE_NOT_IN_PROMPT', message: `参考 ${notInPrompt.join('、')} 没有出现在 Prompt Bar 的 chip 里，运行时不会被使用`, details: { missing: notInPrompt, mentioned } });
+  }
+  const linked = currentGenerateReferences(node, committed.nodes, committed.connections).map(reference => reference.nodeId).filter(id => expectedIds.includes(id));
+  if (linked.join('|') !== expectedIds.join('|')) {
+    issues.push({ code: 'REFERENCE_ORDER_MISMATCH', message: `连线顺序 ${linked.join(' → ') || '（无）'} 与计划的参考顺序 ${expectedIds.join(' → ')} 不一致`, details: { expected: expectedIds, actual: linked } });
+  }
+  if (plan.droppedReferenceIds.length) {
+    issues.push({ code: 'REFERENCES_DROPPED', message: `节点已有的参考 ${plan.droppedReferenceIds.join('、')} 不在 references 里：加 dropReferences=true 断开，或把它们写回 references`, details: { droppedReferenceIds: plan.droppedReferenceIds } });
+  }
+  return issues;
 }

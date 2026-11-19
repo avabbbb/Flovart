@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1",
   "protocolVersion": "1",
-  "registryHash": "a02cd1605dda40ba1e3fdb09916cdc139d2fe5bd34d97b9a8a2d0ce9943763df",
+  "registryHash": "e9aff2e7836dea0638b297d94f29490aa13c49b78139cbd4835207a2cb6dff0d",
   "commands": [
     {
       "name": "runtime.status",
@@ -603,6 +603,7 @@
         "params": "object?",
         "shot": "object?",
         "linkPolicy": "auto|reject?",
+        "dropReferences": "boolean?",
         "run": "boolean?",
         "dryRun": "boolean?",
         "expectedRevision": "number?",

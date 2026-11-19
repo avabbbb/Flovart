@@ -225,3 +225,40 @@ export function createMemoryTool(options: { projectId: string; backend: AgentMem
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// 记忆提醒（P1-E）：用户确认决定时、上下文快被压缩时、刚压缩完，在本轮系统提示词里提醒 Agent 写项目记忆。
+// 只是一段提示词，不替 Agent 写入（写什么仍由 Agent 判断，避免把一次性过程或模型自评写进记忆）。
+// ---------------------------------------------------------------------------
+
+const CONFIRMATION = /^(?:好的?|行|可以|确认|确定|就这样|就这么定|就用|就按|定了|没问题|同意|对|是的|嗯+|ok(?:ay)?|yes|yep|sure|lgtm|sounds good|go(?: ahead)?|用这个|就这个|选\s*[A-Da-d1-9一二三四]|第\s*[一二三四1-9]\s*[个张版条])/i;
+const CONFIRMATION_ANYWHERE = /(?:确认|定稿|就按这个|就用这个|采用|以后都|今后都|统一用|always use|from now on)/i;
+
+/** 用户这条消息像是在确认一个决定（短句的「好 / 确认 / 就用这个 / 选 B」，或带「定稿 / 以后都」）。 */
+export function looksLikeDecisionConfirmation(text: string): boolean {
+  const value = String(text || '').trim();
+  if (!value) return false;
+  if (CONFIRMATION_ANYWHERE.test(value)) return true;
+  return value.length <= 40 && CONFIRMATION.test(value);
+}
+
+export interface MemoryNudgeInput {
+  confirmation?: boolean;
+  nearCompaction?: boolean;
+  justCompacted?: boolean;
+}
+
+/** 本轮的记忆提醒段落；没有需要提醒的情况返回空串。 */
+export function formatMemoryNudge(input: MemoryNudgeInput): string {
+  const lines: string[] = [];
+  if (input.confirmation) {
+    lines.push(`- 用户这条消息像是在确认一个决定。如果确认的是本项目以后还要沿用的事实（风格、角色/产品设定、画幅、时长、选定的模型或费用档位、命名），先用 ${MEMORY_TOOL_NAME} add 记一句再继续；已有相同内容就不用重复写。`);
+  }
+  if (input.nearCompaction) {
+    lines.push(`- 上下文快满了，很快会被压缩成摘要：把此前用户已确认、还没写进项目记忆的事实用 ${MEMORY_TOOL_NAME} add 记下来，压缩后它们仍会出现在系统提示词里。`);
+  }
+  if (input.justCompacted) {
+    lines.push(`- 上下文刚被压缩：上面的「项目记忆」已重新注入，以它和摘要为准继续。摘要里提到、但记忆里没有的已确认事实，用 ${MEMORY_TOOL_NAME} add 补上。`);
+  }
+  return lines.length ? ['## 记忆提醒', ...lines].join('\n') : '';
+}

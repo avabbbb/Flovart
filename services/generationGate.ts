@@ -21,6 +21,10 @@ export interface GenerationGateDetails {
   aspectRatio?: string;
   nodeTitle?: string;
   costBasis?: 'pricing-rule' | 'unknown';
+  /** 没有金额时的原因：no-key=没配 API Key，no-route=当前 Key 没有这个模型的线路，no-pricing-rule=线路上没有计价规则（最常见）。 */
+  costUnknownReason?: 'no-key' | 'no-route' | 'no-pricing-rule';
+  /** 节点用的产品模型 id（费用档位按它算）。 */
+  modelId?: string;
   costComponents?: ApiCostEstimate['components'];
   references?: PlanReference[];
   budget?: { used: number; limit: number; currency: 'USD' | 'CNY'; wouldExceed: boolean };
@@ -128,6 +132,8 @@ export function getGenerationGateDetails(
     aspectRatio,
     nodeTitle: node.title,
     costBasis: estimate ? 'pricing-rule' : 'unknown',
+    ...(estimate ? {} : { costUnknownReason: !keys.length ? 'no-key' as const : !route ? 'no-route' as const : 'no-pricing-rule' as const }),
+    ...(modelId ? { modelId } : {}),
     costComponents: estimate?.components,
   };
 }

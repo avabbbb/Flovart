@@ -19,9 +19,9 @@ import { displayError } from './displayError';
 import { buildProductionBible } from '../components/workflow/productionBible';
 import { nodeSearchQueryFromArgs, searchWorkflowNodes } from '../components/workflow/nodeSearch';
 import { buildProjectLedger, renderProjectLedger } from '../components/workflow/projectLedger';
-import { buildWorkflowPromptDocument, promptDocumentMentions } from '../components/workflow/promptDocument';
+import { buildWorkflowPromptDocument, promptDocumentMentions, workflowPromptMentionAttrs } from '../components/workflow/promptDocument';
 import { buildScriptMaterializeOps, ScriptMaterializeError } from '../components/workflow/scriptMaterialize';
-import { generateModeOf, listWorkflowModels, planWorkflowGenerate, WorkflowGenerateError } from './workflowGenerateCommand';
+import { checkGenerateInvariant, currentGenerateReferences, generateModeOf, listWorkflowModels, planWorkflowGenerate, WorkflowGenerateError } from './workflowGenerateCommand';
 import { WorkflowGroupError, buildGroupCreateOps, groupRunOrder, isGroupFrame } from '../components/workflow/canvasGroups';
 import { SLASH_SHORTCUTS, SlashShortcutError, buildShortcutApplyOps, describeSlashShortcuts, getSlashShortcut } from '../components/workflow/slashShortcuts';
 import type { UserApiKey } from '../types';
@@ -244,6 +244,7 @@ const inspectSummary = (project: WorkflowProject) => ({
     visible: node.isVisible !== false,
     locked: node.isLocked === true,
     status: node.metadata.status || 'idle',
+    ...(node.type === 'video' && typeof node.metadata.durationMs === 'number' && node.metadata.durationMs > 0 ? { durationSec: Math.round(node.metadata.durationMs / 100) / 10 } : {}),
     // 多结果的备选挂在节点上（不是画布节点）；详情用 inspect nodeId 读 metadata.alternates。
     ...(node.metadata.alternates?.length ? { alternateCount: node.metadata.alternates.length, alternateIds: node.metadata.alternates.map(item => item.id) } : {}),
   })),
@@ -273,8 +274,35 @@ const inspectNode = (project: WorkflowProject, nodeId: string) => {
     outbound,
     upstreamNodeIds: [...new Set(inbound.map(connection => connection.fromNodeId))],
     downstreamNodeIds: [...new Set(outbound.map(connection => connection.toNodeId))],
+    ...(generateModeOf(node) ? { references: inspectReferences(project, node) } : {}),
+    ...(mediaFacts(node) ? { media: mediaFacts(node) } : {}),
   };
 };
+
+/** 生成节点的参考，按 chip 顺序（order 1 起 = 图片1/视频1… 的排序依据），带 role / purpose / region。 */
+function inspectReferences(project: WorkflowProject, node: WorkflowNode) {
+  const labels = new Map(workflowPromptMentionAttrs(node.id, project.nodes, project.connections).map(item => [item.id, item.label]));
+  const byId = new Map(project.nodes.map(item => [item.id, item]));
+  return currentGenerateReferences(node, project.nodes, project.connections).map((reference, index) => ({
+    order: index + 1,
+    nodeId: reference.nodeId,
+    label: labels.get(reference.nodeId) || byId.get(reference.nodeId)?.title || reference.nodeId,
+    kind: byId.get(reference.nodeId)?.type,
+    ...(reference.role ? { role: reference.role } : {}),
+    ...(reference.purpose ? { purpose: reference.purpose } : {}),
+    ...(reference.region ? { region: reference.region } : {}),
+  }));
+}
+
+/** 媒体的时长与尺寸（有记录时）：Agent 规划输出时长时不必先 media_view。 */
+function mediaFacts(node: WorkflowNode): { durationSec?: number; width?: number; height?: number } | null {
+  const metadata = node.metadata;
+  const durationSec = typeof metadata.durationMs === 'number' && metadata.durationMs > 0 ? Math.round(metadata.durationMs / 100) / 10 : undefined;
+  const width = typeof metadata.naturalWidth === 'number' && metadata.naturalWidth > 0 ? metadata.naturalWidth : undefined;
+  const height = typeof metadata.naturalHeight === 'number' && metadata.naturalHeight > 0 ? metadata.naturalHeight : undefined;
+  if (durationSec === undefined && width === undefined) return null;
+  return { ...(durationSec !== undefined ? { durationSec } : {}), ...(width ? { width } : {}), ...(height ? { height } : {}) };
+}
 
 const error = (
   commandId: string,
@@ -450,7 +478,13 @@ export function documentOperationsArg(value: unknown): WorkflowDocumentOperation
  * 让 Draft ChangeSet 记下真实的连线增删（可撤销、可重放）。同批前面带 id 的 connect_nodes 也算进去。
  * 只给完整 ids 的旧写法同样按目标节点分组展开。
  */
-export function expandReferenceReorders(connections: readonly WorkflowConnection[], operations: WorkflowDocumentOperation[], createId: () => string = nanoid): WorkflowDocumentOperation[] {
+export function expandReferenceReorders(
+  connections: readonly WorkflowConnection[],
+  operations: WorkflowDocumentOperation[],
+  createId: () => string = nanoid,
+  /** 某个 reorder_connections 已经是目标顺序（展开为空）时回调：调用方据此报「无需修改」，而不是交给提交层报「ops 为空」。 */
+  onNoop?: (note: { index: number; targetNodeId: string; orderedSourceIds: string[] }) => void,
+): WorkflowDocumentOperation[] {
   let working: WorkflowConnection[] = [...connections];
   return operations.flatMap((operation, index): WorkflowDocumentOperation[] => {
     if (operation.type === 'connect_nodes' && operation.id) {
@@ -469,8 +503,13 @@ export function expandReferenceReorders(connections: readonly WorkflowConnection
       if (!Array.isArray(raw.ids) || !raw.ids.length) throw new Error('operations[' + index + '] reorder_connections 需要 targetNodeId + orderedSourceIds，或完整的 ids');
       const byId = new Map(working.map(connection => [connection.id, connection]));
       const ordered = raw.ids.map(id => byId.get(String(id)));
-      if (ordered.some(connection => !connection) || raw.ids.length !== working.length) throw new Error('operations[' + index + '] 连接顺序必须完整且不能重复');
+      if (ordered.some(connection => !connection)) throw new Error('operations[' + index + '] reorder_connections.ids 里有不存在的连接 id；推荐改用 {targetNodeId, orderedSourceIds}（上游节点 id）');
       const targets = [...new Set(ordered.map(connection => connection!.toNodeId))];
+      // 只需覆盖涉及到的目标节点的全部入边（以前要求列出画布上所有连接）。
+      const required = working.filter(connection => targets.includes(connection.toNodeId));
+      if (new Set(raw.ids.map(String)).size !== raw.ids.length || raw.ids.length !== required.length) {
+        throw new Error('operations[' + index + '] reorder_connections.ids 必须完整列出目标节点（' + targets.join('、') + '）的全部 ' + required.length + ' 条入边且不能重复；推荐改用 {targetNodeId, orderedSourceIds}');
+      }
       plans = targets.map(targetNodeId => ({ targetNodeId, orderedSourceIds: ordered.filter(connection => connection!.toNodeId === targetNodeId).map(connection => connection!.fromNodeId) }));
     } else {
       const targetNodeId = requiredString(raw.targetNodeId, 'reorder_connections.targetNodeId');
@@ -479,11 +518,19 @@ export function expandReferenceReorders(connections: readonly WorkflowConnection
       }
       const inbound = new Set(working.filter(connection => connection.toNodeId === targetNodeId).map(connection => connection.fromNodeId));
       const stray = (raw.orderedSourceIds as string[]).filter(id => !inbound.has(id));
-      if (stray.length) throw new Error('operations[' + index + '] reorder_connections：' + stray.join('、') + ' 不是 ' + targetNodeId + ' 的上游参考，先 connect_nodes');
+      if (stray.length) {
+        const connectionIds = new Set(working.filter(connection => connection.toNodeId === targetNodeId).map(connection => connection.id));
+        const current = [...inbound].join('、') || '（无）';
+        if (stray.every(id => connectionIds.has(id))) {
+          throw new Error('operations[' + index + '] reorder_connections.orderedSourceIds 要写上游节点 id，不是连接 id；' + targetNodeId + ' 当前的上游参考按顺序是：' + current);
+        }
+        throw new Error('operations[' + index + '] reorder_connections：' + stray.join('、') + ' 不是 ' + targetNodeId + ' 的上游参考（当前上游：' + current + '），先 connect_nodes');
+      }
       plans = [{ targetNodeId, orderedSourceIds: raw.orderedSourceIds as string[] }];
     }
     return plans.flatMap(plan => {
       const ops = reorderReferenceOperations(working, plan.targetNodeId, plan.orderedSourceIds, () => 'conn-' + createId());
+      if (!ops.length) onNoop?.({ index, targetNodeId: plan.targetNodeId, orderedSourceIds: working.filter(connection => connection.toNodeId === plan.targetNodeId).map(connection => connection.fromNodeId) });
       for (const op of ops) {
         if (op.type === 'delete_connections') working = working.filter(connection => !op.ids.includes(connection.id));
         else working = [...working, { id: op.id, fromNodeId: op.fromNodeId, toNodeId: op.toNodeId, kind: op.kind, role: op.role, order: op.order }];
@@ -491,6 +538,17 @@ export function expandReferenceReorders(connections: readonly WorkflowConnection
       return ops as WorkflowDocumentOperation[];
     });
   });
+}
+
+/** 入边有变化的目标节点：新的参考顺序（可见媒体上游，chip 编号按这个顺序）。 */
+function referenceOrderPreview(before: readonly WorkflowConnection[], after: readonly WorkflowConnection[], nodes: readonly WorkflowNode[]): Record<string, string[]> {
+  const inbound = (list: readonly WorkflowConnection[], target: string) => list.filter(connection => connection.toNodeId === target).map(connection => connection.fromNodeId).join('|');
+  const targets = [...new Set([...before, ...after].map(connection => connection.toNodeId))].filter(target => inbound(before, target) !== inbound(after, target));
+  const byId = new Map(nodes.map(node => [node.id, node]));
+  return Object.fromEntries(targets.map(target => [target, after
+    .filter(connection => connection.toNodeId === target)
+    .map(connection => connection.fromNodeId)
+    .filter(id => { const node = byId.get(id); return Boolean(node && node.isVisible !== false && ['image', 'video', 'audio'].includes(node.type)); })]));
 }
 
 const mutationSource = (source: WorkflowCommandEnvelope['source']): WorkflowMutationSource => (
@@ -1028,6 +1086,7 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
           prompt: plan.prompt,
           model: plan.model,
           references: plan.references,
+          referenceSource: plan.referenceSource,
           autoLinked: plan.autoLinked,
           diagnostics: plan.diagnostics,
         };
@@ -1041,10 +1100,25 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
           expectedRevision,
           intent: (isShortcut ? '快捷工具「' + String(shortcutSummary?.scene) + '」：' : '') + (plan.created ? '新建生成节点并写入提示词：' : '写入提示词：') + plan.nodeId,
         });
-        if (!committed.ok) return committed;
-        const draftVersion = (committed.result as { draftVersion?: number }).draftVersion;
-        if (args.run !== true && args.run !== 'true') {
-          result = { ok: true, commandId: envelope.id, result: { ...summary, draftVersion, ran: false } };
+        // 内容与节点完全一致（例如先 run=false 写好、再用同样参数 run=true）：没有可提交的修改不算失败，按当前节点继续。
+        const unchanged = !committed.ok && committed.error?.message.startsWith('该操作没有修改 Workflow Draft');
+        if (!committed.ok && !unchanged) return committed;
+        const draftVersion = unchanged ? (project.draftVersion || 1) : (committed.result as { draftVersion?: number }).draftVersion;
+        // P0-A：回读已提交的节点核对 mode / submode / 参考；不一致时不运行（写入已完成，可撤销），把问题结构化交回。
+        const committedProject = dependencies.getState().projects.find(item => item.id === project.id);
+        const invariantIssues = committedProject ? checkGenerateInvariant(plan, committedProject, args) : [];
+        const wantsRun = args.run === true || args.run === 'true';
+        if (invariantIssues.length && wantsRun) {
+          return { ok: false, commandId: envelope.id, error: {
+            code: 'GENERATE_INVARIANT_FAILED',
+            message: '提示词已写入节点 ' + plan.nodeId + '，但写入结果与请求不一致，没有运行（避免花钱生成错的东西）：' + invariantIssues.map(issue => issue.message).join('；'),
+            retryable: false,
+            details: { nodeId: plan.nodeId, draftVersion, issues: invariantIssues, references: plan.references, model: plan.model },
+          } };
+        }
+        const warnings = invariantIssues.length ? { warnings: invariantIssues } : {};
+        if (!wantsRun) {
+          result = { ok: true, commandId: envelope.id, result: { ...summary, ...warnings, draftVersion, ran: false } };
         } else {
           const executor = dependencies.getExecutor?.() || dependencies.executor;
           if (!executor) return error(envelope.id, 'RUNNER_UNAVAILABLE', '提示词已写入节点 ' + plan.nodeId + '；Workflow 生成适配器尚未连接，无法运行。');
@@ -1311,8 +1385,25 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         const expectedRevision = args.expectedRevision === undefined ? (project.draftVersion || 1) : finiteNumber(args.expectedRevision, 'expectedRevision');
         let operation: WorkflowDocumentOperation | undefined;
         let operations: WorkflowDocumentOperation[] | undefined;
+        const noopOperations: Array<{ index: number; targetNodeId: string; orderedSourceIds: string[]; reason: string }> = [];
         if (command === 'workflow.apply') {
-          operations = expandReferenceReorders(project.connections, autoPlaceDocumentOperations(project.nodes, documentOperationsArg(args.operations || args.ops)));
+          const requested = documentOperationsArg(args.operations || args.ops);
+          operations = expandReferenceReorders(project.connections, autoPlaceDocumentOperations(project.nodes, requested), nanoid, note => noopOperations.push({ ...note, reason: '参考顺序已经是 ' + note.orderedSourceIds.join(' → ') + '，无需修改' }));
+          if (!operations.length) {
+            // P1-C：只有已经有序的 reorder_connections 时，展开后没有任何写入；以前直接交给提交层，报「ops 至少包含一个 Document Operation」。
+            result = { ok: true, commandId: envelope.id, result: {
+              projectId: project.id,
+              applied: false,
+              noop: true,
+              ...(args.dryRun === true || args['dry-run'] === true ? { dryRun: true } : {}),
+              draftVersion: project.draftVersion || 1,
+              operationCount: 0,
+              noopOperations,
+              message: noopOperations.map(item => 'operations[' + item.index + '] ' + item.reason).join('；') || '没有需要写入的修改',
+            } };
+            cache(cacheKey, result);
+            return result;
+          }
         } else if (command === 'workflow.node.create') {
           const node = validatedNode(args, 'node-' + mutationId);
           if (args.x === undefined && args.y === undefined) node.position = autoPlaceWorkflowNode(project.nodes, node);
@@ -1432,6 +1523,9 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
               connectionIds: [...afterConnectionIds].filter(id => !beforeConnectionIds.has(id)),
               removedConnectionIds: [...beforeConnectionIds].filter(id => !afterConnectionIds.has(id)),
               ...(prunedMentions.length ? { prunedMentions } : {}),
+              ...(noopOperations.length ? { noopOperations } : {}),
+              // 预演后每个被改动的生成节点的参考顺序（chip 编号 = 这个顺序），调用方据此确认 reorder 的效果。
+              referenceOrder: referenceOrderPreview(project.connections, preview.snapshot.connections, preview.snapshot.nodes),
             },
           };
           cache(cacheKey, result);
@@ -1457,6 +1551,9 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
         if (prunedMentions.length && result.result && typeof result.result === 'object') {
           result = { ...result, result: { ...(result.result as Record<string, unknown>), prunedMentions } };
         }
+        if (noopOperations.length && result.result && typeof result.result === 'object') {
+          result = { ...result, result: { ...(result.result as Record<string, unknown>), noopOperations } };
+        }
       }
 
       cache(cacheKey, result);
@@ -1466,16 +1563,50 @@ export function createWorkflowDispatcher(dependencies: WorkflowDispatcherDepende
     }
   };
   const inFlightRuns = new Map<string, Promise<WorkflowCommandResult>>();
+  // P0-B：写命令返回的 draftVersion 必须是所有内部写入（提交 → 运行时挂生成记录 / 写回结果 / 草稿日志）之后的最终版本，
+  // 调用方才能直接拿它当下一次的 expectedRevision；以前返回的是第一次提交时的版本，运行又推进了几次，下一次写必然冲突。
+  const withFinalRevision = async (envelope: WorkflowCommandEnvelope, pending: Promise<WorkflowCommandResult>) => stampFinalRevision(envelope, await pending, dependencies);
   return (envelope: WorkflowCommandEnvelope): Promise<WorkflowCommandResult> => {
     // 同一 idempotencyKey 的并发重复 run（Agent 重试、双击）共享一次执行；结果缓存只在完成后写入，挡不住并发。
     const key = (envelope?.command === 'workflow.node.run' || envelope?.command === 'workflow.generate' || envelope?.command === 'workflow.shortcut.apply' || envelope?.command === 'workflow.group.run') && envelope.idempotencyKey ? envelope.source + ':' + envelope.idempotencyKey : undefined;
-    if (!key) return execute(envelope);
+    if (!key) return withFinalRevision(envelope, execute(envelope));
     const pending = inFlightRuns.get(key);
-    if (pending) return pending;
+    if (pending) return withFinalRevision(envelope, pending);
     const running = execute(envelope).finally(() => inFlightRuns.delete(key));
     inFlightRuns.set(key, running);
-    return running;
+    return withFinalRevision(envelope, running);
   };
+}
+
+/**
+ * 给写命令的结果盖上最终版本：draftVersion（以及 revision 字段，如果有）= 返回那一刻项目的版本。
+ * 内部多次写入时另带 committedDraftVersion（本次文档提交本身的版本），便于排查。读命令原样返回。
+ * 失败结果里有 details.draftVersion 的同样刷新，让调用方修好后直接重试。
+ */
+const RUN_LIKE_COMMANDS: ReadonlySet<string> = new Set(['workflow.node.run', 'workflow.group.run', 'workflow.node.tool', 'workflow.generate', 'workflow.shortcut.apply']);
+
+export function stampFinalRevision(envelope: WorkflowCommandEnvelope, result: WorkflowCommandResult, dependencies: Pick<WorkflowDispatcherDependencies, 'getState'>): WorkflowCommandResult {
+  if (!envelope || WORKFLOW_READ_COMMANDS.has(envelope.command) || envelope.command === 'workflow.focus.nodes') return result;
+  const body = result.ok ? result.result : result.error?.details;
+  if (!isRecord(body)) return result;
+  const state = dependencies.getState();
+  const projectId = typeof body.projectId === 'string' ? body.projectId : String(envelope.args?.projectId || state.activeProjectId || '');
+  const project = state.projects.find(item => item.id === projectId);
+  if (!project) return result;
+  const finalVersion = project.draftVersion || 1;
+  const hasDraft = typeof body.draftVersion === 'number';
+  const hasRevision = typeof body.revision === 'number';
+  if (!result.ok) {
+    if (!hasDraft || body.draftVersion === finalVersion) return result;
+    return { ...result, error: { ...result.error!, details: { ...body, draftVersion: finalVersion, committedDraftVersion: body.draftVersion } } };
+  }
+  // 运行 / 画布工具这类原本不带版本号的写命令也补上，Agent 不必再 inspect 一次；其它命令只刷新已有的版本字段。
+  if (!hasDraft && !hasRevision && !RUN_LIKE_COMMANDS.has(envelope.command)) return result;
+  if (hasDraft && body.draftVersion === finalVersion && (!hasRevision || body.revision === finalVersion)) return result;
+  const stamped: Record<string, unknown> = { ...body, draftVersion: finalVersion };
+  if (hasDraft && body.draftVersion !== finalVersion) stamped.committedDraftVersion = body.draftVersion;
+  if (hasRevision) stamped.revision = finalVersion;
+  return { ...result, result: stamped };
 }
 
 let browserNodeToolRunner: WorkflowDispatcherDependencies['nodeToolRunner'];

@@ -1,3 +1,4 @@
+import { describeReferencePurposes, isReferencePurpose, withReferencePurposeLegend, type WorkflowReferencePurpose } from './referencePurpose';
 import type { ProductModelMode } from '../../types';
 import { findWorkflowNodeDefinition } from './resourceContract';
 import type { PromptIntent } from './promptIntent';
@@ -110,6 +111,8 @@ export interface GenerationReference {
 
 export interface CanonicalGenerationReference extends GenerationReference {
   order: number;
+  /** 参考用途（主体 / 风格 / 背景…），来自 Prompt Bar chip；声明了才有。 */
+  purpose?: WorkflowReferencePurpose;
 }
 
 export interface CanonicalGenerationParameters {
@@ -588,6 +591,19 @@ export function resolveWorkflowInputs(
   };
 }
 
+function mentionPurposes(document?: Record<string, unknown>): Map<string, WorkflowReferencePurpose> {
+  const result = new Map<string, WorkflowReferencePurpose>();
+  const walk = (node: Record<string, unknown>) => {
+    if (node.type === 'mediaMention' && node.attrs && typeof node.attrs === 'object') {
+      const attrs = node.attrs as Record<string, unknown>;
+      if (typeof attrs.id === 'string' && isReferencePurpose(attrs.purpose) && !result.has(attrs.id)) result.set(attrs.id, attrs.purpose);
+    }
+    if (Array.isArray(node.content)) (node.content as Record<string, unknown>[]).forEach(walk);
+  };
+  if (document) walk(document);
+  return result;
+}
+
 function canonicalRole(reference: GenerationReference, index: number, mode: WorkflowGenerationMode, submode?: ProductModelMode): WorkflowGenerationReferenceRole {
   const { resource } = reference;
   const explicitRole = reference.declaredRole || resource.reference.role;
@@ -658,15 +674,22 @@ export function buildCanonicalGenerationInput(input: {
   if (input.mode === 'text' || generationSubmode === 'text-to-video' || generationSubmode === 'text-to-image') candidates = [];
   else if (generationSubmode === 'image-to-video' || generationSubmode === 'first-last-frame') candidates = candidates.filter(reference => reference.resource.kind === 'image');
 
-  const references = candidates.map((reference, order) => ({
-    ...reference,
-    role: canonicalRole(reference, order, input.mode, generationSubmode),
-    order,
-  } satisfies CanonicalGenerationReference));
+  const purposeById = mentionPurposes(input.targetNode.metadata.richTextDocument as Record<string, unknown> | undefined);
+  const references = candidates.map((reference, order) => {
+    const purpose = purposeById.get(reference.resource.sourceNodeId) || purposeById.get(reference.resource.reference.sourceId || '');
+    return {
+      ...reference,
+      role: canonicalRole(reference, order, input.mode, generationSubmode),
+      order,
+      ...(purpose ? { purpose } : {}),
+    } satisfies CanonicalGenerationReference;
+  });
+  // P1-D：声明了用途的参考编成一句参考说明接在提示词后（图片N 与 chip 编号同一规则）；没有用途时提示词不变。
+  const legend = describeReferencePurposes(references.map(reference => ({ kind: reference.resource.kind, purpose: reference.purpose })));
   return {
     nodeId: input.targetNode.id,
     capability: canonicalCapability(input.mode, generationSubmode, references.map(reference => reference.resource)),
-    prompt: input.prompt,
+    prompt: withReferencePurposeLegend(input.prompt, legend),
     textInputs: input.inputs.texts,
     references,
     parameters: {
