@@ -898,13 +898,21 @@
       "watchers": 0,
       "releases": 103,
       "downloads": 123
+    },
+    {
+      "date": "2026-11-20",
+      "stars": 146,
+      "forks": 37,
+      "watchers": 0,
+      "releases": 104,
+      "downloads": 124
     }
   ],
   "releaseAssets": [
     {
       "release": "v0.2.0-test",
       "name": "Flovart_0.2.0_x64-setup.exe",
-      "downloads": 50,
+      "downloads": 51,
       "updatedAt": "2026-06-02T08:23:17Z"
     },
     {
@@ -1044,6 +1052,18 @@
       "name": "SHA256SUMS-x86_64-unknown-linux-gnu.txt",
       "downloads": 2,
       "updatedAt": "2026-10-16T06:47:58Z"
+    },
+    {
+      "release": "nightly-302-466abae",
+      "name": "Iris_0.3.0_amd64.AppImage",
+      "downloads": 0,
+      "updatedAt": "2026-11-20T02:10:44Z"
+    },
+    {
+      "release": "nightly-302-466abae",
+      "name": "Iris_0.3.0_amd64.deb",
+      "downloads": 0,
+      "updatedAt": "2026-11-20T02:10:39Z"
     },
     {
       "release": "nightly-301-96fd8a5",
@@ -4478,5 +4498,5 @@
       "updatedAt": "2026-10-16T03:30:20Z"
     }
   ],
-  "updatedAt": "2026-11-19T07:36:16.523Z"
+  "updatedAt": "2026-11-20T07:27:19.446Z"
 }
