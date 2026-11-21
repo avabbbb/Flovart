@@ -26,6 +26,10 @@ export interface CutTimelineProps {
   onTrim: (clipId: string, edge: 'start' | 'end', time: number) => void;
   onToggleMute: (trackId: string) => void;
   onRemoveTrack: (trackId: string) => void;
+  /** 画布节点结果已更新的联动片段 id。 */
+  stale?: ReadonlySet<string>;
+  /** 点"有更新"：替换为画布节点的新版本。 */
+  onUpdateClip?: (clipId: string) => void;
 }
 
 const HEAD_W = 92;
@@ -96,7 +100,7 @@ function InlineText({ clip, onDone }: { clip: CutClip; onDone: () => void }) {
 }
 
 export function CutTimeline(props: CutTimelineProps) {
-  const { language, project, engine, time, selection, snapping, pxPerSecond, offline, onSelect, onSeek, onMove, onTrim, mediaRevision } = props;
+  const { language, project, engine, time, selection, snapping, pxPerSecond, offline, onSelect, onSeek, onMove, onTrim, mediaRevision, stale, onUpdateClip } = props;
   const zh = language === 'zho';
   const scrollRef = useRef<HTMLDivElement>(null);
   const [drag, setDragState] = useState<Drag | null>(null);
@@ -258,6 +262,16 @@ export function CutTimeline(props: CutTimelineProps) {
                           <span className={`cut-clip__badge${proxy.status === 'generating' ? ' is-busy' : ''}`} data-testid="cut-proxy-badge">
                             {proxy.status === 'generating' ? `${zh ? '代理' : 'Proxy'} ${Math.round((proxy.progress ?? 0) * 100)}%` : `${zh ? '代理' : 'Proxy'} ${proxy.height}p`}
                           </span>
+                        )}
+                        {stale?.has(clip.id) && (
+                          <button
+                            type="button"
+                            className="cut-clip__update"
+                            data-testid="cut-clip-update"
+                            title={zh ? '画布节点结果已更新，点击替换为新版本' : 'The canvas node has a new result, click to use it'}
+                            onPointerDown={event => event.stopPropagation()}
+                            onClick={event => { event.stopPropagation(); onUpdateClip?.(clip.id); }}
+                          >{zh ? '有更新' : 'Update'}</button>
                         )}
                         {clip.keyframes?.map((frame, index) => <span key={index} className="cut-clip__kf" style={{ left: frame.time * pxPerSecond }} aria-hidden />)}
                         <span className="cut-clip__handle is-start" onPointerDown={event => startDrag(event, clip, 'start')} />
