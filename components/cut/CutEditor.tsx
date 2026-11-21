@@ -11,10 +11,10 @@ import { CutExportCancelled, textBox, type CutExportProgress } from '../../servi
 import { cutStore, getCutProject } from '../../services/cut/cutStore';
 import { runCutAction } from '../../services/cut/actions';
 import { actionForEvent } from '../../services/cut/shortcuts';
-import { acquireCutEngine, ensureSourceLoaded, exportCutMp4, importCanvasNode, importCutMedia, releaseCutEngine } from '../../services/cut/runtime';
+import { acquireCutEngine, ensureSourceLoaded, exportCutMp4, importCanvasNode, importCutMedia, releaseCutEngine, updateCanvasClip } from '../../services/cut/runtime';
 import { setCutProxy } from '../../services/cut/proxyActions';
 import { loadProjectFonts } from '../../services/cut/fonts';
-import { canvasSourceId, listCanvasMedia, mediaKindOfFile, type CutCanvasMedia } from '../../services/cut/canvasMedia';
+import { canvasSourceId, listCanvasMedia, mediaKindOfFile, staleCanvasClips, type CutCanvasMedia } from '../../services/cut/canvasMedia';
 import {
   addClip, addTrack, clipEnd, clipsAt, cutId, effectiveTextStyle, findClip, moveClip, projectDuration, removeTrack, setSubtitleStyle,
   setTrackMuted, trimClip, updateClip, type CutClip, type CutTrackKind,
@@ -34,6 +34,8 @@ export interface CutEditorProps {
   onNotify?: (message: string, level?: 'info' | 'success' | 'warning' | 'error') => void;
   /** 把导出的 MP4 放回画布（新建视频节点）。 */
   onSendToCanvas?: (file: File) => Promise<{ ok: boolean; error?: string }>;
+  /** 联动片段"在画布中定位"。 */
+  onFocusNode?: (nodeId: string) => void;
 }
 
 const RESOLUTIONS = [
@@ -113,7 +115,7 @@ function TextDragBox({ clip, scale, measure }: { clip: CutClip; scale: { width: 
   );
 }
 
-export default function CutEditor({ language, project: workflowProject, onNotify, onSendToCanvas }: CutEditorProps) {
+export default function CutEditor({ language, project: workflowProject, onNotify, onSendToCanvas, onFocusNode }: CutEditorProps) {
   const zh = language === 'zho';
   const projectId = workflowProject?.id ?? null;
   const project = useCut(state => state.doc.present);
@@ -143,6 +145,7 @@ export default function CutEditor({ language, project: workflowProject, onNotify
   const preview = previewSize(project.width, project.height);
   const selected = selection.length === 1 ? findClip(project, selection[0]) : undefined;
   const canvasMedia = useMemo(() => listCanvasMedia(workflowProject), [workflowProject]);
+  const staleClips = useMemo(() => new Set(staleCanvasClips(project, workflowProject?.nodes ?? []).map(item => item.clipId)), [project, workflowProject]);
   const offline = useMemo(() => new Set(project.sources.filter(source => !engine?.has(source.id)).map(source => source.id)),
     // mediaRevision：素材加载 / 释放后重算。
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -207,7 +210,7 @@ export default function CutEditor({ language, project: workflowProject, onNotify
 
   const addFromCanvas = async (item: CutCanvasMedia) => {
     if (!engine) return;
-    const sourceId = canvasSourceId(item.nodeId);
+    const sourceId = canvasSourceId(item.nodeId, item.version);
     setLoading(current => new Set(current).add(sourceId));
     try {
       await importCanvasNode(engine, item.nodeId);
@@ -215,6 +218,17 @@ export default function CutEditor({ language, project: workflowProject, onNotify
       notify(zh ? `无法导入「${item.title}」：${error instanceof Error ? error.message : String(error)}` : `Couldn't import "${item.title}": ${error instanceof Error ? error.message : String(error)}`, 'error');
     } finally {
       setLoading(current => { const next = new Set(current); next.delete(sourceId); return next; });
+    }
+  };
+
+  const updateLinkedClip = async (clipId: string) => {
+    if (!engine) return;
+    try {
+      await updateCanvasClip(engine, clipId);
+      playerRef.current?.invalidate();
+      notify(zh ? '已替换为画布节点的新版本' : 'Replaced with the new canvas version', 'success');
+    } catch (error) {
+      notify(zh ? `替换失败：${error instanceof Error ? error.message : String(error)}` : `Couldn't update: ${error instanceof Error ? error.message : String(error)}`, 'error');
     }
   };
 
@@ -332,7 +346,7 @@ export default function CutEditor({ language, project: workflowProject, onNotify
               <div className="cut-bin__group">{zh ? '画布' : 'Canvas'}</div>
               {canvasMedia.length === 0 && <p className="cut-bin__empty">{workflowProject ? (zh ? '画布上还没有图片 / 视频 / 音频节点。' : 'No image, video or audio nodes on the canvas yet.') : (zh ? '还没有画布。' : 'No canvas yet.')}</p>}
               {canvasMedia.map(item => (
-                <CanvasMediaItem key={item.nodeId} item={item} language={language} busy={!engine || loading.has(canvasSourceId(item.nodeId))} onAdd={() => void addFromCanvas(item)} />
+                <CanvasMediaItem key={item.nodeId} item={item} language={language} busy={!engine || loading.has(canvasSourceId(item.nodeId, item.version))} onAdd={() => void addFromCanvas(item)} />
               ))}
               {project.sources.some(source => source.origin.type === 'file') && <div className="cut-bin__group">{zh ? '本地文件' : 'Local files'}</div>}
               {project.sources.filter(source => source.origin.type === 'file').map(source => {
@@ -409,7 +423,7 @@ export default function CutEditor({ language, project: workflowProject, onNotify
 
       <section className="iris-panel cut-inspector" aria-label={zh ? '属性' : 'Inspector'}>
         <header className="cut-panel__head"><h2 className="cut-panel__title">{zh ? '属性' : 'Inspector'}</h2>{selection.length > 1 && <span className="cut-badge">{selection.length} {zh ? '个片段' : 'clips'}</span>}</header>
-        <CutInspector language={language} project={project} clip={selected} playhead={playhead} engine={engine} notify={notify} />
+        <CutInspector language={language} project={project} clip={selected} playhead={playhead} engine={engine} notify={notify} stale={!!selected && staleClips.has(selected.id)} onLocate={onFocusNode} onUpdate={id => void updateLinkedClip(id)} />
       </section>
 
       <section className="iris-panel cut-timeline-panel" aria-label={zh ? '时间线' : 'Timeline'}>
@@ -448,6 +462,8 @@ export default function CutEditor({ language, project: workflowProject, onNotify
           onTrim={(clipId, edge, at) => commit(trimClip(getCutProject(), clipId, edge, at), 'trim')}
           onToggleMute={trackId => cutStore.getState().apply(setTrackMuted(getCutProject(), trackId, !getCutProject().tracks.find(track => track.id === trackId)?.muted), 'mute')}
           onRemoveTrack={trackId => commit(removeTrack(getCutProject(), trackId), 'remove track')}
+          stale={staleClips}
+          onUpdateClip={id => void updateLinkedClip(id)}
         />
       </section>
       {sheet && <CutShortcutSheet language={language} onClose={() => setSheet(false)} />}

@@ -1,4 +1,4 @@
-import { CheckSquare, ClipboardPaste, Copy, CopyPlus, Download, Library, ListOrdered, Maximize2, Pencil, Play, Plus, Star, Trash2 } from 'lucide-react';
+import { CheckSquare, Clapperboard, ClipboardPaste, Copy, CopyPlus, Download, Library, ListOrdered, Maximize2, Pencil, Play, Plus, Star, Trash2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { handleMenuKeyDown } from '../../hooks/useListboxKeyboard';
@@ -8,7 +8,7 @@ export type WorkflowContextMenuState =
   | { type: 'connection'; id: string; x: number; y: number }
   | { type: 'pane'; x: number; y: number };
 
-export function WorkflowContextMenu({ state, language = 'zho', count = 1, onCopy, onDuplicate, onSaveMedia, onDelete, onRun, onSetPrimary, onRunGroup, onDownloadGroup, onRename, onPaste, onSelectAll, onAddNode, onFitView, onClose }: {
+export function WorkflowContextMenu({ state, language = 'zho', count = 1, onCopy, onDuplicate, onSaveMedia, onDelete, onRun, onSetPrimary, onRunGroup, onDownloadGroup, onSendToCut, onRename, onPaste, onSelectAll, onAddNode, onFitView, onClose }: {
   state: WorkflowContextMenuState;
   language?: 'en' | 'zho';
   onCopy: () => void;
@@ -21,6 +21,8 @@ export function WorkflowContextMenu({ state, language = 'zho', count = 1, onCopy
   onRunGroup?: () => void;
   /** 节点在分组框里：下载组内全部媒体 */
   onDownloadGroup?: () => void;
+  /** 图片 / 视频结果节点：追加到 Cut 时间线末尾（引用节点，不复制文件） */
+  onSendToCut?: () => void;
   onRename?: () => void;
   count?: number;
   onPaste?: () => void;
@@ -30,8 +32,8 @@ export function WorkflowContextMenu({ state, language = 'zho', count = 1, onCopy
   onClose: () => void;
 }) {
   const copy = language === 'zho'
-    ? { node: '节点菜单', connection: '连接菜单', pane: '画布菜单', copy: '复制', duplicate: '创建副本', save: '保存到我的素材', run: '运行节点', primary: '设为主图', runGroup: '整组执行', downloadGroup: '下载全部', rename: '重命名', delete: '删除', paste: '粘贴', selectAll: '全选', addNode: '添加节点', fitView: '适应视图' }
-    : { node: 'Node menu', connection: 'Connection menu', pane: 'Canvas menu', copy: 'Copy', duplicate: 'Duplicate', save: 'Save to media library', run: 'Run node', primary: 'Set as primary', runGroup: 'Run group', downloadGroup: 'Download all', rename: 'Rename', delete: 'Delete', paste: 'Paste', selectAll: 'Select all', addNode: 'Add node', fitView: 'Fit view' };
+    ? { node: '节点菜单', connection: '连接菜单', pane: '画布菜单', copy: '复制', duplicate: '创建副本', save: '保存到我的素材', run: '运行节点', primary: '设为主图', runGroup: '整组执行', downloadGroup: '下载全部', sendToCut: '送进 Cut', rename: '重命名', delete: '删除', paste: '粘贴', selectAll: '全选', addNode: '添加节点', fitView: '适应视图' }
+    : { node: 'Node menu', connection: 'Connection menu', pane: 'Canvas menu', copy: 'Copy', duplicate: 'Duplicate', save: 'Save to media library', run: 'Run node', primary: 'Set as primary', runGroup: 'Run group', downloadGroup: 'Download all', sendToCut: 'Send to Cut', rename: 'Rename', delete: 'Delete', paste: 'Paste', selectAll: 'Select all', addNode: 'Add node', fitView: 'Fit view' };
   const menuRef = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const [position, setPosition] = useState({ left: state.x, top: state.y, maxHeight: 480, ready: false });
@@ -112,6 +114,7 @@ export function WorkflowContextMenu({ state, language = 'zho', count = 1, onCopy
       {state.type === 'node' && <button type="button" role="menuitem" onClick={onCopy}><Copy size={14} />{copy.copy}</button>}
       {state.type === 'node' && onDuplicate && <button type="button" role="menuitem" onClick={onDuplicate}><CopyPlus size={14} />{copy.duplicate}</button>}
       {state.type === 'node' && onSaveMedia && <button type="button" role="menuitem" onClick={onSaveMedia}><Library size={14} />{copy.save}</button>}
+      {state.type === 'node' && onSendToCut && <button type="button" role="menuitem" onClick={onSendToCut} data-testid="wf-ctx-send-to-cut"><Clapperboard size={14} />{copy.sendToCut}</button>}
       {state.type === 'node' && <button type="button" role="menuitem" onClick={onRun}><Play size={14} />{copy.run}</button>}
       {state.type === 'node' && onRunGroup && <button type="button" role="menuitem" onClick={onRunGroup}><ListOrdered size={14} />{copy.runGroup}</button>}
       {state.type === 'node' && onDownloadGroup && <button type="button" role="menuitem" onClick={onDownloadGroup}><Download size={14} />{copy.downloadGroup}</button>}

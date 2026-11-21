@@ -1,5 +1,5 @@
 // 属性面板：画面（缩放 / 位置 / 不透明度 + 关键帧）、音频（音量）、变速、文字样式、代理素材。
-import { Diamond, Trash2 } from 'lucide-react';
+import { Diamond, LocateFixed, RefreshCw, Trash2 } from 'lucide-react';
 import { cutStore, getCutProject } from '../../services/cut/cutStore';
 import type { CutMediaEngine } from '../../services/cut/mediaEngine';
 import { cancelCutProxy, clearCutProxy, setCutProxy } from '../../services/cut/proxyActions';
@@ -19,9 +19,13 @@ function fmt(seconds: number) {
   return `${m}:${s}`;
 }
 
-export function CutInspector({ language, project, clip, playhead, engine, notify }: {
+export function CutInspector({ language, project, clip, playhead, engine, notify, stale, onLocate, onUpdate }: {
   language: Lang; project: CutProject; clip: CutClip | undefined; playhead: number; engine: CutMediaEngine | null;
   notify: (message: string, level?: 'info' | 'success' | 'warning' | 'error') => void;
+  /** 画布联动：节点结果已更新 / 跳回节点 / 替换为新版本。 */
+  stale?: boolean;
+  onLocate?: (nodeId: string) => void;
+  onUpdate?: (clipId: string) => void;
 }) {
   const zh = language === 'zho';
   if (!clip) return <p className="cut-inspector__empty">{zh ? '选中时间线上的片段来调整画面、音量、变速、文字或关键帧。按 ? 看快捷键。' : 'Select a clip to adjust transform, volume, speed, text or keyframes. Press ? for shortcuts.'}</p>;
@@ -73,6 +77,15 @@ export function CutInspector({ language, project, clip, playhead, engine, notify
   return (
     <div className="cut-inspector__body" data-testid="cut-inspector">
       <div className="cut-field"><span>{zh ? '片段' : 'Clip'}</span><strong title={source?.name || clip.text}>{source?.name || (clip.kind === 'subtitle' ? (zh ? '字幕' : 'Subtitle') : clip.kind === 'text' ? (zh ? '文字' : 'Text') : clip.kind)}</strong></div>
+      {clip.link && (onLocate || stale) && (
+        <div className="cut-field" data-testid="cut-canvas-link">
+          <span>{zh ? '画布' : 'Canvas'}{stale ? (zh ? ' · 有更新' : ' · updated') : ''}</span>
+          <span style={{ display: 'flex', gap: 6 }}>
+            {onLocate && <button type="button" className="iris-ghost-pill cut-pill" onClick={() => onLocate(clip.link!.sourceNodeId)} data-testid="cut-locate-node"><LocateFixed size={12} />{zh ? '在画布中定位' : 'Show on canvas'}</button>}
+            {stale && onUpdate && <button type="button" className="iris-ghost-pill cut-pill is-primary" onClick={() => onUpdate(clip.id)} data-testid="cut-update-clip"><RefreshCw size={12} />{zh ? '替换为新版本' : 'Use new version'}</button>}
+          </span>
+        </div>
+      )}
       <div className="cut-field"><span>{zh ? '起点 / 时长' : 'Start / length'}</span><strong>{fmt(clip.start)} · {clip.duration.toFixed(2)}s</strong></div>
 
       {(clip.kind === 'video' || clip.kind === 'image') && (

@@ -366,6 +366,7 @@
 .cut-track--subtitle { height: 32px; }
 .cut-clip--subtitle { background: color-mix(in srgb, #8a5cd6 80%, #23124a); }
 .cut-clip__badge { position: absolute; right: 8px; bottom: 3px; padding: 0 5px; border-radius: 999px; background: color-mix(in srgb, #000000 55%, transparent); font-size: 9px; line-height: 14px; pointer-events: none; }
+.cut-clip__update { position: absolute; right: 6px; top: 3px; z-index: 3; padding: 0 6px; border: 0; border-radius: 999px; background: #f2b33d; color: #12152a; font: inherit; font-size: 9px; font-weight: 600; line-height: 14px; cursor: pointer; }
 .cut-clip__badge.is-busy { background: color-mix(in srgb, #f2b33d 70%, #000000); }
 .cut-clip__kf { position: absolute; bottom: 2px; width: 7px; height: 7px; margin-left: -3.5px; background: #f2b33d; transform: rotate(45deg); pointer-events: none; }
 .cut-clip__inline { position: relative; z-index: 2; width: calc(100% - 12px); height: 20px; margin: 3px 6px; padding: 0 6px; border: 0; border-radius: 6px; background: #ffffff; color: #12152a; font: inherit; font-size: 11px; }

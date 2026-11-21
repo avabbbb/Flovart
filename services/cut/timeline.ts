@@ -8,7 +8,7 @@ export type CutSourceKind = 'video' | 'image' | 'audio';
 
 /** 素材来源：画布节点（可跨会话恢复）或本地文件（只在本次会话里有字节）。 */
 export type CutSourceOrigin =
-  | { type: 'canvas'; nodeId: string; storageKey?: string; href?: string }
+  | { type: 'canvas'; nodeId: string; storageKey?: string; href?: string; /** 导入时节点结果的版本（见 canvasNodeVersion）。 */ version?: string }
   | { type: 'file'; fileName: string };
 
 export interface CutSource {
@@ -75,9 +75,13 @@ export interface CutClip {
   transform?: CutTransform;
   keyframes?: CutKeyframe[];
   text?: string;
+  /** 画布联动：片段引用的画布节点与其结果版本（不复制文件，字节按需从画布存储读）。 */
+  link?: CutClipLink;
   /** 文字片段的样式；字幕片段只存覆盖项，其余跟随项目的字幕样式。 */
   textStyle?: CutTextStyle;
 }
+
+export interface CutClipLink { sourceNodeId: string; sourceVersion: string }
 
 export interface CutTrack {
   id: string;
@@ -259,7 +263,7 @@ function ensureTrack(project: CutProject, kind: CutClipKind, trackId?: string): 
 /** 把素材放进时间线：默认接在目标轨道末尾；没有合适轨道时自动新建。 */
 export function addClip(
   project: CutProject,
-  input: { kind: CutClipKind; sourceId?: string; trackId?: string; start?: number; duration?: number; in?: number; text?: string; volume?: number; speed?: number },
+  input: { kind: CutClipKind; sourceId?: string; trackId?: string; start?: number; duration?: number; in?: number; text?: string; volume?: number; speed?: number; link?: CutClipLink },
 ): CutOpResult {
   const ensured = ensureTrack(project, input.kind, input.trackId);
   if (ensured.error || !ensured.track) return fail(project, ensured.error || 'no track');
@@ -289,6 +293,7 @@ export function addClip(
     duration: round(duration),
     volume: Math.max(0, Math.min(2, input.volume ?? 1)),
     ...(speed !== 1 ? { speed } : {}),
+    ...(input.link && !isTextLike(input.kind) ? { link: { ...input.link } } : {}),
     ...(input.kind === 'text' ? { text: input.text ?? 'Text', textStyle: { ...DEFAULT_TEXT_STYLE } } : {}),
     ...(input.kind === 'subtitle' ? { text: input.text ?? '' } : {}),
   };
@@ -714,6 +719,29 @@ export function importSubtitles(project: CutProject, cues: ReadonlyArray<{ start
   return count ? { project: next, ok: true } : fail(project, 'no usable subtitle cues');
 }
 
+/**
+ * 画布联动：把片段换成同一节点的新版本素材（保留位置 / 入点 / 变换，时长按新素材长度收紧）。
+ * 新素材必须已在 sources 里且与片段同类。
+ */
+export function relinkClip(project: CutProject, clipId: string, sourceId: string, link: CutClipLink): CutOpResult {
+  const clip = findClip(project, clipId);
+  if (!clip) return fail(project, 'clip not found');
+  const source = findSource(project, sourceId);
+  if (!source) return fail(project, 'source not found');
+  if (trackKindFor(source.kind === 'image' ? 'image' : source.kind) !== trackKindFor(clip.kind)) return fail(project, `source is ${source.kind}, not ${clip.kind}`);
+  const kind: CutClipKind = source.kind;
+  const inPoint = isTimedMedia(kind) ? Math.max(0, Math.min(clip.in, Math.max(0, source.duration - CUT_MIN_CLIP))) : 0;
+  const draft = { ...clip, kind, sourceId, in: inPoint };
+  const duration = Math.max(CUT_MIN_CLIP, Math.min(clip.duration, maxTimelineDuration(project, draft)));
+  const { speed, ...rest } = draft;
+  const updated: CutClip = { ...rest, ...(isTimedMedia(kind) && speed && speed !== 1 ? { speed } : {}), in: round(inPoint), duration: round(duration), link: { ...link } };
+  let next = replaceClip(project, updated);
+  // 旧版本素材没有片段再用时一并移除。
+  const oldId = clip.sourceId;
+  if (oldId && oldId !== sourceId && !next.clips.some(item => item.sourceId === oldId)) next = { ...next, sources: next.sources.filter(item => item.id !== oldId) };
+  return { project: next, ok: true, clipId };
+}
+
 // ── 序列化 ────────────────────────────────────────────────────────────────
 
 export function serializeCutProject(project: CutProject): string {
@@ -760,6 +788,7 @@ export function deserializeCutProject(raw: string | unknown): CutProject | null 
       in: isNum(clip.in) && clip.in >= 0 ? clip.in : 0,
       duration: clip.duration,
       volume: isNum(clip.volume) ? Math.max(0, Math.min(2, clip.volume)) : 1,
+      ...(clip.link && isStr(clip.link.sourceNodeId) && isStr(clip.link.sourceVersion) && !isTextLike(clip.kind) ? { link: { sourceNodeId: clip.link.sourceNodeId, sourceVersion: clip.link.sourceVersion } } : {}),
       ...(isNum(clip.speed) && clip.speed !== 1 && isTimedMedia(clip.kind) ? { speed: Math.max(CUT_MIN_SPEED, Math.min(CUT_MAX_SPEED, clip.speed)) } : {}),
       ...(clip.transform && typeof clip.transform === 'object' && !isTextLike(clip.kind) ? { transform: { ...DEFAULT_TRANSFORM, ...sanitizeTransform(clip.transform) } } : {}),
       ...(Array.isArray(clip.keyframes) && clip.keyframes.length ? { keyframes: clip.keyframes.filter(frame => frame && isNum(frame.time) && isNum(frame.value) && ANIMATABLE.includes(frame.property)) } : {}),

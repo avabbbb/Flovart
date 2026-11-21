@@ -118,6 +118,7 @@ export function CutPage({ language, project, onCreateProject, onFocusNode, chat,
                   project={project}
                   onNotify={onNotify}
                   onSendToCanvas={project ? file => sendToCanvas(project.id, file) : undefined}
+                  onFocusNode={onFocusNode}
                 />
               </Suspense>
             </CutErrorBoundary>
