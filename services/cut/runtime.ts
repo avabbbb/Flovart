@@ -1,8 +1,8 @@
 // Cut 运行时：媒体引擎（mediabunny，懒加载）的引用计数生命周期 + UI 与 Agent 共用的媒体操作
 // （导入、恢复画布素材、抽帧快照、导出、代理）。最后一个持有者释放时 dispose 全部解码资源。
 import { cutStore, getCutProject } from './cutStore';
-import { canvasSourceId, mediaKindOfFile } from './canvasMedia';
-import { addClip, addSource, findSource, projectDuration, type CutProject, type CutSource, type CutSourceKind } from './timeline';
+import { canvasNodeVersion, canvasSourceId, mediaKindOfFile } from './canvasMedia';
+import { addClip, addSource, findClip, findSource, projectDuration, relinkClip, type CutClipLink, type CutProject, type CutSource, type CutSourceKind } from './timeline';
 import type { CutMediaEngine } from './mediaEngine';
 import type { CutExportProgress } from './render';
 import type { WorkflowNode } from '../../components/workflow/types';
@@ -71,7 +71,9 @@ export function ensureSourceLoaded(engine: CutMediaEngine, source: CutSource): P
   if (pending) return pending;
   const origin = source.origin;
   const job = (async () => {
-    const node = (await workflowNodes()).find(item => item.id === origin.nodeId);
+    const found = (await workflowNodes()).find(item => item.id === origin.nodeId);
+    // 节点结果已换代：仍读这份素材记录的旧存储键（不静默换成新版本）。
+    const node = origin.version && found && canvasNodeVersion(found) !== origin.version ? undefined : found;
     const blob = await loadNodeBlob(node, origin);
     engine.setBlob(source.id, blob);
     await engine.restoreProxy(source).catch(() => undefined);
@@ -90,7 +92,7 @@ export async function ensureProjectMedia(engine: CutMediaEngine, project: CutPro
 /** 新素材：放进引擎 → 读元数据 → 写进时间线（走 store，可撤销）。 */
 export async function importCutMedia(
   engine: CutMediaEngine,
-  input: { sourceId: string; kind: CutSourceKind; name: string; blob: Blob; origin: CutSource['origin']; addToTimeline?: boolean; trackId?: string; start?: number },
+  input: { sourceId: string; kind: CutSourceKind; name: string; blob: Blob; origin: CutSource['origin']; addToTimeline?: boolean; trackId?: string; start?: number; link?: CutClipLink },
   source: 'ui' | 'agent' = 'ui',
 ): Promise<{ source: CutSource; clipId?: string }> {
   engine.setBlob(input.sourceId, input.blob);
@@ -101,7 +103,7 @@ export async function importCutMedia(
   let next = addSource(getCutProject(), record);
   let clipId: string | undefined;
   if (input.addToTimeline !== false) {
-    const added = addClip(next, { kind: input.kind, sourceId: input.sourceId, trackId: input.trackId, start: input.start });
+    const added = addClip(next, { kind: input.kind, sourceId: input.sourceId, trackId: input.trackId, start: input.start, link: input.link });
     if (added.ok) { next = added.project; clipId = added.clipId; }
   }
   cutStore.getState().apply(next, `import ${input.name}`, source);
@@ -113,16 +115,36 @@ export async function importCanvasNode(engine: CutMediaEngine, nodeId: string, o
   const node = (await workflowNodes()).find(item => item.id === nodeId);
   if (!node) throw new Error(`canvas node ${nodeId} not found`);
   if (node.type !== 'image' && node.type !== 'video' && node.type !== 'audio') throw new Error(`node ${nodeId} is ${node.type}, not image/video/audio`);
-  const sourceId = canvasSourceId(nodeId);
+  const version = canvasNodeVersion(node);
+  if (!version) throw new Error(`node ${nodeId} has no result yet`);
+  const sourceId = canvasSourceId(nodeId, version);
+  const link: CutClipLink = { sourceNodeId: nodeId, sourceVersion: version };
   const existing = findSource(getCutProject(), sourceId);
   if (existing && engine.has(sourceId)) {
     if (options.addToTimeline === false) return { source: existing };
-    const result = cutStore.getState().commit(addClip(getCutProject(), { kind: existing.kind, sourceId, trackId: options.trackId, start: options.start }), `add ${existing.name}`, source);
+    const result = cutStore.getState().commit(addClip(getCutProject(), { kind: existing.kind, sourceId, trackId: options.trackId, start: options.start, link }), `add ${existing.name}`, source);
     if (!result.ok) throw new Error(result.error);
     return { source: existing, clipId: result.clipId };
   }
   const blob = await loadNodeBlob(node);
-  return importCutMedia(engine, { sourceId, kind: node.type as CutSourceKind, name: node.title || node.type, blob, origin: { type: 'canvas', nodeId, storageKey: node.metadata.storageKey, href: node.metadata.href }, ...options }, source);
+  return importCutMedia(engine, { sourceId, kind: node.type as CutSourceKind, name: node.title || node.type, blob, origin: { type: 'canvas', nodeId, storageKey: node.metadata.storageKey, href: node.metadata.href, version }, link, ...options }, source);
+}
+
+/** 画布 → Cut 一键送片段：绑定到该画布项目的时间线，追加在末尾（Cut 页没打开也可以）。 */
+export async function sendCanvasNodeToCut(projectId: string, nodeId: string, source: 'ui' | 'agent' = 'ui') {
+  cutStore.getState().open(projectId);
+  return withCutEngine(engine => importCanvasNode(engine, nodeId, {}, source));
+}
+
+/** 用户确认后，把联动片段换成画布节点的当前版本（可撤销）。 */
+export async function updateCanvasClip(engine: CutMediaEngine, clipId: string, source: 'ui' | 'agent' = 'ui') {
+  const clip = findClip(getCutProject(), clipId);
+  if (!clip?.link) throw new Error('clip is not linked to a canvas node');
+  const imported = await importCanvasNode(engine, clip.link.sourceNodeId, { addToTimeline: false }, source);
+  const version = imported.source.origin.type === 'canvas' ? imported.source.origin.version ?? '' : '';
+  const result = cutStore.getState().commit(relinkClip(getCutProject(), clipId, imported.source.id, { sourceNodeId: clip.link.sourceNodeId, sourceVersion: version }), `update ${imported.source.name}`, source);
+  if (!result.ok) throw new Error(result.error);
+  return result;
 }
 
 export async function importUrl(engine: CutMediaEngine, url: string, options: { addToTimeline?: boolean; trackId?: string; start?: number } = {}, source: 'ui' | 'agent' = 'ui') {
