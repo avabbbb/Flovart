@@ -86,4 +86,13 @@ describe('WorkflowContextMenu', () => {
     render(<WorkflowContextMenu state={{ type: 'node', id: 'node-1', x: 20, y: 20 }} count={3} language="en" onCopy={vi.fn()} onDelete={vi.fn()} onRun={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByRole('menuitem', { name: 'Delete (3)' })).toBeInTheDocument();
   });
+  it('shows Send to Cut only when the handler is given', () => {
+    const onSendToCut = vi.fn();
+    const view = render(<WorkflowContextMenu state={{ type: 'node', id: 'n1', x: 0, y: 0 }} language="en" onCopy={vi.fn()} onDelete={vi.fn()} onRun={vi.fn()} onClose={vi.fn()} onSendToCut={onSendToCut} />);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Send to Cut' }));
+    expect(onSendToCut).toHaveBeenCalledTimes(1);
+    view.unmount();
+    render(<WorkflowContextMenu state={{ type: 'node', id: 'n1', x: 0, y: 0 }} language="en" onCopy={vi.fn()} onDelete={vi.fn()} onRun={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.queryByRole('menuitem', { name: 'Send to Cut' })).toBeNull();
+  });
 });
