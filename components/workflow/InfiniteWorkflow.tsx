@@ -3845,6 +3845,15 @@ export function InfiniteWorkflow({
           onCopy={() => { copySelection(); setContextMenu(null); }}
           onDuplicate={ctxNode && !ctxNode.isLocked ? (() => { duplicateSelection(); setContextMenu(null); }) : undefined}
           onSaveMedia={contextMenu.type === 'node' && ctxNode && ['image', 'video', 'audio'].includes(ctxNode.type) && (ctxNode.metadata.storageKey || ctxNode.metadata.href || ctxNode.metadata.artifactRef?.taskId) && onSaveWorkflowMedia ? (() => { onSaveWorkflowMedia(ctxNode.id); setContextMenu(null); }) : undefined}
+          onSendToCut={contextMenu.type === 'node' && ctxNode && (ctxNode.type === 'image' || ctxNode.type === 'video') && (ctxNode.metadata.storageKey || ctxNode.metadata.href || ctxNode.metadata.artifactRef?.taskId) ? (() => {
+            const nodeId = ctxNode.id;
+            const projectId = projectRef.current.id;
+            setContextMenu(null);
+            void import('../../services/cut/runtime')
+              .then(runtime => runtime.sendCanvasNodeToCut(projectId, nodeId))
+              .then(() => setNotice(language === 'zho' ? '已送进 Cut 时间线末尾' : 'Added to the end of the Cut timeline'))
+              .catch(error => setNotice((language === 'zho' ? '送进 Cut 失败：' : 'Could not send to Cut: ') + (error instanceof Error ? error.message : String(error))));
+          }) : undefined}
           onRun={() => { if (contextMenu.type === 'node' && !projectRef.current.nodes.find(node => node.id === contextMenu.id)?.isLocked) runNodeWithKeyGuide(contextMenu.id); setContextMenu(null); }}
           onRename={contextMenu.type === 'node' && ctxNode && !ctxNode.isLocked ? (() => { setRenameSignal({ nodeId: ctxNode.id, nonce: Date.now() }); setContextMenu(null); }) : undefined}
           onDelete={() => { if (contextMenu.type !== 'pane') deleteSelection(); setContextMenu(null); }}
